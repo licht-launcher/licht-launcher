@@ -15,7 +15,7 @@ export function ChoiceCard({
   title: string;
   description?: string;
   icon?: ReactNode;
-  /** Neutral well for brand/loader images; accent green for Lucide icons. */
+  /** Neutral well for brand/loader images; accent purple for Lucide icons. */
   iconNeutral?: boolean;
   selected: boolean;
   onSelect: () => void;
@@ -27,10 +27,11 @@ export function ChoiceCard({
       type="button"
       aria-pressed={selected}
       className={cn(
-        "flex h-auto w-full cursor-pointer flex-col items-start gap-3 rounded-lg border px-4 py-4 text-left transition-colors outline-none select-none",
+        "flex h-auto w-full cursor-pointer flex-col items-start gap-3 rounded-lg border px-4 py-4 text-left outline-none select-none",
+        "transition-[background-color,border-color,box-shadow] duration-200 ease-out",
         "focus-visible:ring-3 focus-visible:ring-ring/50",
         selected
-          ? "border-border bg-muted text-foreground"
+          ? "border-primary/45 bg-primary/15 text-foreground"
           : "border-border/60 bg-black/20 text-foreground hover:bg-muted/50",
         className,
       )}
@@ -40,10 +41,10 @@ export function ChoiceCard({
         {icon !== undefined ? (
           <span
             className={cn(
-              "flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-md [&_img]:size-5 [&_img]:object-contain [&_svg]:size-5",
+              "flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-md transition-colors duration-200 ease-out [&_img]:size-5 [&_img]:object-contain [&_svg]:size-5",
               iconNeutral
                 ? "bg-black/20 text-muted-foreground"
-                : "bg-instance/25 text-instance",
+                : "bg-primary/25 text-primary",
             )}
           >
             {icon}

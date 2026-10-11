@@ -51,7 +51,7 @@ export function Stepper({
                 className={cn(
                   "flex size-4 shrink-0 items-center justify-center rounded-full",
                   active || done
-                    ? "bg-instance/25 text-instance"
+                    ? "bg-primary/25 text-primary"
                     : "bg-muted/60 text-muted-foreground",
                 )}
               >

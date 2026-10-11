@@ -17,7 +17,7 @@ export function StepConfirm({ state }: { state: WizardState }) {
     return (
       <div className="flex flex-col gap-4">
         <div className="flex items-center gap-3">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-instance/25 text-instance">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-primary/25 text-primary">
             <CheckCircle2Icon aria-hidden className="size-5" strokeWidth={2} />
           </span>
           <div>
@@ -58,7 +58,7 @@ export function StepConfirm({ state }: { state: WizardState }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-3">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-instance/25 text-instance">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-primary/25 text-primary">
           <CheckCircle2Icon aria-hidden className="size-5" strokeWidth={2} />
         </span>
         <div>
@@ -103,7 +103,7 @@ function SummaryRow({
 }) {
   return (
     <li className="flex items-center gap-2 rounded-md bg-black/25 px-3 py-2">
-      <Icon aria-hidden className="size-4 shrink-0 text-instance" />
+      <Icon aria-hidden className="size-4 shrink-0 text-primary" />
       <span className="min-w-0 flex-1">
         <span className="text-muted-foreground">{label}: </span>
         <span className="text-foreground">{value || "—"}</span>
