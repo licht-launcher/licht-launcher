@@ -82,7 +82,7 @@ describe("InstanceSettingsDialog", () => {
             writeConcurrency: 8,
             disableCustomTitleBar: false,
             dataDirectory: null,
-                  },
+          },
           applicationDirectory: "C:\\Licht",
           memoryTotalMb: 16384,
           memoryRecommendedMb: 4096,
