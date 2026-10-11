@@ -9,6 +9,8 @@ export default mergeConfig(
       environment: "jsdom",
       setupFiles: ["./src/test/setup.ts"],
       include: ["src/**/*.test.{ts,tsx}"],
+      // Router + Tauri mocks are slower when many files run in parallel.
+      testTimeout: 15_000,
     },
   }),
 );

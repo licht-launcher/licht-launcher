@@ -49,7 +49,9 @@ pub async fn install_version(
     download_all(
         client,
         &pending,
+        crate::shared_transfer_limits(),
         download_concurrency(cache, settings)?,
+        crate::write_concurrency(cache, settings)?,
         DEFAULT_RETRY,
         progress,
     )

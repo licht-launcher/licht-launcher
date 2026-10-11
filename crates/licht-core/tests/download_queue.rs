@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use licht_core::{
     CoreError, DEFAULT_CONCURRENCY, DEFAULT_RETRY, DownloadProgress, DownloadTask, Retry,
-    download_all,
+    TransferLimits, download_all, download_file,
 };
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
@@ -27,8 +27,9 @@ async fn every_file_is_reported_when_the_queue_finishes() {
     let url = serve(ServeMode::Ok).await;
     let tasks = tasks(&directory, &url, 4);
     let (progress, mut incoming) = mpsc::channel(64);
+    let limits = Arc::new(TransferLimits::new());
 
-    download_all(&client(), &tasks, 2, retry(1), progress)
+    download_all(&client(), &tasks, limits, 2, 8, retry(1), progress)
         .await
         .expect("every download should succeed");
 
@@ -50,16 +51,18 @@ async fn every_file_is_reported_when_the_queue_finishes() {
 }
 
 #[tokio::test]
-async fn the_concurrency_limit_caps_open_connections() {
+async fn the_download_limit_caps_open_connections() {
     let directory = temporary_directory("limit");
     let gate = Arc::new(Gate::new());
     let url = serve(ServeMode::Hold(Arc::clone(&gate))).await;
     let tasks = tasks(&directory, &url, 4);
     let (progress, _incoming) = mpsc::channel(64);
     let client = client();
+    let limits = Arc::new(TransferLimits::new());
 
-    let queue =
-        tokio::spawn(async move { download_all(&client, &tasks, 2, retry(1), progress).await });
+    let queue = tokio::spawn(async move {
+        download_all(&client, &tasks, limits, 2, 8, retry(1), progress).await
+    });
 
     while gate.active.load(Ordering::SeqCst) < 2 {
         tokio::task::yield_now().await;
@@ -79,6 +82,124 @@ async fn the_concurrency_limit_caps_open_connections() {
 }
 
 #[tokio::test]
+async fn two_queues_share_the_global_download_limit() {
+    let directory = temporary_directory("shared");
+    let gate = Arc::new(Gate::new());
+    let url = serve(ServeMode::Hold(Arc::clone(&gate))).await;
+    let limits = Arc::new(TransferLimits::new());
+    let left = tasks(&directory.join("left"), &url, 3);
+    let right = tasks(&directory.join("right"), &url, 3);
+    std::fs::create_dir_all(directory.join("left")).expect("left");
+    std::fs::create_dir_all(directory.join("right")).expect("right");
+    let client = client();
+    let (progress_a, _) = mpsc::channel(64);
+    let (progress_b, _) = mpsc::channel(64);
+
+    let first = {
+        let client = client.clone();
+        let limits = Arc::clone(&limits);
+        tokio::spawn(async move {
+            download_all(&client, &left, limits, 2, 8, retry(1), progress_a).await
+        })
+    };
+    let second = {
+        let client = client.clone();
+        let limits = Arc::clone(&limits);
+        tokio::spawn(async move {
+            download_all(&client, &right, limits, 2, 8, retry(1), progress_b).await
+        })
+    };
+
+    while gate.active.load(Ordering::SeqCst) < 2 {
+        tokio::task::yield_now().await;
+    }
+    tokio::time::sleep(Duration::from_millis(40)).await;
+    assert_eq!(gate.max_active.load(Ordering::SeqCst), 2);
+
+    gate.open
+        .send(true)
+        .expect("the gate should still have waiters");
+    first
+        .await
+        .expect("join")
+        .expect("left queue should succeed");
+    second
+        .await
+        .expect("join")
+        .expect("right queue should succeed");
+    cleanup(&directory);
+}
+
+#[tokio::test]
+async fn zero_write_concurrency_is_rejected() {
+    let directory = temporary_directory("write-zero");
+    let url = serve(ServeMode::Ok).await;
+    let tasks = tasks(&directory, &url, 1);
+    let (progress, _) = mpsc::channel(8);
+    let error = download_all(
+        &client(),
+        &tasks,
+        Arc::new(TransferLimits::new()),
+        2,
+        0,
+        retry(1),
+        progress,
+    )
+    .await
+    .expect_err("write concurrency zero");
+    assert!(matches!(error, CoreError::WriteConcurrency));
+    cleanup(&directory);
+}
+
+#[tokio::test]
+async fn skips_when_the_destination_already_matches_sha1() {
+    let directory = temporary_directory("skip");
+    let destination = directory.join("cached.jar");
+    std::fs::write(&destination, BODY).expect("seed");
+    let gate = Arc::new(Gate::new());
+    let url = serve(ServeMode::Hold(Arc::clone(&gate))).await;
+
+    download_file(&client(), &url, &destination, SHA1, retry(1))
+        .await
+        .expect("existing file should skip the download");
+
+    assert_eq!(gate.active.load(Ordering::SeqCst), 0);
+    assert_eq!(gate.max_active.load(Ordering::SeqCst), 0);
+    assert_eq!(std::fs::read(&destination).expect("file"), BODY);
+    cleanup(&directory);
+}
+
+#[tokio::test]
+async fn two_parallel_downloads_to_the_same_path_do_not_corrupt() {
+    let directory = temporary_directory("race");
+    let destination = directory.join("shared.jar");
+    let url = serve(ServeMode::Ok).await;
+    let client = client();
+    let first = {
+        let client = client.clone();
+        let url = url.clone();
+        let destination = destination.clone();
+        tokio::spawn(
+            async move { download_file(&client, &url, &destination, SHA1, retry(1)).await },
+        )
+    };
+    let second = {
+        let client = client.clone();
+        let url = url.clone();
+        let destination = destination.clone();
+        tokio::spawn(
+            async move { download_file(&client, &url, &destination, SHA1, retry(1)).await },
+        )
+    };
+
+    first.await.expect("join").expect("first download");
+    second.await.expect("join").expect("second download");
+    assert_eq!(std::fs::read(&destination).expect("file"), BODY);
+    assert!(!directory.join("shared.jar.part").exists());
+    cleanup(&directory);
+}
+
+#[tokio::test]
 async fn one_failure_is_reported_after_the_other_files_land() {
     let directory = temporary_directory("partial");
     let url = serve(ServeMode::FailPath).await;
@@ -91,9 +212,17 @@ async fn one_failure_is_reported_after_the_other_files_land() {
     });
     let (progress, mut incoming) = mpsc::channel(64);
 
-    let error = download_all(&client(), &tasks, 2, retry(1), progress)
-        .await
-        .expect_err("the failing file should fail the queue");
+    let error = download_all(
+        &client(),
+        &tasks,
+        Arc::new(TransferLimits::new()),
+        2,
+        8,
+        retry(1),
+        progress,
+    )
+    .await
+    .expect_err("the failing file should fail the queue");
 
     assert!(matches!(error, CoreError::Http(_)));
     let events = collect(&mut incoming).await;

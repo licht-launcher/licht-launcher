@@ -4,42 +4,23 @@ use std::sync::Mutex as StdMutex;
 
 use licht_core::{
     ADOPTIUM_API, ASSET_OBJECT_BASE, Arch, CoreError, GameExit, GameInstall, GameLogEvent,
-    InstanceEntry, InstanceSettings, JavaDetections, JavaPaths, JavaStatus, LaunchEnvironment,
-    OsName, Settings, SettingsSnapshot, SharedCache, VersionSummary, browse_start_directory,
-    clear_launch_lock, configured_java, detect_known_javas, fetch_version_manifest, game_cache,
-    global_launch, install_game, install_temurin, installed_java, kill_launch_process,
-    list_running_launch_folders, load_instance, load_settings, log_codec, offline_account,
-    parse_version, prepare_offline_launch, probe_java_major, process_matches_lock,
-    read_launch_lock, required_java_major, resolved_java_path, resolved_launch, run_game,
-    runtime_java_paths, set_java_path, settings_snapshot, update_instance, update_instance_version,
-    version_summaries, write_launch_lock_for_pid,
+    InstallProgress, InstanceEntry, InstanceSettings, JavaDetections, JavaPaths, JavaStatus,
+    LaunchEnvironment, OsName, Settings, SettingsSnapshot, SharedCache, VersionSummary,
+    browse_start_directory, clear_launch_lock, configured_java, detect_known_javas,
+    fetch_version_manifest, game_cache, global_launch, install_game, install_temurin,
+    installed_java, kill_launch_process, list_running_launch_folders, load_instance, load_settings,
+    log_codec, offline_account, parse_version, prepare_offline_launch, probe_java_major,
+    process_matches_lock, read_launch_lock, required_java_major, resolved_java_path,
+    resolved_launch, run_game, runtime_java_paths, set_java_path, settings_snapshot,
+    update_instance, update_instance_version, version_summaries, write_launch_lock_for_pid,
 };
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::{DialogExt, FileDialogBuilder};
 use tauri_plugin_opener::OpenerExt;
-use tokio::sync::{Mutex, MutexGuard, mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot};
 use tokio::task::AbortHandle;
 
 use crate::progress::ProgressThrottle;
-
-/// One version/Java install at a time. Launches do not take this lock.
-pub struct InstallLock {
-    gate: Mutex<()>,
-}
-
-impl InstallLock {
-    pub fn new() -> Self {
-        Self {
-            gate: Mutex::new(()),
-        }
-    }
-
-    pub fn try_begin(&self) -> Result<MutexGuard<'_, ()>, String> {
-        self.gate
-            .try_lock()
-            .map_err(|_| "another install is already running".to_string())
-    }
-}
 
 enum LaunchSession {
     Starting,
@@ -365,13 +346,11 @@ pub async fn detect_java_installations(
 #[tauri::command]
 pub async fn install_recommended_java(
     paths: State<'_, LauncherPaths>,
-    state: State<'_, InstallLock>,
     major: u32,
 ) -> Result<String, String> {
     if !matches!(major, 25 | 21 | 17 | 8) {
         return Err(CoreError::SettingsJava.to_string());
     }
-    let _guard = state.try_begin()?;
     let game = paths.game.clone();
     let settings = paths.settings.clone();
     let environment = host_environment().map_err(failure)?;
@@ -465,10 +444,8 @@ pub async fn list_versions(paths: State<'_, LauncherPaths>) -> Result<Vec<Versio
 pub async fn install_version(
     app: AppHandle,
     paths: State<'_, LauncherPaths>,
-    state: State<'_, InstallLock>,
     version_id: String,
 ) -> Result<String, String> {
-    let _guard = state.try_begin()?;
     install_one(&app, &paths.game, &paths.settings, &version_id)
         .await
         .map_err(failure)
@@ -518,7 +495,10 @@ async fn install_one(
     let mut throttle = ProgressThrottle::new();
     while let Some(progress) = incoming.recv().await {
         if throttle.should_emit(progress, std::time::Instant::now()) {
-            let _ = app.emit("install-progress", progress);
+            let _ = app.emit(
+                "install-progress",
+                InstallProgress::tagged(version_id, progress),
+            );
         }
     }
 

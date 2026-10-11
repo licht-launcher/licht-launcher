@@ -58,6 +58,7 @@ describe("draft", () => {
       width: 854,
       height: 480,
       downloadConcurrency: 8,
+      writeConcurrency: 8,
       dataDirectory: snapshot.applicationDirectory,
     });
   });

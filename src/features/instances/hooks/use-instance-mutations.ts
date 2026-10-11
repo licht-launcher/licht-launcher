@@ -11,18 +11,17 @@ import {
   setInstanceVersion,
 } from "@/lib/commands";
 import { friendlyError, messageOf } from "@/lib/errors";
-import type { DownloadProgress } from "@/lib/generated/DownloadProgress";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 
 export function useInstanceMutations({
-  installingFolder,
-  setProgress,
+  beginInstall,
+  endInstall,
   setSelectedFolder,
   setConfiguringFolder,
   clearAction,
 }: {
-  installingFolder: string | null;
-  setProgress: (progress: DownloadProgress | null) => void;
+  beginInstall: (folder: string, versionId: string) => void;
+  endInstall: (folder: string, versionId: string) => void;
   setSelectedFolder: (folder: string | null) => void;
   setConfiguringFolder: (folder: string | null) => void;
   clearAction: () => void;
@@ -89,23 +88,25 @@ export function useInstanceMutations({
       installed: boolean;
     }) => {
       if (!input.installed) {
-        await installVersion(input.versionId);
+        beginInstall(input.folder, input.versionId);
+        try {
+          await installVersion(input.versionId);
+        } finally {
+          endInstall(input.folder, input.versionId);
+        }
       }
       return setInstanceVersion(input.folder, input.versionId);
     },
     onSuccess: async () => {
-      setProgress(null);
       await queryClient.invalidateQueries({ queryKey: ["instances"] });
       await queryClient.invalidateQueries({ queryKey: ["versions"] });
     },
     onError: (error: unknown) => {
-      setProgress(null);
       toast.error(friendlyError(messageOf(error)));
     },
   });
 
   const busy =
-    installingFolder !== null ||
     create.isPending ||
     rename.isPending ||
     duplicate.isPending ||

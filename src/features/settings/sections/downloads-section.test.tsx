@@ -26,6 +26,14 @@ describe("DownloadsSection", () => {
     expect(
       screen.getByText(/This change applies after restart\./),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", {
+        name: "Maximum simultaneous downloads",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Maximum simultaneous writes" }),
+    ).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Application directory"), {
       target: { value: "D:\\Games" },
     });
@@ -37,6 +45,7 @@ describe("DownloadsSection", () => {
           settings: expect.objectContaining({
             dataDirectory: "D:\\Games",
             downloadConcurrency: 8,
+            writeConcurrency: 8,
             theme: "dark",
           }),
         }),

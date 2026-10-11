@@ -24,6 +24,8 @@ pub enum CoreError {
     DownloadAttempts,
     #[error("download concurrency must be at least 1")]
     DownloadConcurrency,
+    #[error("write concurrency must be at least 1")]
+    WriteConcurrency,
     #[error("could not resolve the Licht data directory")]
     DataDirectory,
     #[error("settings JSON is invalid")]
@@ -32,6 +34,8 @@ pub enum CoreError {
     SettingsSchema { schema: u32 },
     #[error("download concurrency must be from 1 to 16")]
     SettingsConcurrency,
+    #[error("write concurrency must be from 1 to 16")]
+    SettingsWriteConcurrency,
     #[error("color theme must be dark")]
     SettingsTheme,
     #[error("memory must be from 512 to 16384 in steps of 256")]
