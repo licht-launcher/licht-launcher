@@ -15,7 +15,7 @@ export function ChoiceCard({
   title: string;
   description?: string;
   icon?: ReactNode;
-  /** Neutral well for brand/loader images; accent purple for Lucide icons. */
+  /** Neutral well for brand/loader images; brighter instance purple for Lucide icons. */
   iconNeutral?: boolean;
   selected: boolean;
   onSelect: () => void;
@@ -44,7 +44,7 @@ export function ChoiceCard({
               "flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-md transition-colors duration-200 ease-out [&_img]:size-5 [&_img]:object-contain [&_svg]:size-5",
               iconNeutral
                 ? "bg-black/20 text-muted-foreground"
-                : "bg-primary/25 text-primary",
+                : "bg-instance/20 text-instance",
             )}
           >
             {icon}

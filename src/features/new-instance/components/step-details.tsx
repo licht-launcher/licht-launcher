@@ -56,7 +56,7 @@ export function StepDetails({
   return (
     <div className="flex max-w-md flex-col gap-4">
       <div className="flex items-center gap-3">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-primary/25 text-primary">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-instance/20 text-instance">
           <TagIcon aria-hidden className="size-5" strokeWidth={2} />
         </span>
         <div>

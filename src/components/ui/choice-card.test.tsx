@@ -22,7 +22,7 @@ describe("ChoiceCard", () => {
     expect(button).toHaveAttribute("aria-pressed", "true");
     fireEvent.click(button);
     expect(onSelect).toHaveBeenCalledOnce();
-    expect(button.querySelector(".text-primary")).toBeInTheDocument();
+    expect(button.querySelector(".text-instance")).toBeInTheDocument();
     expect(button.className).toContain("bg-primary/15");
   });
 
@@ -41,6 +41,6 @@ describe("ChoiceCard", () => {
     const well = button.querySelector(".bg-black\\/20");
     expect(well).toBeInTheDocument();
     expect(well?.className).not.toContain("grayscale");
-    expect(well?.className).not.toContain("text-primary");
+    expect(well?.className).not.toContain("text-instance");
   });
 });
