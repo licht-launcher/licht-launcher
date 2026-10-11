@@ -4,15 +4,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   browseApplicationDirectory,
   browseJava,
+  clearLastPlayedFolder,
   createInstance,
   deleteInstance,
   detectJavaInstallations,
   duplicateInstance,
+  getLastPlayedFolder,
   getSettings,
   installRecommendedJava,
   installVersion,
   javaInstallationStatus,
   launchVersion,
+  listInstanceEntries,
   listInstances,
   listRunningGames,
   listVersions,
@@ -23,6 +26,7 @@ import {
   saveInstance,
   saveSettings,
   setInstanceVersion,
+  setLastPlayedFolder,
   stopGame,
 } from "@/lib/commands";
 
@@ -92,9 +96,28 @@ describe("launcher commands", () => {
     });
   });
 
+  it("lists instance folder entries for a relative path", async () => {
+    await listInstanceEntries("Survival", "saves");
+    expect(invoke).toHaveBeenCalledWith("list_instance_entries", {
+      folder: "Survival",
+      relativePath: "saves",
+    });
+  });
+
   it("opens the repository", async () => {
     await openRepository();
     expect(invoke).toHaveBeenCalledWith("open_repository");
+  });
+
+  it("reads and writes the last played folder", async () => {
+    await getLastPlayedFolder();
+    expect(invoke).toHaveBeenCalledWith("get_last_played_folder");
+    await setLastPlayedFolder("classic");
+    expect(invoke).toHaveBeenCalledWith("set_last_played_folder", {
+      folder: "classic",
+    });
+    await clearLastPlayedFolder();
+    expect(invoke).toHaveBeenCalledWith("clear_last_played_folder");
   });
 
   it("reads settings without arguments", async () => {
@@ -118,6 +141,7 @@ describe("launcher commands", () => {
       java8: null,
       downloadConcurrency: 4,
       writeConcurrency: 8,
+      disableCustomTitleBar: false,
       dataDirectory: null,
     };
     await saveSettings(settings);

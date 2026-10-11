@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import type { InstanceAction } from "@/features/instances/components/instance-action-dialog";
 import { createVersionChoices } from "@/features/instances/model/create-versions";
 import type { SectionId } from "@/features/settings/model/sections";
 import type { VersionSummary } from "@/lib/generated/VersionSummary";
+import { onOpenSettingsRequest } from "@/lib/shell-events";
 
 export function useInstanceDialogs() {
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -15,6 +16,14 @@ export function useInstanceDialogs() {
   const [draftName, setDraftName] = useState("");
   const [draftVersion, setDraftVersion] = useState("");
   const [includeSnapshots, setIncludeSnapshots] = useState(false);
+
+  useEffect(() => {
+    return onOpenSettingsRequest((section) => {
+      setConfiguringFolder(null);
+      setSettingsSection(section);
+      setSettingsOpen(true);
+    });
+  }, []);
 
   function clearAction() {
     setAction(null);

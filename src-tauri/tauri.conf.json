@@ -22,7 +22,8 @@
         "maxWidth": 1200,
         "maxHeight": 960,
         "fullscreen": false,
-        "maximizable": false
+        "maximizable": false,
+        "decorations": false
       }
     ],
     "security": {

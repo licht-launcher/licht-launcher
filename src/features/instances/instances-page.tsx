@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { useRef } from "react";
 
 import { HomePanel } from "@/features/instances/components/home-panel";
@@ -9,6 +10,7 @@ import { useInstanceMutations } from "@/features/instances/hooks/use-instance-mu
 import { useInstanceSelection } from "@/features/instances/hooks/use-instance-selection";
 import { useInstancesData } from "@/features/instances/hooks/use-instances-data";
 import { usePlaySession } from "@/features/instances/hooks/use-play-session";
+import { getLastPlayedFolder } from "@/lib/commands";
 
 export function InstancesPage() {
   const { versions, instances, username } = useInstancesData();
@@ -24,6 +26,12 @@ export function InstancesPage() {
     clearFolderLog,
   } = useGameEvents((folder) => {
     markStartedRef.current(folder);
+  });
+
+  const lastPlayed = useQuery({
+    queryKey: ["last-played"],
+    queryFn: getLastPlayedFolder,
+    retry: false,
   });
 
   const {
@@ -64,12 +72,14 @@ export function InstancesPage() {
 
   return (
     <>
-      <div className="flex h-svh w-full overflow-hidden bg-popover text-popover-foreground">
+      <div className="flex h-full w-full overflow-hidden bg-popover text-popover-foreground">
         <HomeSidebar
           instances={instances.data ?? []}
+          lastPlayedFolder={lastPlayed.data ?? null}
           selectedFolder={selectedFolder}
           busy={busy}
           loading={instances.isPending}
+          playPhase={playPhase}
           onSelect={setSelectedFolder}
           onCreate={() => dialogs.openCreate(versions.data ?? [])}
           onOpenSettings={() => dialogs.openGlobalSettings("account")}

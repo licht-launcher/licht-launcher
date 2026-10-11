@@ -6,7 +6,6 @@ import {
   ListIcon,
   TriangleAlertIcon,
 } from "lucide-react";
-import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -97,8 +96,81 @@ function ConsoleLineView({
   );
 }
 
-export function ConsoleSection({ lines }: { lines: ConsoleLine[] }) {
-  const [selected, setSelected] = useState<LogLevelSelection>(() => new Set());
+export function ConsoleLogLevelFilter({
+  selected,
+  onSelectedChange,
+}: {
+  selected: LogLevelSelection;
+  onSelectedChange: (next: LogLevelSelection) => void;
+}) {
+  const TriggerIcon = selectionIcon(selected);
+  const label = formatLogLevelSelection(selected);
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          aria-label="Log level"
+          className={cn(
+            "w-40 justify-between font-semibold",
+            selectionTone(selected),
+          )}
+        >
+          <span className="flex min-w-0 items-center gap-1.5">
+            <TriggerIcon aria-hidden data-icon="inline-start" />
+            <span className="truncate">{label}</span>
+          </span>
+          <ChevronDownIcon
+            aria-hidden
+            className="size-4 shrink-0 text-muted-foreground"
+          />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-40 p-1">
+        <p className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+          Log Level
+        </p>
+        {LEVEL_OPTIONS.map((option) => {
+          const Icon = option.icon;
+          const checked = selected.has(option.value);
+          return (
+            <button
+              key={option.value}
+              type="button"
+              className={cn(
+                "flex w-full cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-semibold outline-none hover:bg-accent",
+                option.tone,
+              )}
+              aria-pressed={checked}
+              onClick={() => {
+                onSelectedChange(toggleLogLevel(selected, option.value));
+              }}
+            >
+              <Icon aria-hidden className="size-4 shrink-0" />
+              <span className="flex-1 text-left">{option.label}</span>
+              {checked ? (
+                <CheckIcon aria-hidden className="size-4 shrink-0" />
+              ) : (
+                <span className="size-4 shrink-0" aria-hidden />
+              )}
+            </button>
+          );
+        })}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+export function ConsoleSection({
+  lines,
+  selected,
+}: {
+  lines: ConsoleLine[];
+  selected: LogLevelSelection;
+}) {
   const levels = effectiveLogLevels(lines);
   const visible = lines.flatMap((line, index) => {
     const effectiveLevel = levels[index] ?? "info";
@@ -107,74 +179,12 @@ export function ConsoleSection({ lines }: { lines: ConsoleLine[] }) {
     }
     return [{ line, effectiveLevel }];
   });
-  const TriggerIcon = selectionIcon(selected);
-  const label = formatLogLevelSelection(selected);
   const logSelect =
     "cursor-text select-text selection:bg-muted-foreground/35 selection:text-foreground";
 
   return (
-    <section
-      aria-label="Game log"
-      className="mt-6 flex min-h-0 flex-1 flex-col gap-2"
-    >
-      <div className="flex shrink-0 items-center justify-between gap-3">
-        <h3 className="text-xs font-medium text-muted-foreground">Console</h3>
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              aria-label="Log level"
-              className={cn(
-                "w-40 justify-between font-semibold",
-                selectionTone(selected),
-              )}
-            >
-              <span className="flex min-w-0 items-center gap-1.5">
-                <TriggerIcon aria-hidden data-icon="inline-start" />
-                <span className="truncate">{label}</span>
-              </span>
-              <ChevronDownIcon
-                aria-hidden
-                className="size-4 shrink-0 text-muted-foreground"
-              />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent align="end" className="w-40 p-1">
-            <p className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
-              Log Level
-            </p>
-            {LEVEL_OPTIONS.map((option) => {
-              const Icon = option.icon;
-              const checked = selected.has(option.value);
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  className={cn(
-                    "flex w-full cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-semibold outline-none hover:bg-accent",
-                    option.tone,
-                  )}
-                  aria-pressed={checked}
-                  onClick={() => {
-                    setSelected(toggleLogLevel(selected, option.value));
-                  }}
-                >
-                  <Icon aria-hidden className="size-4 shrink-0" />
-                  <span className="flex-1 text-left">{option.label}</span>
-                  {checked ? (
-                    <CheckIcon aria-hidden className="size-4 shrink-0" />
-                  ) : (
-                    <span className="size-4 shrink-0" aria-hidden />
-                  )}
-                </button>
-              );
-            })}
-          </PopoverContent>
-        </Popover>
-      </div>
-      <ScrollArea className="min-h-0 flex-1 rounded-lg border border-input bg-black/25">
+    <section aria-label="Game log" className="flex min-h-0 flex-1 flex-col">
+      <ScrollArea className="min-h-0 flex-1 rounded-lg bg-black/25">
         {lines.length === 0 ? (
           <p
             className={cn(

@@ -1,7 +1,13 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import { useState } from "react";
 import { describe, expect, it } from "vitest";
+
+import type { LogLevelSelection } from "@/features/instances/lib/log-level";
 import type { ConsoleLine } from "@/features/instances/model/console-line";
-import { ConsoleSection } from "@/features/instances/sections/console-section";
+import {
+  ConsoleLogLevelFilter,
+  ConsoleSection,
+} from "@/features/instances/sections/console-section";
 
 const lines: ConsoleLine[] = [
   { id: 1, stream: "stdout", line: "[t/INFO]: hello" },
@@ -9,9 +15,22 @@ const lines: ConsoleLine[] = [
   { id: 3, stream: "stdout", line: "[t/ERROR]: boom" },
 ];
 
+function ConsoleHarness() {
+  const [selected, setSelected] = useState<LogLevelSelection>(() => new Set());
+  return (
+    <>
+      <ConsoleLogLevelFilter
+        selected={selected}
+        onSelectedChange={setSelected}
+      />
+      <ConsoleSection lines={lines} selected={selected} />
+    </>
+  );
+}
+
 describe("ConsoleSection", () => {
   it("shows a mono console and filters by multi level selection", async () => {
-    render(<ConsoleSection lines={lines} />);
+    render(<ConsoleHarness />);
 
     const log = screen.getByLabelText("Game log");
     expect(log).toBeInTheDocument();
