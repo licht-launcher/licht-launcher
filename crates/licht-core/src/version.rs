@@ -137,7 +137,7 @@ struct VersionFile {
     #[serde(rename = "minecraftArguments")]
     minecraft_arguments: Option<String>,
     arguments: Option<ModernArguments>,
-    libraries: Vec<Library>,
+    libraries: Vec<RawLibrary>,
     #[serde(rename = "assetIndex")]
     asset_index: AssetIndex,
     #[serde(rename = "mainClass")]
@@ -145,6 +145,26 @@ struct VersionFile {
     downloads: VersionDownloads,
     #[serde(rename = "javaVersion")]
     java_version: Option<JavaVersion>,
+}
+
+/// Wire format: Mojang libs use `downloads`; Fabric/Quilt often use Maven `url` + `name`.
+#[derive(Debug, Deserialize)]
+struct RawLibrary {
+    name: String,
+    #[serde(default)]
+    url: Option<String>,
+    #[serde(default)]
+    sha1: Option<String>,
+    #[serde(default)]
+    size: Option<u64>,
+    #[serde(default)]
+    downloads: Option<LibraryDownloads>,
+    #[serde(default)]
+    natives: Option<BTreeMap<String, String>>,
+    #[serde(default)]
+    rules: Option<Vec<Rule>>,
+    #[serde(default)]
+    extract: Option<LibraryExtract>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -267,10 +287,127 @@ pub fn parse_version(json: &str) -> Result<Version> {
 
     Ok(Version {
         arguments,
-        libraries: file.libraries,
+        libraries: file
+            .libraries
+            .into_iter()
+            .map(normalize_library)
+            .collect(),
         asset_index: file.asset_index,
         main_class: file.main_class,
         downloads: file.downloads,
         java_version: file.java_version,
     })
+}
+
+fn normalize_library(raw: RawLibrary) -> Library {
+    let downloads = match raw.downloads {
+        Some(downloads) if downloads.artifact.is_some() || downloads.classifiers.is_some() => {
+            Some(downloads)
+        }
+        _ => maven_downloads(&raw.name, raw.url.as_deref(), raw.sha1.as_deref(), raw.size),
+    };
+    Library {
+        name: raw.name,
+        downloads,
+        natives: raw.natives,
+        rules: raw.rules,
+        extract: raw.extract,
+    }
+}
+
+fn maven_downloads(
+    name: &str,
+    base_url: Option<&str>,
+    sha1: Option<&str>,
+    size: Option<u64>,
+) -> Option<LibraryDownloads> {
+    let base = base_url?;
+    let path = maven_library_path(name)?;
+    let base = base.trim_end_matches('/');
+    Some(LibraryDownloads {
+        artifact: Some(Artifact {
+            path: path.clone(),
+            sha1: sha1.unwrap_or("").to_string(),
+            size: size.unwrap_or(0),
+            url: format!("{base}/{path}"),
+        }),
+        classifiers: None,
+    })
+}
+
+/// `group:artifact:version` or `group:artifact:version:classifier` → Maven relative path.
+pub fn maven_library_path(name: &str) -> Option<String> {
+    let parts: Vec<&str> = name.split(':').collect();
+    if parts.len() < 3 || parts.len() > 4 {
+        return None;
+    }
+    let group = parts[0].replace('.', "/");
+    let artifact = parts[1];
+    let version = parts[2];
+    let file = if parts.len() == 4 {
+        format!("{artifact}-{version}-{}.jar", parts[3])
+    } else {
+        format!("{artifact}-{version}.jar")
+    };
+    Some(format!("{group}/{artifact}/{version}/{file}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn maven_path_from_coordinates() {
+        assert_eq!(
+            maven_library_path("net.fabricmc:fabric-loader:0.16.0").as_deref(),
+            Some("net/fabricmc/fabric-loader/0.16.0/fabric-loader-0.16.0.jar")
+        );
+        assert_eq!(
+            maven_library_path("org.lwjgl:lwjgl:3.3.1:natives-windows").as_deref(),
+            Some("org/lwjgl/lwjgl/3.3.1/lwjgl-3.3.1-natives-windows.jar")
+        );
+    }
+
+    #[test]
+    fn fabric_style_library_gets_maven_artifact() {
+        let json = r#"{
+          "mainClass": "x.Y",
+          "libraries": [
+            {
+              "name": "net.fabricmc:fabric-loader:0.16.0",
+              "url": "https://maven.fabricmc.net/"
+            }
+          ],
+          "assetIndex": {
+            "id": "5",
+            "sha1": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "size": 1,
+            "totalSize": 1,
+            "url": "https://example.invalid/index"
+          },
+          "downloads": {
+            "client": {
+              "sha1": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "size": 1,
+              "url": "https://example.invalid/client"
+            }
+          },
+          "arguments": { "game": [], "jvm": [] }
+        }"#;
+        let version = parse_version(json).expect("parse");
+        let artifact = version.libraries[0]
+            .downloads
+            .as_ref()
+            .and_then(|downloads| downloads.artifact.as_ref())
+            .expect("artifact");
+        assert_eq!(
+            artifact.path,
+            "net/fabricmc/fabric-loader/0.16.0/fabric-loader-0.16.0.jar"
+        );
+        assert_eq!(
+            artifact.url,
+            "https://maven.fabricmc.net/net/fabricmc/fabric-loader/0.16.0/fabric-loader-0.16.0.jar"
+        );
+        assert!(artifact.sha1.is_empty());
+    }
 }

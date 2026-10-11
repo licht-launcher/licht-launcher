@@ -318,23 +318,26 @@ async fn download_one(job: TransferJob<'_>) -> Result<()> {
             }
         };
 
-        let actual = hex_encode(Sha1::digest(&fetched).as_slice());
-        if !actual.eq_ignore_ascii_case(job.expected_sha1) {
-            if let Some(progress) = job.progress {
-                progress.subtract(fetched.len() as u64);
+        // Empty SHA1: Fabric/Quilt Maven entries sometimes omit hashes.
+        if !job.expected_sha1.is_empty() {
+            let actual = hex_encode(Sha1::digest(&fetched).as_slice());
+            if !actual.eq_ignore_ascii_case(job.expected_sha1) {
+                if let Some(progress) = job.progress {
+                    progress.subtract(fetched.len() as u64);
+                }
+                let error = CoreError::Sha1Mismatch {
+                    expected: job.expected_sha1.to_string(),
+                    actual,
+                };
+                if attempt == job.retry.attempts {
+                    return Err(error);
+                }
+                warn!(attempt, url = job.url, "download attempt failed");
+                tokio::time::sleep(backoff).await;
+                backoff = backoff.saturating_mul(2);
+                attempt += 1;
+                continue;
             }
-            let error = CoreError::Sha1Mismatch {
-                expected: job.expected_sha1.to_string(),
-                actual,
-            };
-            if attempt == job.retry.attempts {
-                return Err(error);
-            }
-            warn!(attempt, url = job.url, "download attempt failed");
-            tokio::time::sleep(backoff).await;
-            backoff = backoff.saturating_mul(2);
-            attempt += 1;
-            continue;
         }
 
         let _write = job.limits.write.acquire(job.write_concurrency).await;
@@ -423,6 +426,9 @@ fn destination_lock(destination: &Path) -> Arc<Mutex<()>> {
 }
 
 async fn file_matches(path: &Path, expected_sha1: &str) -> Result<bool> {
+    if expected_sha1.is_empty() {
+        return Ok(tokio::fs::try_exists(path).await.unwrap_or(false));
+    }
     let mut file = match tokio::fs::File::open(path).await {
         Ok(file) => file,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),

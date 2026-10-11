@@ -137,7 +137,7 @@ export function FilesSection({
   return (
     <section
       aria-label="Instance files"
-      className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg bg-black/25"
+      className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border/60 bg-black/20"
     >
       {folder === null ? (
         <p className="p-3 text-sm leading-normal text-muted-foreground">

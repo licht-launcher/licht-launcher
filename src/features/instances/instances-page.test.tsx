@@ -79,6 +79,7 @@ const classicInstance = {
   overrideJava: false,
   overrideJvmArguments: false,
   javaPath: null,
+  lastOpenedAt: null as string | null,
 };
 
 describe("InstancesPage", () => {
@@ -204,7 +205,12 @@ describe("InstancesPage", () => {
     let finishLaunch: (exit: { code: number }) => void = () => {};
     invoke.mockImplementation((command: string) => {
       if (command === "list_instances") {
-        return Promise.resolve([classicInstance]);
+        return Promise.resolve([
+          {
+            ...classicInstance,
+            lastOpenedAt: new Date(Date.now() - 5 * 60_000).toISOString(),
+          },
+        ]);
       }
       if (command === "list_versions") {
         return Promise.resolve([
@@ -218,10 +224,22 @@ describe("InstancesPage", () => {
           settings: { ...snapshot.settings, username: "Mateus" },
         });
       }
+      if (command === "install_modpack_files") {
+        return Promise.resolve();
+      }
+      if (command === "touch_last_opened") {
+        return Promise.resolve({
+          ...classicInstance,
+          lastOpenedAt: "2026-10-11T15:00:00Z",
+        });
+      }
       if (command === "launch") {
         return new Promise<{ code: number }>((resolve) => {
           finishLaunch = resolve;
         });
+      }
+      if (command === "get_last_played_folder") {
+        return Promise.resolve("classic");
       }
       if (command === "list_running_games") {
         return Promise.resolve([]);
@@ -238,11 +256,15 @@ describe("InstancesPage", () => {
       name: "Instances",
     });
     expect(within(sidebar).getByText("Classic")).toBeInTheDocument();
+    expect(within(sidebar).getByText("Classic")).toHaveClass("truncate");
+    expect(within(sidebar).queryByText("1.5.2")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Username")).not.toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: "Classic" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("1.5.2")).toBeInTheDocument();
+    expect(
+      screen.getByText("1.5.2 • Vanilla • 5 minutes ago"),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Configure Classic" }),
     ).toBeInTheDocument();
@@ -366,6 +388,13 @@ describe("InstancesPage", () => {
       if (command === "get_settings") {
         return Promise.resolve(snapshot);
       }
+      if (command === "touch_last_opened") {
+        return Promise.resolve({
+          ...classicInstance,
+          folder: args?.folder ?? "classic",
+          lastOpenedAt: "2026-10-11T15:00:00Z",
+        });
+      }
       if (command === "launch" && args?.folder) {
         return new Promise<{ code: number }>((resolve) => {
           finishLaunch[args.folder as string] = resolve;
@@ -391,7 +420,7 @@ describe("InstancesPage", () => {
     });
     expect(screen.getByRole("button", { name: "Starting…" })).toBeDisabled();
 
-    fireEvent.click(within(sidebar).getByRole("button", { name: "Next" }));
+    fireEvent.click(within(sidebar).getByRole("button", { name: /^Next/ }));
     expect(await screen.findByRole("button", { name: "Play" })).toBeEnabled();
     fireEvent.click(screen.getByRole("button", { name: "Play" }));
     await waitFor(() => {
@@ -459,6 +488,16 @@ describe("InstancesPage", () => {
           finishInstall = resolve;
         });
       }
+      if (command === "install_modpack_files") {
+        return Promise.resolve();
+      }
+      if (command === "touch_last_opened") {
+        return Promise.resolve({
+          ...classicInstance,
+          versionId: "1.20.1",
+          lastOpenedAt: "2026-10-11T15:00:00Z",
+        });
+      }
       if (command === "launch") {
         return Promise.resolve({ code: 0 });
       }
@@ -496,8 +535,168 @@ describe("InstancesPage", () => {
 
     finishInstall("java");
     await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("install_modpack_files", {
+        folder: "next",
+      });
       expect(invoke).toHaveBeenCalledWith("launch", {
         folder: "next",
+        username: "Steve",
+      });
+    });
+  });
+
+  it("skips game install when a loader version is already installed", async () => {
+    invoke.mockImplementation((command: string) => {
+      if (command === "list_instances") {
+        return Promise.resolve([
+          {
+            ...classicInstance,
+            versionId: "fabric-loader-0.16.0-1.20.1",
+            folder: "modded",
+            name: "Modded",
+          },
+        ]);
+      }
+      if (command === "list_versions") {
+        return Promise.resolve([
+          { id: "1.20.1", versionType: "release", installed: true },
+          {
+            id: "fabric-loader-0.16.0-1.20.1",
+            versionType: "old_alpha",
+            installed: true,
+          },
+        ]);
+      }
+      if (command === "get_settings") {
+        return Promise.resolve(snapshot);
+      }
+      if (command === "install_modpack_files") {
+        return Promise.resolve();
+      }
+      if (command === "touch_last_opened") {
+        return Promise.resolve({
+          ...classicInstance,
+          folder: "modded",
+          name: "Modded",
+          versionId: "fabric-loader-0.16.0-1.20.1",
+          lastOpenedAt: "2026-10-11T15:00:00Z",
+        });
+      }
+      if (command === "launch") {
+        return Promise.resolve({ code: 0 });
+      }
+      if (command === "list_running_games") {
+        return Promise.resolve([]);
+      }
+      return Promise.resolve(undefined);
+    });
+
+    await renderAt("/");
+    fireEvent.click(await screen.findByRole("button", { name: "Play" }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("install_modpack_files", {
+        folder: "modded",
+      });
+      expect(invoke).toHaveBeenCalledWith("launch", {
+        folder: "modded",
+        username: "Steve",
+      });
+    });
+    expect(invoke).not.toHaveBeenCalledWith(
+      "install_version",
+      expect.anything(),
+    );
+  });
+
+  it("keeps Preparing while install progress has no totals yet", async () => {
+    let finishInstall: (java: string) => void = () => {};
+    invoke.mockImplementation((command: string) => {
+      if (command === "list_instances") {
+        return Promise.resolve([
+          {
+            ...classicInstance,
+            versionId: "fabric-loader-0.16.0-1.20.1",
+            folder: "modded",
+            name: "Modded",
+          },
+        ]);
+      }
+      if (command === "list_versions") {
+        return Promise.resolve([
+          {
+            id: "fabric-loader-0.16.0-1.20.1",
+            versionType: "old_alpha",
+            installed: false,
+          },
+        ]);
+      }
+      if (command === "get_settings") {
+        return Promise.resolve(snapshot);
+      }
+      if (command === "install_version") {
+        return new Promise<string>((resolve) => {
+          finishInstall = resolve;
+        });
+      }
+      if (command === "install_modpack_files") {
+        return Promise.resolve();
+      }
+      if (command === "touch_last_opened") {
+        return Promise.resolve({
+          ...classicInstance,
+          folder: "modded",
+          name: "Modded",
+          versionId: "fabric-loader-0.16.0-1.20.1",
+          lastOpenedAt: "2026-10-11T15:00:00Z",
+        });
+      }
+      if (command === "launch") {
+        return Promise.resolve({ code: 0 });
+      }
+      if (command === "list_running_games") {
+        return Promise.resolve([]);
+      }
+      return Promise.resolve(undefined);
+    });
+
+    await renderAt("/");
+    fireEvent.click(await screen.findByRole("button", { name: "Play" }));
+
+    expect(
+      await screen.findByRole("progressbar", { name: "Install progress" }),
+    ).toBeInTheDocument();
+
+    listeners.get("install-progress")?.({
+      payload: {
+        versionId: "fabric-loader-0.16.0-1.20.1",
+        finished: 0,
+        failed: 0,
+        total: 0,
+        bytesDone: 0,
+        bytesTotal: 0,
+      } satisfies InstallProgress,
+    });
+    expect(await screen.findByText("Preparing…")).toBeInTheDocument();
+
+    listeners.get("install-progress")?.({
+      payload: {
+        versionId: "fabric-loader-0.16.0-1.20.1",
+        finished: 1,
+        failed: 0,
+        total: 4,
+        bytesDone: 5_000_000,
+        bytesTotal: 10_000_000,
+      } satisfies InstallProgress,
+    });
+    expect(
+      await screen.findByText(/50\.0%\s+5\.0MB\/10\.0MB/),
+    ).toBeInTheDocument();
+
+    finishInstall("java");
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("launch", {
+        folder: "modded",
         username: "Steve",
       });
     });
@@ -535,6 +734,16 @@ describe("InstancesPage", () => {
         const versionId = (args as { versionId: string }).versionId;
         return new Promise<string>((resolve) => {
           finishInstall[versionId] = resolve;
+        });
+      }
+      if (command === "install_modpack_files") {
+        return Promise.resolve();
+      }
+      if (command === "touch_last_opened") {
+        return Promise.resolve({
+          ...classicInstance,
+          folder: (args as { folder?: string } | undefined)?.folder ?? "fresh",
+          lastOpenedAt: "2026-10-11T15:00:00Z",
         });
       }
       if (command === "launch") {
@@ -612,7 +821,7 @@ describe("InstancesPage", () => {
     });
   });
 
-  it("creates an instance from a release that is not installed", async () => {
+  it("opens the new instance wizard from the sidebar", async () => {
     invoke.mockImplementation((command: string) => {
       if (command === "list_instances") {
         return Promise.resolve([]);
@@ -620,16 +829,10 @@ describe("InstancesPage", () => {
       if (command === "list_versions") {
         return Promise.resolve([
           { id: "1.20.1", versionType: "release", installed: false },
-          { id: "24w14a", versionType: "snapshot", installed: false },
         ]);
       }
-      if (command === "create_instance") {
-        return Promise.resolve({
-          ...classicInstance,
-          folder: "Survival",
-          name: "Survival",
-          versionId: "1.20.1",
-        });
+      if (command === "get_settings") {
+        return Promise.resolve(snapshot);
       }
       if (command === "list_running_games") {
         return Promise.resolve([]);
@@ -641,66 +844,8 @@ describe("InstancesPage", () => {
     fireEvent.click(
       await screen.findByRole("button", { name: "New instance" }),
     );
-    fireEvent.change(await screen.findByLabelText("Name"), {
-      target: { value: "Survival" },
-    });
-
-    fireEvent.click(screen.getByRole("combobox", { name: "Version" }));
-    const releaseOption = await screen.findByRole("option", {
-      name: "1.20.1 (will install)",
-    });
     expect(
-      screen.queryByRole("option", { name: /24w14a/ }),
-    ).not.toBeInTheDocument();
-    fireEvent.click(releaseOption);
-
-    fireEvent.click(screen.getByRole("button", { name: "Create instance" }));
-    await waitFor(() => {
-      expect(invoke).toHaveBeenCalledWith("create_instance", {
-        name: "Survival",
-        versionId: "1.20.1",
-      });
-    });
-    expect(invoke).not.toHaveBeenCalledWith(
-      "install_version",
-      expect.anything(),
-    );
-  });
-
-  it("includes snapshots in the create dialog when the switch is on", async () => {
-    invoke.mockImplementation((command: string) => {
-      if (command === "list_instances") {
-        return Promise.resolve([]);
-      }
-      if (command === "list_versions") {
-        return Promise.resolve([
-          { id: "1.20.1", versionType: "release", installed: true },
-          { id: "24w14a", versionType: "snapshot", installed: false },
-        ]);
-      }
-      if (command === "list_running_games") {
-        return Promise.resolve([]);
-      }
-      return Promise.resolve(undefined);
-    });
-
-    await renderAt("/");
-    fireEvent.click(
-      await screen.findByRole("button", { name: "New instance" }),
-    );
-    fireEvent.click(screen.getByRole("combobox", { name: "Version" }));
-    expect(
-      await screen.findByRole("option", { name: "1.20.1" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("option", { name: /24w14a/ }),
-    ).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("option", { name: "1.20.1" }));
-
-    fireEvent.click(screen.getByRole("switch", { name: "Include snapshots" }));
-    fireEvent.click(screen.getByRole("combobox", { name: "Version" }));
-    expect(
-      await screen.findByRole("option", { name: "24w14a (will install)" }),
+      await screen.findByRole("heading", { name: "How do you want to start?" }),
     ).toBeInTheDocument();
   });
 

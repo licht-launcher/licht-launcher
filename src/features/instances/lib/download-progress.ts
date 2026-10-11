@@ -30,3 +30,13 @@ export function progressText(progress: DownloadProgress): string {
       : Math.floor((progress.bytesDone * 1000) / progress.bytesTotal);
   return `${oneDecimal(tenths / 10, tenths % 10)}%  ${megabytes(progress.bytesDone)}MB/${megabytes(progress.bytesTotal)}MB`;
 }
+
+/** True before the first real download totals are known (or with no event yet). */
+export function isPreparingProgress(
+  progress: DownloadProgress | null | undefined,
+): boolean {
+  if (progress === null || progress === undefined) {
+    return true;
+  }
+  return progress.bytesTotal === 0 && progress.total === 0;
+}

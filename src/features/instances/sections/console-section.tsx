@@ -184,7 +184,7 @@ export function ConsoleSection({
 
   return (
     <section aria-label="Game log" className="flex min-h-0 flex-1 flex-col">
-      <ScrollArea className="min-h-0 flex-1 rounded-lg bg-black/25">
+      <ScrollArea className="min-h-0 flex-1 rounded-lg border border-border/60 bg-black/20">
         {lines.length === 0 ? (
           <p
             className={cn(

@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -39,6 +40,9 @@ pub struct Instance {
     pub override_jvm_arguments: bool,
     #[serde(default)]
     pub java_path: Option<String>,
+    /// Last time this instance was launched (RFC 3339 UTC). Absent if never played.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_opened_at: Option<String>,
 }
 
 /// An instance folder and the profile stored in it.
@@ -61,6 +65,7 @@ pub struct InstanceEntry {
     pub override_java: bool,
     pub override_jvm_arguments: bool,
     pub java_path: Option<String>,
+    pub last_opened_at: Option<String>,
 }
 
 /// Launch personalization written from the instance settings dialog.
@@ -182,11 +187,21 @@ pub fn duplicate_instance(instances_dir: &Path, folder: &str, name: &str) -> Res
     }
     let mut instance = load_instance(&destination)?;
     instance.name = name;
+    instance.last_opened_at = None;
     if let Err(error) = write_instance(&destination, &instance) {
         let _ = fs::remove_dir_all(&destination);
         return Err(error);
     }
     Ok(entry_from(new_folder, instance))
+}
+
+/// Records that the instance was opened now (RFC 3339 UTC on the profile).
+pub fn touch_last_opened(instances_dir: &Path, folder: &str) -> Result<InstanceEntry> {
+    let dir = instance_dir(instances_dir, folder)?;
+    let mut instance = load_instance(&dir)?;
+    instance.last_opened_at = Some(utc_now_rfc3339()?);
+    write_instance(&dir, &instance)?;
+    Ok(entry_from(folder.to_string(), instance))
 }
 
 pub fn delete_instance(instances_dir: &Path, folder: &str) -> Result<()> {
@@ -249,6 +264,7 @@ fn default_instance(name: String, version_id: String) -> Instance {
         override_java: false,
         override_jvm_arguments: false,
         java_path: None,
+        last_opened_at: None,
     }
 }
 
@@ -268,6 +284,7 @@ fn instance_from_template(name: String, version_id: String, template: &GlobalLau
         override_java: false,
         override_jvm_arguments: false,
         java_path: None,
+        last_opened_at: None,
     }
 }
 
@@ -341,7 +358,41 @@ fn entry_from(folder: String, instance: Instance) -> InstanceEntry {
         override_java: instance.override_java,
         override_jvm_arguments: instance.override_jvm_arguments,
         java_path: instance.java_path,
+        last_opened_at: instance.last_opened_at,
     }
+}
+
+fn utc_now_rfc3339() -> Result<String> {
+    let duration = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|error| CoreError::Io(std::io::Error::other(error)))?;
+    Ok(unix_secs_to_rfc3339(duration.as_secs()))
+}
+
+/// Civil UTC date/time from Unix seconds (no leap seconds), as `YYYY-MM-DDTHH:MM:SSZ`.
+fn unix_secs_to_rfc3339(secs: u64) -> String {
+    let days = secs / 86_400;
+    let tod = secs % 86_400;
+    let hour = tod / 3_600;
+    let min = (tod % 3_600) / 60;
+    let sec = tod % 60;
+    let (year, month, day) = civil_from_days(days as i64);
+    format!("{year:04}-{month:02}-{day:02}T{hour:02}:{min:02}:{sec:02}Z")
+}
+
+/// Howard Hinnant's `civil_from_days` for the proleptic Gregorian calendar.
+fn civil_from_days(days_since_epoch: i64) -> (i32, u32, u32) {
+    let z = days_since_epoch + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = (z - era * 146_097) as u32;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146_096) / 365;
+    let y = yoe as i64 + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 };
+    let year = if month <= 2 { y + 1 } else { y };
+    (year as i32, month, day)
 }
 
 fn write_instance(dir: &Path, instance: &Instance) -> Result<()> {

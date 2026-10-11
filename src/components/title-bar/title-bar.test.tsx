@@ -160,6 +160,28 @@ describe("TitleBar", () => {
     ).toBeInTheDocument();
   });
 
+  it("stays Idle on a zero-total preparing pulse", async () => {
+    renderTitleBar();
+    await waitFor(() => {
+      expect(listeners.has("install-progress")).toBe(true);
+    });
+
+    listeners.get("install-progress")?.({
+      payload: {
+        versionId: "fabric-loader-0.16.0-1.20.1",
+        finished: 0,
+        failed: 0,
+        total: 0,
+        bytesDone: 0,
+        bytesTotal: 0,
+      } satisfies InstallProgress,
+    });
+
+    expect(
+      screen.getByRole("button", { name: "Downloads: Idle" }),
+    ).toBeInTheDocument();
+  });
+
   it("aggregates multiple installs on the downloads chip", async () => {
     renderTitleBar();
     await waitFor(() => {

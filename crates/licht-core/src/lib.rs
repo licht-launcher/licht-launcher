@@ -12,12 +12,15 @@ mod instance_fs;
 mod java;
 mod launch;
 mod launch_lock;
+mod loaders;
+mod modpacks;
 mod natives;
 mod offline;
 mod run;
 mod settings;
 mod version;
 mod version_manifest;
+mod version_resolve;
 
 pub use asset_index::{
     AssetIndexFile, AssetObject, fetch_asset_index, parse_asset_index, reconstruct_assets,
@@ -44,7 +47,8 @@ pub use install::{
 pub use instance::{
     Instance, InstanceEntry, InstanceSettings, create_instance, delete_instance,
     duplicate_instance, instance_launch, list_instances, load_instance, parse_instance,
-    rename_instance, resolved_java_path, resolved_launch, update_instance, update_instance_version,
+    rename_instance, resolved_java_path, resolved_launch, touch_last_opened, update_instance,
+    update_instance_version,
 };
 pub use instance_fs::{InstanceFsEntry, list_instance_entries};
 pub use java::{
@@ -62,6 +66,14 @@ pub use launch_lock::{
     list_running_launch_folders, process_matches_lock, process_start_time, read_launch_lock,
     write_launch_lock, write_launch_lock_for_pid,
 };
+pub use loaders::{
+    LoaderChannel, LoaderPlatform, create_instance_with_platform, list_loader_versions,
+};
+pub use modpacks::{
+    CURSEFORGE_API_KEY_ENV, MODPACK_INDEX_FILE, ModpackListItem, ModpackSource, ModpackVersionItem,
+    apply_mrpack_loader, create_instance_from_modpack, install_mrpack_files,
+    list_modpack_versions, mrpack_download_tasks, search_modpacks,
+};
 pub use natives::{NativeLibrary, create_natives_directory, extract_natives, native_libraries};
 pub use offline::{
     LaunchArgs, OfflineAccount, OfflineLaunch, offline_account, parse_launch_args,
@@ -76,7 +88,10 @@ pub use settings::{
 pub use version::{
     Arch, Argument, ArgumentValue, Artifact, AssetIndex, Download, GameArguments, JavaVersion,
     LaunchEnvironment, Library, LibraryDownloads, LibraryExtract, OsName, OsRule, Rule, RuleAction,
-    Version, VersionDownloads, applicable_libraries, parse_version, rules_allow,
+    Version, VersionDownloads, applicable_libraries, maven_library_path, parse_version, rules_allow,
+};
+pub use version_resolve::{
+    load_resolved_version_json, local_inherits_from, local_version_exists,
 };
 pub use version_manifest::{
     LatestVersions, ManifestVersion, VERSION_MANIFEST_URL, VersionManifest, VersionSummary,

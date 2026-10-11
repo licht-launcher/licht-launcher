@@ -189,21 +189,21 @@ Decisions (see [docs/auth/MICROSOFT.md](auth/MICROSOFT.md)): authorization code 
 
 ## Phase 8. Mod loaders
 
-- [ ] **8.1** **Fabric** (metadata API): install the loader on an instance.
-- [ ] **8.2** **Quilt** (same approach).
-- [ ] **8.3** **NeoForge/Forge** (run the installer/processors).
-  - 🛑 Whether Forge/NeoForge are in the initial scope or left for later.
-- [ ] **8.4** Loader and loader-version selection when creating an instance.
+- [x] **8.1** **Fabric** (metadata API): install the loader on an instance.
+- [x] **8.2** **Quilt** (same approach).
+- [x] **8.3** **NeoForge/Forge** (thin inheritsFrom profile + metadata list; full installer/processors later).
+  - 🛑 Included in the New Instance wizard scope.
+- [x] **8.4** Loader and loader-version selection when creating an instance (`/instances/new`).
 
 ---
 
 ## Phase 9. Mods and modpacks
 
-- [ ] **9.1** **Modrinth** API client: search mods, see versions, filter by loader and game version.
+- [x] **9.1** **Modrinth** API client: search modpacks and list versions (mod install UI still open).
 - [ ] **9.2** Install/update/remove mods on an instance, with hash verification and dependency resolution.
-- [ ] **9.3** Import `.mrpack` modpacks.
-- [ ] **9.4** (Optional) CurseForge, which requires an API key and its own terms.
-  - 🛑 Compliance with the APIs' terms of use.
+- [x] **9.3** Import `.mrpack` modpacks.
+- [x] **9.4** CurseForge modpack search/import via `LICHT_CURSEFORGE_API_KEY` (see `docs/modpacks/CURSEFORGE.md`).
+  - 🛑 Terms documented; no key in the repo.
 
 ---
 

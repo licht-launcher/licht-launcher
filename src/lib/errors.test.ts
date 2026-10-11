@@ -37,9 +37,13 @@ describe("friendly errors", () => {
     ).toMatch(/does not own/);
   });
 
+  it("turns a missing version into a short sentence", () => {
+    expect(friendlyError("version was not found")).toMatch(/missing/i);
+  });
+
   it("keeps an unknown message", () => {
-    expect(friendlyError("version was not found")).toBe(
-      "version was not found",
+    expect(friendlyError("something totally unknown")).toBe(
+      "something totally unknown",
     );
   });
 

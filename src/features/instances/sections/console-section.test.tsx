@@ -35,7 +35,8 @@ describe("ConsoleSection", () => {
     const log = screen.getByLabelText("Game log");
     expect(log).toBeInTheDocument();
     expect(log.querySelector("[data-slot='scroll-area']")).toHaveClass(
-      "bg-black/25",
+      "border-border/60",
+      "bg-black/20",
     );
     expect(log.querySelector("pre")).toHaveClass("font-mono");
     expect(log.querySelector("pre")).toHaveClass("select-text");

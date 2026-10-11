@@ -9,50 +9,91 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from "./routes/__root";
-import { Route as IndexRouteImport } from "./routes/index";
+import { Route as AppRouteImport } from "./routes/_app";
+import { Route as AppIndexRouteImport } from "./routes/_app/index";
+import { Route as AppInstancesNewRouteImport } from "./routes/_app/instances.new";
 
-const IndexRoute = IndexRouteImport.update({
+const AppRoute = AppRouteImport.update({
+  id: "/_app",
+  getParentRoute: () => rootRouteImport,
+} as any);
+const AppIndexRoute = AppIndexRouteImport.update({
   id: "/",
   path: "/",
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AppRoute,
+} as any);
+const AppInstancesNewRoute = AppInstancesNewRouteImport.update({
+  id: "/instances/new",
+  path: "/instances/new",
+  getParentRoute: () => AppRoute,
 } as any);
 
 export interface FileRoutesByFullPath {
-  "/": typeof IndexRoute;
+  "/": typeof AppIndexRoute;
+  "/instances/new": typeof AppInstancesNewRoute;
 }
 export interface FileRoutesByTo {
-  "/": typeof IndexRoute;
+  "/": typeof AppIndexRoute;
+  "/instances/new": typeof AppInstancesNewRoute;
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport;
-  "/": typeof IndexRoute;
+  "/_app": typeof AppRouteWithChildren;
+  "/_app/": typeof AppIndexRoute;
+  "/_app/instances/new": typeof AppInstancesNewRoute;
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath;
-  fullPaths: "/";
+  fullPaths: "/" | "/instances/new";
   fileRoutesByTo: FileRoutesByTo;
-  to: "/";
-  id: "__root__" | "/";
+  to: "/" | "/instances/new";
+  id: "__root__" | "/_app" | "/_app/" | "/_app/instances/new";
   fileRoutesById: FileRoutesById;
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute;
+  AppRoute: typeof AppRouteWithChildren;
 }
 
 declare module "@tanstack/react-router" {
   interface FileRoutesByPath {
-    "/": {
-      id: "/";
+    "/_app": {
+      id: "/_app";
+      path: "";
+      fullPath: "/";
+      preLoaderRoute: typeof AppRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/_app/": {
+      id: "/_app/";
       path: "/";
       fullPath: "/";
-      preLoaderRoute: typeof IndexRouteImport;
-      parentRoute: typeof rootRouteImport;
+      preLoaderRoute: typeof AppIndexRouteImport;
+      parentRoute: typeof AppRoute;
+    };
+    "/_app/instances/new": {
+      id: "/_app/instances/new";
+      path: "/instances/new";
+      fullPath: "/instances/new";
+      preLoaderRoute: typeof AppInstancesNewRouteImport;
+      parentRoute: typeof AppRoute;
     };
   }
 }
 
+interface AppRouteChildren {
+  AppIndexRoute: typeof AppIndexRoute;
+  AppInstancesNewRoute: typeof AppInstancesNewRoute;
+}
+
+const AppRouteChildren: AppRouteChildren = {
+  AppIndexRoute: AppIndexRoute,
+  AppInstancesNewRoute: AppInstancesNewRoute,
+};
+
+const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren);
+
 const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
+  AppRoute: AppRouteWithChildren,
 };
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

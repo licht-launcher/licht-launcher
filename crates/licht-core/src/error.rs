@@ -124,6 +124,18 @@ pub enum CoreError {
     AuthNotSignedIn,
     #[error("secure credential storage failed")]
     AuthKeyring,
+    #[error("mod loader metadata failed: {detail}")]
+    LoaderMeta { detail: String },
+    #[error("mod loader version was not found")]
+    LoaderVersionMissing,
+    #[error("mod loader JSON is invalid")]
+    LoaderJson(#[source] serde_json::Error),
+    #[error("modpack metadata failed: {detail}")]
+    ModpackMeta { detail: String },
+    #[error("LICHT_CURSEFORGE_API_KEY is missing or empty")]
+    CurseforgeKeyMissing,
+    #[error("modpack archive is invalid")]
+    ModpackArchive,
 }
 
 #[cfg(test)]

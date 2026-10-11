@@ -1,9 +1,7 @@
 import { useEffect, useState } from "react";
 
 import type { InstanceAction } from "@/features/instances/components/instance-action-dialog";
-import { createVersionChoices } from "@/features/instances/model/create-versions";
 import type { SectionId } from "@/features/settings/model/sections";
-import type { VersionSummary } from "@/lib/generated/VersionSummary";
 import { onOpenSettingsRequest } from "@/lib/shell-events";
 
 export function useInstanceDialogs() {
@@ -14,8 +12,6 @@ export function useInstanceDialogs() {
   );
   const [action, setAction] = useState<InstanceAction | null>(null);
   const [draftName, setDraftName] = useState("");
-  const [draftVersion, setDraftVersion] = useState("");
-  const [includeSnapshots, setIncludeSnapshots] = useState(false);
 
   useEffect(() => {
     return onOpenSettingsRequest((section) => {
@@ -27,14 +23,6 @@ export function useInstanceDialogs() {
 
   function clearAction() {
     setAction(null);
-  }
-
-  function openCreate(versions: VersionSummary[]) {
-    setDraftName("");
-    setIncludeSnapshots(false);
-    const choices = createVersionChoices(versions, false);
-    setDraftVersion(choices[0]?.id ?? "");
-    setAction({ kind: "create" });
   }
 
   function openConfigure(folder: string) {
@@ -53,6 +41,7 @@ export function useInstanceDialogs() {
   }
 
   function openDelete(folder: string, name: string) {
+    setDraftName("");
     setAction({ kind: "delete", folder, name });
   }
 
@@ -65,12 +54,7 @@ export function useInstanceDialogs() {
     action,
     draftName,
     setDraftName,
-    draftVersion,
-    setDraftVersion,
-    includeSnapshots,
-    setIncludeSnapshots,
     clearAction,
-    openCreate,
     openConfigure,
     openGlobalSettings,
     openDuplicate,

@@ -22,6 +22,7 @@ const entry: InstanceEntry = {
   overrideJava: true,
   overrideJvmArguments: false,
   javaPath: "C:/jdk/bin/java.exe",
+  lastOpenedAt: null,
 };
 
 describe("instance draft", () => {

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- Fabric yarn spool — square canvas, content centered -->
+  <rect x="11" y="6" width="10" height="2.5" rx="0.8" fill="#DBDEE0"/>
+  <rect x="11" y="23.5" width="10" height="2.5" rx="0.8" fill="#DBDEE0"/>
+  <rect x="12.5" y="8.5" width="7" height="15" rx="1" fill="#C6C9CC"/>
+  <path d="M12.5 11h7M12.5 13.5h7M12.5 16h7M12.5 18.5h7M12.5 21h7" stroke="#8B9096" stroke-width="1.1"/>
+  <circle cx="16" cy="9.5" r="1" fill="#6B7280"/>
+  <circle cx="16" cy="22.5" r="1" fill="#6B7280"/>
+  <path d="M19.5 12.5c3.2 0.8 4.8 3.2 4 6.2" stroke="#E8A23A" stroke-width="1.5" stroke-linecap="round"/>
+  <circle cx="23.5" cy="19" r="1.2" fill="#E8A23A"/>
+</svg>

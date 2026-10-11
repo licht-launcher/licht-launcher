@@ -6,8 +6,11 @@ import { InstanceIcon } from "@/features/instances/components/instance-icon";
 import type { PlayPhase } from "@/features/instances/hooks/use-play-session";
 import {
   barValue,
+  isPreparingProgress,
   progressText,
 } from "@/features/instances/lib/download-progress";
+import { describeInstanceVersion } from "@/features/instances/lib/instance-version";
+import { formatRelativeOpenedAt } from "@/features/instances/lib/relative-time";
 import type { DownloadProgress } from "@/lib/generated/DownloadProgress";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 import { cn } from "@/lib/utils";
@@ -45,27 +48,40 @@ export function PlaySection({
   const running = phase === "running";
   const stopping = phase === "stopping";
   const showStop = running || stopping;
+  const { gameVersion, loaderLabel } = describeInstanceVersion(
+    instance.versionId,
+  );
+  const openedLabel =
+    formatRelativeOpenedAt(instance.lastOpenedAt) ?? "Not opened yet";
 
   return (
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="flex min-w-0 flex-1 flex-wrap items-start gap-4">
         <div className="flex min-w-0 items-center gap-3">
           <InstanceIcon size="md" />
-          <div className="flex min-w-0 flex-col gap-1">
+          <div className="flex min-w-0 flex-col gap-1.5">
             <h2 className="text-lg font-medium">{instance.name}</h2>
-            <p className="text-sm text-muted-foreground">
-              {instance.versionId}
+            <p className="min-w-0 text-sm text-muted-foreground">
+              {[gameVersion, loaderLabel, openedLabel]
+                .filter((part): part is string => part !== null)
+                .join(" • ")}
             </p>
           </div>
         </div>
         {installing ? (
           <div className="flex min-w-0 max-w-sm flex-1 flex-col gap-1 pt-1">
             <span className="text-xs text-muted-foreground">
-              {progress ? progressText(progress) : "Preparing…"}
+              {progress !== null && !isPreparingProgress(progress)
+                ? progressText(progress)
+                : "Preparing…"}
             </span>
             <Progress
               aria-label="Install progress"
-              value={progress ? barValue(progress) : 0}
+              value={
+                progress !== null && !isPreparingProgress(progress)
+                  ? barValue(progress)
+                  : 0
+              }
             />
           </div>
         ) : null}
