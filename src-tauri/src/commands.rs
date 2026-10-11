@@ -315,6 +315,24 @@ pub fn list_instance_entries(
 }
 
 #[tauri::command]
+pub fn get_last_played_folder(paths: State<'_, LauncherPaths>) -> Result<Option<String>, String> {
+    licht_core::last_played_folder(&paths.settings).map_err(failure)
+}
+
+#[tauri::command]
+pub fn set_last_played_folder(
+    paths: State<'_, LauncherPaths>,
+    folder: String,
+) -> Result<(), String> {
+    licht_core::set_last_played_folder(&paths.settings, &folder).map_err(failure)
+}
+
+#[tauri::command]
+pub fn clear_last_played_folder(paths: State<'_, LauncherPaths>) -> Result<(), String> {
+    licht_core::clear_last_played_folder(&paths.settings).map_err(failure)
+}
+
+#[tauri::command]
 pub fn get_settings(paths: State<'_, LauncherPaths>) -> Result<SettingsSnapshot, String> {
     settings_snapshot(&paths.settings).map_err(failure)
 }

@@ -69,6 +69,18 @@ export function openRepository(): Promise<void> {
   return invoke("open_repository");
 }
 
+export function getLastPlayedFolder(): Promise<string | null> {
+  return invoke("get_last_played_folder");
+}
+
+export function setLastPlayedFolder(folder: string): Promise<void> {
+  return invoke("set_last_played_folder", { folder });
+}
+
+export function clearLastPlayedFolder(): Promise<void> {
+  return invoke("clear_last_played_folder");
+}
+
 export function getSettings(): Promise<SettingsSnapshot> {
   return invoke("get_settings");
 }

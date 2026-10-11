@@ -4,10 +4,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   browseApplicationDirectory,
   browseJava,
+  clearLastPlayedFolder,
   createInstance,
   deleteInstance,
   detectJavaInstallations,
   duplicateInstance,
+  getLastPlayedFolder,
   getSettings,
   installRecommendedJava,
   installVersion,
@@ -24,6 +26,7 @@ import {
   saveInstance,
   saveSettings,
   setInstanceVersion,
+  setLastPlayedFolder,
   stopGame,
 } from "@/lib/commands";
 
@@ -104,6 +107,17 @@ describe("launcher commands", () => {
   it("opens the repository", async () => {
     await openRepository();
     expect(invoke).toHaveBeenCalledWith("open_repository");
+  });
+
+  it("reads and writes the last played folder", async () => {
+    await getLastPlayedFolder();
+    expect(invoke).toHaveBeenCalledWith("get_last_played_folder");
+    await setLastPlayedFolder("classic");
+    expect(invoke).toHaveBeenCalledWith("set_last_played_folder", {
+      folder: "classic",
+    });
+    await clearLastPlayedFolder();
+    expect(invoke).toHaveBeenCalledWith("clear_last_played_folder");
   });
 
   it("reads settings without arguments", async () => {

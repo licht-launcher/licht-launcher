@@ -47,7 +47,6 @@ vi.mock("@tauri-apps/api/window", () => ({
   }),
 }));
 
-
 async function renderAt(path: string) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -88,11 +87,60 @@ describe("InstancesPage", () => {
     invoke.mockReset();
   });
 
-  it("shows the sidebar empty state and opens settings", async () => {
+  it("sorts instances by last played or name", async () => {
     invoke.mockImplementation((command: string) => {
-      if (command === "list_instance_entries") {
+      if (command === "list_instances") {
+        return Promise.resolve([
+          { ...classicInstance, folder: "zeta", name: "Zeta" },
+          classicInstance,
+          { ...classicInstance, folder: "alpha", name: "Alpha" },
+        ]);
+      }
+      if (command === "list_versions") {
+        return Promise.resolve([
+          { id: "1.5.2", versionType: "release", installed: true },
+        ]);
+      }
+      if (command === "get_settings") {
+        return Promise.resolve(snapshot);
+      }
+      if (command === "get_last_played_folder") {
+        return Promise.resolve("classic");
+      }
+      if (command === "list_running_games") {
         return Promise.resolve([]);
       }
+      return Promise.resolve(undefined);
+    });
+
+    await renderAt("/");
+
+    const sidebar = await screen.findByRole("navigation", {
+      name: "Instances",
+    });
+    const names = () =>
+      within(sidebar)
+        .getAllByRole("button")
+        .map((button) => button.textContent)
+        .filter(
+          (text) => text === "Alpha" || text === "Classic" || text === "Zeta",
+        );
+
+    await waitFor(() => {
+      expect(names()).toEqual(["Classic", "Alpha", "Zeta"]);
+    });
+
+    fireEvent.click(screen.getByRole("combobox", { name: "Sort instances" }));
+    fireEvent.click(await screen.findByRole("option", { name: "Name" }));
+    expect(names()).toEqual(["Alpha", "Classic", "Zeta"]);
+
+    fireEvent.click(screen.getByRole("combobox", { name: "Sort instances" }));
+    fireEvent.click(await screen.findByRole("option", { name: "Last played" }));
+    expect(names()).toEqual(["Classic", "Alpha", "Zeta"]);
+  });
+
+  it("shows the sidebar empty state and opens settings", async () => {
+    invoke.mockImplementation((command: string) => {
       if (command === "list_instances") {
         return Promise.resolve([]);
       }
@@ -116,6 +164,9 @@ describe("InstancesPage", () => {
       }
       if (command === "list_running_games") {
         return Promise.resolve([]);
+      }
+      if (command === "get_last_played_folder") {
+        return Promise.resolve(null);
       }
       return Promise.resolve(undefined);
     });
@@ -152,9 +203,6 @@ describe("InstancesPage", () => {
   it("lists instances in the sidebar and plays an installed version", async () => {
     let finishLaunch: (exit: { code: number }) => void = () => {};
     invoke.mockImplementation((command: string) => {
-      if (command === "list_instance_entries") {
-        return Promise.resolve([]);
-      }
       if (command === "list_instances") {
         return Promise.resolve([classicInstance]);
       }
@@ -260,9 +308,6 @@ describe("InstancesPage", () => {
 
   it("shows Stop for an orphaned running game recovered on load", async () => {
     invoke.mockImplementation((command: string) => {
-      if (command === "list_instance_entries") {
-        return Promise.resolve([]);
-      }
       if (command === "list_instances") {
         return Promise.resolve([classicInstance]);
       }
@@ -288,12 +333,16 @@ describe("InstancesPage", () => {
     expect(
       screen.queryByRole("button", { name: "Play" }),
     ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Classic (running)" }),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Stop" }));
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("stop_game", { folder: "classic" });
     });
     expect(await screen.findByRole("button", { name: "Play" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Classic" })).toBeInTheDocument();
   });
 
   it("keeps a console per instance and allows parallel launches", async () => {
@@ -305,9 +354,6 @@ describe("InstancesPage", () => {
       versionId: "1.20.1",
     };
     invoke.mockImplementation((command: string, args?: { folder?: string }) => {
-      if (command === "list_instance_entries") {
-        return Promise.resolve([]);
-      }
       if (command === "list_instances") {
         return Promise.resolve([classicInstance, nextInstance]);
       }
@@ -375,7 +421,7 @@ describe("InstancesPage", () => {
     expect(screen.queryByText("classic-log")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Stop" })).toBeEnabled();
 
-    fireEvent.click(within(sidebar).getByRole("button", { name: "Classic" }));
+    fireEvent.click(within(sidebar).getByRole("button", { name: /^Classic/ }));
     expect(await screen.findByText("classic-log")).toBeInTheDocument();
     expect(screen.queryByText("next-log")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Stop" })).toBeEnabled();
@@ -390,9 +436,6 @@ describe("InstancesPage", () => {
   it("installs a missing version when playing", async () => {
     let finishInstall: (java: string) => void = () => {};
     invoke.mockImplementation((command: string) => {
-      if (command === "list_instance_entries") {
-        return Promise.resolve([]);
-      }
       if (command === "list_instances") {
         return Promise.resolve([
           {
@@ -460,11 +503,117 @@ describe("InstancesPage", () => {
     });
   });
 
-  it("creates an instance from a release that is not installed", async () => {
-    invoke.mockImplementation((command: string) => {
-      if (command === "list_instance_entries") {
+  it("installs two versions in parallel without locking the sidebar", async () => {
+    const finishInstall: Record<string, (java: string) => void> = {};
+    invoke.mockImplementation((command: string, args?: unknown) => {
+      if (command === "list_instances") {
+        return Promise.resolve([
+          {
+            ...classicInstance,
+            versionId: "1.20.1",
+            folder: "next",
+            name: "Next",
+          },
+          {
+            ...classicInstance,
+            versionId: "1.21.1",
+            folder: "fresh",
+            name: "Fresh",
+          },
+        ]);
+      }
+      if (command === "list_versions") {
+        return Promise.resolve([
+          { id: "1.20.1", versionType: "release", installed: false },
+          { id: "1.21.1", versionType: "release", installed: false },
+        ]);
+      }
+      if (command === "get_settings") {
+        return Promise.resolve(snapshot);
+      }
+      if (command === "install_version") {
+        const versionId = (args as { versionId: string }).versionId;
+        return new Promise<string>((resolve) => {
+          finishInstall[versionId] = resolve;
+        });
+      }
+      if (command === "launch") {
+        return Promise.resolve({ code: 0 });
+      }
+      if (command === "list_running_games") {
         return Promise.resolve([]);
       }
+      return Promise.resolve(undefined);
+    });
+
+    await renderAt("/");
+    const sidebar = screen.getByRole("navigation", { name: "Instances" });
+    fireEvent.click(await screen.findByRole("button", { name: "Play" }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("install_version", {
+        versionId: "1.20.1",
+      });
+    });
+    expect(screen.getByRole("button", { name: "New instance" })).toBeEnabled();
+    expect(
+      within(sidebar).getByRole("button", { name: /^Fresh/ }),
+    ).toBeEnabled();
+
+    fireEvent.click(within(sidebar).getByRole("button", { name: /^Fresh/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Play" }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("install_version", {
+        versionId: "1.21.1",
+      });
+    });
+
+    listeners.get("install-progress")?.({
+      payload: {
+        versionId: "1.21.1",
+        finished: 1,
+        failed: 0,
+        total: 2,
+        bytesDone: 4_000_000,
+        bytesTotal: 8_000_000,
+      } satisfies InstallProgress,
+    });
+    expect(
+      await screen.findByText(/50\.0%\s+4\.0MB\/8\.0MB/),
+    ).toBeInTheDocument();
+
+    fireEvent.click(within(sidebar).getByRole("button", { name: /^Next/ }));
+    listeners.get("install-progress")?.({
+      payload: {
+        versionId: "1.20.1",
+        finished: 1,
+        failed: 0,
+        total: 4,
+        bytesDone: 5_000_000,
+        bytesTotal: 10_000_000,
+      } satisfies InstallProgress,
+    });
+    expect(
+      await screen.findByText(/50\.0%\s+5\.0MB\/10\.0MB/),
+    ).toBeInTheDocument();
+
+    finishInstall["1.20.1"]?.("java");
+    finishInstall["1.21.1"]?.("java");
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("launch", {
+        folder: "next",
+        username: "Steve",
+      });
+      expect(invoke).toHaveBeenCalledWith("launch", {
+        folder: "fresh",
+        username: "Steve",
+      });
+    });
+  });
+
+  it("creates an instance from a release that is not installed", async () => {
+    invoke.mockImplementation((command: string) => {
       if (command === "list_instances") {
         return Promise.resolve([]);
       }
@@ -520,9 +669,6 @@ describe("InstancesPage", () => {
 
   it("includes snapshots in the create dialog when the switch is on", async () => {
     invoke.mockImplementation((command: string) => {
-      if (command === "list_instance_entries") {
-        return Promise.resolve([]);
-      }
       if (command === "list_instances") {
         return Promise.resolve([]);
       }
@@ -560,9 +706,6 @@ describe("InstancesPage", () => {
 
   it("shows a network toast when the list fails", async () => {
     invoke.mockImplementation((command: string) => {
-      if (command === "list_instance_entries") {
-        return Promise.resolve([]);
-      }
       if (command === "list_instances") {
         return Promise.resolve([]);
       }

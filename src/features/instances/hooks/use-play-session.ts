@@ -6,6 +6,7 @@ import {
   installVersion,
   launchVersion,
   listRunningGames,
+  setLastPlayedFolder,
   stopGame,
 } from "@/lib/commands";
 import { friendlyError, messageOf } from "@/lib/errors";
@@ -165,6 +166,8 @@ export function usePlaySession({
       markStarting(instance.folder);
       launchPendingRef.current.add(instance.folder);
       try {
+        await setLastPlayedFolder(instance.folder);
+        void queryClient.invalidateQueries({ queryKey: ["last-played"] });
         await launchVersion(instance.folder, username);
       } finally {
         clearSession(instance.folder);

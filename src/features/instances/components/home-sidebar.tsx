@@ -1,40 +1,106 @@
-import { PlusIcon, SettingsIcon } from "lucide-react";
+import {
+  ArrowDownAZIcon,
+  HistoryIcon,
+  Loader2Icon,
+  PlusIcon,
+  SettingsIcon,
+} from "lucide-react";
+import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { InstanceIcon } from "@/features/instances/components/instance-icon";
+import type { PlayPhase } from "@/features/instances/hooks/use-play-session";
+import {
+  type InstanceSort,
+  sortInstances,
+} from "@/features/instances/lib/sort-instances";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
+
+function SortLabel({
+  icon: Icon,
+  label,
+}: {
+  icon: typeof HistoryIcon;
+  label: string;
+}) {
+  return (
+    <span className="flex items-center gap-1.5 font-brand text-xs font-medium leading-none">
+      <Icon aria-hidden className="size-3.5 shrink-0" strokeWidth={2} />
+      {label}
+    </span>
+  );
+}
 
 export function HomeSidebar({
   instances,
+  lastPlayedFolder,
   selectedFolder,
   busy,
   loading,
+  playPhase,
   onSelect,
   onCreate,
   onOpenSettings,
 }: {
   instances: InstanceEntry[];
+  lastPlayedFolder: string | null;
   selectedFolder: string | null;
   busy: boolean;
   loading: boolean;
+  playPhase: (folder: string) => PlayPhase;
   onSelect: (folder: string) => void;
   onCreate: () => void;
   onOpenSettings: () => void;
 }) {
-  return (
-    <div className="flex h-full w-72 shrink-0 flex-col gap-6 overflow-hidden bg-black/20 px-4 pt-8 pb-10">
-      <div className="flex flex-col gap-0.5 px-2">
-        <h1 className="text-base font-medium">Licht Launcher</h1>
-        <p className="text-xs text-muted-foreground">0.1.0 · Lilie</p>
-      </div>
+  const [sort, setSort] = useState<InstanceSort>("lastPlayed");
+  const ordered = sortInstances(instances, sort, lastPlayedFolder);
 
+  return (
+    <div className="flex h-full w-72 shrink-0 flex-col gap-6 overflow-hidden bg-black/20 px-4 pt-6 pb-10">
       <nav
         aria-label="Instances"
         className="flex min-h-0 flex-1 flex-col gap-2"
       >
-        <h2 className="px-2 text-xs font-medium text-muted-foreground">
-          Instances
-        </h2>
+        <div className="flex items-center gap-2 px-2">
+          <h2 className="min-w-0 flex-1 font-brand text-xs font-medium leading-none text-muted-foreground">
+            Instances
+          </h2>
+          <Select
+            value={sort}
+            onValueChange={(value) => {
+              if (value === "lastPlayed" || value === "name") {
+                setSort(value);
+              }
+            }}
+          >
+            <SelectTrigger
+              size="sm"
+              aria-label="Sort instances"
+              className="h-auto w-auto max-w-40 shrink-0 gap-1 border-0 bg-transparent px-0 py-0 font-brand text-xs font-medium leading-none text-muted-foreground shadow-none dark:bg-transparent dark:hover:bg-transparent [&_svg:not([class*='size-'])]:size-3.5"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent
+              align="end"
+              className="font-brand text-xs font-medium"
+            >
+              <SelectItem value="lastPlayed" className="text-xs">
+                <SortLabel icon={HistoryIcon} label="Last played" />
+              </SelectItem>
+              <SelectItem value="name" className="text-xs">
+                <SortLabel icon={ArrowDownAZIcon} label="Name" />
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         {loading ? (
           <p className="px-2 text-sm text-muted-foreground">Loading…</p>
         ) : null}
@@ -43,24 +109,55 @@ export function HomeSidebar({
             No instances yet.
           </p>
         ) : null}
-        {!loading && instances.length > 0 ? (
+        {!loading && ordered.length > 0 ? (
           <ScrollArea className="min-h-0 flex-1">
             <ul className="flex flex-col gap-1 pr-3">
-              {instances.map((instance) => {
+              {ordered.map((instance) => {
                 const selected = instance.folder === selectedFolder;
+                const phase = playPhase(instance.folder);
+                const active = phase === "starting" || phase === "running";
                 return (
                   <li key={instance.folder}>
                     <Button
                       type="button"
                       variant={selected ? "secondary" : "ghost"}
-                      className="w-full justify-start px-3"
+                      className="w-full justify-start gap-2 px-3"
                       aria-current={selected ? "page" : undefined}
+                      aria-label={
+                        active
+                          ? `${instance.name} (${phase === "starting" ? "starting" : "running"})`
+                          : undefined
+                      }
                       disabled={busy}
                       onClick={() => {
                         onSelect(instance.folder);
                       }}
                     >
-                      <span className="min-w-0 truncate">{instance.name}</span>
+                      <span className="flex min-w-0 flex-1 items-center gap-2">
+                        <InstanceIcon />
+                        <span className="min-w-0 flex-1 truncate text-left">
+                          {instance.name}
+                        </span>
+                        {active ? (
+                          <span
+                            aria-hidden
+                            className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-success"
+                          >
+                            {phase === "starting" ? "Starting" : "Running"}
+                            {phase === "starting" ? (
+                              <Loader2Icon
+                                className="size-3.5 shrink-0 animate-spin"
+                                strokeWidth={2}
+                              />
+                            ) : (
+                              <span className="relative flex size-2 shrink-0">
+                                <span className="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-75" />
+                                <span className="relative inline-flex size-2 rounded-full bg-success" />
+                              </span>
+                            )}
+                          </span>
+                        ) : null}
+                      </span>
                     </Button>
                   </li>
                 );
