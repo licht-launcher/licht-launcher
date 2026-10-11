@@ -39,6 +39,15 @@ vi.mock("@tauri-apps/api/event", () => ({
   ),
 }));
 
+vi.mock("@tauri-apps/api/window", () => ({
+  getCurrentWindow: () => ({
+    minimize: vi.fn(),
+    close: vi.fn(),
+    setDecorations: vi.fn(),
+  }),
+}));
+
+
 async function renderAt(path: string) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -81,6 +90,9 @@ describe("InstancesPage", () => {
 
   it("shows the sidebar empty state and opens settings", async () => {
     invoke.mockImplementation((command: string) => {
+      if (command === "list_instance_entries") {
+        return Promise.resolve([]);
+      }
       if (command === "list_instances") {
         return Promise.resolve([]);
       }
@@ -115,7 +127,7 @@ describe("InstancesPage", () => {
       screen.getByText("Create an instance to get started."),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "New instance" })).toBeEnabled();
-    expect(screen.getByText("0.1.0 · Lilie")).toBeInTheDocument();
+    expect(screen.getAllByText("0.1.0 · Lilie").length).toBeGreaterThan(0);
     expect(
       screen.getByText(
         "Unofficial, not affiliated with Mojang Studios or Microsoft.",
@@ -140,6 +152,9 @@ describe("InstancesPage", () => {
   it("lists instances in the sidebar and plays an installed version", async () => {
     let finishLaunch: (exit: { code: number }) => void = () => {};
     invoke.mockImplementation((command: string) => {
+      if (command === "list_instance_entries") {
+        return Promise.resolve([]);
+      }
       if (command === "list_instances") {
         return Promise.resolve([classicInstance]);
       }
@@ -245,6 +260,9 @@ describe("InstancesPage", () => {
 
   it("shows Stop for an orphaned running game recovered on load", async () => {
     invoke.mockImplementation((command: string) => {
+      if (command === "list_instance_entries") {
+        return Promise.resolve([]);
+      }
       if (command === "list_instances") {
         return Promise.resolve([classicInstance]);
       }
@@ -287,6 +305,9 @@ describe("InstancesPage", () => {
       versionId: "1.20.1",
     };
     invoke.mockImplementation((command: string, args?: { folder?: string }) => {
+      if (command === "list_instance_entries") {
+        return Promise.resolve([]);
+      }
       if (command === "list_instances") {
         return Promise.resolve([classicInstance, nextInstance]);
       }
@@ -369,6 +390,9 @@ describe("InstancesPage", () => {
   it("installs a missing version when playing", async () => {
     let finishInstall: (java: string) => void = () => {};
     invoke.mockImplementation((command: string) => {
+      if (command === "list_instance_entries") {
+        return Promise.resolve([]);
+      }
       if (command === "list_instances") {
         return Promise.resolve([
           {
@@ -438,6 +462,9 @@ describe("InstancesPage", () => {
 
   it("creates an instance from a release that is not installed", async () => {
     invoke.mockImplementation((command: string) => {
+      if (command === "list_instance_entries") {
+        return Promise.resolve([]);
+      }
       if (command === "list_instances") {
         return Promise.resolve([]);
       }
@@ -493,6 +520,9 @@ describe("InstancesPage", () => {
 
   it("includes snapshots in the create dialog when the switch is on", async () => {
     invoke.mockImplementation((command: string) => {
+      if (command === "list_instance_entries") {
+        return Promise.resolve([]);
+      }
       if (command === "list_instances") {
         return Promise.resolve([]);
       }
@@ -530,6 +560,9 @@ describe("InstancesPage", () => {
 
   it("shows a network toast when the list fails", async () => {
     invoke.mockImplementation((command: string) => {
+      if (command === "list_instance_entries") {
+        return Promise.resolve([]);
+      }
       if (command === "list_instances") {
         return Promise.resolve([]);
       }
