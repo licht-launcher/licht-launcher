@@ -27,12 +27,13 @@ describe("AccountSection", () => {
     });
   });
 
-  it("shows offline username when no Microsoft account is active", async () => {
+  it("shows Microsoft account and offline username", async () => {
     await renderSettings();
 
-    expect(await screen.findByLabelText("Offline username")).toHaveValue(
-      "Steve",
-    );
+    expect(
+      await screen.findByRole("heading", { name: "Microsoft account" }),
+    ).toBeVisible();
+    expect(screen.getByLabelText("Offline username")).toHaveValue("Steve");
     expect(screen.getByRole("heading", { name: "Account" })).toBeVisible();
     expect(
       screen.getByText("Microsoft sign-in and offline player name."),
@@ -40,7 +41,7 @@ describe("AccountSection", () => {
     expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
   });
 
-  it("starts Microsoft browser sign-in", async () => {
+  it("starts Microsoft browser sign-in and keeps offline username", async () => {
     const profile = {
       uuid: "abcdef0123456789abcdef0123456789",
       name: "PlayerOne",
@@ -68,5 +69,6 @@ describe("AccountSection", () => {
     });
     expect(await screen.findByText("PlayerOne")).toBeInTheDocument();
     expect(screen.getByText("Active")).toBeInTheDocument();
+    expect(screen.getByLabelText("Offline username")).toHaveValue("Steve");
   });
 });

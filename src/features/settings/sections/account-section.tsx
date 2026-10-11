@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Loader2Icon, LogInIcon, UserRound } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -77,17 +78,21 @@ export function AccountSection({
   }
 
   const activeUuid = active.data?.uuid ?? null;
-  const showOffline = activeUuid === null;
+  const profiles = accounts.data ?? [];
 
   return (
-    <div className="flex max-w-lg flex-col gap-6">
-      <div className="flex flex-col gap-2">
+    <div className="flex max-w-lg flex-col">
+      <section
+        className="flex flex-col gap-2"
+        aria-labelledby="microsoft-account-heading"
+      >
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-medium">Microsoft account</p>
+            <h3 id="microsoft-account-heading" className="text-sm font-medium">
+              Microsoft account
+            </h3>
             <p className="text-sm text-muted-foreground">
-              Sign in to launch with your purchased game. Offline still works
-              without a Microsoft account.
+              Sign in to launch with your purchased game.
             </p>
           </div>
           <Button
@@ -98,6 +103,15 @@ export function AccountSection({
               begin.mutate();
             }}
           >
+            {begin.isPending ? (
+              <Loader2Icon
+                data-icon="inline-start"
+                aria-hidden
+                className="animate-spin"
+              />
+            ) : (
+              <LogInIcon data-icon="inline-start" aria-hidden />
+            )}
             {begin.isPending ? "Waiting for browser…" : "Sign in"}
           </Button>
         </div>
@@ -111,56 +125,60 @@ export function AccountSection({
             {loginError}
           </p>
         ) : null}
-        <ul className="flex flex-col gap-2">
-          {(accounts.data ?? []).map((profile) => {
-            const isActive = profile.uuid === activeUuid;
-            return (
-              <li
-                key={profile.uuid}
-                className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2"
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{profile.name}</p>
-                  <p className="truncate font-mono text-xs text-muted-foreground">
-                    {profile.uuid}
-                  </p>
-                </div>
-                <div className="flex shrink-0 gap-2">
-                  {isActive ? (
-                    <span className="text-xs text-muted-foreground">
-                      Active
-                    </span>
-                  ) : (
+        {profiles.length > 0 ? (
+          <ul className="flex flex-col gap-2">
+            {profiles.map((profile) => {
+              const isActive = profile.uuid === activeUuid;
+              return (
+                <li
+                  key={profile.uuid}
+                  className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">
+                      {profile.name}
+                    </p>
+                    <p className="truncate font-mono text-xs text-muted-foreground">
+                      {profile.uuid}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 gap-2">
+                    {isActive ? (
+                      <span className="text-xs text-muted-foreground">
+                        Active
+                      </span>
+                    ) : (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          void activate(profile);
+                        }}
+                      >
+                        Use
+                      </Button>
+                    )}
                     <Button
                       type="button"
                       size="sm"
-                      variant="outline"
+                      variant="ghost"
                       onClick={() => {
-                        void activate(profile);
+                        void signOut(profile);
                       }}
                     >
-                      Use
+                      Sign out
                     </Button>
-                  )}
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => {
-                      void signOut(profile);
-                    }}
-                  >
-                    Sign out
-                  </Button>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        ) : null}
+      </section>
 
-      {showOffline ? (
-        <div className="flex max-w-sm flex-col gap-1">
+      <section className="flex items-center justify-between gap-3 border-t border-border pt-6 mt-6">
+        <div className="flex min-w-0 flex-col gap-1">
           <label htmlFor="offline-username" className="text-sm font-medium">
             Offline username
           </label>
@@ -170,17 +188,19 @@ export function AccountSection({
           >
             Used when no Microsoft account is active.
           </p>
-          <Input
-            id="offline-username"
-            value={draft.username}
-            autoComplete="nickname"
-            aria-describedby="offline-username-hint"
-            onChange={(event) => {
-              onChange({ username: event.target.value });
-            }}
-          />
         </div>
-      ) : null}
+        <Input
+          id="offline-username"
+          className="w-40 shrink-0"
+          startIcon={<UserRound aria-hidden />}
+          value={draft.username}
+          autoComplete="nickname"
+          aria-describedby="offline-username-hint"
+          onChange={(event) => {
+            onChange({ username: event.target.value });
+          }}
+        />
+      </section>
     </div>
   );
 }
