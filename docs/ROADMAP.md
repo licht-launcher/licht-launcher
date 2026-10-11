@@ -2,7 +2,7 @@
 
 Unofficial Minecraft: Java Edition launcher for **Windows and Linux**, built with Tauri v2 (Rust + TypeScript).
 
-**Frontend stack:** React + TypeScript + Vite, Tailwind CSS, shadcn/ui (Radix UI), Lucide (icons), TanStack Router (file-based routes, hash history), Vitest + Testing Library (tests). Planned, not installed yet: TanStack Query (calls to Rust), Zustand (global state), TanStack Virtual (large lists).
+**Frontend stack:** React + TypeScript + Vite, Tailwind CSS, shadcn/ui (Radix UI), Lucide (icons), TanStack Router (file-based routes, hash history), TanStack Query (`invoke` calls), Vitest + Testing Library (tests). Installed, not used yet: TanStack Virtual. Planned, not installed: Zustand (global state).
 
 > **How to use:** always ask for **one item at a time** ("do item 3.2"). Flow for each item: **plan → approval → implementation → PR → review**. Follow `AGENTS.md`.
 
@@ -62,7 +62,7 @@ The codename appears on the About screen, in the GitHub release title, and in th
 
 **Closed.** The main window opens empty, CI covers Windows and Ubuntu, and the design system lives in `src/components/ui` with tokens in `src/styles/tokens.css`.
 
-**Context beyond the items:** TanStack Router was installed in this phase (`@tanstack/react-router` and the Vite plugin). Routes are files in `src/routes`; screens stay in `src/features`. The tree generated in `src/routeTree.gen.ts` is committed, so `tsc` does not depend on a Vite build. History is hash-based (`/#/`) because the Tauri window does not rewrite paths to `index.html`. TanStack Query, Zustand, and TanStack Virtual remain decided and not installed. Interface text is in English.
+**Context beyond the items:** TanStack Router was installed in this phase (`@tanstack/react-router` and the Vite plugin). Routes are files in `src/routes`; screens stay in `src/features`. The tree generated in `src/routeTree.gen.ts` is committed, so `tsc` does not depend on a Vite build. History is hash-based (`/#/`) because the Tauri window does not rewrite paths to `index.html`. TanStack Query is installed and used for `invoke` calls (phase 5+). Zustand remains decided and not installed. TanStack Virtual is installed but not wired yet. Interface text is in English.
 
 ---
 
@@ -135,39 +135,41 @@ Reached on Windows, from `licht`, with an offline name: 26.3, 1.20.1, 1.12.2, 1.
 
 Also in place, beyond the original checklist: one `instances/<id>` folder per version (not the phase 6 profile model), install progress in megabytes, natives limited to this machine, and legacy sounds copied to the names old clients open. Details are in [COMPATIBILITY.md](COMPATIBILITY.md) and [LAUNCHWRAPPER.md](core/LAUNCHWRAPPER.md).
 
-Still open before the interface: `${auth_session}` stays literal on 1.5.2. There is no account, no settings screen, and no Tauri command.
+Still open from this milestone: `${auth_session}` stays literal on 1.5.2. Linux launch was not re-checked in that pass. Account login is phase 7.
 
 ---
 
-## Phase 5. Basic interface
+## Phase 5. Basic interface — closed (except visual identity)
 
 **Goal:** use all of this through a UI.
 
-Do not start 5.1 until its command contract is approved. The screen calls the same installer as `licht install`. The CLI can already list, install, and launch.
-
-- [ ] **5.1** Tauri commands (`list_versions`, `install_version`, `launch`), thin, only calling the core. Types shared with the frontend via `ts-rs`/`specta`.
-  - 🛑 Contract (names and types) of commands and events.
+- [x] **5.1** Tauri commands (`list_versions`, `install_version`, `launch`), thin, only calling the core. Types shared with the frontend via `ts-rs`.
   - 📚 `#[tauri::command]`, `State`, `Arc`/`Mutex`.
-- [ ] **5.2** Progress events (download, installation, game status) emitted from Rust to the frontend, with **throttling** (~100 ms) so the UI is not saturated.
-- [ ] **5.3** Versions screen: list (**virtualized** list), filter (release/snapshot), install, play, progress bar. Use only design-system components (item 0.7).
-- [ ] **5.4** Real-time game log console.
-- [ ] **5.5** Friendly error handling in the UI (network down, disk full, invalid SHA1).
-- [ ] **5.6** Final visual identity: logo (lily of light), app icon in every size, and an About screen with version and codename. The palette and tokens have existed since item 0.7.
+- [x] **5.2** Progress events (download, installation, game status) emitted from Rust to the frontend, with **throttling** (~100 ms) so the UI is not saturated.
+- [x] **5.3** Play surface: install, play/stop, progress. Evolved into the **instances hub** (sidebar + play panel) instead of a standalone versions list. Release/snapshot filter lives in the create-instance dialog. TanStack Virtual is installed but not wired (lists are still short).
+- [x] **5.4** Real-time game log console (per instance, with level filter).
+- [x] **5.5** Friendly error handling in the UI (network down, disk full, invalid SHA1) via toasts.
+- [ ] **5.6** Final visual identity: logo (lily of light), app icon in every size, and an About screen with version and codename. The palette and tokens have existed since item 0.7. Sidebars already show `0.1.0 · Lilie`; dedicated About + full icon set remain.
   - 🛑 Logo and icon direction.
 
-**Done when:** it is possible to install and play a version from the interface alone.
+**Done when:** it is possible to install and play a version from the interface alone. **Reached** via the instances hub (offline username).
+
+**Context beyond the items:** stop/orphan recovery for running games, install progress with version id (parallel installs), and download/write concurrency split in settings.
 
 ---
 
-## Phase 6. Instances
+## Phase 6. Instances — closed
 
 **Goal:** isolated profiles.
 
-- [ ] **6.1** Instance model (name, version, own folder, min/max RAM, extra JVM arguments, resolution), persisted in versioned JSON.
-  - 🛑 Configuration file format and migration strategy.
-- [ ] **6.2** Instance CRUD (create, duplicate, rename, delete) in the core + UI.
-- [ ] **6.3** Global settings (data folder, Java, download concurrency, theme).
-- [ ] **6.4** Open the instance folder in the OS file manager.
+- [x] **6.1** Instance model (name, version, own folder, min/max RAM, extra JVM arguments, resolution), persisted in versioned `instance.json`.
+- [x] **6.2** Instance CRUD (create, duplicate, rename, delete) in the core + UI.
+- [x] **6.3** Global settings (data folder, Java, download concurrency, write concurrency, theme). Per-instance launch overrides are also in place.
+- [x] **6.4** Open the instance folder in the OS file manager.
+
+**Closed.** Instances are the primary product surface. Settings open in a dialog with sectioned auto-save.
+
+**Work ready but not on `main` yet** (merged only into the stacked feature branches #54–#56): custom title bar, Files tab browser, last-played sort + SQLite meta, purple instance icons. Land that tip onto `main` before starting new UI work on top of it.
 
 ---
 
