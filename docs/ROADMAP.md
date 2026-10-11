@@ -175,10 +175,10 @@ Still open from this milestone: `${auth_session}` stays literal on 1.5.2. Linux 
 
 **Goal:** legitimate accounts.
 
-Decisions (see [docs/auth/MICROSOFT.md](auth/MICROSOFT.md)): device code, scopes `XboxLive.signin offline_access`, client ID via `LICHT_MSA_CLIENT_ID`, tokens in the OS keyring.
+Decisions (see [docs/auth/MICROSOFT.md](auth/MICROSOFT.md)): authorization code + PKCE (system browser / localhost), scopes `XboxLive.signin offline_access`, client ID embedded (+ optional `LICHT_MSA_CLIENT_ID`), tokens in the OS keyring.
 
 - [x] **7.1** Register an app in Azure and request approval to access the Minecraft services API. **Worth starting this request early**, in parallel with the previous phases, because it can take a while.
-- [x] **7.2** OAuth device code flow → Xbox Live → XSTS → Minecraft Services → profile (name, UUID, skin).
+- [x] **7.2** OAuth authorization code + PKCE (browser) → Xbox Live → XSTS → Minecraft Services → profile (name, UUID, skin).
 - [x] **7.3** Secure token storage with the **OS keyring** (Credential Manager / Secret Service). Never in plain text, never in logs.
 - [x] **7.4** Automatic renewal (refresh token), multiple accounts, logout.
 - [x] **7.5** Check whether the account owns the game, and clear error messages.

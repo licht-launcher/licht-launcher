@@ -1,42 +1,21 @@
 use crate::auth::types::{
-    AccountProfile, DeviceCodeChallenge, DeviceCodeResponse, EntitlementsResponse,
-    MinecraftLoginResponse, MinecraftProfileResponse, TokenErrorBody, TokenSuccess,
-    XboxAuthResponse, XstsErrorBody,
+    AccountProfile, EntitlementsResponse, MinecraftLoginResponse, MinecraftProfileResponse,
+    TokenErrorBody, TokenSuccess, XboxAuthResponse, XstsErrorBody,
 };
 use crate::{CoreError, Result};
 
-pub fn parse_device_code_response(body: &str) -> Result<DeviceCodeChallenge> {
-    let raw: DeviceCodeResponse = serde_json::from_str(body).map_err(CoreError::AuthJson)?;
-    Ok(DeviceCodeChallenge {
-        user_code: raw.user_code,
-        verification_uri: raw
-            .verification_uri_complete
-            .unwrap_or(raw.verification_uri),
-        device_code: raw.device_code,
-        interval_seconds: raw.interval.max(1),
-        expires_in_seconds: raw.expires_in,
-    })
-}
-
-pub enum TokenPoll {
-    Pending,
-    Success(TokenSuccess),
-}
-
-pub fn parse_token_poll(status: u16, body: &str) -> Result<TokenPoll> {
+pub fn parse_token_response(status: u16, body: &str) -> Result<TokenSuccess> {
     if status == 200 {
         let token: TokenSuccess = serde_json::from_str(body).map_err(CoreError::AuthJson)?;
         if token.access_token.is_empty() {
             return Err(CoreError::AuthToken);
         }
-        return Ok(TokenPoll::Success(token));
+        return Ok(token);
     }
     let error: TokenErrorBody = serde_json::from_str(body).map_err(CoreError::AuthJson)?;
     match error.error.as_str() {
-        "authorization_pending" => Ok(TokenPoll::Pending),
-        "slow_down" => Ok(TokenPoll::Pending),
-        "expired_token" | "code_expired" => Err(CoreError::AuthDeviceCodeExpired),
-        "authorization_declined" => Err(CoreError::AuthDeclined),
+        "access_denied" | "authorization_declined" => Err(CoreError::AuthDeclined),
+        "expired_token" | "code_expired" => Err(CoreError::AuthBrowserTimeout),
         other => Err(CoreError::AuthOAuth {
             error: other.to_string(),
             description: error.error_description.unwrap_or_default(),
@@ -139,26 +118,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn device_code_uses_complete_uri_when_present() {
-        let body = r#"{
-            "user_code":"ABCD1234",
-            "device_code":"secret",
-            "verification_uri":"https://microsoft.com/link",
-            "verification_uri_complete":"https://microsoft.com/link?otc=ABCD1234",
-            "expires_in":900,
-            "interval":5
-        }"#;
-        let challenge = parse_device_code_response(body).expect("ok");
-        assert_eq!(challenge.user_code, "ABCD1234");
-        assert!(challenge.verification_uri.contains("otc="));
-        assert_eq!(challenge.interval_seconds, 5);
-    }
-
-    #[test]
-    fn pending_token_poll_is_not_an_error() {
-        let body = r#"{"error":"authorization_pending","error_description":"wait"}"#;
-        let poll = parse_token_poll(400, body).expect("pending");
-        assert!(matches!(poll, TokenPoll::Pending));
+    fn declined_token_maps_to_typed_error() {
+        let body = r#"{"error":"access_denied","error_description":"user cancelled"}"#;
+        let error = parse_token_response(400, body).expect_err("declined");
+        assert!(matches!(error, CoreError::AuthDeclined));
     }
 
     #[test]

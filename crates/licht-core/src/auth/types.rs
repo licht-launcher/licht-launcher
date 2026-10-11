@@ -1,19 +1,6 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-/// Device-code challenge shown to the user (and used to poll).
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct DeviceCodeChallenge {
-    pub user_code: String,
-    pub verification_uri: String,
-    pub device_code: String,
-    #[ts(type = "number")]
-    pub interval_seconds: u64,
-    #[ts(type = "number")]
-    pub expires_in_seconds: u64,
-}
-
 /// Public Minecraft profile (never includes tokens).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -31,17 +18,6 @@ pub struct MicrosoftSession {
     pub minecraft_token: String,
     pub minecraft_expires_at_unix: u64,
     pub xuid: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub(crate) struct DeviceCodeResponse {
-    pub user_code: String,
-    pub verification_uri: String,
-    pub device_code: String,
-    #[serde(default)]
-    pub verification_uri_complete: Option<String>,
-    pub expires_in: u64,
-    pub interval: u64,
 }
 
 #[derive(Debug, Deserialize)]

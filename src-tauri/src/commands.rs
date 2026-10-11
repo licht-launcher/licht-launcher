@@ -3,18 +3,18 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex as StdMutex;
 
 use licht_core::{
-    ADOPTIUM_API, ASSET_OBJECT_BASE, AccountProfile, Arch, CoreError, DeviceCodeChallenge,
-    GameExit, GameInstall, GameLogEvent, InstallProgress, InstanceEntry, InstanceFsEntry,
-    InstanceSettings, JavaDetections, JavaPaths, JavaStatus, LaunchEnvironment, OsName, Settings,
-    SettingsSnapshot, SharedCache, VersionSummary, begin_login, browse_start_directory,
-    clear_launch_lock, configured_java, detect_known_javas, fetch_version_manifest, game_cache,
-    get_active_profile, global_launch, install_game, install_temurin, installed_java,
-    kill_launch_process, list_accounts, list_running_launch_folders, load_instance, load_settings,
-    log_codec, logout_account, offline_account, parse_version, poll_login,
-    prepare_microsoft_launch, prepare_offline_launch, probe_java_major, process_matches_lock,
-    read_launch_lock, required_java_major, resolved_java_path, resolved_launch, run_game,
-    runtime_java_paths, session_for_launch, set_active_account, set_java_path, settings_snapshot,
-    update_instance, update_instance_version, version_summaries, write_launch_lock_for_pid,
+    ADOPTIUM_API, ASSET_OBJECT_BASE, AccountProfile, Arch, CoreError, GameExit, GameInstall,
+    GameLogEvent, InstallProgress, InstanceEntry, InstanceFsEntry, InstanceSettings,
+    JavaDetections, JavaPaths, JavaStatus, LaunchEnvironment, OsName, Settings, SettingsSnapshot,
+    SharedCache, VersionSummary, browse_start_directory, clear_launch_lock, configured_java,
+    detect_known_javas, fetch_version_manifest, game_cache, get_active_profile, global_launch,
+    install_game, install_temurin, installed_java, kill_launch_process, list_accounts,
+    list_running_launch_folders, load_instance, load_settings, log_codec, login_with_browser,
+    logout_account, offline_account, parse_version, prepare_microsoft_launch,
+    prepare_offline_launch, probe_java_major, process_matches_lock, read_launch_lock,
+    required_java_major, resolved_java_path, resolved_launch, run_game, runtime_java_paths,
+    session_for_launch, set_active_account, set_java_path, settings_snapshot, update_instance,
+    update_instance_version, version_summaries, write_launch_lock_for_pid,
 };
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::{DialogExt, FileDialogBuilder};
@@ -348,20 +348,20 @@ pub fn active_microsoft_account(
 }
 
 #[tauri::command]
-pub async fn begin_microsoft_login() -> Result<DeviceCodeChallenge, String> {
-    let client = reqwest::Client::new();
-    begin_login(&client).await.map_err(failure)
-}
-
-#[tauri::command]
-pub async fn poll_microsoft_login(
+pub async fn begin_microsoft_login(
+    app: AppHandle,
     paths: State<'_, LauncherPaths>,
-    device_code: String,
-) -> Result<Option<AccountProfile>, String> {
+) -> Result<AccountProfile, String> {
     let client = reqwest::Client::new();
-    poll_login(&client, &paths.settings, &device_code)
-        .await
-        .map_err(failure)
+    let opener = app.clone();
+    login_with_browser(&client, &paths.settings, move |url| {
+        opener
+            .opener()
+            .open_url(url, None::<&str>)
+            .map_err(|error| error.to_string())
+    })
+    .await
+    .map_err(failure)
 }
 
 #[tauri::command]

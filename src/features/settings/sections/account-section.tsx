@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,12 +9,10 @@ import {
   beginMicrosoftLogin,
   listMicrosoftAccounts,
   logoutMicrosoftAccount,
-  pollMicrosoftLogin,
   setActiveMicrosoftAccount,
 } from "@/lib/commands";
 import { friendlyError, messageOf } from "@/lib/errors";
 import type { AccountProfile } from "@/lib/generated/AccountProfile";
-import type { DeviceCodeChallenge } from "@/lib/generated/DeviceCodeChallenge";
 
 export function AccountSection({
   draft,
@@ -24,7 +22,6 @@ export function AccountSection({
   onChange: (patch: Partial<Draft>) => void;
 }) {
   const queryClient = useQueryClient();
-  const [challenge, setChallenge] = useState<DeviceCodeChallenge | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
 
   const accounts = useQuery({
@@ -40,63 +37,19 @@ export function AccountSection({
 
   const begin = useMutation({
     mutationFn: beginMicrosoftLogin,
-    onSuccess: (next) => {
+    onSuccess: async () => {
       setLoginError(null);
-      setChallenge(next);
+      await queryClient.invalidateQueries({
+        queryKey: ["microsoft-accounts"],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ["microsoft-account-active"],
+      });
     },
     onError: (error) => {
-      setChallenge(null);
       setLoginError(friendlyError(messageOf(error)));
     },
   });
-
-  useEffect(() => {
-    if (challenge === null) {
-      return;
-    }
-    let cancelled = false;
-    const started = Date.now();
-    const tick = async () => {
-      while (!cancelled) {
-        const elapsed = (Date.now() - started) / 1000;
-        if (elapsed > challenge.expiresInSeconds) {
-          setLoginError(friendlyError("Microsoft device code expired"));
-          setChallenge(null);
-          return;
-        }
-        try {
-          const profile = await pollMicrosoftLogin(challenge.deviceCode);
-          if (cancelled) {
-            return;
-          }
-          if (profile !== null) {
-            setChallenge(null);
-            await queryClient.invalidateQueries({
-              queryKey: ["microsoft-accounts"],
-            });
-            await queryClient.invalidateQueries({
-              queryKey: ["microsoft-account-active"],
-            });
-            return;
-          }
-        } catch (error) {
-          if (cancelled) {
-            return;
-          }
-          setChallenge(null);
-          setLoginError(friendlyError(messageOf(error)));
-          return;
-        }
-        await new Promise((resolve) => {
-          window.setTimeout(resolve, challenge.intervalSeconds * 1000);
-        });
-      }
-    };
-    void tick();
-    return () => {
-      cancelled = true;
-    };
-  }, [challenge, queryClient]);
 
   async function activate(profile: AccountProfile) {
     setLoginError(null);
@@ -140,32 +93,18 @@ export function AccountSection({
           <Button
             type="button"
             size="sm"
-            disabled={begin.isPending || challenge !== null}
+            disabled={begin.isPending}
             onClick={() => {
               begin.mutate();
             }}
           >
-            Sign in
+            {begin.isPending ? "Waiting for browser…" : "Sign in"}
           </Button>
         </div>
-        {challenge !== null ? (
-          <div className="rounded-md border border-border bg-muted/40 p-3 text-sm">
-            <p>
-              Open{" "}
-              <a
-                href={challenge.verificationUri}
-                target="_blank"
-                rel="noreferrer"
-                className="underline"
-              >
-                {challenge.verificationUri}
-              </a>{" "}
-              and enter this code:
-            </p>
-            <p className="mt-2 font-mono text-lg tracking-widest">
-              {challenge.userCode}
-            </p>
-          </div>
+        {begin.isPending ? (
+          <p className="text-sm text-muted-foreground">
+            Complete sign-in in your browser, then return here.
+          </p>
         ) : null}
         {loginError !== null ? (
           <p className="text-sm text-destructive" role="alert">

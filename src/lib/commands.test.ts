@@ -25,7 +25,6 @@ import {
   logoutMicrosoftAccount,
   openInstanceFolder,
   openRepository,
-  pollMicrosoftLogin,
   renameInstance,
   runtimeJava,
   saveInstance,
@@ -126,17 +125,13 @@ describe("launcher commands", () => {
     expect(invoke).toHaveBeenCalledWith("clear_last_played_folder");
   });
 
-  it("lists and polls Microsoft accounts", async () => {
+  it("lists and signs in Microsoft accounts", async () => {
     await listMicrosoftAccounts();
     expect(invoke).toHaveBeenCalledWith("list_microsoft_accounts");
     await activeMicrosoftAccount();
     expect(invoke).toHaveBeenCalledWith("active_microsoft_account");
     await beginMicrosoftLogin();
     expect(invoke).toHaveBeenCalledWith("begin_microsoft_login");
-    await pollMicrosoftLogin("device");
-    expect(invoke).toHaveBeenCalledWith("poll_microsoft_login", {
-      deviceCode: "device",
-    });
     await setActiveMicrosoftAccount("abc");
     expect(invoke).toHaveBeenCalledWith("set_active_microsoft_account", {
       uuid: "abc",

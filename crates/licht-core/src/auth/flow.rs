@@ -5,59 +5,15 @@ use serde_json::json;
 
 use crate::auth::client_id::msa_client_id;
 use crate::auth::endpoints::{
-    MC_ENTITLEMENTS_URL, MC_LOGIN_URL, MC_PROFILE_URL, MSA_DEVICE_CODE_URL, MSA_SCOPE,
-    MSA_TOKEN_URL, XBL_USER_AUTH_URL, XSTS_AUTHORIZE_URL,
+    MC_ENTITLEMENTS_URL, MC_LOGIN_URL, MC_PROFILE_URL, MSA_SCOPE, MSA_TOKEN_URL, XBL_USER_AUTH_URL,
+    XSTS_AUTHORIZE_URL,
 };
 use crate::auth::parse::{
-    TokenPoll, parse_device_code_response, parse_minecraft_login, parse_minecraft_profile,
-    parse_owns_minecraft, parse_token_poll, parse_xbox_auth, parse_xsts,
+    parse_minecraft_login, parse_minecraft_profile, parse_owns_minecraft, parse_token_response,
+    parse_xbox_auth, parse_xsts,
 };
-use crate::auth::types::{AccountProfile, DeviceCodeChallenge, MicrosoftSession, TokenSuccess};
+use crate::auth::types::{AccountProfile, MicrosoftSession, TokenSuccess};
 use crate::{CoreError, Result};
-
-/// Starts the device-code flow and returns the challenge for the UI.
-pub async fn begin_device_code_login(client: &Client) -> Result<DeviceCodeChallenge> {
-    let client_id = msa_client_id()?;
-    let response = client
-        .post(MSA_DEVICE_CODE_URL)
-        .header("Content-Type", "application/x-www-form-urlencoded")
-        .form(&[("client_id", client_id.as_str()), ("scope", MSA_SCOPE)])
-        .send()
-        .await?;
-    let status = response.status().as_u16();
-    let body = response.text().await?;
-    if !(200..300).contains(&status) {
-        return Err(CoreError::AuthOAuth {
-            error: format!("device_code_http_{status}"),
-            description: body,
-        });
-    }
-    parse_device_code_response(&body)
-}
-
-/// One poll of the device-code token endpoint.
-pub async fn poll_device_code_once(
-    client: &Client,
-    device_code: &str,
-) -> Result<Option<TokenSuccess>> {
-    let client_id = msa_client_id()?;
-    let response = client
-        .post(MSA_TOKEN_URL)
-        .header("Content-Type", "application/x-www-form-urlencoded")
-        .form(&[
-            ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
-            ("client_id", client_id.as_str()),
-            ("device_code", device_code),
-        ])
-        .send()
-        .await?;
-    let status = response.status().as_u16();
-    let body = response.text().await?;
-    match parse_token_poll(status, &body)? {
-        TokenPoll::Pending => Ok(None),
-        TokenPoll::Success(token) => Ok(Some(token)),
-    }
-}
 
 /// Xbox Live → XSTS → Minecraft login → ownership → profile.
 pub async fn complete_microsoft_login(
@@ -105,9 +61,7 @@ pub async fn refresh_microsoft_session(
         .await?;
     let status = response.status().as_u16();
     let body = response.text().await?;
-    let TokenPoll::Success(msa) = parse_token_poll(status, &body)? else {
-        return Err(CoreError::AuthToken);
-    };
+    let msa = parse_token_response(status, &body)?;
     complete_microsoft_login(client, msa).await
 }
 

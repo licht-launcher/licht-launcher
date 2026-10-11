@@ -1,5 +1,5 @@
-pub const MSA_DEVICE_CODE_URL: &str =
-    "https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode";
+pub const MSA_AUTHORIZE_URL: &str =
+    "https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize";
 pub const MSA_TOKEN_URL: &str = "https://login.microsoftonline.com/consumers/oauth2/v2.0/token";
 pub const MSA_SCOPE: &str = "XboxLive.signin offline_access";
 

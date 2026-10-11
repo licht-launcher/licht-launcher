@@ -1,7 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 
 import type { AccountProfile } from "@/lib/generated/AccountProfile";
-import type { DeviceCodeChallenge } from "@/lib/generated/DeviceCodeChallenge";
 import type { GameExit } from "@/lib/generated/GameExit";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 import type { InstanceFsEntry } from "@/lib/generated/InstanceFsEntry";
@@ -91,14 +90,8 @@ export function activeMicrosoftAccount(): Promise<AccountProfile | null> {
   return invoke("active_microsoft_account");
 }
 
-export function beginMicrosoftLogin(): Promise<DeviceCodeChallenge> {
+export function beginMicrosoftLogin(): Promise<AccountProfile> {
   return invoke("begin_microsoft_login");
-}
-
-export function pollMicrosoftLogin(
-  deviceCode: string,
-): Promise<AccountProfile | null> {
-  return invoke("poll_microsoft_login", { deviceCode });
 }
 
 export function setActiveMicrosoftAccount(

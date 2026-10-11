@@ -40,25 +40,22 @@ describe("AccountSection", () => {
     expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
   });
 
-  it("starts Microsoft device-code sign-in", async () => {
+  it("starts Microsoft browser sign-in", async () => {
+    const profile = {
+      uuid: "abcdef0123456789abcdef0123456789",
+      name: "PlayerOne",
+    };
+    let signedIn = false;
     mockSettingsCommands((command) => {
       if (command === "list_microsoft_accounts") {
-        return Promise.resolve([]);
+        return Promise.resolve(signedIn ? [profile] : []);
       }
       if (command === "active_microsoft_account") {
-        return Promise.resolve(null);
+        return Promise.resolve(signedIn ? profile : null);
       }
       if (command === "begin_microsoft_login") {
-        return Promise.resolve({
-          userCode: "ABCD-1234",
-          verificationUri: "https://microsoft.com/link",
-          deviceCode: "device",
-          intervalSeconds: 5,
-          expiresInSeconds: 900,
-        });
-      }
-      if (command === "poll_microsoft_login") {
-        return Promise.resolve(null);
+        signedIn = true;
+        return Promise.resolve(profile);
       }
       return undefined;
     });
@@ -67,8 +64,9 @@ describe("AccountSection", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Sign in" }));
 
     await waitFor(() => {
-      expect(screen.getByText("ABCD-1234")).toBeInTheDocument();
+      expect(invoke).toHaveBeenCalledWith("begin_microsoft_login");
     });
-    expect(invoke).toHaveBeenCalledWith("begin_microsoft_login");
+    expect(await screen.findByText("PlayerOne")).toBeInTheDocument();
+    expect(screen.getByText("Active")).toBeInTheDocument();
   });
 });

@@ -36,7 +36,6 @@ pub fn run() -> anyhow::Result<()> {
             commands::list_microsoft_accounts,
             commands::active_microsoft_account,
             commands::begin_microsoft_login,
-            commands::poll_microsoft_login,
             commands::set_active_microsoft_account,
             commands::logout_microsoft_account,
             commands::get_settings,

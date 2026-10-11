@@ -2222,10 +2222,12 @@ dependencies = [
 name = "licht-core"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "directories",
  "dotenvy",
  "flate2",
  "futures-util",
+ "getrandom 0.3.4",
  "keyring",
  "md-5",
  "regex",
@@ -2242,6 +2244,7 @@ dependencies = [
  "tokio-util",
  "tracing",
  "ts-rs",
+ "url",
  "uuid",
  "zip",
 ]

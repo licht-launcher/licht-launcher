@@ -6,8 +6,12 @@ const FRIENDLY: Record<string, string> = {
   "downloaded SHA1 does not match": "A downloaded file was damaged. Try again.",
   "LICHT_MSA_CLIENT_ID is missing or empty":
     "Microsoft sign-in is not configured. Set LICHT_MSA_CLIENT_ID and try again.",
-  "Microsoft device code expired":
-    "The sign-in code expired. Start Microsoft sign-in again.",
+  "Microsoft sign-in timed out":
+    "Microsoft sign-in timed out. Start sign-in again.",
+  "could not open the system browser for Microsoft sign-in":
+    "Could not open the browser for Microsoft sign-in. Try again.",
+  "Microsoft sign-in state mismatch":
+    "Microsoft sign-in failed a security check. Start sign-in again.",
   "Microsoft sign-in was declined": "Microsoft sign-in was cancelled.",
   "Minecraft services rejected this app (not allow-listed yet)":
     "Microsoft sign-in is waiting on Mojang approval for this app. Try again later.",

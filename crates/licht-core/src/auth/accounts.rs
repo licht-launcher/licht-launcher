@@ -1,12 +1,12 @@
+use crate::auth::browser::browser_login_msa;
 use crate::auth::flow::{
-    begin_device_code_login, complete_microsoft_login, minecraft_token_needs_refresh,
-    poll_device_code_once, refresh_microsoft_session,
+    complete_microsoft_login, minecraft_token_needs_refresh, refresh_microsoft_session,
 };
 use crate::auth::keyring_store::{
     delete_account, list_stored_profiles, load_account, load_active_account,
     set_active_account_uuid, store_account,
 };
-use crate::auth::types::{AccountProfile, DeviceCodeChallenge, MicrosoftSession};
+use crate::auth::types::{AccountProfile, MicrosoftSession};
 use crate::db::{get_meta, open_db, set_meta};
 use crate::{Result, SharedCache};
 
@@ -60,23 +60,20 @@ pub fn get_active_profile(_cache: &SharedCache) -> Result<Option<AccountProfile>
     Ok(load_active_account()?.map(|session| session.profile))
 }
 
-pub async fn begin_login(client: &reqwest::Client) -> Result<DeviceCodeChallenge> {
-    begin_device_code_login(client).await
-}
-
-/// One device-code poll. When ready, completes Xbox/Minecraft, stores the session, returns profile.
-pub async fn poll_login(
+/// Browser authorization-code + PKCE login. `open_url` must open the system browser.
+pub async fn login_with_browser<F>(
     client: &reqwest::Client,
     cache: &SharedCache,
-    device_code: &str,
-) -> Result<Option<AccountProfile>> {
-    let Some(msa) = poll_device_code_once(client, device_code).await? else {
-        return Ok(None);
-    };
+    open_url: F,
+) -> Result<AccountProfile>
+where
+    F: FnOnce(&str) -> std::result::Result<(), String>,
+{
+    let msa = browser_login_msa(client, open_url).await?;
     let session = complete_microsoft_login(client, msa).await?;
     store_account(&session)?;
     remember_uuid(cache, &session.profile.uuid)?;
-    Ok(Some(session.profile))
+    Ok(session.profile)
 }
 
 pub fn set_active_account(cache: &SharedCache, uuid: &str) -> Result<AccountProfile> {

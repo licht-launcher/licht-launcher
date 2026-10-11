@@ -90,8 +90,12 @@ pub enum CoreError {
     AuthJson(#[source] serde_json::Error),
     #[error("Microsoft token response is invalid")]
     AuthToken,
-    #[error("Microsoft device code expired")]
-    AuthDeviceCodeExpired,
+    #[error("Microsoft sign-in timed out")]
+    AuthBrowserTimeout,
+    #[error("could not open the system browser for Microsoft sign-in")]
+    AuthBrowserOpen,
+    #[error("Microsoft sign-in state mismatch")]
+    AuthStateMismatch,
     #[error("Microsoft sign-in was declined")]
     AuthDeclined,
     #[error("Microsoft OAuth failed: {error}")]
