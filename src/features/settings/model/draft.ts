@@ -4,6 +4,7 @@ import type { SettingsSnapshot } from "@/lib/generated/SettingsSnapshot";
 
 export type Draft = {
   theme: string;
+  username: string;
   fullscreen: boolean;
   width: string;
   height: string;
@@ -39,6 +40,7 @@ export function fromSnapshot(
   const settings = snapshot.settings;
   return {
     theme: settings.theme,
+    username: settings.username,
     fullscreen: settings.fullscreen,
     width: settings.width === null ? "" : String(settings.width),
     height: settings.height === null ? "" : String(settings.height),
@@ -88,6 +90,7 @@ export function toSettings(
   return {
     schema,
     theme: draft.theme,
+    username: draft.username.trim(),
     fullscreen: draft.fullscreen,
     width,
     height,

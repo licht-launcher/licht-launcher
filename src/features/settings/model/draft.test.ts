@@ -54,6 +54,7 @@ describe("draft", () => {
     expect(settings).toMatchObject({
       schema: 1,
       theme: "dark",
+      username: "Steve",
       width: 854,
       height: 480,
       downloadConcurrency: 8,

@@ -109,3 +109,11 @@ export function launchVersion(
 ): Promise<GameExit> {
   return invoke("launch", { folder, username });
 }
+
+export function listRunningGames(): Promise<string[]> {
+  return invoke("list_running_games");
+}
+
+export function stopGame(folder: string): Promise<void> {
+  return invoke("stop_game", { folder });
+}

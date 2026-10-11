@@ -47,7 +47,7 @@ pending.
 - `src/features`: screens and UI behavior grouped by feature.
 - `src/lib`: UI utilities and typed invocation wrappers.
 
-The router is installed. History is hash-based (`/#/` and `/#/styleguide`) because the Tauri window does not rewrite paths to `index.html`. The style guide route loads only when `VITE_SHOW_STYLEGUIDE=true`; otherwise it is not found. The template is `.env.example`. Interface copy is English.
+The router is installed. History is hash-based (`/#/`) because the Tauri window does not rewrite paths to `index.html`. Interface copy is English.
 
 TanStack Query, Zustand, and TanStack Virtual are decided and have not been installed yet. Long lists will be virtualized, and screens will reuse the design system. The frontend runs in WebView2 on Windows and WebKitGTK on Linux.
 

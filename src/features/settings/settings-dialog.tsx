@@ -10,7 +10,7 @@ import type { SectionId } from "@/features/settings/model/sections";
 export function SettingsDialog({
   open,
   onOpenChange,
-  initialSection = "appearance",
+  initialSection = "account",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;

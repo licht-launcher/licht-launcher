@@ -17,7 +17,8 @@ pub fn run() -> anyhow::Result<()> {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(paths)
-        .manage(commands::OperationLock::new())
+        .manage(commands::InstallLock::new())
+        .manage(commands::LaunchSessions::new())
         .invoke_handler(tauri::generate_handler![
             commands::list_instances,
             commands::create_instance,
@@ -38,7 +39,9 @@ pub fn run() -> anyhow::Result<()> {
             commands::browse_application_directory,
             commands::list_versions,
             commands::install_version,
-            commands::launch
+            commands::launch,
+            commands::list_running_games,
+            commands::stop_game
         ])
         .run(tauri::generate_context!())
         .context("Failed to run Licht Launcher")

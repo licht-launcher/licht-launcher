@@ -3,7 +3,7 @@ use std::path::Path;
 use serde::Serialize;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 use ts_rs::TS;
 
 /// How one game process encodes both stdout and stderr.
@@ -30,6 +30,15 @@ pub struct GameLine {
     pub line: String,
 }
 
+/// One console line tagged with the instance folder that produced it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GameLogEvent {
+    pub folder: String,
+    pub stream: OutputStream,
+    pub line: String,
+}
+
 /// `code` is missing when the process was killed by a signal.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
 pub struct GameExit {
@@ -47,12 +56,16 @@ impl GameExit {
 /// Stdin is closed. Stdout and stderr are read together so neither pipe can
 /// fill up and stall the process. A dropped `output` receiver does not stop
 /// the process. Cancelling this task kills the child.
+///
+/// When `pid_tx` is set, the child PID is sent once after spawn so the caller
+/// can write a launch lock before waiting for exit.
 pub async fn run_game(
     command: &[String],
     current_dir: Option<&Path>,
     env: &[(&str, &str)],
     codec: LogCodec,
     output: mpsc::Sender<GameLine>,
+    pid_tx: Option<oneshot::Sender<u32>>,
 ) -> Result<GameExit> {
     let Some(program) = command.first() else {
         return Err(CoreError::GameCommand);
@@ -76,6 +89,11 @@ pub async fn run_game(
     }
 
     let mut child = process.spawn()?;
+    if let Some(tx) = pid_tx
+        && let Some(pid) = child.id()
+    {
+        let _ = tx.send(pid);
+    }
     let stdout = child.stdout.take().ok_or_else(missing_pipe)?;
     let stderr = child.stderr.take().ok_or_else(missing_pipe)?;
     let (stdout_result, stderr_result) = futures_util::future::join(

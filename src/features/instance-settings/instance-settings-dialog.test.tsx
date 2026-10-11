@@ -68,6 +68,7 @@ describe("InstanceSettingsDialog", () => {
           settings: {
             schema: 1,
             theme: "dark",
+            username: "Steve",
             fullscreen: false,
             width: 854,
             height: 480,

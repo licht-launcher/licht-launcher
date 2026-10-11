@@ -20,6 +20,7 @@ fn sample(download_concurrency: u32) -> Settings {
     Settings {
         schema: 1,
         theme: "dark".to_string(),
+        username: "Steve".to_string(),
         fullscreen: false,
         width: None,
         height: None,

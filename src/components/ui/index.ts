@@ -12,6 +12,12 @@ export {
   DialogTrigger,
 } from "@/components/ui/dialog";
 export { Input } from "@/components/ui/input";
+export {
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 export { Progress } from "@/components/ui/progress";
 export { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 export {

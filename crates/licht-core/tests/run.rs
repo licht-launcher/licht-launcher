@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use licht_core::{CoreError, GameLine, LogCodec, OutputStream, run_game};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 
 #[tokio::test]
 async fn a_finished_process_reports_both_streams_and_success() {
@@ -45,16 +45,33 @@ async fn a_failing_process_still_delivers_its_output() {
 #[tokio::test]
 async fn an_empty_command_is_rejected() {
     let (output, _incoming) = mpsc::channel(1);
-    let missing = run_game(&[], None, &[], LogCodec::Utf8, output)
+    let missing = run_game(&[], None, &[], LogCodec::Utf8, output, None)
         .await
         .expect_err("empty");
     assert!(matches!(missing, CoreError::GameCommand));
 
     let (output, _incoming) = mpsc::channel(1);
-    let blank = run_game(&[String::new()], None, &[], LogCodec::Utf8, output)
+    let blank = run_game(&[String::new()], None, &[], LogCodec::Utf8, output, None)
         .await
         .expect_err("blank");
     assert!(matches!(blank, CoreError::GameCommand));
+}
+
+#[tokio::test]
+async fn run_game_reports_the_child_pid() {
+    let directory = temp_dir("pid");
+    let program = write_stub(&directory, "pid", Stub::Streams { code: 0 });
+    let (output, _incoming) = mpsc::channel(8);
+    let (pid_tx, pid_rx) = oneshot::channel();
+    let command = [program.display().to_string()];
+
+    let running = tokio::spawn(async move {
+        run_game(&command, None, &[], LogCodec::Utf8, output, Some(pid_tx)).await
+    });
+    let pid = pid_rx.await.expect("pid");
+    assert!(pid > 0);
+    let exit = running.await.expect("join").expect("exit");
+    assert!(exit.succeeded());
 }
 
 #[tokio::test]
@@ -107,7 +124,16 @@ async fn start_stub(
     let command = [program.display().to_string()];
     let mut attempts = 0;
     loop {
-        match run_game(&command, current_dir, env, LogCodec::Utf8, output.clone()).await {
+        match run_game(
+            &command,
+            current_dir,
+            env,
+            LogCodec::Utf8,
+            output.clone(),
+            None,
+        )
+        .await
+        {
             Err(CoreError::Io(error))
                 if error.kind() == std::io::ErrorKind::ExecutableFileBusy && attempts < 4 =>
             {

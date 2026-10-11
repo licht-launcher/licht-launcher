@@ -1,29 +1,33 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex as StdMutex;
 
 use licht_core::{
-    ADOPTIUM_API, ASSET_OBJECT_BASE, Arch, CoreError, GameExit, GameInstall, InstanceEntry,
-    InstanceSettings, JavaDetections, JavaPaths, JavaStatus, LaunchEnvironment, OsName, Settings,
-    SettingsSnapshot, SharedCache, VersionSummary, browse_start_directory, configured_java,
-    detect_known_javas, fetch_version_manifest, game_cache, global_launch, install_game,
-    install_temurin, installed_java, load_instance, load_settings, log_codec, offline_account,
-    parse_version, prepare_offline_launch, probe_java_major, required_java_major,
-    resolved_java_path, resolved_launch, run_game, runtime_java_paths, set_java_path,
-    settings_snapshot, update_instance, update_instance_version, version_summaries,
+    ADOPTIUM_API, ASSET_OBJECT_BASE, Arch, CoreError, GameExit, GameInstall, GameLogEvent,
+    InstanceEntry, InstanceSettings, JavaDetections, JavaPaths, JavaStatus, LaunchEnvironment,
+    OsName, Settings, SettingsSnapshot, SharedCache, VersionSummary, browse_start_directory,
+    clear_launch_lock, configured_java, detect_known_javas, fetch_version_manifest, game_cache,
+    global_launch, install_game, install_temurin, installed_java, kill_launch_process,
+    list_running_launch_folders, load_instance, load_settings, log_codec, offline_account,
+    parse_version, prepare_offline_launch, probe_java_major, process_matches_lock,
+    read_launch_lock, required_java_major, resolved_java_path, resolved_launch, run_game,
+    runtime_java_paths, set_java_path, settings_snapshot, update_instance, update_instance_version,
+    version_summaries, write_launch_lock_for_pid,
 };
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::{DialogExt, FileDialogBuilder};
 use tauri_plugin_opener::OpenerExt;
-use tokio::sync::{Mutex, MutexGuard, mpsc};
+use tokio::sync::{Mutex, MutexGuard, mpsc, oneshot};
+use tokio::task::AbortHandle;
 
 use crate::progress::ProgressThrottle;
 
-/// One install or one launch at a time. Listing versions does not take the lock.
-pub struct OperationLock {
+/// One version/Java install at a time. Launches do not take this lock.
+pub struct InstallLock {
     gate: Mutex<()>,
 }
 
-impl OperationLock {
+impl InstallLock {
     pub fn new() -> Self {
         Self {
             gate: Mutex::new(()),
@@ -33,7 +37,157 @@ impl OperationLock {
     pub fn try_begin(&self) -> Result<MutexGuard<'_, ()>, String> {
         self.gate
             .try_lock()
-            .map_err(|_| "another install or launch is already running".to_string())
+            .map_err(|_| "another install is already running".to_string())
+    }
+}
+
+enum LaunchSession {
+    Starting,
+    Live { abort: AbortHandle },
+    Orphan { pid: u32 },
+}
+
+/// Tracks which instance folders currently have a running game.
+pub struct LaunchSessions {
+    active: StdMutex<HashMap<String, LaunchSession>>,
+}
+
+/// Removes the folder from [`LaunchSessions`] when dropped.
+pub struct LaunchGuard<'a> {
+    sessions: &'a LaunchSessions,
+    folder: String,
+}
+
+impl LaunchSessions {
+    pub fn new() -> Self {
+        Self {
+            active: StdMutex::new(HashMap::new()),
+        }
+    }
+
+    fn lock(&self) -> Result<std::sync::MutexGuard<'_, HashMap<String, LaunchSession>>, String> {
+        self.active
+            .lock()
+            .map_err(|_| "launch session lock is poisoned".to_string())
+    }
+
+    pub fn try_begin(&self, folder: &str) -> Result<LaunchGuard<'_>, String> {
+        let mut active = self.lock()?;
+        if active.contains_key(folder) {
+            return Err(format!("instance \"{folder}\" is already running"));
+        }
+        active.insert(folder.to_string(), LaunchSession::Starting);
+        Ok(LaunchGuard {
+            sessions: self,
+            folder: folder.to_string(),
+        })
+    }
+
+    fn attach_live(&self, folder: &str, abort: AbortHandle) -> Result<(), String> {
+        let mut active = self.lock()?;
+        match active.get_mut(folder) {
+            Some(slot @ LaunchSession::Starting) => {
+                *slot = LaunchSession::Live { abort };
+                Ok(())
+            }
+            Some(_) => Err(format!("instance \"{folder}\" is already running")),
+            None => Err(format!("instance \"{folder}\" has no launch session")),
+        }
+    }
+
+    fn reconcile(&self, instances_dir: &Path) -> Result<(), String> {
+        let found = list_running_launch_folders(instances_dir).map_err(failure)?;
+        let mut active = self.lock()?;
+        for folder in found {
+            if active.contains_key(&folder) {
+                continue;
+            }
+            let dir = instances_dir.join(&folder);
+            let Some(lock) = read_launch_lock(&dir).map_err(failure)? else {
+                continue;
+            };
+            active.insert(folder, LaunchSession::Orphan { pid: lock.pid });
+        }
+
+        let stale: Vec<String> = active
+            .iter()
+            .filter_map(|(folder, session)| match session {
+                LaunchSession::Orphan { .. } => {
+                    let dir = instances_dir.join(folder);
+                    match read_launch_lock(&dir) {
+                        Ok(Some(lock)) if process_matches_lock(lock.pid, lock.start_time) => None,
+                        _ => Some(folder.clone()),
+                    }
+                }
+                _ => None,
+            })
+            .collect();
+        for folder in stale {
+            active.remove(&folder);
+            let _ = clear_launch_lock(&instances_dir.join(&folder));
+        }
+        Ok(())
+    }
+
+    fn list_running(&self, instances_dir: &Path) -> Result<Vec<String>, String> {
+        self.reconcile(instances_dir)?;
+        let active = self.lock()?;
+        let mut folders: Vec<String> = active.keys().cloned().collect();
+        folders.sort();
+        Ok(folders)
+    }
+
+    fn stop(&self, folder: &str, instance_dir: &Path) -> Result<(), String> {
+        enum Action {
+            Abort(AbortHandle),
+            Kill(u32),
+            Busy,
+            Missing,
+        }
+
+        let action = {
+            let mut active = self.lock()?;
+            match active.get(folder) {
+                Some(LaunchSession::Live { abort }) => Action::Abort(abort.clone()),
+                Some(LaunchSession::Orphan { pid }) => {
+                    let pid = *pid;
+                    active.remove(folder);
+                    Action::Kill(pid)
+                }
+                Some(LaunchSession::Starting) => Action::Busy,
+                None => Action::Missing,
+            }
+        };
+
+        match action {
+            Action::Abort(abort) => {
+                abort.abort();
+                Ok(())
+            }
+            Action::Kill(pid) => {
+                kill_launch_process(pid).map_err(failure)?;
+                clear_launch_lock(instance_dir).map_err(failure)?;
+                Ok(())
+            }
+            Action::Busy => Err(format!("instance \"{folder}\" is still starting")),
+            Action::Missing => {
+                if let Some(lock) = read_launch_lock(instance_dir).map_err(failure)? {
+                    if process_matches_lock(lock.pid, lock.start_time) {
+                        kill_launch_process(lock.pid).map_err(failure)?;
+                    }
+                    clear_launch_lock(instance_dir).map_err(failure)?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+impl Drop for LaunchGuard<'_> {
+    fn drop(&mut self) {
+        if let Ok(mut active) = self.sessions.active.lock() {
+            active.remove(&self.folder);
+        }
     }
 }
 
@@ -211,7 +365,7 @@ pub async fn detect_java_installations(
 #[tauri::command]
 pub async fn install_recommended_java(
     paths: State<'_, LauncherPaths>,
-    state: State<'_, OperationLock>,
+    state: State<'_, InstallLock>,
     major: u32,
 ) -> Result<String, String> {
     if !matches!(major, 25 | 21 | 17 | 8) {
@@ -311,7 +465,7 @@ pub async fn list_versions(paths: State<'_, LauncherPaths>) -> Result<Vec<Versio
 pub async fn install_version(
     app: AppHandle,
     paths: State<'_, LauncherPaths>,
-    state: State<'_, OperationLock>,
+    state: State<'_, InstallLock>,
     version_id: String,
 ) -> Result<String, String> {
     let _guard = state.try_begin()?;
@@ -378,20 +532,51 @@ async fn install_one(
 pub async fn launch(
     app: AppHandle,
     paths: State<'_, LauncherPaths>,
-    state: State<'_, OperationLock>,
+    sessions: State<'_, LaunchSessions>,
     folder: String,
     username: String,
 ) -> Result<GameExit, String> {
-    let _guard = state.try_begin()?;
-    launch_one(&app, &paths.game, &paths.settings, &folder, &username)
-        .await
-        .map_err(failure)
+    let instances_dir = paths.game.instances_dir().map_err(failure)?;
+    sessions.reconcile(&instances_dir)?;
+    let _guard = sessions.try_begin(&folder)?;
+    launch_one(
+        &app,
+        &paths.game,
+        &paths.settings,
+        &sessions,
+        &folder,
+        &username,
+    )
+    .await
+    .map_err(failure)
+}
+
+#[tauri::command]
+pub fn list_running_games(
+    paths: State<'_, LauncherPaths>,
+    sessions: State<'_, LaunchSessions>,
+) -> Result<Vec<String>, String> {
+    let instances_dir = paths.game.instances_dir().map_err(failure)?;
+    sessions.list_running(&instances_dir)
+}
+
+#[tauri::command]
+pub fn stop_game(
+    paths: State<'_, LauncherPaths>,
+    sessions: State<'_, LaunchSessions>,
+    folder: String,
+) -> Result<(), String> {
+    let instances_dir = paths.game.instances_dir().map_err(failure)?;
+    sessions.reconcile(&instances_dir)?;
+    let dir = paths.game.instance_dir(&folder).map_err(failure)?;
+    sessions.stop(&folder, &dir)
 }
 
 async fn launch_one(
     app: &AppHandle,
     game: &SharedCache,
     settings_home: &SharedCache,
+    sessions: &LaunchSessions,
     folder: &str,
     username: &str,
 ) -> Result<GameExit, CoreError> {
@@ -432,20 +617,52 @@ async fn launch_one(
     )?;
 
     let (output, mut incoming) = mpsc::channel(32);
+    let (pid_tx, pid_rx) = oneshot::channel();
     let appdata = prepared.appdata.map(|path| path.display().to_string());
     let command = prepared.command;
     let game_directory = prepared.game_directory;
-    let running = tauri::async_runtime::spawn(async move {
+    // tokio::spawn exposes AbortHandle; tauri::async_runtime::JoinHandle does not.
+    let running = tokio::spawn(async move {
         let mut env = Vec::new();
         if let Some(path) = &appdata {
             env.push(("APPDATA", path.as_str()));
         }
-        run_game(&command, Some(&game_directory), &env, codec, output).await
-    });
-    while let Some(line) = incoming.recv().await {
-        let _ = app.emit("game-log", line);
-    }
-    running
+        run_game(
+            &command,
+            Some(&game_directory),
+            &env,
+            codec,
+            output,
+            Some(pid_tx),
+        )
         .await
-        .map_err(|_| CoreError::Io(std::io::Error::other("launch task failed")))?
+    });
+    sessions
+        .attach_live(folder, running.abort_handle())
+        .map_err(|message| CoreError::Io(std::io::Error::other(message)))?;
+    if let Ok(pid) = pid_rx.await
+        && let Err(error) = write_launch_lock_for_pid(&dir, pid)
+    {
+        tracing::warn!(error = %error, folder, "could not write launch lock");
+    }
+
+    while let Some(line) = incoming.recv().await {
+        let _ = app.emit(
+            "game-log",
+            GameLogEvent {
+                folder: folder.to_string(),
+                stream: line.stream,
+                line: line.line,
+            },
+        );
+    }
+    let exit = match running.await {
+        Ok(result) => result?,
+        Err(join_error) if join_error.is_cancelled() => GameExit { code: None },
+        Err(_) => {
+            return Err(CoreError::Io(std::io::Error::other("launch task failed")));
+        }
+    };
+    clear_launch_lock(&dir)?;
+    Ok(exit)
 }

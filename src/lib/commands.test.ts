@@ -14,6 +14,7 @@ import {
   javaInstallationStatus,
   launchVersion,
   listInstances,
+  listRunningGames,
   listVersions,
   openInstanceFolder,
   openRepository,
@@ -22,6 +23,7 @@ import {
   saveInstance,
   saveSettings,
   setInstanceVersion,
+  stopGame,
 } from "@/lib/commands";
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -104,6 +106,7 @@ describe("launcher commands", () => {
     const settings = {
       schema: 1,
       theme: "dark",
+      username: "Steve",
       fullscreen: false,
       width: null,
       height: null,
@@ -162,5 +165,16 @@ describe("launcher commands", () => {
       folder: "classic",
       username: "Mateus",
     });
+  });
+
+  it("lists running games", async () => {
+    vi.mocked(invoke).mockResolvedValue(["classic"]);
+    await expect(listRunningGames()).resolves.toEqual(["classic"]);
+    expect(invoke).toHaveBeenCalledWith("list_running_games");
+  });
+
+  it("stops a running game by folder", async () => {
+    await stopGame("classic");
+    expect(invoke).toHaveBeenCalledWith("stop_game", { folder: "classic" });
   });
 });

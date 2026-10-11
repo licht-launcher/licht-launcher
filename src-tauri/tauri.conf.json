@@ -20,7 +20,9 @@
         "minWidth": 960,
         "minHeight": 560,
         "maxWidth": 1200,
-        "maxHeight": 960
+        "maxHeight": 960,
+        "fullscreen": false,
+        "maximizable": false
       }
     ],
     "security": {
