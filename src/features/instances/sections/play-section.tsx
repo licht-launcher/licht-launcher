@@ -2,6 +2,7 @@ import { PlayIcon, Settings2Icon, SquareIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { InstanceIcon } from "@/features/instances/components/instance-icon";
 import type { PlayPhase } from "@/features/instances/hooks/use-play-session";
 import {
   barValue,
@@ -48,9 +49,14 @@ export function PlaySection({
   return (
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="flex min-w-0 flex-1 flex-wrap items-start gap-4">
-        <div className="flex min-w-0 flex-col gap-1">
-          <h2 className="text-lg font-medium">{instance.name}</h2>
-          <p className="text-sm text-muted-foreground">{instance.versionId}</p>
+        <div className="flex min-w-0 items-center gap-3">
+          <InstanceIcon size="md" />
+          <div className="flex min-w-0 flex-col gap-1">
+            <h2 className="text-lg font-medium">{instance.name}</h2>
+            <p className="text-sm text-muted-foreground">
+              {instance.versionId}
+            </p>
+          </div>
         </div>
         {installing ? (
           <div className="flex min-w-0 max-w-sm flex-1 flex-col gap-1 pt-1">

@@ -2,6 +2,7 @@
 
 mod asset_index;
 mod cache;
+mod db;
 mod download;
 mod error;
 mod install;
@@ -21,6 +22,10 @@ pub use asset_index::{
     AssetIndexFile, AssetObject, fetch_asset_index, parse_asset_index, reconstruct_assets,
 };
 pub use cache::SharedCache;
+pub use db::{
+    clear_last_played_folder, clear_meta, db_path, get_meta, last_played_folder, open_db,
+    set_last_played_folder, set_meta,
+};
 pub use download::{
     DEFAULT_CONCURRENCY, DEFAULT_RETRY, DownloadProgress, DownloadTask, InstallProgress, Retry,
     TransferLimits, download_all, download_file, shared_transfer_limits,

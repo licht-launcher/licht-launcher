@@ -82,6 +82,8 @@ pub enum CoreError {
     VersionMissing,
     #[error("this system is not supported for launch")]
     LaunchHost,
+    #[error("database operation failed")]
+    Database(#[from] rusqlite::Error),
 }
 
 #[cfg(test)]
