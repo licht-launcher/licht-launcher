@@ -34,14 +34,11 @@ pub fn load_env_files() {
 /// Order: non-empty process env (including values loaded from `.env`) → embedded release ID.
 /// The value is never logged.
 pub fn msa_client_id() -> Result<String> {
-    match std::env::var(MSA_CLIENT_ID_ENV) {
-        Ok(value) => {
-            let trimmed = value.trim().to_string();
-            if !trimmed.is_empty() {
-                return Ok(trimmed);
-            }
+    if let Ok(value) = std::env::var(MSA_CLIENT_ID_ENV) {
+        let trimmed = value.trim().to_string();
+        if !trimmed.is_empty() {
+            return Ok(trimmed);
         }
-        Err(_) => {}
     }
     if EMBEDDED_MSA_CLIENT_ID.is_empty() {
         Err(CoreError::MsaClientIdMissing)
