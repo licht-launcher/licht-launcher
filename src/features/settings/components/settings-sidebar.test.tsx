@@ -21,7 +21,7 @@ describe("SettingsSidebar", () => {
 
   it("shows the app name, version, and opens the repository", async () => {
     await renderSettings();
-    await screen.findByLabelText("Color theme");
+    await screen.findByLabelText("Username");
 
     expect(screen.getByRole("heading", { name: "Settings" })).toBeVisible();
     expect(screen.getByText("Licht Launcher")).toBeInTheDocument();

@@ -8,6 +8,7 @@ mod install;
 mod instance;
 mod java;
 mod launch;
+mod launch_lock;
 mod natives;
 mod offline;
 mod run;
@@ -43,12 +44,17 @@ pub use java::{
     runtime_java_paths, runtime_platform, select_runtime, validate_java,
 };
 pub use launch::{apply_global_launch, classpath, launch_command};
+pub use launch_lock::{
+    LaunchLock, clear_launch_lock, kill_launch_process, launch_lock_path,
+    list_running_launch_folders, process_matches_lock, process_start_time, read_launch_lock,
+    write_launch_lock, write_launch_lock_for_pid,
+};
 pub use natives::{NativeLibrary, create_natives_directory, extract_natives, native_libraries};
 pub use offline::{
     LaunchArgs, OfflineAccount, OfflineLaunch, offline_account, parse_launch_args,
     prepare_offline_launch,
 };
-pub use run::{GameExit, GameLine, LogCodec, OutputStream, log_codec, run_game};
+pub use run::{GameExit, GameLine, GameLogEvent, LogCodec, OutputStream, log_codec, run_game};
 pub use settings::{
     GlobalLaunch, Settings, SettingsSnapshot, configured_java, download_concurrency, game_cache,
     global_launch, load_settings, memory_slider_max, recommended_max_memory_mb, save_settings,

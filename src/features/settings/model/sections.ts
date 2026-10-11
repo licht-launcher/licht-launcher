@@ -3,9 +3,16 @@ import {
   DownloadIcon,
   PaletteIcon,
   TerminalIcon,
+  UserRoundIcon,
 } from "lucide-react";
 
 export const SECTIONS = [
+  {
+    id: "account",
+    label: "Account",
+    description: "Offline player name. Microsoft sign-in will live here later.",
+    icon: UserRoundIcon,
+  },
   {
     id: "appearance",
     label: "Appearance",

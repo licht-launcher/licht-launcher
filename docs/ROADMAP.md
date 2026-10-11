@@ -55,14 +55,14 @@ The codename appears on the About screen, in the GitHub release title, and in th
 - [x] **0.5** Short `docs/ARCHITECTURE.md` describing the layers (core / tauri / frontend).
 - [x] **0.6** Project license and "unofficial" notice in the README.
   - 🛑 License (MIT, Apache-2.0, GPL...).
-- [x] **0.7** **Base design system**: Tailwind + shadcn/ui configured, **design tokens** (colors, radii, spacing, typography) as CSS variables in a single file, light/dark theme, Lucide icons, and base components (Button, Input, Dialog, Tabs, Progress, Toast, Select, Tooltip, ScrollArea). Page `/#/styleguide`, visible only with `VITE_SHOW_STYLEGUIDE=true`, showing all of them.
+- [x] **0.7** **Base design system**: Tailwind + shadcn/ui configured, **design tokens** (colors, radii, spacing, typography) as CSS variables in a single file, light/dark theme, Lucide icons, and base components (Button, Input, Dialog, Tabs, Progress, Toast, Select, Tooltip, ScrollArea).
   - 🛑 **Tailwind version (v3 or v4):** test on an older WebKitGTK (e.g. Ubuntu 22.04) before deciding. If there is a problem, use v3.
   - 🛑 Visual direction: palette, typography, light/dark, level of minimalism (starting point: lily of light, soft tones).
   - Avoid heavy effects (`backdrop-filter`, blurs, and large shadows) because of WebKitGTK on Linux.
 
-**Closed.** The main window opens empty, CI covers Windows and Ubuntu, and the style guide is at `/#/styleguide` when `VITE_SHOW_STYLEGUIDE=true`.
+**Closed.** The main window opens empty, CI covers Windows and Ubuntu, and the design system lives in `src/components/ui` with tokens in `src/styles/tokens.css`.
 
-**Context beyond the items:** TanStack Router was installed in this phase (`@tanstack/react-router` and the Vite plugin). Routes are files in `src/routes`; screens stay in `src/features`. The tree generated in `src/routeTree.gen.ts` is committed, so `tsc` does not depend on a Vite build. History is hash-based (`/#/` and `/#/styleguide`) because the Tauri window does not rewrite paths to `index.html`. The guide no longer depends on `import.meta.env.DEV`: the route responds not found unless `VITE_SHOW_STYLEGUIDE=true` (template in `.env.example`). TanStack Query, Zustand, and TanStack Virtual remain decided and not installed. Interface text is in English.
+**Context beyond the items:** TanStack Router was installed in this phase (`@tanstack/react-router` and the Vite plugin). Routes are files in `src/routes`; screens stay in `src/features`. The tree generated in `src/routeTree.gen.ts` is committed, so `tsc` does not depend on a Vite build. History is hash-based (`/#/`) because the Tauri window does not rewrite paths to `index.html`. TanStack Query, Zustand, and TanStack Virtual remain decided and not installed. Interface text is in English.
 
 ---
 

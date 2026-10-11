@@ -40,7 +40,6 @@
 - Accessibility: everything operable by keyboard, with visible focus and correct labels (Radix already helps; do not remove that).
 - The frontend runs in **WebView2 (Windows)** and **WebKitGTK (Linux)**. Avoid `backdrop-filter`, blurs, large shadows, and complex animations. If you use a modern CSS feature, tell me so I can test it on both systems.
 - Calls to Rust via TanStack Query (cache, loading, and error), once Query is installed. Progress events with throttling (~100 ms). Long lists always virtualized.
-- The style guide lives at `/#/styleguide` and loads only with `VITE_SHOW_STYLEGUIDE=true` (see `.env.example`).
 - Types shared with Rust are generated; never redeclare them by hand.
 
 ## Rust (beginner level: prefer simple code)

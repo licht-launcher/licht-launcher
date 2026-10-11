@@ -24,6 +24,7 @@ const THEME: &str = "dark";
 pub struct Settings {
     pub schema: u32,
     pub theme: String,
+    pub username: String,
     pub fullscreen: bool,
     pub width: Option<u32>,
     pub height: Option<u32>,
@@ -67,6 +68,8 @@ struct StoredSettings {
     schema: u32,
     #[serde(default = "default_theme")]
     theme: String,
+    #[serde(default = "default_username")]
+    username: String,
     #[serde(default)]
     fullscreen: bool,
     #[serde(default = "default_width")]
@@ -93,6 +96,10 @@ struct StoredSettings {
 
 fn default_theme() -> String {
     THEME.to_string()
+}
+
+fn default_username() -> String {
+    "Steve".to_string()
 }
 
 fn default_width() -> Option<u32> {
@@ -196,6 +203,10 @@ fn validated(cache: &SharedCache, settings: Settings) -> Result<Settings> {
     if settings.theme != THEME {
         return Err(CoreError::SettingsTheme);
     }
+    let username = settings.username.trim().to_string();
+    if username.is_empty() {
+        return Err(CoreError::OfflineName);
+    }
     if !(MIN_CONCURRENCY..=MAX_CONCURRENCY).contains(&settings.download_concurrency) {
         return Err(CoreError::SettingsConcurrency);
     }
@@ -211,6 +222,7 @@ fn validated(cache: &SharedCache, settings: Settings) -> Result<Settings> {
     Ok(Settings {
         schema: SCHEMA,
         theme: settings.theme,
+        username,
         fullscreen: settings.fullscreen,
         width: settings.width,
         height: settings.height,
@@ -244,6 +256,7 @@ fn from_stored(cache: &SharedCache, stored: StoredSettings) -> Result<Settings> 
         Settings {
             schema: stored.schema,
             theme: stored.theme,
+            username: stored.username,
             fullscreen: stored.fullscreen,
             width: stored.width,
             height: stored.height,
@@ -273,6 +286,7 @@ pub fn load_settings(cache: &SharedCache) -> Result<Settings> {
             StoredSettings {
                 schema: SCHEMA,
                 theme: default_theme(),
+                username: default_username(),
                 fullscreen: false,
                 width: default_width(),
                 height: default_height(),

@@ -206,7 +206,7 @@ async fn launch(args: &[String]) -> licht_core::Result<i32> {
         if let Some(path) = &appdata {
             env.push(("APPDATA", path.as_str()));
         }
-        run_game(&command, Some(&game_directory), &env, codec, output).await
+        run_game(&command, Some(&game_directory), &env, codec, output, None).await
     });
     while let Some(line) = incoming.recv().await {
         match line.stream {

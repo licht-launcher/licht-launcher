@@ -2,6 +2,7 @@ export const snapshot = {
   settings: {
     schema: 1,
     theme: "dark",
+    username: "Steve",
     fullscreen: false,
     width: 1280,
     height: 720,
