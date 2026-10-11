@@ -39,6 +39,14 @@ vi.mock("@tauri-apps/api/event", () => ({
   ),
 }));
 
+vi.mock("@tauri-apps/api/window", () => ({
+  getCurrentWindow: () => ({
+    minimize: vi.fn(),
+    close: vi.fn(),
+    setDecorations: vi.fn(),
+  }),
+}));
+
 async function renderAt(path: string) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -115,7 +123,7 @@ describe("InstancesPage", () => {
       screen.getByText("Create an instance to get started."),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "New instance" })).toBeEnabled();
-    expect(screen.getByText("0.1.0 · Lilie")).toBeInTheDocument();
+    expect(screen.getAllByText("0.1.0 · Lilie").length).toBeGreaterThan(0);
     expect(
       screen.getByText(
         "Unofficial, not affiliated with Mojang Studios or Microsoft.",
