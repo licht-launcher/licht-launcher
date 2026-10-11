@@ -15,8 +15,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Toaster } from "@/components/ui/sonner";
 import { snapshot } from "@/features/settings/fixtures/snapshot";
-import type { DownloadProgress } from "@/lib/generated/DownloadProgress";
 import type { GameLogEvent } from "@/lib/generated/GameLogEvent";
+import type { InstallProgress } from "@/lib/generated/InstallProgress";
 import { routeTree } from "@/routeTree.gen";
 
 const { invoke, listeners } = vi.hoisted(() => ({
@@ -415,12 +415,13 @@ describe("InstancesPage", () => {
 
     listeners.get("install-progress")?.({
       payload: {
+        versionId: "1.20.1",
         finished: 1,
         failed: 0,
         total: 4,
         bytesDone: 5_000_000,
         bytesTotal: 10_000_000,
-      } satisfies DownloadProgress,
+      } satisfies InstallProgress,
     });
     expect(
       await screen.findByText(/50\.0%\s+5\.0MB\/10\.0MB/),

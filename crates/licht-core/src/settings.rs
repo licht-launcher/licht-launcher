@@ -35,6 +35,7 @@ pub struct Settings {
     pub java17: Option<String>,
     pub java8: Option<String>,
     pub download_concurrency: u32,
+    pub write_concurrency: u32,
     pub data_directory: Option<String>,
 }
 
@@ -90,6 +91,8 @@ struct StoredSettings {
     java8: Option<String>,
     #[serde(default = "default_concurrency_value")]
     download_concurrency: u32,
+    #[serde(default = "default_concurrency_value")]
+    write_concurrency: u32,
     #[serde(default)]
     data_directory: Option<String>,
 }
@@ -210,6 +213,9 @@ fn validated(cache: &SharedCache, settings: Settings) -> Result<Settings> {
     if !(MIN_CONCURRENCY..=MAX_CONCURRENCY).contains(&settings.download_concurrency) {
         return Err(CoreError::SettingsConcurrency);
     }
+    if !(MIN_CONCURRENCY..=MAX_CONCURRENCY).contains(&settings.write_concurrency) {
+        return Err(CoreError::SettingsWriteConcurrency);
+    }
     if settings.max_memory_mb < MIN_MEMORY_MB
         || settings.max_memory_mb > MAX_MEMORY_CAP_MB
         || !settings.max_memory_mb.is_multiple_of(MEMORY_STEP_MB)
@@ -237,6 +243,7 @@ fn validated(cache: &SharedCache, settings: Settings) -> Result<Settings> {
         java17: clean_java(settings.java17.as_deref())?,
         java8: clean_java(settings.java8.as_deref())?,
         download_concurrency: settings.download_concurrency,
+        write_concurrency: settings.write_concurrency,
         data_directory: normalize_directory(cache, settings.data_directory.as_deref())?,
     })
 }
@@ -267,6 +274,7 @@ fn from_stored(cache: &SharedCache, stored: StoredSettings) -> Result<Settings> 
             java17: stored.java17,
             java8: stored.java8,
             download_concurrency: stored.download_concurrency,
+            write_concurrency: stored.write_concurrency,
             data_directory: stored.data_directory,
         },
     )
@@ -297,6 +305,7 @@ pub fn load_settings(cache: &SharedCache) -> Result<Settings> {
                 java17: None,
                 java8: None,
                 download_concurrency: default_concurrency_value(),
+                write_concurrency: default_concurrency_value(),
                 data_directory: None,
             },
         );
@@ -353,15 +362,23 @@ pub fn set_java_path(cache: &SharedCache, major: u32, path: &Path) -> Result<Set
     save_settings(cache, &settings)
 }
 
-/// Game files may live in another folder. When that folder has no
-/// `settings.json`, concurrency still comes from the settings folder.
-pub fn download_concurrency(game: &SharedCache, settings: &SharedCache) -> Result<usize> {
-    let source = if settings_path(game).is_file() {
+fn concurrency_source<'a>(game: &'a SharedCache, settings: &'a SharedCache) -> &'a SharedCache {
+    if settings_path(game).is_file() {
         game
     } else {
         settings
-    };
-    Ok(load_settings(source)?.download_concurrency as usize)
+    }
+}
+
+/// Game files may live in another folder. When that folder has no
+/// `settings.json`, concurrency still comes from the settings folder.
+pub fn download_concurrency(game: &SharedCache, settings: &SharedCache) -> Result<usize> {
+    Ok(load_settings(concurrency_source(game, settings))?.download_concurrency as usize)
+}
+
+/// How many files may be written to disk at once across all installs.
+pub fn write_concurrency(game: &SharedCache, settings: &SharedCache) -> Result<usize> {
+    Ok(load_settings(concurrency_source(game, settings))?.write_concurrency as usize)
 }
 
 /// Next process: game files go to `{dataDirectory}/Licht Launcher`.

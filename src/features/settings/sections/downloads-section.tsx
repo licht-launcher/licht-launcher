@@ -34,14 +34,14 @@ export function DownloadsSection({
         <div className="flex flex-col gap-1">
           <div className="flex items-baseline justify-between gap-3">
             <h3 id="download-concurrency-label" className="text-sm font-medium">
-              Concurrency
+              Maximum simultaneous downloads
             </h3>
             <span className="text-sm text-muted-foreground">
               {draft.downloadConcurrency}
             </span>
           </div>
           <p className="text-sm text-muted-foreground">
-            How many files download at once.
+            How many files download over the network at once.
           </p>
         </div>
         <Slider
@@ -54,6 +54,35 @@ export function DownloadsSection({
             const next = value[0];
             if (next !== undefined) {
               onChange({ downloadConcurrency: next });
+            }
+          }}
+        />
+      </section>
+
+      <section className="flex flex-col gap-4 border-t border-border pt-6">
+        <div className="flex flex-col gap-1">
+          <div className="flex items-baseline justify-between gap-3">
+            <h3 id="write-concurrency-label" className="text-sm font-medium">
+              Maximum simultaneous writes
+            </h3>
+            <span className="text-sm text-muted-foreground">
+              {draft.writeConcurrency}
+            </span>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            How many files are written to disk at once.
+          </p>
+        </div>
+        <Slider
+          aria-labelledby="write-concurrency-label"
+          min={1}
+          max={16}
+          step={1}
+          value={[draft.writeConcurrency]}
+          onValueChange={(value) => {
+            const next = value[0];
+            if (next !== undefined) {
+              onChange({ writeConcurrency: next });
             }
           }}
         />
@@ -80,9 +109,11 @@ export function DownloadsSection({
           <Button
             type="button"
             variant="secondary"
-            className="shrink-0"
+            aria-label="Browse application directory"
             disabled={browseDirectory.isPending}
-            onClick={() => browseDirectory.mutate(draft.dataDirectory)}
+            onClick={() => {
+              browseDirectory.mutate(draft.dataDirectory);
+            }}
           >
             <FolderOpenIcon data-icon="inline-start" aria-hidden />
             Browse

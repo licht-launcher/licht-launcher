@@ -17,14 +17,19 @@ export function InstancesPage() {
   );
   const dialogs = useInstanceDialogs();
   const markStartedRef = useRef<(folder: string) => void>(() => {});
-  const { progress, setProgress, logsByFolder, clearFolderLog } = useGameEvents(
-    (folder) => {
-      markStartedRef.current(folder);
-    },
-  );
+  const {
+    progressForVersion,
+    clearVersionProgress,
+    logsByFolder,
+    clearFolderLog,
+  } = useGameEvents((folder) => {
+    markStartedRef.current(folder);
+  });
 
   const {
-    installingFolder,
+    isInstalling,
+    beginInstall,
+    endInstall,
     playBlocked,
     playPhase,
     markStarted,
@@ -33,15 +38,15 @@ export function InstancesPage() {
   } = usePlaySession({
     versions: versions.data,
     username,
-    setProgress,
+    clearVersionProgress,
     clearFolderLog,
   });
   markStartedRef.current = markStarted;
 
   const { busy, create, rename, duplicate, remove, openFolder, changeVersion } =
     useInstanceMutations({
-      installingFolder,
-      setProgress,
+      beginInstall,
+      endInstall,
       setSelectedFolder,
       setConfiguringFolder: dialogs.setConfiguringFolder,
       clearAction: dialogs.clearAction,
@@ -53,6 +58,9 @@ export function InstancesPage() {
     ) ?? null;
 
   const phase = selected ? playPhase(selected.folder) : "idle";
+  const installing = selected !== null && isInstalling(selected.folder);
+  const progress =
+    installing && selected ? progressForVersion(selected.versionId) : null;
 
   return (
     <>
@@ -71,7 +79,7 @@ export function InstancesPage() {
           busy={busy}
           playDisabled={playBlocked}
           phase={phase}
-          installing={selected !== null && installingFolder === selected.folder}
+          installing={installing}
           progress={progress}
           lines={
             selectedFolder === null ? [] : (logsByFolder[selectedFolder] ?? [])

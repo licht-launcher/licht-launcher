@@ -79,6 +79,7 @@ describe("InstanceSettingsDialog", () => {
             java17: null,
             java8: null,
             downloadConcurrency: 4,
+            writeConcurrency: 8,
             dataDirectory: null,
           },
           applicationDirectory: "C:\\Licht",

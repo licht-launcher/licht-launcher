@@ -4,9 +4,22 @@ import { useEffect, useRef, useState } from "react";
 import type { ConsoleLine } from "@/features/instances/model/console-line";
 import type { DownloadProgress } from "@/lib/generated/DownloadProgress";
 import type { GameLogEvent } from "@/lib/generated/GameLogEvent";
+import type { InstallProgress } from "@/lib/generated/InstallProgress";
+
+function toDownloadProgress(progress: InstallProgress): DownloadProgress {
+  return {
+    finished: progress.finished,
+    failed: progress.failed,
+    total: progress.total,
+    bytesDone: progress.bytesDone,
+    bytesTotal: progress.bytesTotal,
+  };
+}
 
 export function useGameEvents(onGameLog?: (folder: string) => void) {
-  const [progress, setProgress] = useState<DownloadProgress | null>(null);
+  const [progressByVersion, setProgressByVersion] = useState<
+    Record<string, DownloadProgress>
+  >({});
   const [logsByFolder, setLogsByFolder] = useState<
     Record<string, ConsoleLine[]>
   >({});
@@ -18,8 +31,12 @@ export function useGameEvents(onGameLog?: (folder: string) => void) {
     let stop = false;
     let unlistenProgress: (() => void) | undefined;
     let unlistenLog: (() => void) | undefined;
-    void listen<DownloadProgress>("install-progress", (event) => {
-      setProgress(event.payload);
+    void listen<InstallProgress>("install-progress", (event) => {
+      const { versionId } = event.payload;
+      setProgressByVersion((current) => ({
+        ...current,
+        [versionId]: toDownloadProgress(event.payload),
+      }));
     }).then((unlisten) => {
       if (stop) {
         unlisten();
@@ -54,9 +71,27 @@ export function useGameEvents(onGameLog?: (folder: string) => void) {
     setLogsByFolder((current) => ({ ...current, [folder]: [] }));
   }
 
+  function clearVersionProgress(versionId: string) {
+    setProgressByVersion((current) => {
+      if (!(versionId in current)) {
+        return current;
+      }
+      const next = { ...current };
+      delete next[versionId];
+      return next;
+    });
+  }
+
+  function progressForVersion(versionId: string | null | undefined) {
+    if (versionId === null || versionId === undefined) {
+      return null;
+    }
+    return progressByVersion[versionId] ?? null;
+  }
+
   return {
-    progress,
-    setProgress,
+    progressForVersion,
+    clearVersionProgress,
     logsByFolder,
     clearFolderLog,
   };

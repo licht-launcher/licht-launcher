@@ -9,7 +9,6 @@ import {
   stopGame,
 } from "@/lib/commands";
 import { friendlyError, messageOf } from "@/lib/errors";
-import type { DownloadProgress } from "@/lib/generated/DownloadProgress";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 import type { VersionSummary } from "@/lib/generated/VersionSummary";
 
@@ -18,16 +17,19 @@ export type PlayPhase = "idle" | "starting" | "running" | "stopping";
 export function usePlaySession({
   versions,
   username,
-  setProgress,
+  clearVersionProgress,
   clearFolderLog,
 }: {
   versions: VersionSummary[] | undefined;
   username: string;
-  setProgress: (progress: DownloadProgress | null) => void;
+  clearVersionProgress: (versionId: string) => void;
   clearFolderLog: (folder: string) => void;
 }) {
   const queryClient = useQueryClient();
-  const [installingFolder, setInstallingFolder] = useState<string | null>(null);
+  /** folder → versionId while that instance is installing. */
+  const [installingByFolder, setInstallingByFolder] = useState<
+    Record<string, string>
+  >({});
   const [startingFolders, setStartingFolders] = useState<Record<string, true>>(
     {},
   );
@@ -40,6 +42,7 @@ export function usePlaySession({
   const sessionRef = useRef(new Set<string>());
   const launchPendingRef = useRef(new Set<string>());
   const startingRef = useRef(new Set<string>());
+  const installingRef = useRef(new Map<string, string>());
   const playBlocked = username.trim() === "";
 
   useEffect(() => {
@@ -65,6 +68,26 @@ export function usePlaySession({
       cancelled = true;
     };
   }, []);
+
+  function beginInstall(folder: string, versionId: string) {
+    installingRef.current.set(folder, versionId);
+    setInstallingByFolder((current) => ({ ...current, [folder]: versionId }));
+  }
+
+  function endInstall(folder: string, versionId: string) {
+    installingRef.current.delete(folder);
+    setInstallingByFolder((current) => {
+      const next = { ...current };
+      delete next[folder];
+      return next;
+    });
+    const stillUsingVersion = [...installingRef.current.values()].includes(
+      versionId,
+    );
+    if (!stillUsingVersion) {
+      clearVersionProgress(versionId);
+    }
+  }
 
   function markStarting(folder: string) {
     sessionRef.current.add(folder);
@@ -120,7 +143,7 @@ export function usePlaySession({
     if (
       playBlocked ||
       sessionRef.current.has(instance.folder) ||
-      installingFolder === instance.folder
+      installingRef.current.has(instance.folder)
     ) {
       return;
     }
@@ -131,14 +154,12 @@ export function usePlaySession({
         (version) => version.id === instance.versionId,
       );
       if (summary === undefined || !summary.installed) {
-        setInstallingFolder(instance.folder);
-        setProgress(null);
+        beginInstall(instance.folder, instance.versionId);
         try {
           await installVersion(instance.versionId);
           await queryClient.invalidateQueries({ queryKey: ["versions"] });
         } finally {
-          setInstallingFolder(null);
-          setProgress(null);
+          endInstall(instance.folder, instance.versionId);
         }
       }
       markStarting(instance.folder);
@@ -149,8 +170,9 @@ export function usePlaySession({
         clearSession(instance.folder);
       }
     } catch (error: unknown) {
-      setInstallingFolder(null);
-      setProgress(null);
+      if (installingRef.current.has(instance.folder)) {
+        endInstall(instance.folder, instance.versionId);
+      }
       clearSession(instance.folder);
       toast.error(friendlyError(messageOf(error)));
     }
@@ -189,8 +211,15 @@ export function usePlaySession({
     return "idle";
   }
 
+  function isInstalling(folder: string) {
+    return folder in installingByFolder;
+  }
+
   return {
-    installingFolder,
+    installingByFolder,
+    isInstalling,
+    beginInstall,
+    endInstall,
     playBlocked,
     playPhase,
     markStarted,

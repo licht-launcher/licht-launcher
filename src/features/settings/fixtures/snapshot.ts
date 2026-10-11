@@ -13,6 +13,7 @@ export const snapshot = {
     java17: null,
     java8: null,
     downloadConcurrency: 8,
+    writeConcurrency: 8,
     dataDirectory: null,
   },
   applicationDirectory: "C:\\Users\\Mateus\\AppData\\Roaming\\Licht",

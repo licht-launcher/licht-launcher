@@ -15,6 +15,7 @@ export type Draft = {
   java17: string;
   java8: string;
   downloadConcurrency: number;
+  writeConcurrency: number;
   dataDirectory: string;
 };
 
@@ -56,6 +57,7 @@ export function fromSnapshot(
     java17: installedPath(settings.java17, runtime?.java17),
     java8: installedPath(settings.java8, runtime?.java8),
     downloadConcurrency: settings.downloadConcurrency,
+    writeConcurrency: settings.writeConcurrency,
     dataDirectory: snapshot.applicationDirectory,
   };
 }
@@ -101,6 +103,7 @@ export function toSettings(
     java17: emptyToNull(draft.java17),
     java8: emptyToNull(draft.java8),
     downloadConcurrency: draft.downloadConcurrency,
+    writeConcurrency: draft.writeConcurrency,
     dataDirectory: emptyToNull(draft.dataDirectory),
   };
 }

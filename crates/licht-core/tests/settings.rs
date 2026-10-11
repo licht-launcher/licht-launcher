@@ -31,6 +31,7 @@ fn sample(download_concurrency: u32) -> Settings {
         java17: None,
         java8: None,
         download_concurrency,
+        write_concurrency: 8,
         data_directory: None,
     }
 }
@@ -57,6 +58,7 @@ fn a_missing_file_returns_defaults_and_is_not_created() {
     assert_eq!(settings.width, Some(854));
     assert_eq!(settings.height, Some(480));
     assert_eq!(settings.download_concurrency, 8);
+    assert_eq!(settings.write_concurrency, 8);
     assert_eq!(
         settings.max_memory_mb,
         recommended_max_memory_mb(total_memory_mb())
@@ -89,6 +91,7 @@ fn an_old_file_keeps_concurrency_and_fills_the_new_fields() {
     let loaded = load_settings(&cache).expect("load");
 
     assert_eq!(loaded.download_concurrency, 4);
+    assert_eq!(loaded.write_concurrency, 8);
     assert_eq!(loaded.theme, "dark");
     assert!(!loaded.fullscreen);
     assert_eq!(loaded.width, Some(854));
@@ -132,6 +135,25 @@ fn values_outside_one_to_sixteen_are_rejected_without_writing() {
     let high = save_settings(&cache, &sample(17)).expect_err("seventeen");
     assert!(matches!(high, CoreError::SettingsConcurrency));
     assert_eq!(std::fs::read_to_string(&path).expect("unchanged"), before);
+}
+
+#[test]
+fn write_concurrency_outside_one_to_sixteen_is_rejected() {
+    let cache = cache("write-range");
+    let mut low = sample(8);
+    low.write_concurrency = 0;
+    assert!(matches!(
+        save_settings(&cache, &low).expect_err("zero"),
+        CoreError::SettingsWriteConcurrency
+    ));
+
+    let mut high = sample(8);
+    high.write_concurrency = 17;
+    assert!(matches!(
+        save_settings(&cache, &high).expect_err("seventeen"),
+        CoreError::SettingsWriteConcurrency
+    ));
+    assert!(!settings_file(&cache).exists());
 }
 
 #[test]

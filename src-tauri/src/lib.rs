@@ -17,7 +17,6 @@ pub fn run() -> anyhow::Result<()> {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(paths)
-        .manage(commands::InstallLock::new())
         .manage(commands::LaunchSessions::new())
         .invoke_handler(tauri::generate_handler![
             commands::list_instances,

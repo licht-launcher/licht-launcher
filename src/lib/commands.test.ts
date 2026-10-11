@@ -117,6 +117,7 @@ describe("launcher commands", () => {
       java17: null,
       java8: null,
       downloadConcurrency: 4,
+      writeConcurrency: 8,
       dataDirectory: null,
     };
     await saveSettings(settings);

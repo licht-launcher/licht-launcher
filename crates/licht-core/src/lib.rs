@@ -21,8 +21,8 @@ pub use asset_index::{
 };
 pub use cache::SharedCache;
 pub use download::{
-    DEFAULT_CONCURRENCY, DEFAULT_RETRY, DownloadProgress, DownloadTask, Retry, download_all,
-    download_file,
+    DEFAULT_CONCURRENCY, DEFAULT_RETRY, DownloadProgress, DownloadTask, InstallProgress, Retry,
+    TransferLimits, download_all, download_file, shared_transfer_limits,
 };
 pub use error::CoreError;
 pub use install::{
@@ -58,7 +58,7 @@ pub use run::{GameExit, GameLine, GameLogEvent, LogCodec, OutputStream, log_code
 pub use settings::{
     GlobalLaunch, Settings, SettingsSnapshot, configured_java, download_concurrency, game_cache,
     global_launch, load_settings, memory_slider_max, recommended_max_memory_mb, save_settings,
-    set_java_path, settings_snapshot, total_memory_mb,
+    set_java_path, settings_snapshot, total_memory_mb, write_concurrency,
 };
 pub use version::{
     Arch, Argument, ArgumentValue, Artifact, AssetIndex, Download, GameArguments, JavaVersion,
