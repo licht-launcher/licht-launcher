@@ -191,7 +191,9 @@
     @apply h-full font-sans;
   }
   body {
-    @apply h-full overflow-hidden bg-background text-foreground select-none;
+    /* Sidebar wash (#121212) — keep in sync with index.html + tauri.conf.json. */
+    @apply h-full overflow-hidden text-foreground select-none;
+    background-color: #121212;
   }
   #root {
     @apply h-full;
