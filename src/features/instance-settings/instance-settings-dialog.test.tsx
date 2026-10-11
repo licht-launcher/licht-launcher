@@ -80,6 +80,7 @@ describe("InstanceSettingsDialog", () => {
             java8: null,
             downloadConcurrency: 4,
             writeConcurrency: 8,
+            disableCustomTitleBar: false,
             dataDirectory: null,
                   },
           applicationDirectory: "C:\\Licht",

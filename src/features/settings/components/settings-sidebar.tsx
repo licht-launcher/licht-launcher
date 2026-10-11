@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { DialogTitle } from "@/components/ui/dialog";
 import { GitHubIcon } from "@/features/settings/components/github-icon";
 import { SECTIONS, type SectionId } from "@/features/settings/model/sections";
+import { appReleaseLabel } from "@/lib/app-release";
 import { openRepository } from "@/lib/commands";
 import { friendlyError, messageOf } from "@/lib/errors";
 
@@ -40,7 +41,7 @@ export function SettingsSidebar({
       <div className="mt-auto flex items-center gap-2 border border-transparent px-4">
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <p className="text-sm">Licht Launcher</p>
-          <p className="text-xs text-muted-foreground">0.1.0 · Lilie</p>
+          <p className="text-xs text-muted-foreground">{appReleaseLabel}</p>
         </div>
         <Button
           type="button"

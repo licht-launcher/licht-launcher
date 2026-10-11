@@ -37,6 +37,7 @@ pub struct Settings {
     pub download_concurrency: u32,
     pub write_concurrency: u32,
     pub data_directory: Option<String>,
+    pub disable_custom_title_bar: bool,
 }
 
 /// What the settings screen shows. `application_directory` is filled even when
@@ -95,6 +96,8 @@ struct StoredSettings {
     write_concurrency: u32,
     #[serde(default)]
     data_directory: Option<String>,
+    #[serde(default)]
+    disable_custom_title_bar: bool,
 }
 
 fn default_theme() -> String {
@@ -245,6 +248,7 @@ fn validated(cache: &SharedCache, settings: Settings) -> Result<Settings> {
         download_concurrency: settings.download_concurrency,
         write_concurrency: settings.write_concurrency,
         data_directory: normalize_directory(cache, settings.data_directory.as_deref())?,
+        disable_custom_title_bar: settings.disable_custom_title_bar,
     })
 }
 
@@ -276,6 +280,7 @@ fn from_stored(cache: &SharedCache, stored: StoredSettings) -> Result<Settings> 
             download_concurrency: stored.download_concurrency,
             write_concurrency: stored.write_concurrency,
             data_directory: stored.data_directory,
+            disable_custom_title_bar: stored.disable_custom_title_bar,
         },
     )
 }
@@ -307,6 +312,7 @@ pub fn load_settings(cache: &SharedCache) -> Result<Settings> {
                 download_concurrency: default_concurrency_value(),
                 write_concurrency: default_concurrency_value(),
                 data_directory: None,
+                disable_custom_title_bar: false,
             },
         );
     }

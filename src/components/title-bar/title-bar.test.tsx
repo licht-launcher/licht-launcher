@@ -1,0 +1,196 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { TitleBar } from "@/components/title-bar/title-bar";
+import { snapshot } from "@/features/settings/fixtures/snapshot";
+import { appReleaseLabel } from "@/lib/app-release";
+import type { InstallProgress } from "@/lib/generated/InstallProgress";
+import { OPEN_SETTINGS_EVENT } from "@/lib/shell-events";
+
+const minimize = vi.fn();
+const close = vi.fn();
+
+const { invoke, listeners } = vi.hoisted(() => ({
+  invoke: vi.fn(),
+  listeners: new Map<string, (event: { payload: unknown }) => void>(),
+}));
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke,
+}));
+
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn(
+    async (name: string, handler: (event: { payload: unknown }) => void) => {
+      listeners.set(name, handler);
+      return () => {
+        listeners.delete(name);
+      };
+    },
+  ),
+}));
+
+vi.mock("@tauri-apps/api/window", () => ({
+  getCurrentWindow: () => ({
+    minimize,
+    close,
+    setDecorations: vi.fn(),
+  }),
+}));
+
+function renderTitleBar() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <TitleBar />
+    </QueryClientProvider>,
+  );
+}
+
+describe("TitleBar", () => {
+  beforeEach(() => {
+    minimize.mockReset();
+    close.mockReset();
+    invoke.mockReset();
+    listeners.clear();
+    invoke.mockImplementation(async (command: string) => {
+      if (command === "get_settings") {
+        return {
+          ...snapshot,
+          settings: { ...snapshot.settings, username: "Alex" },
+        };
+      }
+      throw new Error(`unexpected command: ${command}`);
+    });
+  });
+
+  it("shows the wordmark, release, account chip, idle downloads, and window controls", async () => {
+    renderTitleBar();
+
+    expect(screen.getByText("Licht Launcher")).toHaveClass("uppercase");
+    expect(screen.getByText(appReleaseLabel)).toBeInTheDocument();
+    expect(
+      document.querySelector("[data-tauri-drag-region]"),
+    ).toBeInTheDocument();
+
+    expect(
+      await screen.findByRole("button", { name: "Account: Alex" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Downloads: Idle" }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Minimize" }));
+    expect(minimize).toHaveBeenCalledOnce();
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(close).toHaveBeenCalledOnce();
+  });
+
+  it("requests account settings when the account chip is clicked", async () => {
+    renderTitleBar();
+    const onOpen = vi.fn();
+    window.addEventListener(OPEN_SETTINGS_EVENT, onOpen);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Account: Alex" }),
+    );
+
+    expect(onOpen).toHaveBeenCalledOnce();
+    const event = onOpen.mock.calls[0]?.[0] as CustomEvent | undefined;
+    expect(event?.detail).toEqual({ section: "account" });
+
+    window.removeEventListener(OPEN_SETTINGS_EVENT, onOpen);
+  });
+
+  it("shows download progress on the chip and in the popover", async () => {
+    renderTitleBar();
+    await screen.findByRole("button", { name: "Downloads: Idle" });
+
+    await waitFor(() => {
+      expect(listeners.has("install-progress")).toBe(true);
+    });
+
+    listeners.get("install-progress")?.({
+      payload: {
+        versionId: "1.20.1",
+        finished: 1,
+        failed: 0,
+        total: 4,
+        bytesDone: 100_000,
+        bytesTotal: 400_000,
+      } satisfies InstallProgress,
+    });
+
+    expect(
+      await screen.findByRole("button", { name: "Downloads: 25%" }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Downloads: 25%" }));
+    expect(await screen.findByText(/25\.0%/)).toBeInTheDocument();
+
+    listeners.get("install-progress")?.({
+      payload: {
+        versionId: "1.20.1",
+        finished: 4,
+        failed: 0,
+        total: 4,
+        bytesDone: 400_000,
+        bytesTotal: 400_000,
+      } satisfies InstallProgress,
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Downloads: Idle" }),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("shows idle detail in the downloads popover", async () => {
+    renderTitleBar();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Downloads: Idle" }),
+    );
+    expect(
+      await screen.findByText("No downloads in progress"),
+    ).toBeInTheDocument();
+  });
+
+  it("aggregates multiple installs on the downloads chip", async () => {
+    renderTitleBar();
+    await waitFor(() => {
+      expect(listeners.has("install-progress")).toBe(true);
+    });
+
+    listeners.get("install-progress")?.({
+      payload: {
+        versionId: "1.20.1",
+        finished: 1,
+        failed: 0,
+        total: 4,
+        bytesDone: 100_000,
+        bytesTotal: 400_000,
+      } satisfies InstallProgress,
+    });
+    listeners.get("install-progress")?.({
+      payload: {
+        versionId: "1.21.1",
+        finished: 0,
+        failed: 0,
+        total: 2,
+        bytesDone: 0,
+        bytesTotal: 200_000,
+      } satisfies InstallProgress,
+    });
+
+    expect(
+      await screen.findByRole("button", { name: "Downloads: 2" }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Downloads: 2" }));
+    expect(await screen.findByText("2 installing")).toBeInTheDocument();
+  });
+});

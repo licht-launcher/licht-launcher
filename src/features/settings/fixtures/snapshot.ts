@@ -15,6 +15,7 @@ export const snapshot = {
     downloadConcurrency: 8,
     writeConcurrency: 8,
     dataDirectory: null,
+    disableCustomTitleBar: false,
   },
   applicationDirectory: "C:\\Users\\Mateus\\AppData\\Roaming\\Licht",
   memoryTotalMb: 16384,

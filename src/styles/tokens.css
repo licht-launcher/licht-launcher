@@ -1,12 +1,14 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "@fontsource/space-grotesk/500.css";
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans: system-ui, "Segoe UI", Ubuntu, sans-serif;
+  --font-brand: "Space Grotesk", var(--font-sans);
   --font-mono:
     ui-monospace, "Cascadia Mono", Consolas, "Segoe UI Mono", monospace;
   --color-sidebar-ring: var(--sidebar-ring);
@@ -187,5 +189,8 @@
   }
   #root {
     @apply h-full;
+  }
+  [data-tauri-drag-region] {
+    app-region: drag;
   }
 }
