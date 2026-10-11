@@ -50,6 +50,28 @@ executable; existing OS/shell values are not overwritten.
 **Tokens** (refresh / access) must never appear in the repository, commit
 messages, or logs — only the public client ID is embedded.
 
+### Changing the embedded release client ID
+
+Do this only when rotating the Azure app (compromise, lost tenant, new brand, etc.).
+
+1. Create a **new** Entra app registration (same settings as above: personal
+   accounts only, public client flows enabled, no secret), or reuse another
+   already allow-listed app you control.
+2. Submit the **new** Application (client) ID to Mojang via
+   https://aka.ms/mce-reviewappid (**new app**). Wait until
+   `api.minecraftservices.com` accepts it (old ID keeps working until you stop
+   shipping it).
+3. Update `EMBEDDED_MSA_CLIENT_ID` in
+   [`crates/licht-core/src/auth/client_id.rs`](../../crates/licht-core/src/auth/client_id.rs).
+4. Ship a new Licht release that contains the rebuilt binary. Users must update
+   the app; there is no server-side way to change an already installed client ID.
+5. Optional cleanup: delete or disable the old Azure app when no supported Licht
+   version still embeds it. Users on old builds will fail Microsoft sign-in until
+   they upgrade.
+
+For a one-off local test of a different ID without changing the release constant,
+use `.env` / `LICHT_MSA_CLIENT_ID` (overrides the embedded value).
+
 ## Flow (implemented in later items)
 
 1. Device code → user completes `microsoft.com/link`
