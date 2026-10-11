@@ -5,8 +5,7 @@ use std::sync::Mutex as StdMutex;
 use licht_core::{
     ADOPTIUM_API, ASSET_OBJECT_BASE, Arch, CoreError, GameExit, GameInstall, GameLogEvent,
     InstallProgress, InstanceEntry, InstanceFsEntry, InstanceSettings, JavaDetections, JavaPaths,
-    JavaStatus,
-    LaunchEnvironment, OsName, Settings, SettingsSnapshot, SharedCache, VersionSummary,
+    JavaStatus, LaunchEnvironment, OsName, Settings, SettingsSnapshot, SharedCache, VersionSummary,
     browse_start_directory, clear_launch_lock, configured_java, detect_known_javas,
     fetch_version_manifest, game_cache, global_launch, install_game, install_temurin,
     installed_java, kill_launch_process, list_running_launch_folders, load_instance, load_settings,
