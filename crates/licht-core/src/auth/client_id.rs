@@ -3,8 +3,13 @@ use std::sync::Once;
 
 use crate::{CoreError, Result};
 
-/// Environment variable that holds the Azure Application (client) ID.
+/// Environment variable that overrides the embedded Azure Application (client) ID.
 pub const MSA_CLIENT_ID_ENV: &str = "LICHT_MSA_CLIENT_ID";
+
+/// Public OAuth client ID baked into every build (not a secret).
+///
+/// Runtime `LICHT_MSA_CLIENT_ID` / `.env` overrides this for local forks and tests.
+pub const EMBEDDED_MSA_CLIENT_ID: &str = "e750bdc1-545a-430a-b795-975886cbaa67";
 
 static ENV_FILES_LOADED: Once = Once::new();
 
@@ -24,20 +29,24 @@ pub fn load_env_files() {
     });
 }
 
-/// Reads the Microsoft application client ID from the environment.
+/// Resolves the Microsoft application client ID.
 ///
-/// The value is never logged. It must not be committed to the repository.
+/// Order: non-empty process env (including values loaded from `.env`) → embedded release ID.
+/// The value is never logged.
 pub fn msa_client_id() -> Result<String> {
     match std::env::var(MSA_CLIENT_ID_ENV) {
         Ok(value) => {
             let trimmed = value.trim().to_string();
-            if trimmed.is_empty() {
-                Err(CoreError::MsaClientIdMissing)
-            } else {
-                Ok(trimmed)
+            if !trimmed.is_empty() {
+                return Ok(trimmed);
             }
         }
-        Err(_) => Err(CoreError::MsaClientIdMissing),
+        Err(_) => {}
+    }
+    if EMBEDDED_MSA_CLIENT_ID.is_empty() {
+        Err(CoreError::MsaClientIdMissing)
+    } else {
+        Ok(EMBEDDED_MSA_CLIENT_ID.to_string())
     }
 }
 
@@ -50,31 +59,31 @@ mod tests {
     static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
-    fn missing_env_is_an_error() {
+    fn falls_back_to_the_embedded_client_id() {
         let _guard = ENV_LOCK.lock().expect("env lock");
         // SAFETY: serialized by ENV_LOCK for this process env key.
         unsafe {
             std::env::remove_var(MSA_CLIENT_ID_ENV);
         }
-        let error = msa_client_id().expect_err("missing");
-        assert!(matches!(error, CoreError::MsaClientIdMissing));
+        let id = msa_client_id().expect("embedded");
+        assert_eq!(id, EMBEDDED_MSA_CLIENT_ID);
     }
 
     #[test]
-    fn blank_env_is_an_error() {
+    fn blank_env_falls_back_to_embedded() {
         let _guard = ENV_LOCK.lock().expect("env lock");
         unsafe {
             std::env::set_var(MSA_CLIENT_ID_ENV, "  ");
         }
-        let error = msa_client_id().expect_err("blank");
-        assert!(matches!(error, CoreError::MsaClientIdMissing));
+        let id = msa_client_id().expect("embedded");
+        assert_eq!(id, EMBEDDED_MSA_CLIENT_ID);
         unsafe {
             std::env::remove_var(MSA_CLIENT_ID_ENV);
         }
     }
 
     #[test]
-    fn trims_and_returns_the_client_id() {
+    fn runtime_env_overrides_the_embedded_client_id() {
         let _guard = ENV_LOCK.lock().expect("env lock");
         unsafe {
             std::env::set_var(MSA_CLIENT_ID_ENV, "  test-client-id  ");
@@ -87,7 +96,7 @@ mod tests {
     }
 
     #[test]
-    fn dotenv_file_can_supply_the_client_id() {
+    fn dotenv_file_can_override_the_embedded_client_id() {
         let _guard = ENV_LOCK.lock().expect("env lock");
         let dir = std::env::temp_dir().join(format!(
             "licht-dotenv-{}-{}",

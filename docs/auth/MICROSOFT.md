@@ -11,7 +11,7 @@ active.
 | OAuth flow   | Device code (`consumers` tenant)                                       |
 | Scopes       | `XboxLive.signin offline_access`                                       |
 | Client secret| None (public client)                                                   |
-| Client ID    | Runtime env `LICHT_MSA_CLIENT_ID` — never committed                    |
+| Client ID    | Embedded in the binary (`EMBEDDED_MSA_CLIENT_ID`); optional `.env` override |
 | Token store  | OS keyring (Credential Manager / Secret Service); never logs or files  |
 
 ## Azure app registration
@@ -22,7 +22,8 @@ active.
 4. Redirect URI: leave empty for device code (or public client / `http://localhost` if the portal requires one).
 5. After create: Authentication → Advanced → **Allow public client flows** = **Yes**.
 6. Do **not** create a client secret.
-7. Copy **Application (client) ID** into a local env var (see below). Directory (tenant) ID is only for the Mojang form.
+7. Copy **Application (client) ID** for the Mojang form. Directory (tenant) ID is only for that form.
+   Official Licht builds ship the client ID embedded in the binary (public OAuth client; not a secret).
 
 ## Mojang allowlist
 
@@ -36,20 +37,18 @@ New client IDs get HTTP 403 (`Invalid app registration`) from
 
 Until approval, device-code and Xbox steps may succeed and fail only at Minecraft Services.
 
-## Local configuration
+## Client ID in builds
 
-Copy [`.env.example`](../../.env.example) to `.env` in the **repository root** (gitignored):
+Release and local builds use the embedded public client ID in
+`crates/licht-core/src/auth/client_id.rs`. End users do **not** need an env var.
 
-```text
-LICHT_MSA_CLIENT_ID=<application-client-id>
-```
+For forks or local experiments, optionally override with `.env` (see
+[`.env.example`](../../.env.example)) or `LICHT_MSA_CLIENT_ID` in the shell.
+On startup Licht loads `.env` from the working directory and next to the
+executable; existing OS/shell values are not overwritten.
 
-On startup, Licht loads `.env` from the current working directory and from the
-directory of the executable. Values already set in the OS/shell environment are
-not overwritten.
-
-You can also set `LICHT_MSA_CLIENT_ID` as a user/system environment variable.
-The value must not appear in the repository, commit messages, or logs.
+**Tokens** (refresh / access) must never appear in the repository, commit
+messages, or logs — only the public client ID is embedded.
 
 ## Flow (implemented in later items)
 
