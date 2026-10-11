@@ -19,6 +19,12 @@ export function mockSettingsCommands(implement?: (command: string) => unknown) {
     if (command === "get_settings") {
       return Promise.resolve(snapshot);
     }
+    if (command === "list_microsoft_accounts") {
+      return Promise.resolve([]);
+    }
+    if (command === "active_microsoft_account") {
+      return Promise.resolve(null);
+    }
     if (command === "runtime_java") {
       return Promise.resolve({
         java25: null,

@@ -84,6 +84,46 @@ pub enum CoreError {
     LaunchHost,
     #[error("database operation failed")]
     Database(#[from] rusqlite::Error),
+    #[error("LICHT_MSA_CLIENT_ID is missing or empty")]
+    MsaClientIdMissing,
+    #[error("Microsoft auth JSON is invalid")]
+    AuthJson(#[source] serde_json::Error),
+    #[error("Microsoft token response is invalid")]
+    AuthToken,
+    #[error("Microsoft sign-in timed out")]
+    AuthBrowserTimeout,
+    #[error("could not open the system browser for Microsoft sign-in")]
+    AuthBrowserOpen,
+    #[error("Microsoft sign-in state mismatch")]
+    AuthStateMismatch,
+    #[error("Microsoft sign-in was declined")]
+    AuthDeclined,
+    #[error("Microsoft OAuth failed: {error}")]
+    AuthOAuth { error: String, description: String },
+    #[error("Xbox Live authentication failed")]
+    AuthXbox,
+    #[error("this Microsoft account is banned from Xbox Live")]
+    AuthXboxBanned,
+    #[error("this Microsoft account has no Xbox profile")]
+    AuthXboxNoAccount,
+    #[error("Xbox Live is unavailable for this account's country")]
+    AuthXboxUnavailable,
+    #[error("this Microsoft account needs adult verification on Xbox")]
+    AuthXboxAdultVerification,
+    #[error("this Microsoft account is a child and needs to join a Family")]
+    AuthXboxChild,
+    #[error("Minecraft services rejected this app (not allow-listed yet)")]
+    AuthAppNotAllowlisted,
+    #[error("Minecraft authentication failed")]
+    AuthMinecraft,
+    #[error("Minecraft profile was not found for this account")]
+    AuthProfileMissing,
+    #[error("this Microsoft account does not own Minecraft: Java Edition")]
+    AuthNoOwnership,
+    #[error("no signed-in Microsoft account")]
+    AuthNotSignedIn,
+    #[error("secure credential storage failed")]
+    AuthKeyring,
 }
 
 #[cfg(test)]

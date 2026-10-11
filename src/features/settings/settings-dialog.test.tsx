@@ -21,7 +21,9 @@ describe("SettingsDialog", () => {
 
   it("does not show a Save button", async () => {
     await renderSettings();
-    expect(await screen.findByLabelText("Username")).toBeInTheDocument();
+    expect(
+      await screen.findByLabelText("Offline username"),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Save" }),
     ).not.toBeInTheDocument();
@@ -29,7 +31,7 @@ describe("SettingsDialog", () => {
 
   it("does not save just by opening", async () => {
     await renderSettings();
-    await screen.findByLabelText("Username");
+    await screen.findByLabelText("Offline username");
     await new Promise((resolve) => setTimeout(resolve, 500));
     expect(invoke).not.toHaveBeenCalledWith("save_settings", expect.anything());
   });

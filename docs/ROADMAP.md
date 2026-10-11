@@ -167,9 +167,7 @@ Still open from this milestone: `${auth_session}` stays literal on 1.5.2. Linux 
 - [x] **6.3** Global settings (data folder, Java, download concurrency, write concurrency, theme). Per-instance launch overrides are also in place.
 - [x] **6.4** Open the instance folder in the OS file manager.
 
-**Closed.** Instances are the primary product surface. Settings open in a dialog with sectioned auto-save.
-
-**Work ready but not on `main` yet** (merged only into the stacked feature branches #54–#56): custom title bar, Files tab browser, last-played sort + SQLite meta, purple instance icons. Land that tip onto `main` before starting new UI work on top of it.
+**Closed.** Instances are the primary product surface. Settings open in a dialog with sectioned auto-save. Custom title bar, Files tab, and last-played sort landed on `main`.
 
 ---
 
@@ -177,12 +175,13 @@ Still open from this milestone: `${auth_session}` stays literal on 1.5.2. Linux 
 
 **Goal:** legitimate accounts.
 
-- [ ] **7.1** Register an app in Azure and request approval to access the Minecraft services API. **Worth starting this request early**, in parallel with the previous phases, because it can take a while.
-  - 🛑 Everything in this phase: flow (device code recommended), scopes, where to store tokens.
-- [ ] **7.2** OAuth device code flow → Xbox Live → XSTS → Minecraft Services → profile (name, UUID, skin).
-- [ ] **7.3** Secure token storage with the **OS keyring** (Credential Manager / Secret Service). Never in plain text, never in logs.
-- [ ] **7.4** Automatic renewal (refresh token), multiple accounts, logout.
-- [ ] **7.5** Check whether the account owns the game, and clear error messages.
+Decisions (see [docs/auth/MICROSOFT.md](auth/MICROSOFT.md)): authorization code + PKCE (system browser / localhost), scopes `XboxLive.signin offline_access`, client ID embedded (+ optional `LICHT_MSA_CLIENT_ID`), tokens in the OS keyring.
+
+- [x] **7.1** Register an app in Azure and request approval to access the Minecraft services API. **Worth starting this request early**, in parallel with the previous phases, because it can take a while.
+- [x] **7.2** OAuth authorization code + PKCE (browser) → Xbox Live → XSTS → Minecraft Services → profile (name, UUID, skin).
+- [x] **7.3** Secure token storage with the **OS keyring** (Credential Manager / Secret Service). Never in plain text, never in logs.
+- [x] **7.4** Automatic renewal (refresh token), multiple accounts, logout.
+- [x] **7.5** Check whether the account owns the game, and clear error messages.
 
 ### 🏁 Milestone 2: usable launcher with a real account
 

@@ -5,6 +5,7 @@ mod logging;
 mod progress;
 
 pub fn run() -> anyhow::Result<()> {
+    licht_core::load_env_files();
     logging::init()?;
     tracing::info!(
         version = env!("CARGO_PKG_VERSION"),
@@ -32,6 +33,11 @@ pub fn run() -> anyhow::Result<()> {
             commands::get_last_played_folder,
             commands::set_last_played_folder,
             commands::clear_last_played_folder,
+            commands::list_microsoft_accounts,
+            commands::active_microsoft_account,
+            commands::begin_microsoft_login,
+            commands::set_active_microsoft_account,
+            commands::logout_microsoft_account,
             commands::get_settings,
             commands::save_settings,
             commands::runtime_java,
