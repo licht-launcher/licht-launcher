@@ -27,6 +27,7 @@ pub fn run() -> anyhow::Result<()> {
             commands::save_instance,
             commands::set_instance_version,
             commands::open_instance_folder,
+            commands::list_instance_entries,
             commands::open_repository,
             commands::get_settings,
             commands::save_settings,

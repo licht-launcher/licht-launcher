@@ -13,6 +13,7 @@ import {
   installVersion,
   javaInstallationStatus,
   launchVersion,
+  listInstanceEntries,
   listInstances,
   listRunningGames,
   listVersions,
@@ -89,6 +90,14 @@ describe("launcher commands", () => {
     await openInstanceFolder("Survival");
     expect(invoke).toHaveBeenCalledWith("open_instance_folder", {
       folder: "Survival",
+    });
+  });
+
+  it("lists instance folder entries for a relative path", async () => {
+    await listInstanceEntries("Survival", "saves");
+    expect(invoke).toHaveBeenCalledWith("list_instance_entries", {
+      folder: "Survival",
+      relativePath: "saves",
     });
   });
 

@@ -6,6 +6,7 @@ mod download;
 mod error;
 mod install;
 mod instance;
+mod instance_fs;
 mod java;
 mod launch;
 mod launch_lock;
@@ -34,6 +35,7 @@ pub use instance::{
     duplicate_instance, instance_launch, list_instances, load_instance, parse_instance,
     rename_instance, resolved_java_path, resolved_launch, update_instance, update_instance_version,
 };
+pub use instance_fs::{InstanceFsEntry, list_instance_entries};
 pub use java::{
     ADOPTIUM_API, JAVA_RUNTIME_INDEX_URL, JavaChoice, JavaDetections, JavaPaths, JavaRuntimeBuild,
     JavaRuntimeEntry, JavaRuntimeIndex, JavaRuntimeManifest, JavaRuntimeManifestRef, JavaStatus,

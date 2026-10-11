@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 
 import type { GameExit } from "@/lib/generated/GameExit";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
+import type { InstanceFsEntry } from "@/lib/generated/InstanceFsEntry";
 import type { InstanceSettings } from "@/lib/generated/InstanceSettings";
 import type { JavaDetections } from "@/lib/generated/JavaDetections";
 import type { JavaPaths } from "@/lib/generated/JavaPaths";
@@ -55,6 +56,13 @@ export function setInstanceVersion(
 
 export function openInstanceFolder(folder: string): Promise<void> {
   return invoke("open_instance_folder", { folder });
+}
+
+export function listInstanceEntries(
+  folder: string,
+  relativePath: string,
+): Promise<InstanceFsEntry[]> {
+  return invoke("list_instance_entries", { folder, relativePath });
 }
 
 export function openRepository(): Promise<void> {

@@ -4,7 +4,8 @@ use std::sync::Mutex as StdMutex;
 
 use licht_core::{
     ADOPTIUM_API, ASSET_OBJECT_BASE, Arch, CoreError, GameExit, GameInstall, GameLogEvent,
-    InstallProgress, InstanceEntry, InstanceSettings, JavaDetections, JavaPaths, JavaStatus,
+    InstallProgress, InstanceEntry, InstanceFsEntry, InstanceSettings, JavaDetections, JavaPaths,
+    JavaStatus,
     LaunchEnvironment, OsName, Settings, SettingsSnapshot, SharedCache, VersionSummary,
     browse_start_directory, clear_launch_lock, configured_java, detect_known_javas,
     fetch_version_manifest, game_cache, global_launch, install_game, install_temurin,
@@ -302,6 +303,15 @@ pub fn open_instance_folder(
     app.opener()
         .open_path(path.to_string_lossy().into_owned(), None::<&str>)
         .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn list_instance_entries(
+    paths: State<'_, LauncherPaths>,
+    folder: String,
+    relative_path: String,
+) -> Result<Vec<InstanceFsEntry>, String> {
+    licht_core::list_instance_entries(&paths.game, &folder, &relative_path).map_err(failure)
 }
 
 #[tauri::command]
