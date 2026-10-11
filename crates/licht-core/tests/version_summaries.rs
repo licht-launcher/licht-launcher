@@ -1,4 +1,4 @@
-use licht_core::{SharedCache, parse_version_manifest, version_summaries};
+use licht_core::{SharedCache, VersionType, parse_version_manifest, version_summaries};
 
 fn manifest() -> licht_core::VersionManifest {
     parse_version_manifest(
@@ -44,6 +44,43 @@ fn a_saved_version_json_is_installed_and_a_bad_id_is_not() {
     assert!(summaries[0].installed);
     assert_eq!(summaries[1].id, "bad/id");
     assert!(!summaries[1].installed);
+
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn a_local_loader_profile_is_listed_and_needs_its_jar() {
+    let root = std::env::temp_dir().join(format!(
+        "licht-summaries-loader-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("time")
+            .as_nanos()
+    ));
+    let _ = std::fs::remove_dir_all(&root);
+    let cache = SharedCache::at(&root);
+    let id = "fabric-loader-0.16.0-1.20.1";
+    let json = cache.version_json(id).expect("version path");
+    std::fs::create_dir_all(json.parent().expect("parent")).expect("version dir");
+    std::fs::write(&json, r#"{"inheritsFrom":"1.20.1"}"#).expect("version json");
+
+    let summaries = version_summaries(&manifest(), &cache);
+    let loader = summaries
+        .iter()
+        .find(|entry| entry.id == id)
+        .expect("local loader summary");
+    assert_eq!(loader.version_type, VersionType::OldAlpha);
+    assert!(!loader.installed);
+
+    let jar = cache.version_jar(id).expect("jar path");
+    std::fs::write(&jar, b"client").expect("jar");
+    let summaries = version_summaries(&manifest(), &cache);
+    let loader = summaries
+        .iter()
+        .find(|entry| entry.id == id)
+        .expect("local loader summary");
+    assert!(loader.installed);
 
     let _ = std::fs::remove_dir_all(root);
 }

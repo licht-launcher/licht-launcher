@@ -3,11 +3,12 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import {
+  installModpackFiles,
   installVersion,
   launchVersion,
   listRunningGames,
-  setLastPlayedFolder,
   stopGame,
+  touchLastOpened,
 } from "@/lib/commands";
 import { friendlyError, messageOf } from "@/lib/errors";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
@@ -140,6 +141,35 @@ export function usePlaySession({
     markRunning(folder);
   }
 
+  /** Downloads game/loader assets and modpack files; does not launch. */
+  async function prepareInstance(instance: InstanceEntry) {
+    if (
+      sessionRef.current.has(instance.folder) ||
+      installingRef.current.has(instance.folder)
+    ) {
+      return;
+    }
+
+    const summary = versions?.find(
+      (version) => version.id === instance.versionId,
+    );
+    const needsGame = summary === undefined || !summary.installed;
+    if (!needsGame) {
+      // Already installed: refresh modpack files without the play-panel spinner.
+      await installModpackFiles(instance.folder);
+      return;
+    }
+
+    beginInstall(instance.folder, instance.versionId);
+    try {
+      await installVersion(instance.versionId);
+      await queryClient.invalidateQueries({ queryKey: ["versions"] });
+      await installModpackFiles(instance.folder);
+    } finally {
+      endInstall(instance.folder, instance.versionId);
+    }
+  }
+
   async function playInstance(instance: InstanceEntry) {
     if (
       playBlocked ||
@@ -151,23 +181,13 @@ export function usePlaySession({
     clearFolderLog(instance.folder);
 
     try {
-      const summary = versions?.find(
-        (version) => version.id === instance.versionId,
-      );
-      if (summary === undefined || !summary.installed) {
-        beginInstall(instance.folder, instance.versionId);
-        try {
-          await installVersion(instance.versionId);
-          await queryClient.invalidateQueries({ queryKey: ["versions"] });
-        } finally {
-          endInstall(instance.folder, instance.versionId);
-        }
-      }
+      await prepareInstance(instance);
       markStarting(instance.folder);
       launchPendingRef.current.add(instance.folder);
       try {
-        await setLastPlayedFolder(instance.folder);
+        await touchLastOpened(instance.folder);
         void queryClient.invalidateQueries({ queryKey: ["last-played"] });
+        void queryClient.invalidateQueries({ queryKey: ["instances"] });
         await launchVersion(instance.folder, username);
       } finally {
         clearSession(instance.folder);
@@ -226,6 +246,7 @@ export function usePlaySession({
     playBlocked,
     playPhase,
     markStarted,
+    prepareInstance,
     playInstance,
     stopInstance,
   };

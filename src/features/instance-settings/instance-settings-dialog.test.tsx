@@ -30,6 +30,7 @@ const entry: InstanceEntry = {
   overrideJava: false,
   overrideJvmArguments: false,
   javaPath: null,
+  lastOpenedAt: null,
 };
 
 function renderDialog(
@@ -175,14 +176,12 @@ describe("InstanceSettingsDialog", () => {
     ).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText("Game version"));
     expect(
-      await screen.findByRole("option", { name: "1.21.1 (will install)" }),
+      await screen.findByRole("option", { name: "1.21.1" }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("option", { name: "24w14a (will install)" }),
+      screen.queryByRole("option", { name: "24w14a" }),
     ).not.toBeInTheDocument();
-    fireEvent.click(
-      screen.getByRole("option", { name: "1.21.1 (will install)" }),
-    );
+    fireEvent.click(screen.getByRole("option", { name: "1.21.1" }));
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(onChangeVersion).toHaveBeenCalledWith("1.21.1");
   });

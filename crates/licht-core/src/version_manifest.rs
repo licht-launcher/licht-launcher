@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
@@ -62,9 +63,14 @@ pub struct VersionSummary {
 
 /// Marks each manifest entry installed when `versions/<id>/<id>.json` exists.
 ///
+/// Local loader profiles (Fabric, Forge, …) that are not on Mojang's list are
+/// appended with [`VersionType::OldAlpha`] so the create-instance version picker
+/// (release/snapshot only) ignores them. For those, `installed` means the client
+/// jar exists — the profile JSON alone is written at instance creation.
+///
 /// An id that cannot be a single path segment is listed and not installed.
 pub fn version_summaries(manifest: &VersionManifest, cache: &SharedCache) -> Vec<VersionSummary> {
-    manifest
+    let mut summaries: Vec<VersionSummary> = manifest
         .versions
         .iter()
         .map(|version| VersionSummary {
@@ -74,7 +80,39 @@ pub fn version_summaries(manifest: &VersionManifest, cache: &SharedCache) -> Vec
                 .version_json(&version.id)
                 .is_ok_and(|path| path.is_file()),
         })
-        .collect()
+        .collect();
+
+    let mut known: HashSet<String> = summaries.iter().map(|entry| entry.id.clone()).collect();
+    let versions_dir = cache.root().join("versions");
+    let Ok(entries) = std::fs::read_dir(versions_dir) else {
+        return summaries;
+    };
+    for entry in entries.flatten() {
+        let Ok(file_type) = entry.file_type() else {
+            continue;
+        };
+        if !file_type.is_dir() {
+            continue;
+        }
+        let id = entry.file_name().to_string_lossy().into_owned();
+        if known.contains(&id) {
+            continue;
+        }
+        let Ok(json_path) = cache.version_json(&id) else {
+            continue;
+        };
+        if !json_path.is_file() {
+            continue;
+        }
+        let installed = cache.version_jar(&id).is_ok_and(|path| path.is_file());
+        summaries.push(VersionSummary {
+            id: id.clone(),
+            version_type: VersionType::OldAlpha,
+            installed,
+        });
+        known.insert(id);
+    }
+    summaries
 }
 
 pub fn version_lines(manifest: &VersionManifest) -> Vec<String> {

@@ -5,10 +5,12 @@ import { progressText } from "@/features/instances/lib/download-progress";
 import type { DownloadProgress } from "@/lib/generated/DownloadProgress";
 import type { InstallProgress } from "@/lib/generated/InstallProgress";
 
-function isActive(progress: InstallProgress): boolean {
-  return (
-    progress.total === 0 || progress.finished + progress.failed < progress.total
-  );
+/** True while files are still transferring. A 0/0 pulse is not a lasting install. */
+export function isInstallProgressActive(progress: InstallProgress): boolean {
+  if (progress.total === 0) {
+    return false;
+  }
+  return progress.finished + progress.failed < progress.total;
 }
 
 function toDownloadProgress(progress: InstallProgress): DownloadProgress {
@@ -33,7 +35,7 @@ export function useInstallActivity() {
     void listen<InstallProgress>("install-progress", (event) => {
       const progress = event.payload;
       setActiveByVersion((current) => {
-        if (isActive(progress)) {
+        if (isInstallProgressActive(progress)) {
           return { ...current, [progress.versionId]: progress };
         }
         if (!(progress.versionId in current)) {

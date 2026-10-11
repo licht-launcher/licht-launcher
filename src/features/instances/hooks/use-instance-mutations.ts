@@ -2,7 +2,6 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import {
-  createInstance,
   deleteInstance,
   duplicateInstance,
   installVersion,
@@ -11,18 +10,15 @@ import {
   setInstanceVersion,
 } from "@/lib/commands";
 import { friendlyError, messageOf } from "@/lib/errors";
-import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 
 export function useInstanceMutations({
   beginInstall,
   endInstall,
-  setSelectedFolder,
   setConfiguringFolder,
   clearAction,
 }: {
   beginInstall: (folder: string, versionId: string) => void;
   endInstall: (folder: string, versionId: string) => void;
-  setSelectedFolder: (folder: string | null) => void;
   setConfiguringFolder: (folder: string | null) => void;
   clearAction: () => void;
 }) {
@@ -32,18 +28,6 @@ export function useInstanceMutations({
     clearAction();
     await queryClient.invalidateQueries({ queryKey: ["instances"] });
   };
-
-  const create = useMutation({
-    mutationFn: (input: { name: string; versionId: string }) =>
-      createInstance(input.name, input.versionId),
-    onSuccess: async (entry: InstanceEntry) => {
-      setSelectedFolder(entry.folder);
-      await refreshInstances();
-    },
-    onError: (error: unknown) => {
-      toast.error(friendlyError(messageOf(error)));
-    },
-  });
 
   const rename = useMutation({
     mutationFn: (input: { folder: string; name: string }) =>
@@ -107,7 +91,6 @@ export function useInstanceMutations({
   });
 
   const busy =
-    create.isPending ||
     rename.isPending ||
     duplicate.isPending ||
     remove.isPending ||
@@ -116,7 +99,6 @@ export function useInstanceMutations({
 
   return {
     busy,
-    create,
     rename,
     duplicate,
     remove,

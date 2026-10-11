@@ -290,6 +290,9 @@ fn task_for_artifact(cache: &SharedCache, artifact: &crate::Artifact) -> Result<
 }
 
 fn file_matches(path: &Path, expected_sha1: &str) -> Result<bool> {
+    if expected_sha1.is_empty() {
+        return Ok(path.is_file());
+    }
     let mut file = match File::open(path) {
         Ok(file) => file,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),

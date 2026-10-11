@@ -92,7 +92,6 @@ export function EditInstanceVersionDialog({
                 {versionChoices.map((version) => (
                   <SelectItem key={version.id} value={version.id}>
                     {version.id}
-                    {version.installed ? "" : " (will install)"}
                   </SelectItem>
                 ))}
               </SelectContent>

@@ -3,18 +3,25 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex as StdMutex;
 
 use licht_core::{
-    ADOPTIUM_API, ASSET_OBJECT_BASE, AccountProfile, Arch, CoreError, GameExit, GameInstall,
-    GameLogEvent, InstallProgress, InstanceEntry, InstanceFsEntry, InstanceSettings,
-    JavaDetections, JavaPaths, JavaStatus, LaunchEnvironment, OsName, Settings, SettingsSnapshot,
+    ADOPTIUM_API, ASSET_OBJECT_BASE, AccountProfile, Arch, CoreError, DownloadProgress, GameExit,
+    GameInstall, GameLogEvent, InstallProgress, InstanceEntry, InstanceFsEntry, InstanceSettings,
+    JavaDetections, JavaPaths, JavaStatus, LaunchEnvironment, LoaderChannel, LoaderPlatform,
+    ModpackListItem, ModpackSource, ModpackVersionItem, OsName, Settings, SettingsSnapshot,
     SharedCache, VersionSummary, browse_start_directory, clear_launch_lock, configured_java,
-    detect_known_javas, fetch_version_manifest, game_cache, get_active_profile, global_launch,
-    install_game, install_temurin, installed_java, kill_launch_process, list_accounts,
-    list_running_launch_folders, load_instance, load_settings, log_codec, login_with_browser,
-    logout_account, offline_account, parse_version, prepare_microsoft_launch,
-    prepare_offline_launch, probe_java_major, process_matches_lock, read_launch_lock,
-    required_java_major, resolved_java_path, resolved_launch, run_game, runtime_java_paths,
-    session_for_launch, set_active_account, set_java_path, settings_snapshot, update_instance,
-    update_instance_version, version_summaries, write_launch_lock_for_pid,
+    create_instance_from_modpack as create_instance_from_modpack_core,
+    create_instance_with_platform as create_instance_with_platform_core, detect_known_javas,
+    fetch_version_manifest, game_cache, get_active_profile, global_launch, install_game,
+    install_mrpack_files, install_temurin, installed_java, kill_launch_process, list_accounts,
+    list_loader_versions as list_loader_versions_core,
+    list_modpack_versions as list_modpack_versions_core, list_running_launch_folders,
+    load_instance, load_resolved_version_json, load_settings, local_inherits_from,
+    local_version_exists, log_codec, login_with_browser, logout_account, offline_account,
+    parse_version, prepare_microsoft_launch, prepare_offline_launch, probe_java_major,
+    process_matches_lock, read_launch_lock, required_java_major, resolved_java_path,
+    resolved_launch, run_game, runtime_java_paths, search_modpacks as search_modpacks_core,
+    session_for_launch, set_active_account, set_java_path, settings_snapshot,
+    touch_last_opened as touch_instance_opened, update_instance, update_instance_version,
+    version_summaries, write_launch_lock_for_pid,
 };
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::{DialogExt, FileDialogBuilder};
@@ -237,6 +244,137 @@ pub fn create_instance(
 }
 
 #[tauri::command]
+pub async fn list_loader_versions(
+    platform: String,
+    game_version: String,
+    channel: String,
+) -> Result<Vec<String>, String> {
+    let platform =
+        LoaderPlatform::parse(&platform).ok_or_else(|| "unknown platform".to_string())?;
+    let channel = LoaderChannel::parse(&channel).ok_or_else(|| "unknown channel".to_string())?;
+    let client = reqwest::Client::new();
+    list_loader_versions_core(&client, platform, &game_version, channel)
+        .await
+        .map_err(failure)
+}
+
+#[tauri::command]
+pub async fn create_instance_with_platform(
+    paths: State<'_, LauncherPaths>,
+    name: String,
+    platform: String,
+    game_version: String,
+    loader_channel: String,
+    loader_version: Option<String>,
+) -> Result<InstanceEntry, String> {
+    let platform =
+        LoaderPlatform::parse(&platform).ok_or_else(|| "unknown platform".to_string())?;
+    let channel =
+        LoaderChannel::parse(&loader_channel).ok_or_else(|| "unknown channel".to_string())?;
+    let root = instances_root(&paths).map_err(failure)?;
+    let settings = load_settings(&paths.settings).map_err(failure)?;
+    let client = reqwest::Client::new();
+    create_instance_with_platform_core(
+        &client,
+        &paths.game,
+        &root,
+        &name,
+        platform,
+        &game_version,
+        channel,
+        loader_version.as_deref(),
+        &global_launch(&settings),
+    )
+    .await
+    .map_err(failure)
+}
+
+#[tauri::command]
+pub async fn search_modpacks(query: String) -> Result<Vec<ModpackListItem>, String> {
+    let client = reqwest::Client::new();
+    search_modpacks_core(&client, &query).await.map_err(failure)
+}
+
+#[tauri::command]
+pub async fn list_modpack_versions(
+    source: String,
+    project_id: String,
+) -> Result<Vec<ModpackVersionItem>, String> {
+    let source =
+        ModpackSource::parse(&source).ok_or_else(|| "unknown modpack source".to_string())?;
+    let client = reqwest::Client::new();
+    list_modpack_versions_core(&client, source, &project_id)
+        .await
+        .map_err(failure)
+}
+
+#[tauri::command]
+pub async fn create_instance_from_modpack(
+    paths: State<'_, LauncherPaths>,
+    name: String,
+    source: String,
+    project_id: String,
+    version_id: String,
+) -> Result<InstanceEntry, String> {
+    let source =
+        ModpackSource::parse(&source).ok_or_else(|| "unknown modpack source".to_string())?;
+    let root = instances_root(&paths).map_err(failure)?;
+    let settings = load_settings(&paths.settings).map_err(failure)?;
+    let client = reqwest::Client::new();
+    create_instance_from_modpack_core(
+        &client,
+        &paths.game,
+        &root,
+        &name,
+        source,
+        &project_id,
+        &version_id,
+        &global_launch(&settings),
+    )
+    .await
+    .map_err(failure)
+}
+
+#[tauri::command]
+pub async fn install_modpack_files(
+    app: AppHandle,
+    paths: State<'_, LauncherPaths>,
+    folder: String,
+) -> Result<(), String> {
+    let cache = paths.game.clone();
+    let settings = paths.settings.clone();
+    let dir = cache.instance_dir(&folder).map_err(failure)?;
+    let profile = load_instance(&dir).map_err(failure)?;
+    let progress_version_id = profile.version_id.clone();
+    emit_install_progress(
+        &app,
+        &progress_version_id,
+        DownloadProgress {
+            finished: 0,
+            failed: 0,
+            total: 0,
+            bytes_done: 0,
+            bytes_total: 0,
+        },
+    );
+    let (progress, mut incoming) = mpsc::channel(4096);
+    let installing = tauri::async_runtime::spawn(async move {
+        let client = reqwest::Client::new();
+        install_mrpack_files(&client, &cache, &settings, &dir, progress).await
+    });
+    let mut throttle = ProgressThrottle::new();
+    while let Some(progress) = incoming.recv().await {
+        if throttle.should_emit(progress, std::time::Instant::now()) {
+            emit_install_progress(&app, &progress_version_id, progress);
+        }
+    }
+    installing
+        .await
+        .map_err(|_| "install task failed".to_string())?
+        .map_err(failure)
+}
+
+#[tauri::command]
 pub fn rename_instance(
     paths: State<'_, LauncherPaths>,
     folder: String,
@@ -326,6 +464,18 @@ pub fn set_last_played_folder(
     folder: String,
 ) -> Result<(), String> {
     licht_core::set_last_played_folder(&paths.settings, &folder).map_err(failure)
+}
+
+/// Marks the instance as opened now and updates the global last-played folder.
+#[tauri::command]
+pub fn touch_last_opened(
+    paths: State<'_, LauncherPaths>,
+    folder: String,
+) -> Result<InstanceEntry, String> {
+    let root = instances_root(&paths).map_err(failure)?;
+    let entry = touch_instance_opened(&root, &folder).map_err(failure)?;
+    licht_core::set_last_played_folder(&paths.settings, &folder).map_err(failure)?;
+    Ok(entry)
 }
 
 #[tauri::command]
@@ -522,9 +672,16 @@ pub async fn install_version(
     paths: State<'_, LauncherPaths>,
     version_id: String,
 ) -> Result<String, String> {
-    install_one(&app, &paths.game, &paths.settings, &version_id)
+    install_one(&app, &paths.game, &paths.settings, &version_id, &version_id)
         .await
         .map_err(failure)
+}
+
+fn emit_install_progress(app: &AppHandle, progress_version_id: &str, progress: DownloadProgress) {
+    let _ = app.emit(
+        "install-progress",
+        InstallProgress::tagged(progress_version_id, progress),
+    );
 }
 
 async fn install_one(
@@ -532,19 +689,99 @@ async fn install_one(
     game: &SharedCache,
     settings: &SharedCache,
     version_id: &str,
+    progress_version_id: &str,
 ) -> Result<String, CoreError> {
+    emit_install_progress(
+        app,
+        progress_version_id,
+        DownloadProgress {
+            finished: 0,
+            failed: 0,
+            total: 0,
+            bytes_done: 0,
+            bytes_total: 0,
+        },
+    );
+
     let cache = game.clone();
     let settings = settings.clone();
     let client = reqwest::Client::new();
     let manifest = fetch_version_manifest(&client).await?;
-    let Some(entry) = manifest
+    let entry = manifest
         .versions
         .iter()
-        .find(|version| version.id == version_id)
-    else {
-        return Err(CoreError::VersionMissing);
-    };
+        .find(|version| version.id == version_id);
 
+    // Custom loader profiles are not on Mojang's list; install their parent first.
+    if entry.is_none() {
+        if !local_version_exists(&cache, version_id) {
+            return Err(CoreError::VersionMissing);
+        }
+        if let Some(parent) = local_inherits_from(&cache, version_id)? {
+            Box::pin(install_one(
+                app,
+                game,
+                &settings,
+                &parent,
+                progress_version_id,
+            ))
+            .await?;
+        }
+        let resolved = load_resolved_version_json(&cache, version_id)?;
+        let version = parse_version(&resolved)?;
+        let environment = host_environment()?;
+        let (progress, mut incoming) = mpsc::channel(4096);
+        let id = version_id.to_string();
+        let cache_task = cache.clone();
+        let settings_task = settings.clone();
+        let installing = tauri::async_runtime::spawn(async move {
+            let index_json = client
+                .get(&version.asset_index.url)
+                .send()
+                .await?
+                .error_for_status()?
+                .text()
+                .await?;
+            let assets = licht_core::parse_asset_index(&index_json)?;
+            licht_core::install_version(
+                &client,
+                &cache_task,
+                &settings_task,
+                licht_core::InstallPlan {
+                    version_id: &id,
+                    version: &version,
+                    asset_index_json: &index_json,
+                    assets: &assets,
+                    environment: &environment,
+                    asset_base: ASSET_OBJECT_BASE,
+                },
+                progress.clone(),
+            )
+            .await?;
+            let major = required_java_major(&id, &version);
+            install_temurin(
+                &client,
+                &cache_task,
+                major,
+                &environment,
+                ADOPTIUM_API,
+                progress,
+            )
+            .await
+        });
+        let mut throttle = ProgressThrottle::new();
+        while let Some(progress) = incoming.recv().await {
+            if throttle.should_emit(progress, std::time::Instant::now()) {
+                emit_install_progress(app, progress_version_id, progress);
+            }
+        }
+        let java = installing
+            .await
+            .map_err(|_| CoreError::Io(std::io::Error::other("install task failed")))??;
+        return Ok(java.display().to_string());
+    }
+
+    let entry = entry.expect("checked above");
     let (progress, mut incoming) = mpsc::channel(4096);
     let version_url = entry.url.clone();
     let version_sha1 = entry.sha1.clone();
@@ -571,10 +808,7 @@ async fn install_one(
     let mut throttle = ProgressThrottle::new();
     while let Some(progress) = incoming.recv().await {
         if throttle.should_emit(progress, std::time::Instant::now()) {
-            let _ = app.emit(
-                "install-progress",
-                InstallProgress::tagged(version_id, progress),
-            );
+            emit_install_progress(app, progress_version_id, progress);
         }
     }
 
@@ -641,7 +875,7 @@ async fn launch_one(
     let dir = cache.instance_dir(folder)?;
     let profile = load_instance(&dir)?;
     let version_id = profile.version_id.clone();
-    let json = std::fs::read_to_string(cache.version_json(&version_id)?)?;
+    let json = load_resolved_version_json(&cache, &version_id)?;
     let version = parse_version(&json)?;
     let environment = host_environment()?;
     let required = required_java_major(&version_id, &version);

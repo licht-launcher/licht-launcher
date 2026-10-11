@@ -111,17 +111,17 @@ export function HomeSidebar({
         ) : null}
         {!loading && ordered.length > 0 ? (
           <ScrollArea className="min-h-0 flex-1">
-            <ul className="flex flex-col gap-1 pr-3">
+            <ul className="flex w-full min-w-0 flex-col gap-1 pr-3">
               {ordered.map((instance) => {
                 const selected = instance.folder === selectedFolder;
                 const phase = playPhase(instance.folder);
                 const active = phase === "starting" || phase === "running";
                 return (
-                  <li key={instance.folder}>
+                  <li key={instance.folder} className="min-w-0">
                     <Button
                       type="button"
                       variant={selected ? "secondary" : "ghost"}
-                      className="w-full justify-start gap-2 px-3"
+                      className="w-full min-w-0 max-w-full justify-start gap-2 overflow-hidden px-3"
                       aria-current={selected ? "page" : undefined}
                       aria-label={
                         active
@@ -133,9 +133,9 @@ export function HomeSidebar({
                         onSelect(instance.folder);
                       }}
                     >
-                      <span className="flex min-w-0 flex-1 items-center gap-2">
+                      <span className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
                         <InstanceIcon />
-                        <span className="min-w-0 flex-1 truncate text-left">
+                        <span className="w-0 min-w-0 flex-1 truncate text-left">
                           {instance.name}
                         </span>
                         {active ? (

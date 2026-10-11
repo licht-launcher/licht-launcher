@@ -19,6 +19,7 @@ function entry(folder: string, name: string): InstanceEntry {
     overrideJava: false,
     overrideJvmArguments: false,
     javaPath: null,
+    lastOpenedAt: null,
   };
 }
 

@@ -94,7 +94,10 @@ describe("FilesSection", () => {
     expect(
       screen.getByRole("columnheader", { name: "Created" }),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText("Instance files")).toHaveClass("bg-black/25");
+    expect(screen.getByLabelText("Instance files")).toHaveClass(
+      "border-border/60",
+      "bg-black/20",
+    );
     expect(screen.getByText("saves")).toBeInTheDocument();
     expect(screen.getByText("options.txt")).toBeInTheDocument();
     expect(screen.getByText("12 B")).toBeInTheDocument();

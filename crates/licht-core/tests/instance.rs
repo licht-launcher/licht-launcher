@@ -4,7 +4,8 @@ use std::path::{Path, PathBuf};
 use licht_core::{
     CoreError, GlobalLaunch, InstanceSettings, create_instance, delete_instance,
     duplicate_instance, instance_launch, list_instances, load_instance, parse_instance,
-    rename_instance, resolved_java_path, resolved_launch, update_instance, update_instance_version,
+    rename_instance, resolved_java_path, resolved_launch, touch_last_opened, update_instance,
+    update_instance_version,
 };
 
 fn scratch(name: &str) -> PathBuf {
@@ -416,5 +417,48 @@ fn update_instance_version_changes_only_the_game_version() {
     assert_eq!(updated.name, "My World");
     assert_eq!(updated.version_id, "1.21.1");
     assert_eq!(updated.max_memory_mb, created.max_memory_mb);
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn touch_last_opened_writes_rfc3339_and_duplicate_clears_it() {
+    let root = scratch("opened");
+    let instances = root.join("instances");
+    let created =
+        create_instance(&instances, "Classic", "1.5.2", &plain_template()).expect("create");
+    assert_eq!(created.last_opened_at, None);
+
+    let touched = touch_last_opened(&instances, &created.folder).expect("touch");
+    let stamp = touched.last_opened_at.expect("timestamp");
+    assert!(
+        stamp.ends_with('Z') && stamp.contains('T') && stamp.len() == 20,
+        "unexpected stamp {stamp}"
+    );
+    let again = load_instance(&instances.join(&created.folder)).expect("reload");
+    assert_eq!(again.last_opened_at.as_deref(), Some(stamp.as_str()));
+
+    let copy = duplicate_instance(&instances, &created.folder, "Classic Copy").expect("dup");
+    assert_eq!(copy.last_opened_at, None);
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn missing_last_opened_at_defaults_to_none() {
+    let root = scratch("legacy-opened");
+    let dir = root.join("Legacy");
+    write(
+        &dir,
+        "instance.json",
+        r#"{
+  "schema": 1,
+  "name": "Legacy",
+  "versionId": "1.20.1",
+  "minMemoryMb": 512,
+  "maxMemoryMb": 2048,
+  "jvmArguments": []
+}"#,
+    );
+    let instance = load_instance(&dir).expect("load");
+    assert_eq!(instance.last_opened_at, None);
     let _ = fs::remove_dir_all(root);
 }

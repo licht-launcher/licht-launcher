@@ -26,6 +26,17 @@ const FRIENDLY: Record<string, string> = {
   "no signed-in Microsoft account": "No Microsoft account is signed in.",
   "secure credential storage failed":
     "Could not store credentials in the OS keyring.",
+  "mod loader version was not found":
+    "No loader build matches this game version. Try another version or channel.",
+  "version was not found":
+    "That game version is missing. Install it again or pick another version.",
+  "LICHT_CURSEFORGE_API_KEY is missing or empty":
+    "CurseForge search needs LICHT_CURSEFORGE_API_KEY. Modrinth packs still work.",
+  "modpack archive is invalid":
+    "That modpack archive could not be read. Try another version.",
+  "unknown platform": "That platform is not supported.",
+  "unknown channel": "That loader channel is not supported.",
+  "unknown modpack source": "That modpack source is not supported.",
 };
 
 export function messageOf(error: unknown): string {

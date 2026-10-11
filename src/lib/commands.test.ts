@@ -8,18 +8,23 @@ import {
   browseJava,
   clearLastPlayedFolder,
   createInstance,
+  createInstanceFromModpack,
+  createInstanceWithPlatform,
   deleteInstance,
   detectJavaInstallations,
   duplicateInstance,
   getLastPlayedFolder,
   getSettings,
+  installModpackFiles,
   installRecommendedJava,
   installVersion,
   javaInstallationStatus,
   launchVersion,
   listInstanceEntries,
   listInstances,
+  listLoaderVersions,
   listMicrosoftAccounts,
+  listModpackVersions,
   listRunningGames,
   listVersions,
   logoutMicrosoftAccount,
@@ -29,10 +34,12 @@ import {
   runtimeJava,
   saveInstance,
   saveSettings,
+  searchModpacks,
   setActiveMicrosoftAccount,
   setInstanceVersion,
   setLastPlayedFolder,
   stopGame,
+  touchLastOpened,
 } from "@/lib/commands";
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -55,6 +62,45 @@ describe("launcher commands", () => {
     expect(invoke).toHaveBeenCalledWith("create_instance", {
       name: "Survival",
       versionId: "1.20.1",
+    });
+    await createInstanceWithPlatform({
+      name: "Fabric",
+      platform: "fabric",
+      gameVersion: "1.20.1",
+      loaderChannel: "stable",
+      loaderVersion: null,
+    });
+    expect(invoke).toHaveBeenCalledWith("create_instance_with_platform", {
+      name: "Fabric",
+      platform: "fabric",
+      gameVersion: "1.20.1",
+      loaderChannel: "stable",
+      loaderVersion: null,
+    });
+    await listLoaderVersions("fabric", "1.20.1", "stable");
+    expect(invoke).toHaveBeenCalledWith("list_loader_versions", {
+      platform: "fabric",
+      gameVersion: "1.20.1",
+      channel: "stable",
+    });
+    await searchModpacks("cobble");
+    expect(invoke).toHaveBeenCalledWith("search_modpacks", { query: "cobble" });
+    await listModpackVersions("modrinth", "ABC");
+    expect(invoke).toHaveBeenCalledWith("list_modpack_versions", {
+      source: "modrinth",
+      projectId: "ABC",
+    });
+    await createInstanceFromModpack({
+      name: "Cobblemon",
+      source: "modrinth",
+      projectId: "ABC",
+      versionId: "v1",
+    });
+    expect(invoke).toHaveBeenCalledWith("create_instance_from_modpack", {
+      name: "Cobblemon",
+      source: "modrinth",
+      projectId: "ABC",
+      versionId: "v1",
     });
     await renameInstance("Survival", "Classic");
     expect(invoke).toHaveBeenCalledWith("rename_instance", {
@@ -119,6 +165,10 @@ describe("launcher commands", () => {
     expect(invoke).toHaveBeenCalledWith("get_last_played_folder");
     await setLastPlayedFolder("classic");
     expect(invoke).toHaveBeenCalledWith("set_last_played_folder", {
+      folder: "classic",
+    });
+    await touchLastOpened("classic");
+    expect(invoke).toHaveBeenCalledWith("touch_last_opened", {
       folder: "classic",
     });
     await clearLastPlayedFolder();
@@ -203,6 +253,13 @@ describe("launcher commands", () => {
     await installVersion("1.20.1");
     expect(invoke).toHaveBeenCalledWith("install_version", {
       versionId: "1.20.1",
+    });
+  });
+
+  it("installs modpack files for an instance folder", async () => {
+    await installModpackFiles("Cobblemon");
+    expect(invoke).toHaveBeenCalledWith("install_modpack_files", {
+      folder: "Cobblemon",
     });
   });
 

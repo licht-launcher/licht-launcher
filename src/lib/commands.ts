@@ -1,5 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
-
+import type {
+  LoaderChannel,
+  ModpackListItem,
+  ModpackSource,
+  ModpackVersionItem,
+  PlatformId,
+} from "@/features/new-instance/model/wizard";
 import type { AccountProfile } from "@/lib/generated/AccountProfile";
 import type { GameExit } from "@/lib/generated/GameExit";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
@@ -21,6 +27,55 @@ export function createInstance(
   versionId: string,
 ): Promise<InstanceEntry> {
   return invoke("create_instance", { name, versionId });
+}
+
+export function listLoaderVersions(
+  platform: PlatformId | string,
+  gameVersion: string,
+  channel: LoaderChannel,
+): Promise<string[]> {
+  return invoke("list_loader_versions", { platform, gameVersion, channel });
+}
+
+export function createInstanceWithPlatform(input: {
+  name: string;
+  platform: PlatformId;
+  gameVersion: string;
+  loaderChannel: LoaderChannel;
+  loaderVersion: string | null;
+}): Promise<InstanceEntry> {
+  return invoke("create_instance_with_platform", {
+    name: input.name,
+    platform: input.platform,
+    gameVersion: input.gameVersion,
+    loaderChannel: input.loaderChannel,
+    loaderVersion: input.loaderVersion,
+  });
+}
+
+export function searchModpacks(query: string): Promise<ModpackListItem[]> {
+  return invoke("search_modpacks", { query });
+}
+
+export function listModpackVersions(
+  source: ModpackSource,
+  projectId: string,
+): Promise<ModpackVersionItem[]> {
+  return invoke("list_modpack_versions", { source, projectId });
+}
+
+export function createInstanceFromModpack(input: {
+  name: string;
+  source: ModpackSource;
+  projectId: string;
+  versionId: string;
+}): Promise<InstanceEntry> {
+  return invoke("create_instance_from_modpack", {
+    name: input.name,
+    source: input.source,
+    projectId: input.projectId,
+    versionId: input.versionId,
+  });
 }
 
 export function renameInstance(
@@ -76,6 +131,10 @@ export function getLastPlayedFolder(): Promise<string | null> {
 
 export function setLastPlayedFolder(folder: string): Promise<void> {
   return invoke("set_last_played_folder", { folder });
+}
+
+export function touchLastOpened(folder: string): Promise<InstanceEntry> {
+  return invoke("touch_last_opened", { folder });
 }
 
 export function clearLastPlayedFolder(): Promise<void> {
@@ -144,6 +203,10 @@ export function listVersions(): Promise<VersionSummary[]> {
 
 export function installVersion(versionId: string): Promise<string> {
   return invoke("install_version", { versionId });
+}
+
+export function installModpackFiles(folder: string): Promise<void> {
+  return invoke("install_modpack_files", { folder });
 }
 
 export function launchVersion(
