@@ -9,9 +9,9 @@ use zip::ZipArchive;
 
 use crate::download::{DEFAULT_RETRY, DownloadProgress, DownloadTask, download_all};
 use crate::instance::{InstanceEntry, create_instance, update_instance_version};
+use crate::loaders::LoaderChannel;
 use crate::loaders::fabric::{self, install_fabric_like};
 use crate::loaders::forge::{self, install_forge_like};
-use crate::loaders::LoaderChannel;
 use crate::settings::{GlobalLaunch, download_concurrency, write_concurrency};
 use crate::{CoreError, Result, SharedCache, shared_transfer_limits};
 
@@ -203,10 +203,7 @@ pub fn mrpack_download_tasks(index: &Value, instance_dir: &Path) -> Result<Vec<D
             .and_then(Value::as_str)
             .ok_or(CoreError::ModpackArchive)?
             .to_string();
-        let size = file
-            .get("fileSize")
-            .and_then(Value::as_u64)
-            .unwrap_or(0);
+        let size = file.get("fileSize").and_then(Value::as_u64).unwrap_or(0);
         tasks.push(DownloadTask {
             url,
             destination,

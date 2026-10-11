@@ -71,8 +71,8 @@ pub use loaders::{
 };
 pub use modpacks::{
     CURSEFORGE_API_KEY_ENV, MODPACK_INDEX_FILE, ModpackListItem, ModpackSource, ModpackVersionItem,
-    apply_mrpack_loader, create_instance_from_modpack, install_mrpack_files,
-    list_modpack_versions, mrpack_download_tasks, search_modpacks,
+    apply_mrpack_loader, create_instance_from_modpack, install_mrpack_files, list_modpack_versions,
+    mrpack_download_tasks, search_modpacks,
 };
 pub use natives::{NativeLibrary, create_natives_directory, extract_natives, native_libraries};
 pub use offline::{
@@ -88,15 +88,14 @@ pub use settings::{
 pub use version::{
     Arch, Argument, ArgumentValue, Artifact, AssetIndex, Download, GameArguments, JavaVersion,
     LaunchEnvironment, Library, LibraryDownloads, LibraryExtract, OsName, OsRule, Rule, RuleAction,
-    Version, VersionDownloads, applicable_libraries, maven_library_path, parse_version, rules_allow,
-};
-pub use version_resolve::{
-    load_resolved_version_json, local_inherits_from, local_version_exists,
+    Version, VersionDownloads, applicable_libraries, maven_library_path, parse_version,
+    rules_allow,
 };
 pub use version_manifest::{
     LatestVersions, ManifestVersion, VERSION_MANIFEST_URL, VersionManifest, VersionSummary,
     VersionType, VersionsArgs, fetch_version_manifest, parse_version_manifest, parse_versions_args,
     version_lines, version_summaries, version_type_name,
 };
+pub use version_resolve::{load_resolved_version_json, local_inherits_from, local_version_exists};
 
 pub type Result<T> = std::result::Result<T, CoreError>;

@@ -287,11 +287,7 @@ pub fn parse_version(json: &str) -> Result<Version> {
 
     Ok(Version {
         arguments,
-        libraries: file
-            .libraries
-            .into_iter()
-            .map(normalize_library)
-            .collect(),
+        libraries: file.libraries.into_iter().map(normalize_library).collect(),
         asset_index: file.asset_index,
         main_class: file.main_class,
         downloads: file.downloads,

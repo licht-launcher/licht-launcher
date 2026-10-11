@@ -10,9 +10,8 @@ use licht_core::{
     SharedCache, VersionSummary, browse_start_directory, clear_launch_lock, configured_java,
     create_instance_from_modpack as create_instance_from_modpack_core,
     create_instance_with_platform as create_instance_with_platform_core, detect_known_javas,
-    install_mrpack_files,
     fetch_version_manifest, game_cache, get_active_profile, global_launch, install_game,
-    install_temurin, installed_java, kill_launch_process, list_accounts,
+    install_mrpack_files, install_temurin, installed_java, kill_launch_process, list_accounts,
     list_loader_versions as list_loader_versions_core,
     list_modpack_versions as list_modpack_versions_core, list_running_launch_folders,
     load_instance, load_resolved_version_json, load_settings, local_inherits_from,
@@ -673,15 +672,9 @@ pub async fn install_version(
     paths: State<'_, LauncherPaths>,
     version_id: String,
 ) -> Result<String, String> {
-    install_one(
-        &app,
-        &paths.game,
-        &paths.settings,
-        &version_id,
-        &version_id,
-    )
-    .await
-    .map_err(failure)
+    install_one(&app, &paths.game, &paths.settings, &version_id, &version_id)
+        .await
+        .map_err(failure)
 }
 
 fn emit_install_progress(app: &AppHandle, progress_version_id: &str, progress: DownloadProgress) {
