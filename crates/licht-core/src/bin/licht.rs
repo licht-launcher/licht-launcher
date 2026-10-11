@@ -13,6 +13,7 @@ use licht_core::{
 use tokio::sync::mpsc;
 
 fn main() {
+    licht_core::load_env_files();
     let code = match runtime() {
         Ok(runtime) => match runtime.block_on(run()) {
             Ok(code) => code,

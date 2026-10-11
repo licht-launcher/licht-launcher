@@ -7,6 +7,7 @@ license.workspace = true
 
 [dependencies]
 directories = "=6.0.0"
+dotenvy = "=0.15.7"
 flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
 keyring = "=3.6.3"
 futures-util = "=0.3.34"

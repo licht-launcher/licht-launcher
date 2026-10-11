@@ -38,11 +38,17 @@ Until approval, device-code and Xbox steps may succeed and fail only at Minecraf
 
 ## Local configuration
 
+Copy [`.env.example`](../../.env.example) to `.env` in the **repository root** (gitignored):
+
 ```text
 LICHT_MSA_CLIENT_ID=<application-client-id>
 ```
 
-Set this in the shell or OS user environment before launching the app or `licht`.
+On startup, Licht loads `.env` from the current working directory and from the
+directory of the executable. Values already set in the OS/shell environment are
+not overwritten.
+
+You can also set `LICHT_MSA_CLIENT_ID` as a user/system environment variable.
 The value must not appear in the repository, commit messages, or logs.
 
 ## Flow (implemented in later items)

@@ -24,7 +24,7 @@ pub use asset_index::{
 };
 pub use auth::{
     AccountProfile, DeviceCodeChallenge, MSA_CLIENT_ID_ENV, MicrosoftSession, begin_login,
-    get_active_profile, list_accounts, logout_account, msa_client_id, poll_login,
+    get_active_profile, list_accounts, load_env_files, logout_account, msa_client_id, poll_login,
     prepare_microsoft_launch, session_for_launch, set_active_account,
 };
 pub use cache::SharedCache;

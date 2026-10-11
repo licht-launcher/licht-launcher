@@ -5,6 +5,7 @@ mod logging;
 mod progress;
 
 pub fn run() -> anyhow::Result<()> {
+    licht_core::load_env_files();
     logging::init()?;
     tracing::info!(
         version = env!("CARGO_PKG_VERSION"),
