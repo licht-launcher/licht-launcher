@@ -53,7 +53,9 @@ export function PlaySection({
           <InstanceIcon size="md" />
           <div className="flex min-w-0 flex-col gap-1">
             <h2 className="text-lg font-medium">{instance.name}</h2>
-            <p className="text-sm text-muted-foreground">{instance.versionId}</p>
+            <p className="text-sm text-muted-foreground">
+              {instance.versionId}
+            </p>
           </div>
         </div>
         {installing ? (
