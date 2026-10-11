@@ -1,6 +1,7 @@
 //! Minecraft launcher core, independent of Tauri.
 
 mod asset_index;
+mod auth;
 mod cache;
 mod db;
 mod download;
@@ -21,6 +22,7 @@ mod version_manifest;
 pub use asset_index::{
     AssetIndexFile, AssetObject, fetch_asset_index, parse_asset_index, reconstruct_assets,
 };
+pub use auth::{MSA_CLIENT_ID_ENV, msa_client_id};
 pub use cache::SharedCache;
 pub use db::{
     clear_last_played_folder, clear_meta, db_path, get_meta, last_played_folder, open_db,

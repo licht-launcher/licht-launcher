@@ -84,6 +84,8 @@ pub enum CoreError {
     LaunchHost,
     #[error("database operation failed")]
     Database(#[from] rusqlite::Error),
+    #[error("LICHT_MSA_CLIENT_ID is missing or empty")]
+    MsaClientIdMissing,
 }
 
 #[cfg(test)]
