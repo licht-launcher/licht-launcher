@@ -195,9 +195,7 @@ describe("InstancesPage", () => {
         username: "Mateus",
       });
     });
-    expect(
-      screen.getByRole("button", { name: "Starting…" }),
-    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Starting…" })).toBeDisabled();
     expect(
       screen.queryByRole("button", { name: "Stop" }),
     ).not.toBeInTheDocument();
@@ -277,9 +275,7 @@ describe("InstancesPage", () => {
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("stop_game", { folder: "classic" });
     });
-    expect(
-      await screen.findByRole("button", { name: "Play" }),
-    ).toBeEnabled();
+    expect(await screen.findByRole("button", { name: "Play" })).toBeEnabled();
   });
 
   it("keeps a console per instance and allows parallel launches", async () => {
@@ -326,9 +322,7 @@ describe("InstancesPage", () => {
         username: "Steve",
       });
     });
-    expect(
-      screen.getByRole("button", { name: "Starting…" }),
-    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Starting…" })).toBeDisabled();
 
     fireEvent.click(within(sidebar).getByRole("button", { name: "Next" }));
     expect(await screen.findByRole("button", { name: "Play" })).toBeEnabled();
@@ -339,9 +333,7 @@ describe("InstancesPage", () => {
         username: "Steve",
       });
     });
-    expect(
-      screen.getByRole("button", { name: "Starting…" }),
-    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Starting…" })).toBeDisabled();
 
     listeners.get("game-log")?.({
       payload: {
