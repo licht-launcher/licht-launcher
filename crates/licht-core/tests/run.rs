@@ -61,16 +61,43 @@ async fn an_empty_command_is_rejected() {
 async fn run_game_reports_the_child_pid() {
     let directory = temp_dir("pid");
     let program = write_stub(&directory, "pid", Stub::Streams { code: 0 });
-    let (output, _incoming) = mpsc::channel(8);
-    let (pid_tx, pid_rx) = oneshot::channel();
     let command = [program.display().to_string()];
+    let mut attempts = 0;
 
-    let running = tokio::spawn(async move {
-        run_game(&command, None, &[], LogCodec::Utf8, output, Some(pid_tx)).await
-    });
-    let pid = pid_rx.await.expect("pid");
+    // Linux can answer exec with "Text file busy" right after the stub is written
+    // (same race as start_stub). Retry so the oneshot is not dropped without a pid.
+    let (pid, exit) = loop {
+        let (output, _incoming) = mpsc::channel(8);
+        let (pid_tx, pid_rx) = oneshot::channel();
+        let command = command.clone();
+        let running = tokio::spawn(async move {
+            run_game(&command, None, &[], LogCodec::Utf8, output, Some(pid_tx)).await
+        });
+        match pid_rx.await {
+            Ok(pid) => {
+                let exit = running.await.expect("join").expect("exit");
+                break (pid, exit);
+            }
+            Err(_) => {
+                let result = running.await.expect("join");
+                match result {
+                    Err(CoreError::Io(error))
+                        if error.kind() == std::io::ErrorKind::ExecutableFileBusy
+                            && attempts < 4 =>
+                    {
+                        attempts += 1;
+                        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                    }
+                    other => {
+                        other.expect("exit");
+                        panic!("pid channel closed without ExecutableFileBusy");
+                    }
+                }
+            }
+        }
+    };
+
     assert!(pid > 0);
-    let exit = running.await.expect("join").expect("exit");
     assert!(exit.succeeded());
 }
 
