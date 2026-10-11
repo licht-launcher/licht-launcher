@@ -27,7 +27,7 @@ export function StepModpack({
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
       <div className="flex items-center gap-3">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-success/25 text-success">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-instance/25 text-instance">
           <PackageIcon aria-hidden className="size-5" strokeWidth={2} />
         </span>
         <div>

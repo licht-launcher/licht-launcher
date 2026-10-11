@@ -43,7 +43,7 @@ export function ChoiceCard({
               "flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-md [&_img]:size-5 [&_img]:object-contain [&_svg]:size-5",
               iconNeutral
                 ? "bg-black/20 text-muted-foreground"
-                : "bg-success/25 text-success",
+                : "bg-instance/25 text-instance",
             )}
           >
             {icon}

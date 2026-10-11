@@ -22,7 +22,7 @@ describe("ChoiceCard", () => {
     expect(button).toHaveAttribute("aria-pressed", "true");
     fireEvent.click(button);
     expect(onSelect).toHaveBeenCalledOnce();
-    expect(button.querySelector(".text-success")).toBeInTheDocument();
+    expect(button.querySelector(".text-instance")).toBeInTheDocument();
   });
 
   it("keeps loader icon wells neutral", () => {
@@ -40,6 +40,6 @@ describe("ChoiceCard", () => {
     const well = button.querySelector(".bg-black\\/20");
     expect(well).toBeInTheDocument();
     expect(well?.className).not.toContain("grayscale");
-    expect(well?.className).not.toContain("text-success");
+    expect(well?.className).not.toContain("text-instance");
   });
 });
