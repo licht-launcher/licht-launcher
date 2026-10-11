@@ -47,7 +47,6 @@ vi.mock("@tauri-apps/api/window", () => ({
   }),
 }));
 
-
 async function renderAt(path: string) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
