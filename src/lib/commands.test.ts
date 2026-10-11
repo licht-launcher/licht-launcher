@@ -2,6 +2,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  activeMicrosoftAccount,
+  beginMicrosoftLogin,
   browseApplicationDirectory,
   browseJava,
   clearLastPlayedFolder,
@@ -17,14 +19,18 @@ import {
   launchVersion,
   listInstanceEntries,
   listInstances,
+  listMicrosoftAccounts,
   listRunningGames,
   listVersions,
+  logoutMicrosoftAccount,
   openInstanceFolder,
   openRepository,
+  pollMicrosoftLogin,
   renameInstance,
   runtimeJava,
   saveInstance,
   saveSettings,
+  setActiveMicrosoftAccount,
   setInstanceVersion,
   setLastPlayedFolder,
   stopGame,
@@ -118,6 +124,27 @@ describe("launcher commands", () => {
     });
     await clearLastPlayedFolder();
     expect(invoke).toHaveBeenCalledWith("clear_last_played_folder");
+  });
+
+  it("lists and polls Microsoft accounts", async () => {
+    await listMicrosoftAccounts();
+    expect(invoke).toHaveBeenCalledWith("list_microsoft_accounts");
+    await activeMicrosoftAccount();
+    expect(invoke).toHaveBeenCalledWith("active_microsoft_account");
+    await beginMicrosoftLogin();
+    expect(invoke).toHaveBeenCalledWith("begin_microsoft_login");
+    await pollMicrosoftLogin("device");
+    expect(invoke).toHaveBeenCalledWith("poll_microsoft_login", {
+      deviceCode: "device",
+    });
+    await setActiveMicrosoftAccount("abc");
+    expect(invoke).toHaveBeenCalledWith("set_active_microsoft_account", {
+      uuid: "abc",
+    });
+    await logoutMicrosoftAccount("abc");
+    expect(invoke).toHaveBeenCalledWith("logout_microsoft_account", {
+      uuid: "abc",
+    });
   });
 
   it("reads settings without arguments", async () => {

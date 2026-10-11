@@ -4,6 +4,24 @@ const FRIENDLY: Record<string, string> = {
   "I/O operation failed":
     "The disk could not be written. Free some space and try again.",
   "downloaded SHA1 does not match": "A downloaded file was damaged. Try again.",
+  "LICHT_MSA_CLIENT_ID is missing or empty":
+    "Microsoft sign-in is not configured. Set LICHT_MSA_CLIENT_ID and try again.",
+  "Microsoft device code expired":
+    "The sign-in code expired. Start Microsoft sign-in again.",
+  "Microsoft sign-in was declined": "Microsoft sign-in was cancelled.",
+  "Minecraft services rejected this app (not allow-listed yet)":
+    "Microsoft sign-in is waiting on Mojang approval for this app. Try again later.",
+  "this Microsoft account does not own Minecraft: Java Edition":
+    "This Microsoft account does not own Minecraft: Java Edition.",
+  "this Microsoft account is a child and needs to join a Family":
+    "This Microsoft account is a child account and must join a Family first.",
+  "this Microsoft account has no Xbox profile":
+    "This Microsoft account needs an Xbox profile before signing in.",
+  "Minecraft profile was not found for this account":
+    "No Minecraft profile was found. Open the official launcher once, then try again.",
+  "no signed-in Microsoft account": "No Microsoft account is signed in.",
+  "secure credential storage failed":
+    "Could not store credentials in the OS keyring.",
 };
 
 export function messageOf(error: unknown): string {

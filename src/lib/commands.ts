@@ -1,5 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
+import type { AccountProfile } from "@/lib/generated/AccountProfile";
+import type { DeviceCodeChallenge } from "@/lib/generated/DeviceCodeChallenge";
 import type { GameExit } from "@/lib/generated/GameExit";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 import type { InstanceFsEntry } from "@/lib/generated/InstanceFsEntry";
@@ -79,6 +81,34 @@ export function setLastPlayedFolder(folder: string): Promise<void> {
 
 export function clearLastPlayedFolder(): Promise<void> {
   return invoke("clear_last_played_folder");
+}
+
+export function listMicrosoftAccounts(): Promise<AccountProfile[]> {
+  return invoke("list_microsoft_accounts");
+}
+
+export function activeMicrosoftAccount(): Promise<AccountProfile | null> {
+  return invoke("active_microsoft_account");
+}
+
+export function beginMicrosoftLogin(): Promise<DeviceCodeChallenge> {
+  return invoke("begin_microsoft_login");
+}
+
+export function pollMicrosoftLogin(
+  deviceCode: string,
+): Promise<AccountProfile | null> {
+  return invoke("poll_microsoft_login", { deviceCode });
+}
+
+export function setActiveMicrosoftAccount(
+  uuid: string,
+): Promise<AccountProfile> {
+  return invoke("set_active_microsoft_account", { uuid });
+}
+
+export function logoutMicrosoftAccount(uuid: string): Promise<void> {
+  return invoke("logout_microsoft_account", { uuid });
 }
 
 export function getSettings(): Promise<SettingsSnapshot> {

@@ -10,7 +10,7 @@ export const SECTIONS = [
   {
     id: "account",
     label: "Account",
-    description: "Offline player name. Microsoft sign-in will live here later.",
+    description: "Microsoft sign-in and offline player name.",
     icon: UserRoundIcon,
   },
   {

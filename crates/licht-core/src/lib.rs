@@ -22,7 +22,11 @@ mod version_manifest;
 pub use asset_index::{
     AssetIndexFile, AssetObject, fetch_asset_index, parse_asset_index, reconstruct_assets,
 };
-pub use auth::{MSA_CLIENT_ID_ENV, msa_client_id};
+pub use auth::{
+    AccountProfile, DeviceCodeChallenge, MSA_CLIENT_ID_ENV, MicrosoftSession, begin_login,
+    get_active_profile, list_accounts, logout_account, msa_client_id, poll_login,
+    prepare_microsoft_launch, session_for_launch, set_active_account,
+};
 pub use cache::SharedCache;
 pub use db::{
     clear_last_played_folder, clear_meta, db_path, get_meta, last_played_folder, open_db,

@@ -3,15 +3,17 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex as StdMutex;
 
 use licht_core::{
-    ADOPTIUM_API, ASSET_OBJECT_BASE, Arch, CoreError, GameExit, GameInstall, GameLogEvent,
-    InstallProgress, InstanceEntry, InstanceFsEntry, InstanceSettings, JavaDetections, JavaPaths,
-    JavaStatus, LaunchEnvironment, OsName, Settings, SettingsSnapshot, SharedCache, VersionSummary,
-    browse_start_directory, clear_launch_lock, configured_java, detect_known_javas,
-    fetch_version_manifest, game_cache, global_launch, install_game, install_temurin,
-    installed_java, kill_launch_process, list_running_launch_folders, load_instance, load_settings,
-    log_codec, offline_account, parse_version, prepare_offline_launch, probe_java_major,
-    process_matches_lock, read_launch_lock, required_java_major, resolved_java_path,
-    resolved_launch, run_game, runtime_java_paths, set_java_path, settings_snapshot,
+    ADOPTIUM_API, ASSET_OBJECT_BASE, AccountProfile, Arch, CoreError, DeviceCodeChallenge,
+    GameExit, GameInstall, GameLogEvent, InstallProgress, InstanceEntry, InstanceFsEntry,
+    InstanceSettings, JavaDetections, JavaPaths, JavaStatus, LaunchEnvironment, OsName, Settings,
+    SettingsSnapshot, SharedCache, VersionSummary, begin_login, browse_start_directory,
+    clear_launch_lock, configured_java, detect_known_javas, fetch_version_manifest, game_cache,
+    get_active_profile, global_launch, install_game, install_temurin, installed_java,
+    kill_launch_process, list_accounts, list_running_launch_folders, load_instance, load_settings,
+    log_codec, logout_account, offline_account, parse_version, poll_login,
+    prepare_microsoft_launch, prepare_offline_launch, probe_java_major, process_matches_lock,
+    read_launch_lock, required_java_major, resolved_java_path, resolved_launch, run_game,
+    runtime_java_paths, session_for_launch, set_active_account, set_java_path, settings_snapshot,
     update_instance, update_instance_version, version_summaries, write_launch_lock_for_pid,
 };
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -332,6 +334,53 @@ pub fn clear_last_played_folder(paths: State<'_, LauncherPaths>) -> Result<(), S
 }
 
 #[tauri::command]
+pub fn list_microsoft_accounts(
+    paths: State<'_, LauncherPaths>,
+) -> Result<Vec<AccountProfile>, String> {
+    list_accounts(&paths.settings).map_err(failure)
+}
+
+#[tauri::command]
+pub fn active_microsoft_account(
+    paths: State<'_, LauncherPaths>,
+) -> Result<Option<AccountProfile>, String> {
+    get_active_profile(&paths.settings).map_err(failure)
+}
+
+#[tauri::command]
+pub async fn begin_microsoft_login() -> Result<DeviceCodeChallenge, String> {
+    let client = reqwest::Client::new();
+    begin_login(&client).await.map_err(failure)
+}
+
+#[tauri::command]
+pub async fn poll_microsoft_login(
+    paths: State<'_, LauncherPaths>,
+    device_code: String,
+) -> Result<Option<AccountProfile>, String> {
+    let client = reqwest::Client::new();
+    poll_login(&client, &paths.settings, &device_code)
+        .await
+        .map_err(failure)
+}
+
+#[tauri::command]
+pub fn set_active_microsoft_account(
+    paths: State<'_, LauncherPaths>,
+    uuid: String,
+) -> Result<AccountProfile, String> {
+    set_active_account(&paths.settings, &uuid).map_err(failure)
+}
+
+#[tauri::command]
+pub fn logout_microsoft_account(
+    paths: State<'_, LauncherPaths>,
+    uuid: String,
+) -> Result<(), String> {
+    logout_account(&paths.settings, &uuid).map_err(failure)
+}
+
+#[tauri::command]
 pub fn get_settings(paths: State<'_, LauncherPaths>) -> Result<SettingsSnapshot, String> {
     settings_snapshot(&paths.settings).map_err(failure)
 }
@@ -610,18 +659,34 @@ async fn launch_one(
         required
     };
     let codec = log_codec(major);
-    let account = offline_account(username)?;
     let launch = resolved_launch(&profile, &global_launch(&settings));
-    let prepared = prepare_offline_launch(
-        &java,
-        &cache,
-        &version_id,
-        &version,
-        &environment,
-        &account,
-        &dir,
-        &launch,
-    )?;
+    let http = reqwest::Client::new();
+    let prepared = match session_for_launch(&http, settings_home).await {
+        Ok(session) => prepare_microsoft_launch(
+            &java,
+            &cache,
+            &version_id,
+            &version,
+            &environment,
+            &session,
+            &dir,
+            &launch,
+        )?,
+        Err(CoreError::AuthNotSignedIn) => {
+            let account = offline_account(username)?;
+            prepare_offline_launch(
+                &java,
+                &cache,
+                &version_id,
+                &version,
+                &environment,
+                &account,
+                &dir,
+                &launch,
+            )?
+        }
+        Err(error) => return Err(error),
+    };
 
     let (output, mut incoming) = mpsc::channel(32);
     let (pid_tx, pid_rx) = oneshot::channel();

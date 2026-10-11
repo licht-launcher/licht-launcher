@@ -24,6 +24,19 @@ describe("friendly errors", () => {
     );
   });
 
+  it("turns Microsoft auth failures into short sentences", () => {
+    expect(
+      friendlyError(
+        "Minecraft services rejected this app (not allow-listed yet)",
+      ),
+    ).toMatch(/Mojang approval/);
+    expect(
+      friendlyError(
+        "this Microsoft account does not own Minecraft: Java Edition",
+      ),
+    ).toMatch(/does not own/);
+  });
+
   it("keeps an unknown message", () => {
     expect(friendlyError("version was not found")).toBe(
       "version was not found",
