@@ -13,6 +13,8 @@ mod meta;
 mod modpacks;
 mod runtime;
 mod store;
+#[cfg(test)]
+mod test_http;
 mod transfer;
 
 pub(crate) use game::install;

@@ -176,63 +176,28 @@ mod tests {
 
     #[tokio::test]
     async fn a_live_redirect_to_a_disallowed_url_is_rejected() {
+        use crate::test_http::{error_chain, lock_local_http, with_stub_retries};
+
+        let _guard = lock_local_http().await;
+        let client = allowlisted_download_client(HOSTS, BLOCKED, TOO_MANY).expect("client");
         for location in [
             "https://evil.example/malware.jar",
             "http://cdn.modrinth.com/a.jar",
             "https://github.com/user/repo/releases/download/v1/a.jar",
             "https://edge.forgecdn.net/files/1/2/a.jar",
         ] {
-            let url = serve_redirect(location).await;
-            let client = allowlisted_download_client(HOSTS, BLOCKED, TOO_MANY).expect("client");
-            let error = client.get(&url).send().await.expect_err(location);
+            let response = format!(
+                "HTTP/1.1 302 Found\r\nLocation: {location}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+            );
+            let error = with_stub_retries(&response, |url| {
+                let client = client.clone();
+                async move { client.get(&url).send().await }
+            })
+            .await
+            .expect_err(location);
             assert!(error.is_redirect(), "{location}: {}", error_chain(&error));
             let message = error_chain(&error);
             assert!(message.contains(BLOCKED), "{location}: {message}");
         }
-    }
-
-    fn error_chain(error: &dyn std::error::Error) -> String {
-        let mut message = error.to_string();
-        let mut source = std::error::Error::source(error);
-        while let Some(inner) = source {
-            message.push_str(": ");
-            message.push_str(&inner.to_string());
-            source = inner.source();
-        }
-        message
-    }
-
-    async fn serve_redirect(location: &str) -> String {
-        use tokio::io::{AsyncReadExt, AsyncWriteExt};
-
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
-            .await
-            .expect("bind");
-        let address = listener.local_addr().expect("address");
-        let location = location.to_string();
-        tokio::spawn(async move {
-            let Ok((mut socket, _)) = listener.accept().await else {
-                return;
-            };
-            let mut incoming = Vec::new();
-            let mut buffer = [0_u8; 256];
-            loop {
-                let Ok(read) = socket.read(&mut buffer).await else {
-                    return;
-                };
-                if read == 0 {
-                    return;
-                }
-                incoming.extend_from_slice(&buffer[..read]);
-                if incoming.windows(4).any(|window| window == b"\r\n\r\n") {
-                    break;
-                }
-            }
-            let body = format!(
-                "HTTP/1.1 302 Found\r\nLocation: {location}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
-            );
-            let _ = socket.write_all(body.as_bytes()).await;
-        });
-        format!("http://{address}/file.jar")
     }
 }

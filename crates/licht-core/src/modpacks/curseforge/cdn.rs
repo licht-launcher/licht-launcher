@@ -176,6 +176,9 @@ mod tests {
 
     #[tokio::test]
     async fn the_client_sends_the_api_key_header() {
+        use crate::test_http::{lock_local_http, serve_once};
+
+        let _guard = lock_local_http().await;
         let (url, request) = serve_once("HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n").await;
         let client = cdn_client("test-key").expect("client");
         client.get(&url).send().await.expect("response");
@@ -185,6 +188,10 @@ mod tests {
 
     #[tokio::test]
     async fn a_live_redirect_to_a_disallowed_url_is_rejected() {
+        use crate::test_http::{error_chain, lock_local_http, with_stub_retries};
+
+        let _guard = lock_local_http().await;
+        let client = cdn_client("test-key").expect("client");
         for location in [
             "https://evil.example/malware.jar",
             "http://edge.forgecdn.net/a.jar",
@@ -194,9 +201,12 @@ mod tests {
             let response = format!(
                 "HTTP/1.1 302 Found\r\nLocation: {location}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
             );
-            let (url, _request) = serve_once(&response).await;
-            let client = cdn_client("test-key").expect("client");
-            let error = client.get(&url).send().await.expect_err(location);
+            let error = with_stub_retries(&response, |url| {
+                let client = client.clone();
+                async move { client.get(&url).send().await }
+            })
+            .await
+            .expect_err(location);
             assert!(error.is_redirect(), "{location}: {error}");
             let message = error_chain(&error);
             assert!(
@@ -204,46 +214,5 @@ mod tests {
                 "{location}: {message}"
             );
         }
-    }
-
-    fn error_chain(error: &dyn std::error::Error) -> String {
-        let mut message = error.to_string();
-        let mut source = std::error::Error::source(error);
-        while let Some(inner) = source {
-            message.push_str(": ");
-            message.push_str(&inner.to_string());
-            source = inner.source();
-        }
-        message
-    }
-
-    /// Answers one request with `response` and returns the raw request text.
-    async fn serve_once(response: &str) -> (String, tokio::task::JoinHandle<String>) {
-        use tokio::io::{AsyncReadExt, AsyncWriteExt};
-
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
-            .await
-            .expect("bind");
-        let address = listener.local_addr().expect("address");
-        let response = response.to_string();
-        let handle = tokio::spawn(async move {
-            let Ok((mut socket, _)) = listener.accept().await else {
-                return String::new();
-            };
-            let mut incoming = Vec::new();
-            let mut buffer = [0_u8; 256];
-            while let Ok(read) = socket.read(&mut buffer).await {
-                if read == 0 {
-                    break;
-                }
-                incoming.extend_from_slice(&buffer[..read]);
-                if incoming.windows(4).any(|window| window == b"\r\n\r\n") {
-                    break;
-                }
-            }
-            let _ = socket.write_all(response.as_bytes()).await;
-            String::from_utf8_lossy(&incoming).into_owned()
-        });
-        (format!("http://{address}/file.jar"), handle)
     }
 }
