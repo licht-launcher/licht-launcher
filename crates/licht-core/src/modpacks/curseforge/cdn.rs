@@ -178,7 +178,7 @@ mod tests {
     async fn the_client_sends_the_api_key_header() {
         use crate::test_http::{lock_local_http, serve_once};
 
-        let _guard = lock_local_http();
+        let _guard = lock_local_http().await;
         let (url, request) = serve_once("HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n").await;
         let client = cdn_client("test-key").expect("client");
         client.get(&url).send().await.expect("response");
@@ -190,7 +190,7 @@ mod tests {
     async fn a_live_redirect_to_a_disallowed_url_is_rejected() {
         use crate::test_http::{error_chain, lock_local_http, with_stub_retries};
 
-        let _guard = lock_local_http();
+        let _guard = lock_local_http().await;
         let client = cdn_client("test-key").expect("client");
         for location in [
             "https://evil.example/malware.jar",

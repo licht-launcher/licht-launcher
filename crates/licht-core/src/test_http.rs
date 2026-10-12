@@ -4,16 +4,16 @@
 //! fail with WSAEADDRINUSE (10048) when picking an ephemeral client port. Tests
 //! that hit the network loopback should serialize on [`LOCAL_HTTP`] and retry.
 
-use std::sync::{Mutex, MutexGuard};
+use std::sync::LazyLock;
 use std::time::Duration;
 
-/// Serializes loopback stub servers so parallel unit tests do not exhaust ports.
-pub(crate) static LOCAL_HTTP: Mutex<()> = Mutex::new(());
+use tokio::sync::{Mutex, MutexGuard};
 
-pub(crate) fn lock_local_http() -> MutexGuard<'static, ()> {
-    LOCAL_HTTP
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+/// Serializes loopback stub servers so parallel unit tests do not exhaust ports.
+static LOCAL_HTTP: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+pub(crate) async fn lock_local_http() -> MutexGuard<'static, ()> {
+    LOCAL_HTTP.lock().await
 }
 
 pub(crate) fn error_chain(error: &dyn std::error::Error) -> String {

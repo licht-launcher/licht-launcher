@@ -178,7 +178,7 @@ mod tests {
     async fn a_live_redirect_to_a_disallowed_url_is_rejected() {
         use crate::test_http::{error_chain, lock_local_http, with_stub_retries};
 
-        let _guard = lock_local_http();
+        let _guard = lock_local_http().await;
         let client = allowlisted_download_client(HOSTS, BLOCKED, TOO_MANY).expect("client");
         for location in [
             "https://evil.example/malware.jar",

@@ -1179,7 +1179,7 @@ mod tests {
 
     #[tokio::test]
     async fn temurin_is_stored_under_its_major_version() {
-        let _guard = crate::test_http::lock_local_http();
+        let _guard = crate::test_http::lock_local_http().await;
         let directory =
             std::env::temp_dir().join(format!("licht-temurin-zip-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&directory);
@@ -1226,7 +1226,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_missing_jre_falls_back_to_the_jdk() {
-        let _guard = crate::test_http::lock_local_http();
+        let _guard = crate::test_http::lock_local_http().await;
         let directory =
             std::env::temp_dir().join(format!("licht-temurin-jdk-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&directory);
@@ -1260,7 +1260,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_wrong_checksum_is_rejected() {
-        let _guard = crate::test_http::lock_local_http();
+        let _guard = crate::test_http::lock_local_http().await;
         let directory =
             std::env::temp_dir().join(format!("licht-temurin-bad-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&directory);
