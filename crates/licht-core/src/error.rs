@@ -84,6 +84,8 @@ pub enum CoreError {
     LaunchArgs,
     #[error("version was not found")]
     VersionMissing,
+    #[error("version manifest is unavailable")]
+    VersionManifestUnavailable,
     #[error("this system is not supported for launch")]
     LaunchHost,
     #[error("database operation failed")]

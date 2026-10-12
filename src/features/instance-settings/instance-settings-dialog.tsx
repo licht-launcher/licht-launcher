@@ -7,7 +7,7 @@ import { InstanceSettingsPanel } from "@/features/instance-settings/components/i
 import { InstanceSettingsSidebar } from "@/features/instance-settings/components/instance-settings-sidebar";
 import { useInstanceDraft } from "@/features/instance-settings/hooks/use-instance-draft";
 import type { InstanceSectionId } from "@/features/instance-settings/model/sections";
-import { getSettings, listVersions } from "@/lib/commands";
+import { getSettings } from "@/lib/commands";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 
 export function InstanceSettingsDialog({
@@ -43,12 +43,6 @@ export function InstanceSettingsDialog({
     enabled: open,
     retry: false,
   });
-  const versions = useQuery({
-    queryKey: ["versions"],
-    queryFn: listVersions,
-    enabled: open,
-    retry: false,
-  });
 
   function handleOpenChange(next: boolean) {
     if (!next) {
@@ -68,14 +62,14 @@ export function InstanceSettingsDialog({
             onOpenGlobalSettings={onOpenGlobalSettings}
           />
         ) : null}
-        {entry && draft && settings.data && versions.data ? (
+        {entry && draft && settings.data ? (
           <InstanceSettingsPanel
             section={section}
             draft={draft}
             snapshot={settings.data}
             instanceName={entry.name}
+            folder={entry.folder}
             versionId={entry.versionId}
-            versions={versions.data}
             busy={busy}
             versionBusy={versionBusy}
             onChange={update}

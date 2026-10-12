@@ -257,4 +257,48 @@ describe("NewInstancePage", () => {
       });
     });
   });
+
+  it("shows retry when the version list fails", async () => {
+    let versionsCalls = 0;
+    invoke.mockImplementation((command: string) => {
+      if (command === "list_instances") {
+        return Promise.resolve([]);
+      }
+      if (command === "list_versions") {
+        versionsCalls += 1;
+        if (versionsCalls === 1) {
+          return Promise.reject(new Error("version manifest is unavailable"));
+        }
+        return Promise.resolve([
+          { id: "1.20.1", versionType: "release", installed: false },
+        ]);
+      }
+      if (command === "get_settings") {
+        return Promise.resolve(snapshot);
+      }
+      if (command === "get_last_played_folder") {
+        return Promise.resolve(null);
+      }
+      if (command === "list_running_games") {
+        return Promise.resolve([]);
+      }
+      return Promise.resolve(undefined);
+    });
+
+    await renderWizard();
+    fireEvent.click(screen.getByRole("button", { name: /From scratch/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Vanilla/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(
+      await screen.findByText(
+        "Could not load the version list. Check your connection and try again.",
+      ),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(
+      await screen.findByRole("combobox", { name: "Game version" }),
+    ).toBeInTheDocument();
+  });
 });

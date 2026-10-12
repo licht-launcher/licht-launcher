@@ -18,6 +18,7 @@ import {
   installModpackFiles,
   installRecommendedJava,
   installVersion,
+  isVersionReady,
   javaInstallationStatus,
   launchVersion,
   listInstanceEntries,
@@ -31,6 +32,7 @@ import {
   openInstanceFolder,
   openRepository,
   renameInstance,
+  repairInstance,
   runtimeJava,
   saveInstance,
   saveSettings,
@@ -249,10 +251,24 @@ describe("launcher commands", () => {
     expect(invoke).toHaveBeenCalledWith("list_versions");
   });
 
+  it("checks whether a version is ready to launch", async () => {
+    await isVersionReady("1.20.1");
+    expect(invoke).toHaveBeenCalledWith("is_version_ready_cmd", {
+      versionId: "1.20.1",
+    });
+  });
+
   it("installs one version by id", async () => {
     await installVersion("1.20.1");
     expect(invoke).toHaveBeenCalledWith("install_version", {
       versionId: "1.20.1",
+    });
+  });
+
+  it("repairs an instance folder", async () => {
+    await repairInstance("classic");
+    expect(invoke).toHaveBeenCalledWith("repair_instance", {
+      folder: "classic",
     });
   });
 

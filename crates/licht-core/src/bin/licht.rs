@@ -66,8 +66,11 @@ async fn install(args: &[String]) -> licht_core::Result<()> {
         Some(root) => SharedCache::at(root),
         None => game_cache(&settings_home)?,
     };
-    let client = reqwest::Client::new();
-    let manifest = fetch_version_manifest(&client).await?;
+    let client = reqwest::Client::builder()
+        .timeout(licht_core::MANIFEST_REQUEST_TIMEOUT)
+        .build()
+        .map_err(CoreError::from)?;
+    let manifest = fetch_version_manifest(&client, &cache).await?;
     let Some(entry) = manifest
         .versions
         .iter()
@@ -137,10 +140,15 @@ async fn install(args: &[String]) -> licht_core::Result<()> {
 
 async fn versions(args: &[String]) -> licht_core::Result<i32> {
     let args = parse_versions_args(args)?;
-    if let Some(root) = &args.cache {
-        let _cache = SharedCache::at(root);
-    }
-    let manifest = fetch_version_manifest(&reqwest::Client::new()).await?;
+    let cache = match &args.cache {
+        Some(root) => SharedCache::at(root),
+        None => SharedCache::system()?,
+    };
+    let client = reqwest::Client::builder()
+        .timeout(licht_core::MANIFEST_REQUEST_TIMEOUT)
+        .build()
+        .map_err(CoreError::from)?;
+    let manifest = fetch_version_manifest(&client, &cache).await?;
     for line in version_lines(&manifest) {
         println!("{line}");
     }

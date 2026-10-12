@@ -102,9 +102,11 @@ pub use version::{
     rules_allow,
 };
 pub use version_manifest::{
-    LatestVersions, ManifestVersion, VERSION_MANIFEST_URL, VersionManifest, VersionSummary,
-    VersionType, VersionsArgs, fetch_version_manifest, parse_version_manifest, parse_versions_args,
-    version_lines, version_summaries, version_type_name,
+    LatestVersions, MANIFEST_REQUEST_TIMEOUT, ManifestVersion, VERSION_MANIFEST_LEGACY_URL,
+    VERSION_MANIFEST_URL, VersionManifest, VersionSummary, VersionType, VersionsArgs,
+    fetch_version_manifest, is_version_ready, list_installed_version_summaries,
+    list_version_summaries, parse_version_manifest, parse_versions_args, version_lines,
+    version_manifest_cache_path, version_summaries, version_type_name,
 };
 pub use version_resolve::{load_resolved_version_json, local_inherits_from, local_version_exists};
 

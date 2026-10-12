@@ -170,10 +170,16 @@ describe("InstanceSettingsDialog", () => {
         "Open the editor to pick another Vanilla release for this instance.",
       ),
     ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Repair" })).toBeInTheDocument();
+    expect(invoke).not.toHaveBeenCalledWith("list_versions");
+
     fireEvent.click(screen.getByRole("button", { name: "Edit base" }));
     expect(
       await screen.findByRole("heading", { name: "Edit game version" }),
     ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("list_versions");
+    });
     fireEvent.click(screen.getByLabelText("Game version"));
     expect(
       await screen.findByRole("option", { name: "1.21.1" }),
@@ -184,6 +190,56 @@ describe("InstanceSettingsDialog", () => {
     fireEvent.click(screen.getByRole("option", { name: "1.21.1" }));
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(onChangeVersion).toHaveBeenCalledWith("1.21.1");
+  });
+
+  it("repairs the instance from the base section", async () => {
+    invoke.mockImplementation((command: string) => {
+      if (command === "get_settings") {
+        return Promise.resolve({
+          settings: {
+            schema: 1,
+            theme: "dark",
+            username: "Steve",
+            fullscreen: false,
+            width: 854,
+            height: 480,
+            maxMemoryMb: 2048,
+            jvmArguments: [],
+            java25: null,
+            java21: null,
+            java17: null,
+            java8: null,
+            downloadConcurrency: 4,
+            writeConcurrency: 8,
+            disableCustomTitleBar: false,
+            dataDirectory: null,
+          },
+          applicationDirectory: "C:\\Licht",
+          memoryTotalMb: 16384,
+          memoryRecommendedMb: 4096,
+          memoryMinimumMb: 512,
+          memoryMaximumMb: 8192,
+          memoryStepMb: 256,
+        });
+      }
+      if (command === "repair_instance") {
+        return Promise.resolve(undefined);
+      }
+      return Promise.resolve(entry);
+    });
+    renderDialog();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Instance base" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Repair" }));
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("repair_instance", {
+        folder: "Survival",
+      });
+    });
+    expect(
+      await screen.findByText("Instance files were repaired."),
+    ).toBeInTheDocument();
   });
 
   it("groups overrides under Override Settings", async () => {

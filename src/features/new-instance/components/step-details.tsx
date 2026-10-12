@@ -1,5 +1,6 @@
 import { CalendarRangeIcon, PuzzleIcon, TagIcon } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -24,6 +25,8 @@ export function StepDetails({
   includeSnapshots,
   versions,
   versionsPending,
+  versionsError,
+  onRetryVersions,
   loaderChannel,
   loaderVersion,
   loaderVersions,
@@ -40,6 +43,8 @@ export function StepDetails({
   includeSnapshots: boolean;
   versions: VersionSummary[];
   versionsPending: boolean;
+  versionsError: boolean;
+  onRetryVersions: () => void;
   loaderChannel: LoaderChannel;
   loaderVersion: string;
   loaderVersions: string[];
@@ -117,10 +122,25 @@ export function StepDetails({
           />
         </div>
       ) : null}
-      {choices.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          {versionsPending ? "Loading versions…" : "No versions available."}
-        </p>
+      {versionsPending ? (
+        <p className="text-sm text-muted-foreground">Loading versions…</p>
+      ) : versionsError && choices.length === 0 ? (
+        <div className="flex flex-col gap-2">
+          <p className="text-sm text-muted-foreground">
+            Could not load the version list. Check your connection and try
+            again.
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            className="self-start"
+            onClick={onRetryVersions}
+          >
+            Retry
+          </Button>
+        </div>
+      ) : choices.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No versions available.</p>
       ) : (
         <Select value={gameVersion} onValueChange={onGameVersionChange}>
           <SelectTrigger aria-label="Game version">

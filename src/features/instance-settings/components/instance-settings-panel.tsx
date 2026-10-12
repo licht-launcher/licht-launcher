@@ -8,15 +8,14 @@ import { GeneralSection } from "@/features/instance-settings/sections/general-se
 import { InstanceBaseSection } from "@/features/instance-settings/sections/instance-base-section";
 import { OverridesSection } from "@/features/instance-settings/sections/overrides-section";
 import type { SettingsSnapshot } from "@/lib/generated/SettingsSnapshot";
-import type { VersionSummary } from "@/lib/generated/VersionSummary";
 
 export function InstanceSettingsPanel({
   section,
   draft,
   snapshot,
   instanceName,
+  folder,
   versionId,
-  versions,
   busy,
   versionBusy,
   onChange,
@@ -30,8 +29,8 @@ export function InstanceSettingsPanel({
   draft: InstanceDraft;
   snapshot: SettingsSnapshot;
   instanceName: string;
+  folder: string;
   versionId: string;
-  versions: VersionSummary[];
   busy: boolean;
   versionBusy: boolean;
   onChange: (patch: Partial<InstanceDraft>) => void;
@@ -66,8 +65,8 @@ export function InstanceSettingsPanel({
           ) : null}
           {section === "base" ? (
             <InstanceBaseSection
+              folder={folder}
               versionId={versionId}
-              versions={versions}
               busy={busy}
               versionBusy={versionBusy}
               onChangeVersion={onChangeVersion}

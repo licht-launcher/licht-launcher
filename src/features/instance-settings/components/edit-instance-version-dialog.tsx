@@ -16,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Spinner } from "@/components/ui/spinner";
 import type { VersionSummary } from "@/lib/generated/VersionSummary";
 
 function releaseOptions(
@@ -36,6 +37,9 @@ export function EditInstanceVersionDialog({
   open,
   versionId,
   versions,
+  versionsPending,
+  versionsError,
+  onRetryVersions,
   busy,
   onOpenChange,
   onSave,
@@ -43,6 +47,9 @@ export function EditInstanceVersionDialog({
   open: boolean;
   versionId: string;
   versions: VersionSummary[];
+  versionsPending: boolean;
+  versionsError: boolean;
+  onRetryVersions: () => void;
   busy: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (versionId: string) => void;
@@ -77,25 +84,47 @@ export function EditInstanceVersionDialog({
             <span className="text-sm font-medium" id="edit-game-version-label">
               Game version
             </span>
-            <Select
-              value={draftVersion}
-              disabled={busy || versionChoices.length === 0}
-              onValueChange={setDraftVersion}
-            >
-              <SelectTrigger
-                aria-labelledby="edit-game-version-label"
-                className="w-full font-normal"
+            {versionsPending ? (
+              <div className="flex h-8 items-center gap-2 text-sm text-muted-foreground">
+                <Spinner className="size-3.5" aria-hidden />
+                Loading versions…
+              </div>
+            ) : versionsError && versionChoices.length === 0 ? (
+              <div className="flex flex-col gap-2">
+                <p className="text-sm text-muted-foreground">
+                  Could not load the version list. Check your connection and try
+                  again.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="self-start"
+                  onClick={onRetryVersions}
+                >
+                  Retry
+                </Button>
+              </div>
+            ) : (
+              <Select
+                value={draftVersion}
+                disabled={busy || versionChoices.length === 0}
+                onValueChange={setDraftVersion}
               >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {versionChoices.map((version) => (
-                  <SelectItem key={version.id} value={version.id}>
-                    {version.id}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                <SelectTrigger
+                  aria-labelledby="edit-game-version-label"
+                  className="w-full font-normal"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {versionChoices.map((version) => (
+                    <SelectItem key={version.id} value={version.id}>
+                      {version.id}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
         </div>
         <DialogFooter>
@@ -111,7 +140,12 @@ export function EditInstanceVersionDialog({
           </Button>
           <Button
             type="button"
-            disabled={busy || draftVersion === "" || draftVersion === versionId}
+            disabled={
+              busy ||
+              versionsPending ||
+              draftVersion === "" ||
+              draftVersion === versionId
+            }
             onClick={() => {
               onSave(draftVersion);
               onOpenChange(false);
