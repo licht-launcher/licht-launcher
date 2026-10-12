@@ -1,3 +1,7 @@
+//! Instance profiles (`instance.json`) and folder listing.
+
+pub(crate) mod listing;
+
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};

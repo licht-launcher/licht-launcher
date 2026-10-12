@@ -10,7 +10,7 @@ workspace. [AGENTS.md](../AGENTS.md) defines the project rules;
 
 | Location            | Responsibility                                                                           | Boundary                                           |
 | ------------------- | ---------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| `crates/licht-core` | Minecraft manifests, rules, downloads, Java runtimes, game execution, and authentication | A standalone Rust library with no Tauri dependency |
+| `crates/licht-core` | Minecraft manifests, rules, downloads, Java runtimes, game execution, and authentication | A standalone Rust library with no Tauri dependency. Internally grouped as `meta/`, `transfer/`, `game/`, `instance/`, `java/`, `store/`, plus `auth/`, `loaders/`, and `modpacks/` |
 | `src-tauri`         | Application startup, logging configuration, thin commands, and frontend events           | Delegates game behavior to the core                |
 | `src`               | Screens, UI state, and calls to the Tauri adapter                                        | Contains no Minecraft domain logic                 |
 

@@ -1,26 +1,35 @@
 //! Minecraft launcher core, independent of Tauri.
+//!
+//! Internal layout groups modules by domain (`meta`, `transfer`, `game`,
+//! `instance`, `java`, `store`). The crate root still exposes the same public
+//! names as before so callers and `crate::…` paths inside the library stay stable.
 
-mod asset_index;
 mod auth;
-mod cache;
-mod db;
-mod download;
 mod error;
-mod install;
+mod game;
 mod instance;
-mod instance_fs;
 mod java;
-mod launch;
-mod launch_lock;
 mod loaders;
+mod meta;
 mod modpacks;
-mod natives;
-mod offline;
-mod run;
-mod settings;
-mod version;
-mod version_manifest;
-mod version_resolve;
+mod store;
+mod transfer;
+
+pub(crate) use game::install;
+pub(crate) use game::launch;
+pub(crate) use game::launch_lock;
+pub(crate) use game::natives;
+pub(crate) use game::offline;
+pub(crate) use game::run;
+pub(crate) use instance::listing as instance_fs;
+pub(crate) use meta::asset_index;
+pub(crate) use meta::version;
+pub(crate) use meta::version_manifest;
+pub(crate) use meta::version_resolve;
+pub(crate) use store::cache;
+pub(crate) use store::db;
+pub(crate) use store::settings;
+pub(crate) use transfer::download;
 
 pub use asset_index::{
     AssetIndexFile, AssetObject, fetch_asset_index, parse_asset_index, reconstruct_assets,
