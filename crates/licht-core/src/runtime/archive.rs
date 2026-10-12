@@ -61,13 +61,13 @@ fn extract_tar_gz(archive: &Path, destination: &Path) -> Result<()> {
             continue;
         }
         if kind.is_symlink() {
-            let Some(link) = entry.link_name()? else {
+            let Some(link_target) = entry.link_name()? else {
                 return Err(CoreError::CachePath);
             };
-            let Some(link) = link.to_str() else {
+            let Some(link_target) = link_target.to_str() else {
                 return Err(CoreError::CachePath);
             };
-            place_link(&target, link)?;
+            place_link(&target, link_target, destination)?;
             continue;
         }
         if !kind.is_file() {
@@ -118,7 +118,15 @@ pub(crate) fn mark_executable(path: &Path) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn place_link(link: &Path, target: &str) -> Result<()> {
+pub(crate) fn place_link(link: &Path, target: &str, extract_root: &Path) -> Result<()> {
+    let Some(parent) = link.parent() else {
+        return Err(CoreError::CachePath);
+    };
+    // Reject absolute / drive-relative / escaping targets before creating the link.
+    let resolved = resolve_symlink_target(extract_root, parent, target)?;
+    if let Some(parent) = link.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
     if link.exists() {
         std::fs::remove_file(link)?;
     }
@@ -131,20 +139,56 @@ pub(crate) fn place_link(link: &Path, target: &str) -> Result<()> {
     {
         if std::os::windows::fs::symlink_file(relative, link).is_err() {
             tracing::warn!("Java runtime symlink was copied because the link could not be created");
-            let Some(parent) = link.parent() else {
-                return Err(CoreError::CachePath);
-            };
-            std::fs::copy(parent.join(relative), link)?;
+            std::fs::copy(resolved, link)?;
         }
     }
     Ok(())
+}
+
+/// Resolves a symlink target under `extract_root`. Relative targets with `..` are
+/// fine when they stay inside the root; absolute paths and drive prefixes are not.
+fn resolve_symlink_target(
+    extract_root: &Path,
+    link_parent: &Path,
+    target: &str,
+) -> Result<PathBuf> {
+    if target.is_empty() || target.contains('\0') || target.contains(':') {
+        return Err(CoreError::CachePath);
+    }
+    let target_path = Path::new(target);
+    if target_path.is_absolute() {
+        return Err(CoreError::CachePath);
+    }
+    let mut current = link_parent.to_path_buf();
+    for component in target_path.components() {
+        match component {
+            Component::Normal(name) => current.push(name),
+            Component::CurDir => {}
+            Component::ParentDir => {
+                if current.as_os_str() == extract_root.as_os_str()
+                    || !current.starts_with(extract_root)
+                {
+                    return Err(CoreError::CachePath);
+                }
+                if !current.pop() || !current.starts_with(extract_root) {
+                    return Err(CoreError::CachePath);
+                }
+            }
+            Component::RootDir | Component::Prefix(_) => return Err(CoreError::CachePath),
+        }
+    }
+    if current.starts_with(extract_root) {
+        Ok(current)
+    } else {
+        Err(CoreError::CachePath)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use std::io::Write;
 
-    use super::{archive_relative, extract_java_archive};
+    use super::{archive_relative, extract_java_archive, resolve_symlink_target};
 
     #[test]
     fn an_archive_path_outside_the_runtime_is_rejected() {
@@ -167,6 +211,47 @@ mod tests {
         let _ = std::fs::remove_dir_all(directory);
     }
 
+    #[test]
+    fn symlink_targets_must_stay_inside_the_extract_root() {
+        let root = std::env::temp_dir().join(format!("licht-runtime-link-{}", std::process::id()));
+        let parent = root.join("bin");
+        assert_eq!(
+            resolve_symlink_target(&root, &parent, "../lib/jre").expect("relative"),
+            root.join("lib").join("jre")
+        );
+        assert_eq!(
+            resolve_symlink_target(&root, &parent, "java").expect("same dir"),
+            parent.join("java")
+        );
+        for target in [
+            "/etc/passwd",
+            "C:evil",
+            "foo:bar",
+            "../../outside",
+            "../..",
+            "",
+            "a\0b",
+        ] {
+            assert!(
+                resolve_symlink_target(&root, &parent, target).is_err(),
+                "{target:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_gzip_archive_with_an_escaping_symlink_is_rejected() {
+        let directory =
+            std::env::temp_dir().join(format!("licht-temurin-link-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).expect("directory");
+        let archive = directory.join("temurin.tar.gz");
+        std::fs::write(&archive, sample_tar_gz_with_bad_symlink()).expect("archive");
+        let error = extract_java_archive(&archive, &directory).expect_err("escape");
+        assert!(matches!(error, crate::CoreError::CachePath));
+        let _ = std::fs::remove_dir_all(directory);
+    }
+
     fn sample_tar_gz() -> Vec<u8> {
         let mut header = tar::Header::new_gnu();
         header.set_path("jdk-21/bin/java").expect("path");
@@ -175,6 +260,22 @@ mod tests {
         header.set_cksum();
         let mut builder = tar::Builder::new(Vec::new());
         builder.append(&header, &b"temurin"[..]).expect("tar entry");
+        let tar_bytes = builder.into_inner().expect("tar");
+        let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        encoder.write_all(&tar_bytes).expect("gzip");
+        encoder.finish().expect("gzip finish")
+    }
+
+    fn sample_tar_gz_with_bad_symlink() -> Vec<u8> {
+        let mut header = tar::Header::new_gnu();
+        header.set_path("jdk-21/bin/java").expect("path");
+        header.set_entry_type(tar::EntryType::Symlink);
+        header.set_size(0);
+        header.set_mode(0o777);
+        header.set_link_name("../../outside").expect("link");
+        header.set_cksum();
+        let mut builder = tar::Builder::new(Vec::new());
+        builder.append(&header, &[][..]).expect("tar entry");
         let tar_bytes = builder.into_inner().expect("tar");
         let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
         encoder.write_all(&tar_bytes).expect("gzip");
