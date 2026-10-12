@@ -12,6 +12,7 @@ mod instance;
 mod loaders;
 mod meta;
 mod modpacks;
+mod path_component;
 mod runtime;
 mod store;
 #[cfg(test)]
