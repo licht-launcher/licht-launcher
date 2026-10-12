@@ -11,8 +11,8 @@ The game files still come from Mojang. Temurin is the runtime only.
 
 `javaVersion.majorVersion` in the version JSON wins. The component name in
 that object (`jre-legacy`, `java-runtime-gamma`, `java-runtime-delta`,
-`java-runtime-epsilon`) is Mojang's label for its own runtime. Licht reads
-the major and ignores the component.
+`java-runtime-epsilon`) is Mojang's label for its own runtime packages.
+Licht only reads the major; it does not download Mojang's Java.
 
 Installed JSONs on the Windows checks:
 
@@ -70,14 +70,8 @@ Java 18 and newer logs are read as UTF-8. An older Java is read as the system
 code page. Details are in the log section of
 [COMPATIBILITY.md](../COMPATIBILITY.md).
 
-## Mojang's runtime manifest
-
-The core can still parse Mojang's runtime index and install one component
-from it. `licht install` does not call that path.
-
-```text
-https://piston-meta.mojang.com/v1/products/java-runtime/2ec0cc96c44e5a76b9c8b7c39df7210883d12871/all.json
-```
+## Discovery of system Javas
 
 Discovery of a Java under `C:\Program Files\Eclipse Adoptium` and the other
-usual roots is also implemented and tested. The CLI does not use it.
+usual roots is implemented and tested for the settings UI. The CLI install
+path only uses Temurin under Licht's `runtime/` folder (or `--java`).
