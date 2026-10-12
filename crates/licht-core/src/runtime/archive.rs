@@ -133,6 +133,8 @@ pub(crate) fn place_link(link: &Path, target: &str, extract_root: &Path) -> Resu
     let relative = Path::new(target);
     #[cfg(unix)]
     {
+        // `resolved` is only needed for the Windows copy fallback.
+        let _ = resolved;
         std::os::unix::fs::symlink(relative, link)?;
     }
     #[cfg(windows)]
