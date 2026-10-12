@@ -1,8 +1,5 @@
 use std::fs::File;
-use std::io::Read;
 use std::path::{Component, Path, PathBuf};
-
-use sha1::{Digest, Sha1};
 
 use crate::{CoreError, OsName, Result};
 
@@ -123,24 +120,6 @@ pub(crate) fn under(root: &Path, relative: &str) -> Result<PathBuf> {
     Ok(full)
 }
 
-pub(crate) fn file_matches(path: &Path, expected_sha1: &str) -> Result<bool> {
-    let mut file = match File::open(path) {
-        Ok(file) => file,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
-        Err(error) => return Err(error.into()),
-    };
-    let mut hasher = Sha1::new();
-    let mut buffer = [0_u8; 64 * 1024];
-    loop {
-        let read = file.read(&mut buffer)?;
-        if read == 0 {
-            break;
-        }
-        hasher.update(&buffer[..read]);
-    }
-    Ok(hex_encode(hasher.finalize().as_slice()).eq_ignore_ascii_case(expected_sha1))
-}
-
 pub(crate) fn mark_executable(path: &Path) -> Result<()> {
     #[cfg(unix)]
     {
@@ -173,14 +152,6 @@ pub(crate) fn place_link(link: &Path, target: &str) -> Result<()> {
         }
     }
     Ok(())
-}
-
-pub(crate) fn hex_encode(bytes: &[u8]) -> String {
-    let mut hex = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        hex.push_str(&format!("{byte:02x}"));
-    }
-    hex
 }
 
 #[cfg(test)]

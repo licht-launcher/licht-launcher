@@ -1,11 +1,9 @@
-use std::fs::File;
-use std::io::Read;
 use std::path::{Path, PathBuf};
 
-use sha1::{Digest, Sha1};
 use tokio::sync::mpsc;
 
 use crate::download::DownloadProgress;
+use crate::hashes::{file_matches_sha1, sha1_hex};
 use crate::natives::{classifier_matches, native_classifier};
 use crate::{
     ADOPTIUM_API, AssetIndexFile, CoreError, DEFAULT_RETRY, DownloadTask, JavaChoice,
@@ -37,7 +35,7 @@ pub async fn install_version(
 
     let mut pending = Vec::new();
     for task in download_tasks(cache, &plan)? {
-        if file_matches(&task.destination, &task.sha1)? {
+        if file_matches_sha1(&task.destination, &task.sha1)? {
             continue;
         }
         if let Some(parent) = task.destination.parent() {
@@ -194,13 +192,9 @@ async fn read_text(client: &reqwest::Client, url: &str) -> Result<String> {
     }
 }
 
-fn sha1_hex(bytes: &[u8]) -> String {
-    hex_encode(Sha1::digest(bytes).as_slice())
-}
-
 fn write_asset_index(cache: &SharedCache, version: &Version, json: &str) -> Result<()> {
     let expected = &version.asset_index.sha1;
-    let actual = hex_encode(Sha1::digest(json.as_bytes()).as_slice());
+    let actual = sha1_hex(json.as_bytes());
     if !actual.eq_ignore_ascii_case(expected) {
         return Err(CoreError::Sha1Mismatch {
             expected: expected.clone(),
@@ -209,7 +203,7 @@ fn write_asset_index(cache: &SharedCache, version: &Version, json: &str) -> Resu
     }
 
     let path = cache.asset_index(&version.asset_index.id)?;
-    if file_matches(&path, expected)? {
+    if file_matches_sha1(&path, expected)? {
         return Ok(());
     }
     if let Some(parent) = path.parent() {
@@ -287,51 +281,4 @@ fn task_for_artifact(cache: &SharedCache, artifact: &crate::Artifact) -> Result<
         sha1: artifact.sha1.clone(),
         size: artifact.size,
     })
-}
-
-fn file_matches(path: &Path, expected_sha1: &str) -> Result<bool> {
-    // Same rule as the downloader: a missing hash must not skip the file.
-    if expected_sha1.is_empty() {
-        return Ok(false);
-    }
-    let mut file = match File::open(path) {
-        Ok(file) => file,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
-        Err(error) => return Err(error.into()),
-    };
-    let mut hasher = Sha1::new();
-    let mut buffer = [0_u8; 64 * 1024];
-    loop {
-        let read = file.read(&mut buffer)?;
-        if read == 0 {
-            break;
-        }
-        hasher.update(&buffer[..read]);
-    }
-    Ok(hex_encode(hasher.finalize().as_slice()).eq_ignore_ascii_case(expected_sha1))
-}
-
-fn hex_encode(bytes: &[u8]) -> String {
-    let mut hex = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        hex.push_str(&format!("{byte:02x}"));
-    }
-    hex
-}
-
-#[cfg(test)]
-mod tests {
-    use super::file_matches;
-
-    #[test]
-    fn an_empty_sha1_does_not_treat_an_existing_file_as_verified() {
-        let directory =
-            std::env::temp_dir().join(format!("licht-install-empty-sha-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&directory);
-        std::fs::create_dir_all(&directory).expect("temp directory");
-        let path = directory.join("library.jar");
-        std::fs::write(&path, b"unverified").expect("file");
-        assert!(!file_matches(&path, "").expect("match"));
-        let _ = std::fs::remove_dir_all(&directory);
-    }
 }

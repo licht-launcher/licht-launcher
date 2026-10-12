@@ -4,7 +4,8 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 use tokio::sync::mpsc;
 
-use super::archive::{file_matches, java_executable, mark_executable, place_link, under};
+use super::archive::{java_executable, mark_executable, place_link, under};
+use crate::hashes::file_matches_sha1;
 use crate::{
     Arch, CoreError, DEFAULT_RETRY, DownloadProgress, DownloadTask, OsName, Result, SharedCache,
     download_all, download_concurrency,
@@ -181,7 +182,7 @@ pub async fn install_java(
                 if let Some(parent) = path.parent() {
                     std::fs::create_dir_all(parent)?;
                 }
-                if !file_matches(&path, &files.raw.sha1)? {
+                if !file_matches_sha1(&path, &files.raw.sha1)? {
                     downloads.push(DownloadTask {
                         url: files.raw.url.clone(),
                         destination: path.clone(),
