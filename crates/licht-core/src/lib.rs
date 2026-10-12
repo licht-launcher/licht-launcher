@@ -1,17 +1,17 @@
 //! Minecraft launcher core, independent of Tauri.
 //!
 //! Internal layout groups modules by domain (`meta`, `transfer`, `game`,
-//! `instance`, `java`, `store`). The crate root still exposes the same public
+//! `instance`, `runtime`, `store`). The crate root still exposes the same public
 //! names as before so callers and `crate::…` paths inside the library stay stable.
 
 mod auth;
 mod error;
 mod game;
 mod instance;
-mod java;
 mod loaders;
 mod meta;
 mod modpacks;
+mod runtime;
 mod store;
 mod transfer;
 
@@ -60,7 +60,7 @@ pub use instance::{
     update_instance_version,
 };
 pub use instance_fs::{InstanceFsEntry, list_instance_entries};
-pub use java::{
+pub use runtime::{
     ADOPTIUM_API, JAVA_RUNTIME_INDEX_URL, JavaChoice, JavaDetections, JavaPaths, JavaRuntimeBuild,
     JavaRuntimeEntry, JavaRuntimeIndex, JavaRuntimeManifest, JavaRuntimeManifestRef, JavaStatus,
     browse_start_directory, default_java_roots, detect_javas, detect_known_javas, discover_javas,
