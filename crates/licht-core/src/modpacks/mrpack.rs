@@ -131,8 +131,8 @@ pub async fn apply_mrpack_loader(
 /// Downloads every client-required file from [`MODPACK_INDEX_FILE`] into the instance.
 ///
 /// No-op when the index is missing (vanilla / CurseForge without mrpack files).
-/// A redirect is followed only when that hop is HTTPS and its host is on the
-/// Modrinth allowlist.
+/// A redirect is followed only when that hop is HTTPS and the host is
+/// `cdn.modrinth.com`.
 pub async fn install_mrpack_files(
     game: &SharedCache,
     settings: &SharedCache,
@@ -191,14 +191,15 @@ pub fn mrpack_download_tasks(index: &Value, instance_dir: &Path) -> Result<Vec<D
         .collect())
 }
 
-/// Hosts Modrinth allows in `downloads[]`.
-/// https://support.modrinth.com/en/articles/8802351-modrinth-modpack-format-mrpack
-const MRPACK_DOWNLOAD_HOSTS: &[&str] = &[
-    "cdn.modrinth.com",
-    "github.com",
-    "raw.githubusercontent.com",
-    "gitlab.com",
-];
+/// Hosts accepted in a `.mrpack` `downloads[]` entry and on every redirect.
+///
+/// Modrinth's spec also lists GitHub and GitLab. Those are refused: pack files
+/// installed here come from the Modrinth CDN.
+/// CurseForge does not use this list. `download_curseforge_pack` fetches the
+/// pack archive with the caller's client, and that import never writes
+/// [`MODPACK_INDEX_FILE`], so CurseForge CDN hosts are not added. A
+/// `forgecdn.net` URL inside an `.mrpack` is refused.
+const MRPACK_DOWNLOAD_HOSTS: &[&str] = &["cdn.modrinth.com"];
 
 struct PackFile {
     task: DownloadTask,
@@ -610,18 +611,19 @@ mod tests {
                 "downloads": [
                     "http://cdn.modrinth.com/a.jar",
                     "https://evil.example/a.jar",
-                    "https://user:secret@github.com/a.jar",
+                    "https://user:secret@cdn.modrinth.com/a.jar",
                     "https://cdn.modrinth.com:444/a.jar",
-                    "https://raw.githubusercontent.com/user/repo/main/a.jar"
+                    "https://github.com/user/repo/releases/download/v1/a.jar",
+                    "https://raw.githubusercontent.com/user/repo/main/a.jar",
+                    "https://gitlab.com/user/repo/-/raw/main/a.jar",
+                    "https://edge.forgecdn.net/files/1/2/a.jar",
+                    "https://cdn.modrinth.com/data/a.jar"
                 ],
                 "fileSize": 1
             }]
         });
         let tasks = mrpack_download_tasks(&index, Path::new("/tmp/instance")).expect("tasks");
-        assert_eq!(
-            tasks[0].url,
-            "https://raw.githubusercontent.com/user/repo/main/a.jar"
-        );
+        assert_eq!(tasks[0].url, "https://cdn.modrinth.com/data/a.jar");
     }
 
     #[test]
@@ -632,7 +634,11 @@ mod tests {
             "https://cdn.modrinth.com.evil.com/a.jar",
             "https://evil.cdn.modrinth.com/a.jar",
             "https://1.2.3.4/a.jar",
-            "https://gitlab.com:8443/a.jar",
+            "https://github.com/user/repo/releases/download/v1/a.jar",
+            "https://raw.githubusercontent.com/user/repo/main/a.jar",
+            "https://gitlab.com/user/repo/-/raw/main/a.jar",
+            "https://edge.forgecdn.net/files/1/2/a.jar",
+            "https://mediafilez.forgecdn.net/files/1/2/a.jar",
         ] {
             let index = file_index("mods/a.jar", url);
             let error = mrpack_download_tasks(&index, Path::new("/tmp/instance")).unwrap_err();
@@ -641,13 +647,10 @@ mod tests {
     }
 
     #[test]
-    fn allows_each_modrinth_download_host() {
+    fn allows_the_modrinth_cdn() {
         for url in [
             "https://cdn.modrinth.com/data/a.jar",
             "https://CDN.MODRINTH.COM/data/a.jar",
-            "https://github.com/user/repo/releases/download/v1/a.jar",
-            "https://raw.githubusercontent.com/user/repo/main/a.jar",
-            "https://gitlab.com/user/repo/-/raw/main/a.jar",
         ] {
             let tasks =
                 mrpack_download_tasks(&file_index("mods/a.jar", url), Path::new("/tmp/instance"))
@@ -783,9 +786,7 @@ mod tests {
     fn follows_only_allowed_https_redirects() {
         for url in [
             "https://cdn.modrinth.com/data/a.jar",
-            "https://github.com/user/repo/releases/download/v1/a.jar",
-            "https://raw.githubusercontent.com/user/repo/main/a.jar",
-            "https://gitlab.com/user/repo/-/raw/main/a.jar",
+            "https://CDN.MODRINTH.COM/data/a.jar",
         ] {
             assert!(matches!(redirect_hop(url, 1), RedirectHop::Follow), "{url}");
             assert!(
@@ -799,10 +800,15 @@ mod tests {
         ));
         for url in [
             "http://cdn.modrinth.com/a.jar",
+            "https://github.com/user/repo/releases/download/v1/a.jar",
+            "https://raw.githubusercontent.com/user/repo/main/a.jar",
+            "https://gitlab.com/user/repo/-/raw/main/a.jar",
             "https://objects.githubusercontent.com/a.jar",
             "https://release-assets.githubusercontent.com/a.jar",
+            "https://edge.forgecdn.net/files/1/2/a.jar",
+            "https://mediafilez.forgecdn.net/files/1/2/a.jar",
             "https://evil.example/a.jar",
-            "https://user:secret@github.com/a.jar",
+            "https://user:secret@cdn.modrinth.com/a.jar",
             "https://cdn.modrinth.com:444/a.jar",
         ] {
             assert!(
@@ -816,9 +822,8 @@ mod tests {
     fn stops_a_redirect_chain_at_the_first_disallowed_hop() {
         let hops = [
             "https://cdn.modrinth.com/a.jar",
-            "https://github.com/user/repo/releases/download/v1/a.jar",
-            "https://gitlab.com/user/a.jar",
-            "https://objects.githubusercontent.com/malware.jar",
+            "https://CDN.MODRINTH.COM/b.jar",
+            "https://edge.forgecdn.net/files/1/2/malware.jar",
         ];
         for (index, hop) in hops.iter().enumerate() {
             // The first previous entry is the URL that was just requested.
@@ -836,6 +841,8 @@ mod tests {
         for location in [
             "https://evil.example/malware.jar",
             "http://cdn.modrinth.com/a.jar",
+            "https://github.com/user/repo/releases/download/v1/a.jar",
+            "https://edge.forgecdn.net/files/1/2/a.jar",
         ] {
             let url = serve_redirect(location).await;
             let client = mrpack_download_client().expect("client");
