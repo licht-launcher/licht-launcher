@@ -1,4 +1,5 @@
 use reqwest::Client;
+use reqwest::header::HeaderMap;
 
 use crate::{CoreError, Result};
 
@@ -50,10 +51,21 @@ pub(super) fn allowlisted_download_client(
     blocked_msg: &str,
     too_many_msg: &str,
 ) -> Result<Client> {
+    allowlisted_download_client_with_headers(hosts, HeaderMap::new(), blocked_msg, too_many_msg)
+}
+
+/// Same as [`allowlisted_download_client`], plus `headers` sent on every request.
+pub(super) fn allowlisted_download_client_with_headers(
+    hosts: &[&str],
+    headers: HeaderMap,
+    blocked_msg: &str,
+    too_many_msg: &str,
+) -> Result<Client> {
     let hosts: Vec<String> = hosts.iter().map(|host| host.to_string()).collect();
     let blocked_msg = blocked_msg.to_string();
     let too_many_msg = too_many_msg.to_string();
     Client::builder()
+        .default_headers(headers)
         .redirect(reqwest::redirect::Policy::custom(move |attempt| {
             let allowed: Vec<&str> = hosts.iter().map(String::as_str).collect();
             match redirect_hop(attempt.url().as_str(), attempt.previous().len(), &allowed) {

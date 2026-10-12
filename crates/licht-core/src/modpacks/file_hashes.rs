@@ -72,10 +72,80 @@ pub(super) fn ensure_sha512(path: &Path, expected: &str) -> Result<()> {
     })
 }
 
+/// Returns the MD5 as lowercase hex, or `None` when the file does not exist.
+pub(super) fn file_hash_md5(path: &Path) -> Result<Option<String>> {
+    use md5::{Digest, Md5};
+
+    let mut file = match fs::File::open(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error.into()),
+    };
+    let mut md5 = Md5::new();
+    let mut buffer = [0_u8; 64 * 1024];
+    loop {
+        let read = file.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        md5.update(&buffer[..read]);
+    }
+    Ok(Some(hex_encode(md5.finalize().as_slice())))
+}
+
+pub(super) fn ensure_md5(path: &Path, expected: &str) -> Result<()> {
+    let actual = file_hash_md5(path)?.unwrap_or_default();
+    if actual.eq_ignore_ascii_case(expected) {
+        return Ok(());
+    }
+    let _ = fs::remove_file(path);
+    Err(CoreError::Md5Mismatch {
+        expected: expected.to_string(),
+        actual,
+    })
+}
+
+/// `true` when the file still has to be fetched (CurseForge: sha1 and/or md5).
+///
+/// An empty hash is not a match. An existing file is removed so the downloader
+/// does not treat "the file exists" as success when SHA1 is missing.
+pub(super) fn prepare_destination_sha1_md5(
+    path: &Path,
+    sha1: &str,
+    md5: Option<&str>,
+) -> Result<bool> {
+    let md5 = md5.filter(|value| !value.is_empty());
+    let has_sha1 = !sha1.is_empty();
+    if !has_sha1 && md5.is_none() {
+        if path.is_file() {
+            fs::remove_file(path)?;
+        }
+        return Ok(true);
+    }
+    let sha1_ok =
+        !has_sha1 || hash_file(path)?.is_some_and(|(actual, _)| actual.eq_ignore_ascii_case(sha1));
+    let md5_ok = match md5 {
+        None => true,
+        Some(expected) => {
+            file_hash_md5(path)?.is_some_and(|actual| actual.eq_ignore_ascii_case(expected))
+        }
+    };
+    if sha1_ok && md5_ok && path.is_file() {
+        return Ok(false);
+    }
+    if path.is_file() && (!has_sha1 || sha1_ok) {
+        fs::remove_file(path)?;
+    }
+    Ok(true)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::path::PathBuf;
+
+    const HELLO_WORLD_SHA1: &str = "2aae6c35c94fcfb415dbe95f408b9ce91ee846ed";
+    const HELLO_WORLD_MD5: &str = "5eb63bbbe01eeed093cb22bb8f5acdc3";
 
     #[test]
     fn encodes_lowercase_hex() {
@@ -128,6 +198,58 @@ mod tests {
         let (_, sha512) = hash_file(&path).unwrap().expect("hashes");
         ensure_sha512(&path, &sha512.to_uppercase()).expect("matches");
         assert!(path.is_file());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_file_without_a_hash_is_not_treated_as_installed() {
+        let root = temp_dir("no-hash");
+        let path = root.join("a.jar");
+        fs::write(&path, b"hello world").unwrap();
+        assert!(prepare_destination_sha1_md5(&path, "", None).unwrap());
+        assert!(!path.exists());
+        fs::write(&path, b"hello world").unwrap();
+        assert!(prepare_destination_sha1_md5(&path, "", Some("")).unwrap());
+        assert!(!path.exists());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn sha1_or_md5_match_skips_the_download_and_a_mismatch_does_not() {
+        let root = temp_dir("sha1-md5");
+        let path = root.join("a.jar");
+        fs::write(&path, b"hello world").unwrap();
+        assert!(!prepare_destination_sha1_md5(&path, HELLO_WORLD_SHA1, None).unwrap());
+        assert!(path.exists());
+        assert!(!prepare_destination_sha1_md5(&path, "", Some(HELLO_WORLD_MD5)).unwrap());
+        assert!(path.exists());
+        assert!(
+            prepare_destination_sha1_md5(&path, HELLO_WORLD_SHA1, Some("0".repeat(32).as_str()))
+                .unwrap()
+        );
+        assert!(!path.exists());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_missing_file_has_to_be_fetched() {
+        let root = temp_dir("missing");
+        let path = root.join("a.jar");
+        assert!(file_hash_md5(&path).unwrap().is_none());
+        assert!(prepare_destination_sha1_md5(&path, HELLO_WORLD_SHA1, None).unwrap());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn md5_mismatch_removes_the_file() {
+        let root = temp_dir("md5");
+        let path = root.join("a.jar");
+        fs::write(&path, b"hello world").unwrap();
+        ensure_md5(&path, &HELLO_WORLD_MD5.to_uppercase()).expect("matches");
+        assert!(path.is_file());
+        let error = ensure_md5(&path, &"0".repeat(32)).unwrap_err();
+        assert!(matches!(error, CoreError::Md5Mismatch { .. }));
+        assert!(!path.exists());
         let _ = fs::remove_dir_all(&root);
     }
 
