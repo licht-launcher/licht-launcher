@@ -1,0 +1,173 @@
+use licht_core::{
+    InstanceEntry, InstanceFsEntry, InstanceSettings, LoaderChannel, LoaderPlatform, global_launch,
+    load_settings, touch_last_opened as touch_instance_opened, update_instance,
+    update_instance_version,
+};
+use tauri::{AppHandle, State};
+use tauri_plugin_opener::OpenerExt;
+
+use super::{LauncherPaths, failure, http_client, instances_root};
+
+#[tauri::command]
+pub fn list_instances(paths: State<'_, LauncherPaths>) -> Result<Vec<InstanceEntry>, String> {
+    let root = instances_root(&paths).map_err(failure)?;
+    licht_core::list_instances(&root).map_err(failure)
+}
+
+#[tauri::command]
+pub fn create_instance(
+    paths: State<'_, LauncherPaths>,
+    name: String,
+    version_id: String,
+) -> Result<InstanceEntry, String> {
+    let root = instances_root(&paths).map_err(failure)?;
+    let settings = load_settings(&paths.settings).map_err(failure)?;
+    licht_core::create_instance(&root, &name, &version_id, &global_launch(&settings))
+        .map_err(failure)
+}
+
+#[tauri::command]
+pub async fn list_loader_versions(
+    platform: String,
+    game_version: String,
+    channel: String,
+) -> Result<Vec<String>, String> {
+    let platform =
+        LoaderPlatform::parse(&platform).ok_or_else(|| "unknown platform".to_string())?;
+    let channel = LoaderChannel::parse(&channel).ok_or_else(|| "unknown channel".to_string())?;
+    let client = http_client().map_err(failure)?;
+    licht_core::list_loader_versions(&client, platform, &game_version, channel)
+        .await
+        .map_err(failure)
+}
+
+#[tauri::command]
+pub async fn create_instance_with_platform(
+    paths: State<'_, LauncherPaths>,
+    name: String,
+    platform: String,
+    game_version: String,
+    loader_channel: String,
+    loader_version: Option<String>,
+) -> Result<InstanceEntry, String> {
+    let platform =
+        LoaderPlatform::parse(&platform).ok_or_else(|| "unknown platform".to_string())?;
+    let channel =
+        LoaderChannel::parse(&loader_channel).ok_or_else(|| "unknown channel".to_string())?;
+    let root = instances_root(&paths).map_err(failure)?;
+    let settings = load_settings(&paths.settings).map_err(failure)?;
+    let client = http_client().map_err(failure)?;
+    licht_core::create_instance_with_platform(
+        &client,
+        &paths.game,
+        &root,
+        &name,
+        platform,
+        &game_version,
+        channel,
+        loader_version.as_deref(),
+        &global_launch(&settings),
+    )
+    .await
+    .map_err(failure)
+}
+
+#[tauri::command]
+pub fn rename_instance(
+    paths: State<'_, LauncherPaths>,
+    folder: String,
+    name: String,
+) -> Result<InstanceEntry, String> {
+    let root = instances_root(&paths).map_err(failure)?;
+    licht_core::rename_instance(&root, &folder, &name).map_err(failure)
+}
+
+#[tauri::command]
+pub fn duplicate_instance(
+    paths: State<'_, LauncherPaths>,
+    folder: String,
+    name: String,
+) -> Result<InstanceEntry, String> {
+    let root = instances_root(&paths).map_err(failure)?;
+    licht_core::duplicate_instance(&root, &folder, &name).map_err(failure)
+}
+
+#[tauri::command]
+pub fn delete_instance(paths: State<'_, LauncherPaths>, folder: String) -> Result<(), String> {
+    let root = instances_root(&paths).map_err(failure)?;
+    licht_core::delete_instance(&root, &folder).map_err(failure)
+}
+
+#[tauri::command]
+pub fn save_instance(
+    paths: State<'_, LauncherPaths>,
+    folder: String,
+    settings: InstanceSettings,
+) -> Result<InstanceEntry, String> {
+    let root = instances_root(&paths).map_err(failure)?;
+    update_instance(&root, &folder, &settings).map_err(failure)
+}
+
+#[tauri::command]
+pub fn set_instance_version(
+    paths: State<'_, LauncherPaths>,
+    folder: String,
+    version_id: String,
+) -> Result<InstanceEntry, String> {
+    let root = instances_root(&paths).map_err(failure)?;
+    update_instance_version(&root, &folder, &version_id).map_err(failure)
+}
+
+#[tauri::command]
+pub fn open_instance_folder(
+    app: AppHandle,
+    paths: State<'_, LauncherPaths>,
+    folder: String,
+) -> Result<(), String> {
+    let path = paths.game.instance_dir(&folder).map_err(failure)?;
+    if !path.is_dir() {
+        return Err("instance directory is missing".to_string());
+    }
+    app.opener()
+        .open_path(path.to_string_lossy().into_owned(), None::<&str>)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn list_instance_entries(
+    paths: State<'_, LauncherPaths>,
+    folder: String,
+    relative_path: String,
+) -> Result<Vec<InstanceFsEntry>, String> {
+    licht_core::list_instance_entries(&paths.game, &folder, &relative_path).map_err(failure)
+}
+
+#[tauri::command]
+pub fn get_last_played_folder(paths: State<'_, LauncherPaths>) -> Result<Option<String>, String> {
+    licht_core::last_played_folder(&paths.settings).map_err(failure)
+}
+
+#[tauri::command]
+pub fn set_last_played_folder(
+    paths: State<'_, LauncherPaths>,
+    folder: String,
+) -> Result<(), String> {
+    licht_core::set_last_played_folder(&paths.settings, &folder).map_err(failure)
+}
+
+/// Marks the instance as opened now and updates the global last-played folder.
+#[tauri::command]
+pub fn touch_last_opened(
+    paths: State<'_, LauncherPaths>,
+    folder: String,
+) -> Result<InstanceEntry, String> {
+    let root = instances_root(&paths).map_err(failure)?;
+    let entry = touch_instance_opened(&root, &folder).map_err(failure)?;
+    licht_core::set_last_played_folder(&paths.settings, &folder).map_err(failure)?;
+    Ok(entry)
+}
+
+#[tauri::command]
+pub fn clear_last_played_folder(paths: State<'_, LauncherPaths>) -> Result<(), String> {
+    licht_core::clear_last_played_folder(&paths.settings).map_err(failure)
+}
