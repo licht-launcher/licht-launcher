@@ -318,8 +318,14 @@ async fn download_one(job: TransferJob<'_>) -> Result<()> {
             }
         };
 
-        // Empty SHA1: Fabric/Quilt Maven entries sometimes omit hashes.
-        if !job.expected_sha1.is_empty() {
+        // Fabric/Quilt Maven entries sometimes omit hashes. Download them, but
+        // never treat a missing hash as a successful check.
+        if job.expected_sha1.is_empty() {
+            warn!(
+                url = job.url,
+                "download has no SHA1; content is not verified"
+            );
+        } else {
             let actual = hex_encode(Sha1::digest(&fetched).as_slice());
             if !actual.eq_ignore_ascii_case(job.expected_sha1) {
                 if let Some(progress) = job.progress {
@@ -426,8 +432,9 @@ fn destination_lock(destination: &Path) -> Arc<Mutex<()>> {
 }
 
 async fn file_matches(path: &Path, expected_sha1: &str) -> Result<bool> {
+    // Existence is not verification. Callers that omit a hash re-download.
     if expected_sha1.is_empty() {
-        return Ok(tokio::fs::try_exists(path).await.unwrap_or(false));
+        return Ok(false);
     }
     let mut file = match tokio::fs::File::open(path).await {
         Ok(file) => file,

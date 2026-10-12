@@ -290,8 +290,9 @@ fn task_for_artifact(cache: &SharedCache, artifact: &crate::Artifact) -> Result<
 }
 
 fn file_matches(path: &Path, expected_sha1: &str) -> Result<bool> {
+    // Same rule as the downloader: a missing hash must not skip the file.
     if expected_sha1.is_empty() {
-        return Ok(path.is_file());
+        return Ok(false);
     }
     let mut file = match File::open(path) {
         Ok(file) => file,
@@ -316,4 +317,21 @@ fn hex_encode(bytes: &[u8]) -> String {
         hex.push_str(&format!("{byte:02x}"));
     }
     hex
+}
+
+#[cfg(test)]
+mod tests {
+    use super::file_matches;
+
+    #[test]
+    fn an_empty_sha1_does_not_treat_an_existing_file_as_verified() {
+        let directory =
+            std::env::temp_dir().join(format!("licht-install-empty-sha-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).expect("temp directory");
+        let path = directory.join("library.jar");
+        std::fs::write(&path, b"unverified").expect("file");
+        assert!(!file_matches(&path, "").expect("match"));
+        let _ = std::fs::remove_dir_all(&directory);
+    }
 }
