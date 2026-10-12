@@ -20,6 +20,8 @@ pub enum CoreError {
     Sha1Mismatch { expected: String, actual: String },
     #[error("downloaded SHA256 does not match")]
     Sha256Mismatch { expected: String, actual: String },
+    #[error("downloaded SHA512 does not match")]
+    Sha512Mismatch { expected: String, actual: String },
     #[error("download needs at least one attempt")]
     DownloadAttempts,
     #[error("download concurrency must be at least 1")]

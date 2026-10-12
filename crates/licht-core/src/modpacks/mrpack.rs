@@ -144,16 +144,20 @@ pub async fn install_mrpack_files(
     }
     let body = fs::read_to_string(&index_path)?;
     let index: Value = serde_json::from_str(&body).map_err(CoreError::LoaderJson)?;
-    let tasks = mrpack_download_tasks(&index, instance_dir)?;
+    let files = index_files(&index, instance_dir)?;
     let mut pending = Vec::new();
-    for task in tasks {
-        if file_matches_sha1(&task.destination, &task.sha1)? {
+    for file in &files {
+        if !prepare_download(
+            &file.task.destination,
+            &file.task.sha1,
+            file.sha512.as_deref(),
+        )? {
             continue;
         }
-        if let Some(parent) = task.destination.parent() {
+        if let Some(parent) = file.task.destination.parent() {
             fs::create_dir_all(parent)?;
         }
-        pending.push(task);
+        pending.push(file.task.clone());
     }
     if pending.is_empty() {
         let _ = progress.try_send(DownloadProgress {
@@ -174,14 +178,41 @@ pub async fn install_mrpack_files(
         DEFAULT_RETRY,
         progress,
     )
-    .await
+    .await?;
+    for file in &files {
+        if let Some(expected) = &file.sha512 {
+            ensure_sha512(&file.task.destination, expected)?;
+        }
+    }
+    Ok(())
 }
 
 pub fn mrpack_download_tasks(index: &Value, instance_dir: &Path) -> Result<Vec<DownloadTask>> {
+    Ok(index_files(index, instance_dir)?
+        .into_iter()
+        .map(|file| file.task)
+        .collect())
+}
+
+/// Hosts Modrinth allows in `downloads[]`.
+/// https://support.modrinth.com/en/articles/8802351-modrinth-modpack-format-mrpack
+const MRPACK_DOWNLOAD_HOSTS: &[&str] = &[
+    "cdn.modrinth.com",
+    "github.com",
+    "raw.githubusercontent.com",
+    "gitlab.com",
+];
+
+struct PackFile {
+    task: DownloadTask,
+    sha512: Option<String>,
+}
+
+fn index_files(index: &Value, instance_dir: &Path) -> Result<Vec<PackFile>> {
     let Some(files) = index.get("files").and_then(Value::as_array) else {
         return Ok(Vec::new());
     };
-    let mut tasks = Vec::new();
+    let mut packed = Vec::new();
     for file in files {
         if client_unsupported(file) {
             continue;
@@ -191,27 +222,76 @@ pub fn mrpack_download_tasks(index: &Value, instance_dir: &Path) -> Result<Vec<D
             .and_then(Value::as_str)
             .ok_or(CoreError::ModpackArchive)?;
         let destination = safe_instance_path(instance_dir, path)?;
-        let sha1 = file
-            .pointer("/hashes/sha1")
-            .and_then(Value::as_str)
-            .ok_or(CoreError::ModpackArchive)?
-            .to_string();
-        let url = file
-            .get("downloads")
-            .and_then(Value::as_array)
-            .and_then(|urls| urls.first())
-            .and_then(Value::as_str)
-            .ok_or(CoreError::ModpackArchive)?
-            .to_string();
+        let sha1 = required_sha1(file)?;
+        let sha512 = optional_sha512(file)?;
+        let url = select_download_url(file)?;
         let size = file.get("fileSize").and_then(Value::as_u64).unwrap_or(0);
-        tasks.push(DownloadTask {
-            url,
-            destination,
-            sha1,
-            size,
+        packed.push(PackFile {
+            task: DownloadTask {
+                url,
+                destination,
+                sha1,
+                size,
+            },
+            sha512,
         });
     }
-    Ok(tasks)
+    Ok(packed)
+}
+
+fn required_sha1(file: &Value) -> Result<String> {
+    file.pointer("/hashes/sha1")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .ok_or(CoreError::ModpackArchive)
+}
+
+fn optional_sha512(file: &Value) -> Result<Option<String>> {
+    match file.pointer("/hashes/sha512") {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(value)) => {
+            let trimmed = value.trim();
+            if trimmed.is_empty() {
+                return Err(CoreError::ModpackArchive);
+            }
+            Ok(Some(trimmed.to_string()))
+        }
+        Some(_) => Err(CoreError::ModpackArchive),
+    }
+}
+
+fn select_download_url(file: &Value) -> Result<String> {
+    let urls = file
+        .get("downloads")
+        .and_then(Value::as_array)
+        .ok_or(CoreError::ModpackArchive)?;
+    for entry in urls {
+        let raw = entry.as_str().ok_or(CoreError::ModpackArchive)?;
+        if download_url_allowed(raw) {
+            return Ok(raw.to_string());
+        }
+    }
+    Err(CoreError::ModpackArchive)
+}
+
+fn download_url_allowed(raw: &str) -> bool {
+    let Ok(url) = url::Url::parse(raw) else {
+        return false;
+    };
+    if url.scheme() != "https" || url.port().is_some() {
+        return false;
+    }
+    if !url.username().is_empty() || url.password().is_some() {
+        return false;
+    }
+    let Some(url::Host::Domain(host)) = url.host() else {
+        return false;
+    };
+    MRPACK_DOWNLOAD_HOSTS
+        .iter()
+        .any(|allowed| host.eq_ignore_ascii_case(allowed))
 }
 
 fn client_unsupported(file: &Value) -> bool {
@@ -222,13 +302,59 @@ fn client_unsupported(file: &Value) -> bool {
 
 fn safe_instance_path(instance_dir: &Path, relative: &str) -> Result<PathBuf> {
     let normalized = relative.replace('\\', "/");
+    // `C:foo` is not absolute on Windows, but joining it replaces the drive.
+    // A colon is never a normal mod path component.
     if normalized.is_empty()
-        || Path::new(&normalized).is_absolute()
-        || normalized.split('/').any(|part| part == "..")
+        || normalized.starts_with('/')
+        || normalized.contains('\0')
+        || normalized.contains(':')
     {
         return Err(CoreError::ModpackArchive);
     }
-    Ok(instance_dir.join(normalized))
+    let mut destination = instance_dir.to_path_buf();
+    let mut depth = 0usize;
+    for part in normalized.split('/') {
+        if !path_component_allowed(part) {
+            return Err(CoreError::ModpackArchive);
+        }
+        if depth == 0 && is_launcher_file(part) {
+            return Err(CoreError::ModpackArchive);
+        }
+        destination.push(part);
+        depth += 1;
+    }
+    if depth == 0 {
+        return Err(CoreError::ModpackArchive);
+    }
+    Ok(destination)
+}
+
+fn path_component_allowed(part: &str) -> bool {
+    if part.is_empty() || part == "." || part == ".." {
+        return false;
+    }
+    // Windows strips trailing dots and spaces, so `instance.json.` can alias the profile.
+    if part.ends_with('.') || part.ends_with(' ') {
+        return false;
+    }
+    !is_windows_reserved(part)
+}
+
+fn is_launcher_file(name: &str) -> bool {
+    name.eq_ignore_ascii_case("instance.json") || name.eq_ignore_ascii_case(MODPACK_INDEX_FILE)
+}
+
+/// `CON`, `PRN`, `AUX`, `NUL`, `COM1`–`COM9`, `LPT1`–`LPT9`, including `CON.txt`.
+fn is_windows_reserved(part: &str) -> bool {
+    let stem = part.split('.').next().unwrap_or(part);
+    let upper = stem.to_ascii_uppercase();
+    matches!(
+        upper.as_str(),
+        "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$"
+    ) || ((upper.starts_with("COM") || upper.starts_with("LPT"))
+        && upper.len() == 4
+        && upper.as_bytes()[3].is_ascii_digit()
+        && upper.as_bytes()[3] != b'0')
 }
 
 fn read_index(archive: &mut ZipArchive<Cursor<&[u8]>>) -> Result<Value> {
@@ -250,12 +376,17 @@ fn extract_prefixed(
         let mut file = archive
             .by_index(index)
             .map_err(|_| CoreError::ModpackArchive)?;
-        let name = file.name().to_string();
+        let name = file.name().replace('\\', "/");
         let Some(relative) = name.strip_prefix(prefix) else {
             continue;
         };
         if relative.is_empty() || relative.ends_with('/') {
             continue;
+        }
+        // Rejects absolute paths and `..` that leave the archive. `C:foo` still
+        // looks like a normal name on Unix, so `safe_instance_path` checks it too.
+        if file.enclosed_name().is_none() {
+            return Err(CoreError::ModpackArchive);
         }
         let destination = safe_instance_path(instance_dir, relative)?;
         if let Some(parent) = destination.parent() {
@@ -267,33 +398,74 @@ fn extract_prefixed(
     Ok(())
 }
 
-fn file_matches_sha1(path: &Path, expected_sha1: &str) -> Result<bool> {
-    use sha1::{Digest, Sha1};
-    use std::io::Read as _;
-
-    if expected_sha1.is_empty() {
-        return Ok(path.is_file());
+/// `true` when the file must be fetched. A sha1 hit with a wrong sha512 is deleted
+/// so the downloader does not skip it on the sha1 alone.
+fn prepare_download(path: &Path, sha1: &str, sha512: Option<&str>) -> Result<bool> {
+    if sha1.is_empty() {
+        return Ok(true);
     }
+    let Some((actual_sha1, actual_sha512)) = hash_file(path)? else {
+        return Ok(true);
+    };
+    if !actual_sha1.eq_ignore_ascii_case(sha1) {
+        return Ok(true);
+    }
+    let Some(expected) = sha512.filter(|value| !value.is_empty()) else {
+        return Ok(false);
+    };
+    if actual_sha512.eq_ignore_ascii_case(expected) {
+        return Ok(false);
+    }
+    fs::remove_file(path)?;
+    Ok(true)
+}
+
+fn ensure_sha512(path: &Path, expected: &str) -> Result<()> {
+    let actual = hash_file(path)?
+        .map(|(_, sha512)| sha512)
+        .unwrap_or_default();
+    if actual.eq_ignore_ascii_case(expected) {
+        return Ok(());
+    }
+    let _ = fs::remove_file(path);
+    Err(CoreError::Sha512Mismatch {
+        expected: expected.to_string(),
+        actual,
+    })
+}
+
+fn hash_file(path: &Path) -> Result<Option<(String, String)>> {
+    use sha1::{Digest, Sha1};
+    use sha2::Sha512;
+
     let mut file = match fs::File::open(path) {
         Ok(file) => file,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(error.into()),
     };
-    let mut hasher = Sha1::new();
+    let mut sha1 = Sha1::new();
+    let mut sha512 = Sha512::new();
     let mut buffer = [0_u8; 64 * 1024];
     loop {
         let read = file.read(&mut buffer)?;
         if read == 0 {
             break;
         }
-        hasher.update(&buffer[..read]);
+        sha1.update(&buffer[..read]);
+        sha512.update(&buffer[..read]);
     }
-    let digest = hasher.finalize();
-    let mut actual = String::with_capacity(digest.len() * 2);
-    for byte in digest {
-        actual.push_str(&format!("{byte:02x}"));
+    Ok(Some((
+        hex_encode(sha1.finalize().as_slice()),
+        hex_encode(sha512.finalize().as_slice()),
+    )))
+}
+
+fn hex_encode(bytes: &[u8]) -> String {
+    let mut hex = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        hex.push_str(&format!("{byte:02x}"));
     }
-    Ok(actual.eq_ignore_ascii_case(expected_sha1))
+    hex
 }
 
 #[cfg(test)]
@@ -354,7 +526,7 @@ mod tests {
                 {
                   "path": "mods/a.jar",
                   "hashes": { "sha1": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
-                  "downloads": ["https://example.invalid/a.jar"],
+                  "downloads": ["https://cdn.modrinth.com/data/a.jar"],
                   "fileSize": 10,
                   "env": { "client": "required", "server": "unsupported" }
                 },
@@ -380,6 +552,7 @@ mod tests {
                 .ends_with("mods/a.jar")
         );
         assert_eq!(tasks[0].sha1, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        assert_eq!(tasks[0].url, "https://cdn.modrinth.com/data/a.jar");
     }
 
     #[test]
@@ -389,7 +562,7 @@ mod tests {
               "files": [{
                 "path": "../evil.jar",
                 "hashes": { "sha1": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
-                "downloads": ["https://example.invalid/evil.jar"],
+                "downloads": ["https://cdn.modrinth.com/evil.jar"],
                 "fileSize": 1
               }]
             }"#,
@@ -397,5 +570,252 @@ mod tests {
         .unwrap();
         let error = mrpack_download_tasks(&index, Path::new("/tmp/instance")).unwrap_err();
         assert!(matches!(error, CoreError::ModpackArchive));
+    }
+
+    #[test]
+    fn accepts_modrinth_download_hosts_and_skips_others() {
+        let index = serde_json::json!({
+            "files": [{
+                "path": "mods/a.jar",
+                "hashes": { "sha1": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+                "downloads": [
+                    "http://cdn.modrinth.com/a.jar",
+                    "https://evil.example/a.jar",
+                    "https://user:secret@github.com/a.jar",
+                    "https://cdn.modrinth.com:444/a.jar",
+                    "https://raw.githubusercontent.com/user/repo/main/a.jar"
+                ],
+                "fileSize": 1
+            }]
+        });
+        let tasks = mrpack_download_tasks(&index, Path::new("/tmp/instance")).expect("tasks");
+        assert_eq!(
+            tasks[0].url,
+            "https://raw.githubusercontent.com/user/repo/main/a.jar"
+        );
+    }
+
+    #[test]
+    fn rejects_packs_with_no_allowed_download_url() {
+        for url in [
+            "http://cdn.modrinth.com/a.jar",
+            "https://example.invalid/a.jar",
+            "https://cdn.modrinth.com.evil.com/a.jar",
+            "https://evil.cdn.modrinth.com/a.jar",
+            "https://1.2.3.4/a.jar",
+            "https://gitlab.com:8443/a.jar",
+        ] {
+            let index = file_index("mods/a.jar", url);
+            let error = mrpack_download_tasks(&index, Path::new("/tmp/instance")).unwrap_err();
+            assert!(matches!(error, CoreError::ModpackArchive), "{url}");
+        }
+    }
+
+    #[test]
+    fn allows_each_modrinth_download_host() {
+        for url in [
+            "https://cdn.modrinth.com/data/a.jar",
+            "https://CDN.MODRINTH.COM/data/a.jar",
+            "https://github.com/user/repo/releases/download/v1/a.jar",
+            "https://raw.githubusercontent.com/user/repo/main/a.jar",
+            "https://gitlab.com/user/repo/-/raw/main/a.jar",
+        ] {
+            let tasks =
+                mrpack_download_tasks(&file_index("mods/a.jar", url), Path::new("/tmp/instance"))
+                    .unwrap_or_else(|_| panic!("{url}"));
+            assert_eq!(tasks[0].url, url);
+        }
+    }
+
+    #[test]
+    fn requires_sha1_and_rejects_an_empty_sha512() {
+        let missing_sha1 = serde_json::json!({
+            "files": [{
+                "path": "mods/a.jar",
+                "hashes": { "sha512": "ab" },
+                "downloads": ["https://cdn.modrinth.com/a.jar"],
+                "fileSize": 1
+            }]
+        });
+        let empty_sha1 = serde_json::json!({
+            "files": [{
+                "path": "mods/a.jar",
+                "hashes": { "sha1": "  " },
+                "downloads": ["https://cdn.modrinth.com/a.jar"],
+                "fileSize": 1
+            }]
+        });
+        let empty_sha512 = serde_json::json!({
+            "files": [{
+                "path": "mods/a.jar",
+                "hashes": {
+                    "sha1": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "sha512": ""
+                },
+                "downloads": ["https://cdn.modrinth.com/a.jar"],
+                "fileSize": 1
+            }]
+        });
+        for index in [missing_sha1, empty_sha1, empty_sha512] {
+            let error = mrpack_download_tasks(&index, Path::new("/tmp/instance")).unwrap_err();
+            assert!(matches!(error, CoreError::ModpackArchive));
+        }
+        let tasks = mrpack_download_tasks(
+            &file_index("mods/a.jar", "https://cdn.modrinth.com/a.jar"),
+            Path::new("/tmp/instance"),
+        )
+        .expect("sha1 without sha512 is valid");
+        assert_eq!(tasks.len(), 1);
+    }
+
+    #[test]
+    fn rejects_launcher_files_reserved_names_and_drive_prefixes() {
+        for path in [
+            "instance.json",
+            "Instance.JSON",
+            "licht-modpack.json",
+            "C:evil.jar",
+            "mods/C:evil.jar",
+            "CON",
+            "mods/CON.txt",
+            "mods/lpt1.jar",
+            "mods/foo.",
+            "../evil.jar",
+            "/etc/passwd",
+            "mods/../../outside.jar",
+        ] {
+            let error = mrpack_download_tasks(
+                &file_index(path, "https://cdn.modrinth.com/a.jar"),
+                Path::new("/tmp/instance"),
+            )
+            .unwrap_err();
+            assert!(matches!(error, CoreError::ModpackArchive), "{path}");
+        }
+        let tasks = mrpack_download_tasks(
+            &file_index("config/instance.json", "https://cdn.modrinth.com/a.jar"),
+            Path::new("/tmp/instance"),
+        )
+        .expect("a nested instance.json is a normal config file");
+        assert!(
+            tasks[0]
+                .destination
+                .to_string_lossy()
+                .replace('\\', "/")
+                .ends_with("config/instance.json")
+        );
+    }
+
+    #[test]
+    fn sha512_mismatch_removes_the_cached_file() {
+        let root = temp_dir("sha512");
+        let path = root.join("mod.jar");
+        fs::write(&path, b"hello").unwrap();
+        let (sha1, sha512) = hash_file(&path).unwrap().expect("hashes");
+        assert!(!prepare_download(&path, &sha1, Some(sha512.as_str())).unwrap());
+        assert!(path.is_file());
+        assert!(prepare_download(&path, &sha1, Some("deadbeef")).unwrap());
+        assert!(!path.exists());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn empty_sha1_does_not_accept_an_existing_mod_file() {
+        let root = temp_dir("empty-sha");
+        let path = root.join("mod.jar");
+        fs::write(&path, b"hello").unwrap();
+        assert!(prepare_download(&path, "", None).unwrap());
+        assert_eq!(fs::read(&path).unwrap(), b"hello");
+        let error = ensure_sha512(&path, "00").unwrap_err();
+        assert!(matches!(error, CoreError::Sha512Mismatch { .. }));
+        assert!(!path.exists());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn rejects_overrides_that_target_launcher_files_or_windows_devices() {
+        let names = [
+            "overrides/instance.json",
+            "overrides/licht-modpack.json",
+            "overrides/C:evil.txt",
+            "overrides/CON",
+            "overrides/mods/CON.txt",
+            "client-overrides/../../outside.txt",
+        ];
+        for name in names {
+            let bytes = zip_with(&[
+                (
+                    "modrinth.index.json",
+                    br#"{"dependencies":{"minecraft":"1.20.1"},"files":[]}"#,
+                ),
+                (name, b"pwned"),
+            ]);
+            let root = temp_dir("override");
+            let instances = root.join("instances");
+            fs::create_dir_all(&instances).unwrap();
+            let error = import_mrpack_bytes(&instances, "Cobble", &bytes, &launch_template())
+                .expect_err(name);
+            assert!(matches!(error, CoreError::ModpackArchive), "{name}");
+            let instance_dir = fs::read_dir(&instances)
+                .unwrap()
+                .next()
+                .unwrap()
+                .unwrap()
+                .path();
+            let profile = fs::read_to_string(instance_dir.join("instance.json")).unwrap();
+            assert!(!profile.contains("pwned"), "{name}");
+            assert!(!instance_dir.join("C:evil.txt").exists(), "{name}");
+            assert!(!instance_dir.join("CON").exists(), "{name}");
+            let _ = fs::remove_dir_all(&root);
+        }
+    }
+
+    fn file_index(path: &str, url: &str) -> Value {
+        serde_json::json!({
+            "files": [{
+                "path": path,
+                "hashes": { "sha1": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+                "downloads": [url],
+                "fileSize": 1
+            }]
+        })
+    }
+
+    fn launch_template() -> GlobalLaunch {
+        GlobalLaunch {
+            max_memory_mb: 2048,
+            jvm_arguments: Vec::new(),
+            fullscreen: false,
+            width: None,
+            height: None,
+        }
+    }
+
+    fn temp_dir(label: &str) -> PathBuf {
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("time")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "licht-mrpack-{label}-{}-{stamp}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        root
+    }
+
+    fn zip_with(files: &[(&str, &[u8])]) -> Vec<u8> {
+        let mut buffer = Cursor::new(Vec::new());
+        {
+            let mut zip = zip::ZipWriter::new(&mut buffer);
+            let options =
+                SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
+            for (name, bytes) in files {
+                zip.start_file(*name, options).unwrap();
+                zip.write_all(bytes).unwrap();
+            }
+            zip.finish().unwrap();
+        }
+        buffer.into_inner()
     }
 }

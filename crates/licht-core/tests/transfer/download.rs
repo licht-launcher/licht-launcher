@@ -82,6 +82,24 @@ async fn exhausted_attempts_leave_no_destination() {
 }
 
 #[tokio::test]
+async fn an_empty_sha1_does_not_keep_an_existing_file() {
+    let destination = temporary_destination("empty-sha");
+    std::fs::write(&destination, b"stale").expect("the stale file should be written");
+    let url = serve(vec![200]).await;
+
+    download_file(&client(), &url, &destination, "", retry(1))
+        .await
+        .expect("the download should replace the unverified file");
+
+    assert_eq!(
+        std::fs::read(&destination).expect("the file should exist"),
+        BODY
+    );
+    assert!(!part_path(&destination).exists());
+    cleanup(&destination);
+}
+
+#[tokio::test]
 async fn an_existing_destination_is_replaced() {
     let destination = temporary_destination("replace");
     std::fs::write(&destination, b"old").expect("the old file should be written");

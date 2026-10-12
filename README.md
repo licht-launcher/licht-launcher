@@ -7,27 +7,32 @@ built with Tauri v2, React, TypeScript, and Rust.
 
 ## Project status
 
-Milestone 1 is done from the command line. `licht` can list Mojang's manifest,
-install a version, and launch it with an offline name. The desktop window is
-still the foundation shell: it does not install or launch. Phase 5, the
-interface, has not started. Its command contract has to be approved first.
-See the [roadmap](docs/ROADMAP.md).
+The window installs and launches. From the instances screen you can install a
+version, play or stop it, and read the game log. Sign-in is a Microsoft
+account (tokens stay in the OS keyring) or an offline name. Each instance has
+its own folder, memory, and Java settings. Fabric, Quilt, Forge, and NeoForge
+can be chosen when creating an instance. Modrinth and CurseForge modpacks can
+be imported; CurseForge search needs `LICHT_CURSEFORGE_API_KEY`.
+
+`licht` lists Mojang's manifest, installs a version, and launches it with an
+offline name. It does not sign in to Microsoft. See the
+[roadmap](docs/ROADMAP.md).
 
 What a launch does today:
 
 - Game files come from Mojang and stay in Licht's data directory, not in the
   official `.minecraft` folder. The default Java is Eclipse Temurin. `--java`
   uses another executable. A Java already on the machine is not picked by itself.
-- Each version gets `instances/<id>` next to the data directory. LaunchWrapper
-  versions (through 1.5.2) keep the game in `instances/<id>/.minecraft`.
+- Each instance gets its own folder under `instances/`. LaunchWrapper versions
+  (through 1.5.2) keep the game in that folder's `.minecraft` directory.
 - Natives are extracted once per version into `natives/<id>`.
 - Versions through 1.7.2 get their sounds copied to the names those clients
   open. Newer versions read the hashed asset objects directly.
 - The game log is read as UTF-8 on Java 18 and newer, and as the system code
   page on older Java. A bad byte does not kill the process.
 
-Still open: `${auth_session}` is not filled, and there is no Microsoft login
-(phase 7). The live checks so far were on Windows.
+Still open: `${auth_session}` is left literal on versions that include it
+(through 1.5.2). The live launch checks so far were on Windows.
 
 ```sh
 cargo run -p licht-core --bin licht -- versions

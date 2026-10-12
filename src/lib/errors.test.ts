@@ -19,6 +19,9 @@ describe("friendly errors", () => {
     expect(friendlyError("downloaded SHA1 does not match")).toBe(
       "A downloaded file was damaged. Try again.",
     );
+    expect(friendlyError("downloaded SHA512 does not match")).toBe(
+      "A downloaded file was damaged. Try again.",
+    );
     expect(friendlyError("downloaded SHA1 does not match")).not.toMatch(
       /[0-9a-f]{40}/,
     );
