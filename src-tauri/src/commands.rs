@@ -359,8 +359,7 @@ pub async fn install_modpack_files(
     );
     let (progress, mut incoming) = mpsc::channel(4096);
     let installing = tauri::async_runtime::spawn(async move {
-        let client = reqwest::Client::new();
-        install_mrpack_files(&client, &cache, &settings, &dir, progress).await
+        install_mrpack_files(&cache, &settings, &dir, progress).await
     });
     let mut throttle = ProgressThrottle::new();
     while let Some(progress) = incoming.recv().await {

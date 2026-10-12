@@ -131,8 +131,9 @@ pub async fn apply_mrpack_loader(
 /// Downloads every client-required file from [`MODPACK_INDEX_FILE`] into the instance.
 ///
 /// No-op when the index is missing (vanilla / CurseForge without mrpack files).
+/// A redirect is followed only when that hop is HTTPS and its host is on the
+/// Modrinth allowlist.
 pub async fn install_mrpack_files(
-    client: &Client,
     game: &SharedCache,
     settings: &SharedCache,
     instance_dir: &Path,
@@ -147,11 +148,7 @@ pub async fn install_mrpack_files(
     let files = index_files(&index, instance_dir)?;
     let mut pending = Vec::new();
     for file in &files {
-        if !prepare_download(
-            &file.task.destination,
-            &file.task.sha1,
-            file.sha512.as_deref(),
-        )? {
+        if !prepare_download(&file.task.destination, &file.task.sha1, &file.sha512)? {
             continue;
         }
         if let Some(parent) = file.task.destination.parent() {
@@ -169,8 +166,10 @@ pub async fn install_mrpack_files(
         });
         return Ok(());
     }
+    // The caller's client would follow any redirect. This one checks every hop.
+    let client = mrpack_download_client()?;
     download_all(
-        client,
+        &client,
         &pending,
         shared_transfer_limits(),
         download_concurrency(game, settings)?,
@@ -180,9 +179,7 @@ pub async fn install_mrpack_files(
     )
     .await?;
     for file in &files {
-        if let Some(expected) = &file.sha512 {
-            ensure_sha512(&file.task.destination, expected)?;
-        }
+        ensure_sha512(&file.task.destination, &file.sha512)?;
     }
     Ok(())
 }
@@ -205,7 +202,7 @@ const MRPACK_DOWNLOAD_HOSTS: &[&str] = &[
 
 struct PackFile {
     task: DownloadTask,
-    sha512: Option<String>,
+    sha512: String,
 }
 
 fn index_files(index: &Value, instance_dir: &Path) -> Result<Vec<PackFile>> {
@@ -223,7 +220,7 @@ fn index_files(index: &Value, instance_dir: &Path) -> Result<Vec<PackFile>> {
             .ok_or(CoreError::ModpackArchive)?;
         let destination = safe_instance_path(instance_dir, path)?;
         let sha1 = required_sha1(file)?;
-        let sha512 = optional_sha512(file)?;
+        let sha512 = required_sha512(file)?;
         let url = select_download_url(file)?;
         let size = file.get("fileSize").and_then(Value::as_u64).unwrap_or(0);
         packed.push(PackFile {
@@ -248,18 +245,47 @@ fn required_sha1(file: &Value) -> Result<String> {
         .ok_or(CoreError::ModpackArchive)
 }
 
-fn optional_sha512(file: &Value) -> Result<Option<String>> {
-    match file.pointer("/hashes/sha512") {
-        None | Some(Value::Null) => Ok(None),
-        Some(Value::String(value)) => {
-            let trimmed = value.trim();
-            if trimmed.is_empty() {
-                return Err(CoreError::ModpackArchive);
-            }
-            Ok(Some(trimmed.to_string()))
-        }
-        Some(_) => Err(CoreError::ModpackArchive),
+fn required_sha512(file: &Value) -> Result<String> {
+    file.pointer("/hashes/sha512")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .ok_or(CoreError::ModpackArchive)
+}
+
+/// Same cap as reqwest's default. The spec asks for at least three.
+const MAX_MRPACK_REDIRECTS: usize = 10;
+
+enum RedirectHop {
+    Follow,
+    Blocked,
+    TooMany,
+}
+
+/// `previous_len` is how many URLs were already requested, including the first one.
+fn redirect_hop(next: &str, previous_len: usize) -> RedirectHop {
+    if previous_len > MAX_MRPACK_REDIRECTS {
+        return RedirectHop::TooMany;
     }
+    if download_url_allowed(next) {
+        RedirectHop::Follow
+    } else {
+        RedirectHop::Blocked
+    }
+}
+
+fn mrpack_download_client() -> Result<Client> {
+    Client::builder()
+        .redirect(reqwest::redirect::Policy::custom(
+            |attempt| match redirect_hop(attempt.url().as_str(), attempt.previous().len()) {
+                RedirectHop::Follow => attempt.follow(),
+                RedirectHop::Blocked => attempt.error("modpack redirect target is not allowed"),
+                RedirectHop::TooMany => attempt.error("too many modpack redirects"),
+            },
+        ))
+        .build()
+        .map_err(CoreError::from)
 }
 
 fn select_download_url(file: &Value) -> Result<String> {
@@ -400,8 +426,8 @@ fn extract_prefixed(
 
 /// `true` when the file must be fetched. A sha1 hit with a wrong sha512 is deleted
 /// so the downloader does not skip it on the sha1 alone.
-fn prepare_download(path: &Path, sha1: &str, sha512: Option<&str>) -> Result<bool> {
-    if sha1.is_empty() {
+fn prepare_download(path: &Path, sha1: &str, sha512: &str) -> Result<bool> {
+    if sha1.is_empty() || sha512.is_empty() {
         return Ok(true);
     }
     let Some((actual_sha1, actual_sha512)) = hash_file(path)? else {
@@ -410,10 +436,7 @@ fn prepare_download(path: &Path, sha1: &str, sha512: Option<&str>) -> Result<boo
     if !actual_sha1.eq_ignore_ascii_case(sha1) {
         return Ok(true);
     }
-    let Some(expected) = sha512.filter(|value| !value.is_empty()) else {
-        return Ok(false);
-    };
-    if actual_sha512.eq_ignore_ascii_case(expected) {
+    if actual_sha512.eq_ignore_ascii_case(sha512) {
         return Ok(false);
     }
     fs::remove_file(path)?;
@@ -525,7 +548,10 @@ mod tests {
               "files": [
                 {
                   "path": "mods/a.jar",
-                  "hashes": { "sha1": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+                  "hashes": {
+                    "sha1": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "sha512": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                  },
                   "downloads": ["https://cdn.modrinth.com/data/a.jar"],
                   "fileSize": 10,
                   "env": { "client": "required", "server": "unsupported" }
@@ -577,7 +603,10 @@ mod tests {
         let index = serde_json::json!({
             "files": [{
                 "path": "mods/a.jar",
-                "hashes": { "sha1": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+                "hashes": {
+                    "sha1": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "sha512": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                },
                 "downloads": [
                     "http://cdn.modrinth.com/a.jar",
                     "https://evil.example/a.jar",
@@ -628,7 +657,7 @@ mod tests {
     }
 
     #[test]
-    fn requires_sha1_and_rejects_an_empty_sha512() {
+    fn requires_sha1_and_sha512() {
         let missing_sha1 = serde_json::json!({
             "files": [{
                 "path": "mods/a.jar",
@@ -640,7 +669,15 @@ mod tests {
         let empty_sha1 = serde_json::json!({
             "files": [{
                 "path": "mods/a.jar",
-                "hashes": { "sha1": "  " },
+                "hashes": { "sha1": "  ", "sha512": "ab" },
+                "downloads": ["https://cdn.modrinth.com/a.jar"],
+                "fileSize": 1
+            }]
+        });
+        let missing_sha512 = serde_json::json!({
+            "files": [{
+                "path": "mods/a.jar",
+                "hashes": { "sha1": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
                 "downloads": ["https://cdn.modrinth.com/a.jar"],
                 "fileSize": 1
             }]
@@ -650,22 +687,33 @@ mod tests {
                 "path": "mods/a.jar",
                 "hashes": {
                     "sha1": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-                    "sha512": ""
+                    "sha512": "  "
                 },
                 "downloads": ["https://cdn.modrinth.com/a.jar"],
                 "fileSize": 1
             }]
         });
-        for index in [missing_sha1, empty_sha1, empty_sha512] {
+        let non_string_sha512 = serde_json::json!({
+            "files": [{
+                "path": "mods/a.jar",
+                "hashes": {
+                    "sha1": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "sha512": 1
+                },
+                "downloads": ["https://cdn.modrinth.com/a.jar"],
+                "fileSize": 1
+            }]
+        });
+        for index in [
+            missing_sha1,
+            empty_sha1,
+            missing_sha512,
+            empty_sha512,
+            non_string_sha512,
+        ] {
             let error = mrpack_download_tasks(&index, Path::new("/tmp/instance")).unwrap_err();
             assert!(matches!(error, CoreError::ModpackArchive));
         }
-        let tasks = mrpack_download_tasks(
-            &file_index("mods/a.jar", "https://cdn.modrinth.com/a.jar"),
-            Path::new("/tmp/instance"),
-        )
-        .expect("sha1 without sha512 is valid");
-        assert_eq!(tasks.len(), 1);
     }
 
     #[test]
@@ -711,9 +759,9 @@ mod tests {
         let path = root.join("mod.jar");
         fs::write(&path, b"hello").unwrap();
         let (sha1, sha512) = hash_file(&path).unwrap().expect("hashes");
-        assert!(!prepare_download(&path, &sha1, Some(sha512.as_str())).unwrap());
+        assert!(!prepare_download(&path, &sha1, &sha512).unwrap());
         assert!(path.is_file());
-        assert!(prepare_download(&path, &sha1, Some("deadbeef")).unwrap());
+        assert!(prepare_download(&path, &sha1, "deadbeef").unwrap());
         assert!(!path.exists());
         let _ = fs::remove_dir_all(&root);
     }
@@ -723,12 +771,82 @@ mod tests {
         let root = temp_dir("empty-sha");
         let path = root.join("mod.jar");
         fs::write(&path, b"hello").unwrap();
-        assert!(prepare_download(&path, "", None).unwrap());
+        assert!(prepare_download(&path, "", "deadbeef").unwrap());
         assert_eq!(fs::read(&path).unwrap(), b"hello");
         let error = ensure_sha512(&path, "00").unwrap_err();
         assert!(matches!(error, CoreError::Sha512Mismatch { .. }));
         assert!(!path.exists());
         let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn follows_only_allowed_https_redirects() {
+        for url in [
+            "https://cdn.modrinth.com/data/a.jar",
+            "https://github.com/user/repo/releases/download/v1/a.jar",
+            "https://raw.githubusercontent.com/user/repo/main/a.jar",
+            "https://gitlab.com/user/repo/-/raw/main/a.jar",
+        ] {
+            assert!(matches!(redirect_hop(url, 1), RedirectHop::Follow), "{url}");
+            assert!(
+                matches!(redirect_hop(url, 10), RedirectHop::Follow),
+                "{url}"
+            );
+        }
+        assert!(matches!(
+            redirect_hop("https://cdn.modrinth.com/a.jar", 11),
+            RedirectHop::TooMany
+        ));
+        for url in [
+            "http://cdn.modrinth.com/a.jar",
+            "https://objects.githubusercontent.com/a.jar",
+            "https://release-assets.githubusercontent.com/a.jar",
+            "https://evil.example/a.jar",
+            "https://user:secret@github.com/a.jar",
+            "https://cdn.modrinth.com:444/a.jar",
+        ] {
+            assert!(
+                matches!(redirect_hop(url, 1), RedirectHop::Blocked),
+                "{url}"
+            );
+        }
+    }
+
+    #[test]
+    fn stops_a_redirect_chain_at_the_first_disallowed_hop() {
+        let hops = [
+            "https://cdn.modrinth.com/a.jar",
+            "https://github.com/user/repo/releases/download/v1/a.jar",
+            "https://gitlab.com/user/a.jar",
+            "https://objects.githubusercontent.com/malware.jar",
+        ];
+        for (index, hop) in hops.iter().enumerate() {
+            // The first previous entry is the URL that was just requested.
+            let decision = redirect_hop(hop, index + 1);
+            if index + 1 == hops.len() {
+                assert!(matches!(decision, RedirectHop::Blocked), "{hop}");
+            } else {
+                assert!(matches!(decision, RedirectHop::Follow), "{hop}");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn a_live_redirect_to_a_disallowed_url_is_rejected() {
+        for location in [
+            "https://evil.example/malware.jar",
+            "http://cdn.modrinth.com/a.jar",
+        ] {
+            let url = serve_redirect(location).await;
+            let client = mrpack_download_client().expect("client");
+            let error = client.get(&url).send().await.expect_err(location);
+            assert!(error.is_redirect(), "{location}: {error}");
+            let message = error_chain(&error);
+            assert!(
+                message.contains("modpack redirect target is not allowed"),
+                "{location}: {message}"
+            );
+        }
     }
 
     #[test]
@@ -769,11 +887,59 @@ mod tests {
         }
     }
 
+    fn error_chain(error: &dyn std::error::Error) -> String {
+        let mut message = error.to_string();
+        let mut source = std::error::Error::source(error);
+        while let Some(inner) = source {
+            message.push_str(": ");
+            message.push_str(&inner.to_string());
+            source = inner.source();
+        }
+        message
+    }
+
+    async fn serve_redirect(location: &str) -> String {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind");
+        let address = listener.local_addr().expect("address");
+        let location = location.to_string();
+        tokio::spawn(async move {
+            let Ok((mut socket, _)) = listener.accept().await else {
+                return;
+            };
+            let mut incoming = Vec::new();
+            let mut buffer = [0_u8; 256];
+            loop {
+                let Ok(read) = socket.read(&mut buffer).await else {
+                    return;
+                };
+                if read == 0 {
+                    return;
+                }
+                incoming.extend_from_slice(&buffer[..read]);
+                if incoming.windows(4).any(|window| window == b"\r\n\r\n") {
+                    break;
+                }
+            }
+            let body = format!(
+                "HTTP/1.1 302 Found\r\nLocation: {location}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+            );
+            let _ = socket.write_all(body.as_bytes()).await;
+        });
+        format!("http://{address}/file.jar")
+    }
+
     fn file_index(path: &str, url: &str) -> Value {
         serde_json::json!({
             "files": [{
                 "path": path,
-                "hashes": { "sha1": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+                "hashes": {
+                    "sha1": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "sha512": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                },
                 "downloads": [url],
                 "fileSize": 1
             }]
