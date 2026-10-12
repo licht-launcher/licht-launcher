@@ -88,6 +88,10 @@ pub(super) fn pending_task(
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(str::to_string);
+    // Fail closed: never download a CurseForge file that cannot be verified.
+    if sha1.is_empty() && md5.is_none() {
+        return Err(CoreError::ModpackArchive);
+    }
     if !prepare_destination_sha1_md5(&destination, &sha1, md5.as_deref())? {
         return Ok(None);
     }
@@ -165,11 +169,27 @@ mod tests {
         let _ = fs::remove_dir_all(&root);
     }
 
+    #[test]
+    fn rejects_a_file_without_sha1_or_md5() {
+        let mut file = index_file("mods/a.jar", "https://edge.forgecdn.net/files/1/2/a.jar");
+        file.hashes = IndexHashes::default();
+        let error = pending_task(&file, Path::new("/tmp/instance")).unwrap_err();
+        assert!(matches!(error, CoreError::ModpackArchive));
+
+        file.hashes.md5 = Some("5eb63bbbe01eeed093cb22bb8f5acdc3".into());
+        let root = temp_dir("md5-only");
+        assert!(pending_task(&file, &root).expect("md5 is enough").is_some());
+        let _ = fs::remove_dir_all(&root);
+    }
+
     fn index_file(path: &str, url: &str) -> IndexFile {
         IndexFile {
             path: path.into(),
             downloads: vec![url.into()],
-            hashes: IndexHashes::default(),
+            hashes: IndexHashes {
+                sha1: Some("a".repeat(40)),
+                md5: None,
+            },
             file_size: 1,
             project_id: 1,
             file_id: 2,
