@@ -58,6 +58,8 @@
 }
 
 :root {
+  /* Three native caption buttons × 46 logical px (tauri-plugin-window-controls). */
+  --native-caption-inset: 138px;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);

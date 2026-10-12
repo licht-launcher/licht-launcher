@@ -8,6 +8,7 @@ import {
   useMemo,
   useRef,
 } from "react";
+import { TitleBar } from "@/components/title-bar/title-bar";
 import { HomeSidebar } from "@/features/instances/components/home-sidebar";
 import { InstanceDialogs } from "@/features/instances/components/instance-dialogs";
 import { useGameEvents } from "@/features/instances/hooks/use-game-events";
@@ -19,6 +20,7 @@ import {
   type PlayPhase,
   usePlaySession,
 } from "@/features/instances/hooks/use-play-session";
+import { useTitleBarDecorations } from "@/hooks/use-title-bar-decorations";
 import { getLastPlayedFolder } from "@/lib/commands";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 import type { VersionSummary } from "@/lib/generated/VersionSummary";
@@ -54,6 +56,7 @@ export function useInstancesChrome(): InstancesChromeContext {
 }
 
 export function InstancesChrome({ children }: { children: ReactNode }) {
+  const { disableCustomTitleBar } = useTitleBarDecorations();
   const navigate = useNavigate();
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
@@ -173,9 +176,14 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
           }}
           onOpenSettings={() => dialogs.openGlobalSettings("account")}
         />
-        <ChromeContext.Provider value={context}>
-          {children}
-        </ChromeContext.Provider>
+        <div className="flex min-w-0 min-h-0 flex-1 flex-col overflow-hidden">
+          {disableCustomTitleBar ? null : <TitleBar />}
+          <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
+            <ChromeContext.Provider value={context}>
+              {children}
+            </ChromeContext.Provider>
+          </div>
+        </div>
       </div>
 
       <InstanceDialogs

@@ -10,23 +10,7 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "windows": [
-      {
-        "label": "main",
-        "title": "Licht Launcher",
-        "theme": "Dark",
-        "backgroundColor": "#121212",
-        "width": 1200,
-        "height": 800,
-        "minWidth": 960,
-        "minHeight": 560,
-        "maxWidth": 1200,
-        "maxHeight": 960,
-        "fullscreen": false,
-        "maximizable": false,
-        "decorations": false
-      }
-    ],
+    "windows": [],
     "security": {
       "csp": {
         "default-src": "'none'",

@@ -6,6 +6,7 @@ import { TitleBar } from "@/components/title-bar/title-bar";
 import { snapshot } from "@/features/settings/fixtures/snapshot";
 import { appReleaseLabel } from "@/lib/app-release";
 import type { InstallProgress } from "@/lib/generated/InstallProgress";
+import * as nativeCaption from "@/lib/native-caption";
 import { OPEN_SETTINGS_EVENT } from "@/lib/shell-events";
 
 const minimize = vi.fn();
@@ -52,6 +53,7 @@ function renderTitleBar() {
 
 describe("TitleBar", () => {
   beforeEach(() => {
+    vi.restoreAllMocks();
     minimize.mockReset();
     close.mockReset();
     invoke.mockReset();
@@ -68,6 +70,7 @@ describe("TitleBar", () => {
   });
 
   it("shows the wordmark, release, account chip, idle downloads, and window controls", async () => {
+    vi.spyOn(nativeCaption, "usesNativeCaptionButtons").mockReturnValue(false);
     renderTitleBar();
 
     expect(screen.getByText("Licht Launcher")).toHaveClass("uppercase");
@@ -88,6 +91,21 @@ describe("TitleBar", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(close).toHaveBeenCalledOnce();
+  });
+
+  it("omits HTML window controls when native caption buttons are used", async () => {
+    vi.spyOn(nativeCaption, "usesNativeCaptionButtons").mockReturnValue(true);
+    renderTitleBar();
+
+    expect(
+      await screen.findByRole("button", { name: "Account: Alex" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Minimize" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Close" }),
+    ).not.toBeInTheDocument();
   });
 
   it("requests account settings when the account chip is clicked", async () => {
