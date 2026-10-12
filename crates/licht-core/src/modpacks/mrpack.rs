@@ -1,11 +1,15 @@
 use std::fs;
 use std::io::{Cursor, Read};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use reqwest::Client;
 use serde_json::Value;
 use tokio::sync::mpsc;
 use zip::ZipArchive;
+
+use super::file_hashes::{ensure_sha512, prepare_download};
+use super::path_safety::safe_instance_path;
+use super::secure_download::{allowlisted_download_client, download_url_allowed};
 
 use crate::download::{DEFAULT_RETRY, DownloadProgress, DownloadTask, download_all};
 use crate::instance::{InstanceEntry, create_instance, update_instance_version};
@@ -16,6 +20,9 @@ use crate::settings::{GlobalLaunch, download_concurrency, write_concurrency};
 use crate::{CoreError, Result, SharedCache, shared_transfer_limits};
 
 pub const MODPACK_INDEX_FILE: &str = "licht-modpack.json";
+
+/// Files at the instance root that a pack must never overwrite.
+const PROTECTED_ROOT_NAMES: [&str; 2] = ["instance.json", MODPACK_INDEX_FILE];
 
 /// Extracts a Modrinth `.mrpack` (zip) into a new instance folder.
 ///
@@ -219,7 +226,7 @@ fn index_files(index: &Value, instance_dir: &Path) -> Result<Vec<PackFile>> {
             .get("path")
             .and_then(Value::as_str)
             .ok_or(CoreError::ModpackArchive)?;
-        let destination = safe_instance_path(instance_dir, path)?;
+        let destination = safe_instance_path(instance_dir, path, &PROTECTED_ROOT_NAMES)?;
         let sha1 = required_sha1(file)?;
         let sha512 = required_sha512(file)?;
         let url = select_download_url(file)?;
@@ -255,38 +262,12 @@ fn required_sha512(file: &Value) -> Result<String> {
         .ok_or(CoreError::ModpackArchive)
 }
 
-/// Same cap as reqwest's default. The spec asks for at least three.
-const MAX_MRPACK_REDIRECTS: usize = 10;
-
-enum RedirectHop {
-    Follow,
-    Blocked,
-    TooMany,
-}
-
-/// `previous_len` is how many URLs were already requested, including the first one.
-fn redirect_hop(next: &str, previous_len: usize) -> RedirectHop {
-    if previous_len > MAX_MRPACK_REDIRECTS {
-        return RedirectHop::TooMany;
-    }
-    if download_url_allowed(next) {
-        RedirectHop::Follow
-    } else {
-        RedirectHop::Blocked
-    }
-}
-
 fn mrpack_download_client() -> Result<Client> {
-    Client::builder()
-        .redirect(reqwest::redirect::Policy::custom(
-            |attempt| match redirect_hop(attempt.url().as_str(), attempt.previous().len()) {
-                RedirectHop::Follow => attempt.follow(),
-                RedirectHop::Blocked => attempt.error("modpack redirect target is not allowed"),
-                RedirectHop::TooMany => attempt.error("too many modpack redirects"),
-            },
-        ))
-        .build()
-        .map_err(CoreError::from)
+    allowlisted_download_client(
+        MRPACK_DOWNLOAD_HOSTS,
+        "modpack redirect target is not allowed",
+        "too many modpack redirects",
+    )
 }
 
 fn select_download_url(file: &Value) -> Result<String> {
@@ -296,92 +277,17 @@ fn select_download_url(file: &Value) -> Result<String> {
         .ok_or(CoreError::ModpackArchive)?;
     for entry in urls {
         let raw = entry.as_str().ok_or(CoreError::ModpackArchive)?;
-        if download_url_allowed(raw) {
+        if download_url_allowed(raw, MRPACK_DOWNLOAD_HOSTS) {
             return Ok(raw.to_string());
         }
     }
     Err(CoreError::ModpackArchive)
 }
 
-fn download_url_allowed(raw: &str) -> bool {
-    let Ok(url) = url::Url::parse(raw) else {
-        return false;
-    };
-    if url.scheme() != "https" || url.port().is_some() {
-        return false;
-    }
-    if !url.username().is_empty() || url.password().is_some() {
-        return false;
-    }
-    let Some(url::Host::Domain(host)) = url.host() else {
-        return false;
-    };
-    MRPACK_DOWNLOAD_HOSTS
-        .iter()
-        .any(|allowed| host.eq_ignore_ascii_case(allowed))
-}
-
 fn client_unsupported(file: &Value) -> bool {
     file.pointer("/env/client")
         .and_then(Value::as_str)
         .is_some_and(|value| value == "unsupported")
-}
-
-fn safe_instance_path(instance_dir: &Path, relative: &str) -> Result<PathBuf> {
-    let normalized = relative.replace('\\', "/");
-    // `C:foo` is not absolute on Windows, but joining it replaces the drive.
-    // A colon is never a normal mod path component.
-    if normalized.is_empty()
-        || normalized.starts_with('/')
-        || normalized.contains('\0')
-        || normalized.contains(':')
-    {
-        return Err(CoreError::ModpackArchive);
-    }
-    let mut destination = instance_dir.to_path_buf();
-    let mut depth = 0usize;
-    for part in normalized.split('/') {
-        if !path_component_allowed(part) {
-            return Err(CoreError::ModpackArchive);
-        }
-        if depth == 0 && is_launcher_file(part) {
-            return Err(CoreError::ModpackArchive);
-        }
-        destination.push(part);
-        depth += 1;
-    }
-    if depth == 0 {
-        return Err(CoreError::ModpackArchive);
-    }
-    Ok(destination)
-}
-
-fn path_component_allowed(part: &str) -> bool {
-    if part.is_empty() || part == "." || part == ".." {
-        return false;
-    }
-    // Windows strips trailing dots and spaces, so `instance.json.` can alias the profile.
-    if part.ends_with('.') || part.ends_with(' ') {
-        return false;
-    }
-    !is_windows_reserved(part)
-}
-
-fn is_launcher_file(name: &str) -> bool {
-    name.eq_ignore_ascii_case("instance.json") || name.eq_ignore_ascii_case(MODPACK_INDEX_FILE)
-}
-
-/// `CON`, `PRN`, `AUX`, `NUL`, `COM1`–`COM9`, `LPT1`–`LPT9`, including `CON.txt`.
-fn is_windows_reserved(part: &str) -> bool {
-    let stem = part.split('.').next().unwrap_or(part);
-    let upper = stem.to_ascii_uppercase();
-    matches!(
-        upper.as_str(),
-        "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$"
-    ) || ((upper.starts_with("COM") || upper.starts_with("LPT"))
-        && upper.len() == 4
-        && upper.as_bytes()[3].is_ascii_digit()
-        && upper.as_bytes()[3] != b'0')
 }
 
 fn read_index(archive: &mut ZipArchive<Cursor<&[u8]>>) -> Result<Value> {
@@ -415,7 +321,7 @@ fn extract_prefixed(
         if file.enclosed_name().is_none() {
             return Err(CoreError::ModpackArchive);
         }
-        let destination = safe_instance_path(instance_dir, relative)?;
+        let destination = safe_instance_path(instance_dir, relative, &PROTECTED_ROOT_NAMES)?;
         if let Some(parent) = destination.parent() {
             fs::create_dir_all(parent)?;
         }
@@ -425,78 +331,12 @@ fn extract_prefixed(
     Ok(())
 }
 
-/// `true` when the file must be fetched. A sha1 hit with a wrong sha512 is deleted
-/// so the downloader does not skip it on the sha1 alone.
-fn prepare_download(path: &Path, sha1: &str, sha512: &str) -> Result<bool> {
-    if sha1.is_empty() || sha512.is_empty() {
-        return Ok(true);
-    }
-    let Some((actual_sha1, actual_sha512)) = hash_file(path)? else {
-        return Ok(true);
-    };
-    if !actual_sha1.eq_ignore_ascii_case(sha1) {
-        return Ok(true);
-    }
-    if actual_sha512.eq_ignore_ascii_case(sha512) {
-        return Ok(false);
-    }
-    fs::remove_file(path)?;
-    Ok(true)
-}
-
-fn ensure_sha512(path: &Path, expected: &str) -> Result<()> {
-    let actual = hash_file(path)?
-        .map(|(_, sha512)| sha512)
-        .unwrap_or_default();
-    if actual.eq_ignore_ascii_case(expected) {
-        return Ok(());
-    }
-    let _ = fs::remove_file(path);
-    Err(CoreError::Sha512Mismatch {
-        expected: expected.to_string(),
-        actual,
-    })
-}
-
-fn hash_file(path: &Path) -> Result<Option<(String, String)>> {
-    use sha1::{Digest, Sha1};
-    use sha2::Sha512;
-
-    let mut file = match fs::File::open(path) {
-        Ok(file) => file,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(error) => return Err(error.into()),
-    };
-    let mut sha1 = Sha1::new();
-    let mut sha512 = Sha512::new();
-    let mut buffer = [0_u8; 64 * 1024];
-    loop {
-        let read = file.read(&mut buffer)?;
-        if read == 0 {
-            break;
-        }
-        sha1.update(&buffer[..read]);
-        sha512.update(&buffer[..read]);
-    }
-    Ok(Some((
-        hex_encode(sha1.finalize().as_slice()),
-        hex_encode(sha512.finalize().as_slice()),
-    )))
-}
-
-fn hex_encode(bytes: &[u8]) -> String {
-    let mut hex = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        hex.push_str(&format!("{byte:02x}"));
-    }
-    hex
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::settings::GlobalLaunch;
     use std::io::{Cursor, Write};
+    use std::path::PathBuf;
     use zip::CompressionMethod;
     use zip::write::SimpleFileOptions;
 
@@ -757,106 +597,6 @@ mod tests {
     }
 
     #[test]
-    fn sha512_mismatch_removes_the_cached_file() {
-        let root = temp_dir("sha512");
-        let path = root.join("mod.jar");
-        fs::write(&path, b"hello").unwrap();
-        let (sha1, sha512) = hash_file(&path).unwrap().expect("hashes");
-        assert!(!prepare_download(&path, &sha1, &sha512).unwrap());
-        assert!(path.is_file());
-        assert!(prepare_download(&path, &sha1, "deadbeef").unwrap());
-        assert!(!path.exists());
-        let _ = fs::remove_dir_all(&root);
-    }
-
-    #[test]
-    fn empty_sha1_does_not_accept_an_existing_mod_file() {
-        let root = temp_dir("empty-sha");
-        let path = root.join("mod.jar");
-        fs::write(&path, b"hello").unwrap();
-        assert!(prepare_download(&path, "", "deadbeef").unwrap());
-        assert_eq!(fs::read(&path).unwrap(), b"hello");
-        let error = ensure_sha512(&path, "00").unwrap_err();
-        assert!(matches!(error, CoreError::Sha512Mismatch { .. }));
-        assert!(!path.exists());
-        let _ = fs::remove_dir_all(&root);
-    }
-
-    #[test]
-    fn follows_only_allowed_https_redirects() {
-        for url in [
-            "https://cdn.modrinth.com/data/a.jar",
-            "https://CDN.MODRINTH.COM/data/a.jar",
-        ] {
-            assert!(matches!(redirect_hop(url, 1), RedirectHop::Follow), "{url}");
-            assert!(
-                matches!(redirect_hop(url, 10), RedirectHop::Follow),
-                "{url}"
-            );
-        }
-        assert!(matches!(
-            redirect_hop("https://cdn.modrinth.com/a.jar", 11),
-            RedirectHop::TooMany
-        ));
-        for url in [
-            "http://cdn.modrinth.com/a.jar",
-            "https://github.com/user/repo/releases/download/v1/a.jar",
-            "https://raw.githubusercontent.com/user/repo/main/a.jar",
-            "https://gitlab.com/user/repo/-/raw/main/a.jar",
-            "https://objects.githubusercontent.com/a.jar",
-            "https://release-assets.githubusercontent.com/a.jar",
-            "https://edge.forgecdn.net/files/1/2/a.jar",
-            "https://mediafilez.forgecdn.net/files/1/2/a.jar",
-            "https://evil.example/a.jar",
-            "https://user:secret@cdn.modrinth.com/a.jar",
-            "https://cdn.modrinth.com:444/a.jar",
-        ] {
-            assert!(
-                matches!(redirect_hop(url, 1), RedirectHop::Blocked),
-                "{url}"
-            );
-        }
-    }
-
-    #[test]
-    fn stops_a_redirect_chain_at_the_first_disallowed_hop() {
-        let hops = [
-            "https://cdn.modrinth.com/a.jar",
-            "https://CDN.MODRINTH.COM/b.jar",
-            "https://edge.forgecdn.net/files/1/2/malware.jar",
-        ];
-        for (index, hop) in hops.iter().enumerate() {
-            // The first previous entry is the URL that was just requested.
-            let decision = redirect_hop(hop, index + 1);
-            if index + 1 == hops.len() {
-                assert!(matches!(decision, RedirectHop::Blocked), "{hop}");
-            } else {
-                assert!(matches!(decision, RedirectHop::Follow), "{hop}");
-            }
-        }
-    }
-
-    #[tokio::test]
-    async fn a_live_redirect_to_a_disallowed_url_is_rejected() {
-        for location in [
-            "https://evil.example/malware.jar",
-            "http://cdn.modrinth.com/a.jar",
-            "https://github.com/user/repo/releases/download/v1/a.jar",
-            "https://edge.forgecdn.net/files/1/2/a.jar",
-        ] {
-            let url = serve_redirect(location).await;
-            let client = mrpack_download_client().expect("client");
-            let error = client.get(&url).send().await.expect_err(location);
-            assert!(error.is_redirect(), "{location}: {error}");
-            let message = error_chain(&error);
-            assert!(
-                message.contains("modpack redirect target is not allowed"),
-                "{location}: {message}"
-            );
-        }
-    }
-
-    #[test]
     fn rejects_overrides_that_target_launcher_files_or_windows_devices() {
         let names = [
             "overrides/instance.json",
@@ -892,51 +632,6 @@ mod tests {
             assert!(!instance_dir.join("CON").exists(), "{name}");
             let _ = fs::remove_dir_all(&root);
         }
-    }
-
-    fn error_chain(error: &dyn std::error::Error) -> String {
-        let mut message = error.to_string();
-        let mut source = std::error::Error::source(error);
-        while let Some(inner) = source {
-            message.push_str(": ");
-            message.push_str(&inner.to_string());
-            source = inner.source();
-        }
-        message
-    }
-
-    async fn serve_redirect(location: &str) -> String {
-        use tokio::io::{AsyncReadExt, AsyncWriteExt};
-
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
-            .await
-            .expect("bind");
-        let address = listener.local_addr().expect("address");
-        let location = location.to_string();
-        tokio::spawn(async move {
-            let Ok((mut socket, _)) = listener.accept().await else {
-                return;
-            };
-            let mut incoming = Vec::new();
-            let mut buffer = [0_u8; 256];
-            loop {
-                let Ok(read) = socket.read(&mut buffer).await else {
-                    return;
-                };
-                if read == 0 {
-                    return;
-                }
-                incoming.extend_from_slice(&buffer[..read]);
-                if incoming.windows(4).any(|window| window == b"\r\n\r\n") {
-                    break;
-                }
-            }
-            let body = format!(
-                "HTTP/1.1 302 Found\r\nLocation: {location}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
-            );
-            let _ = socket.write_all(body.as_bytes()).await;
-        });
-        format!("http://{address}/file.jar")
     }
 
     fn file_index(path: &str, url: &str) -> Value {

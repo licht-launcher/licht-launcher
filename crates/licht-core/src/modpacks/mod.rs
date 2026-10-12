@@ -1,8 +1,11 @@
 //! Modpack discovery (Modrinth / CurseForge) and `.mrpack` import.
 
 mod curseforge;
+mod file_hashes;
 mod modrinth;
 mod mrpack;
+mod path_safety;
+mod secure_download;
 mod types;
 
 pub use curseforge::CURSEFORGE_API_KEY_ENV;
@@ -17,6 +20,7 @@ use reqwest::Client;
 use crate::instance::InstanceEntry;
 use crate::settings::GlobalLaunch;
 use crate::{CoreError, Result, SharedCache};
+use path_safety::safe_instance_path;
 use std::path::Path;
 
 /// Searches Modrinth always; CurseForge when `LICHT_CURSEFORGE_API_KEY` is set.
@@ -106,7 +110,7 @@ fn import_curse_zip(
         let mut file = archive
             .by_index(index)
             .map_err(|_| CoreError::ModpackArchive)?;
-        let name = file.name().to_string();
+        let name = file.name().replace('\\', "/");
         let Some(relative) = name
             .strip_prefix("overrides/")
             .or_else(|| name.strip_prefix("override/"))
@@ -116,10 +120,16 @@ fn import_curse_zip(
         if relative.is_empty() || relative.ends_with('/') {
             continue;
         }
-        if relative.split('/').any(|part| part == "..") {
+        // Same checks as `.mrpack` overrides: `enclosed_name` rejects absolute
+        // paths and `..`, `safe_instance_path` the Windows-specific cases.
+        if file.enclosed_name().is_none() {
             return Err(CoreError::ModpackArchive);
         }
-        let destination = instance_dir.join(relative);
+        let destination = safe_instance_path(
+            &instance_dir,
+            relative,
+            &["instance.json", MODPACK_INDEX_FILE],
+        )?;
         if let Some(parent) = destination.parent() {
             std::fs::create_dir_all(parent)?;
         }
@@ -127,4 +137,88 @@ fn import_curse_zip(
         std::io::copy(&mut file, &mut out)?;
     }
     Ok(entry)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::{Cursor, Write};
+    use zip::CompressionMethod;
+    use zip::write::SimpleFileOptions;
+
+    fn curse_zip(files: &[(&str, &[u8])]) -> Vec<u8> {
+        let mut buffer = Cursor::new(Vec::new());
+        {
+            let mut zip = zip::ZipWriter::new(&mut buffer);
+            let options =
+                SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
+            for (name, bytes) in files {
+                zip.start_file(*name, options).unwrap();
+                zip.write_all(bytes).unwrap();
+            }
+            zip.finish().unwrap();
+        }
+        buffer.into_inner()
+    }
+
+    fn launch_template() -> GlobalLaunch {
+        GlobalLaunch {
+            max_memory_mb: 2048,
+            jvm_arguments: Vec::new(),
+            fullscreen: false,
+            width: None,
+            height: None,
+        }
+    }
+
+    fn temp_instances(label: &str) -> std::path::PathBuf {
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("time")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "licht-curse-{label}-{}-{stamp}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        root
+    }
+
+    #[test]
+    fn curse_import_extracts_overrides_and_reads_the_game_version() {
+        let bytes = curse_zip(&[
+            ("manifest.json", br#"{"minecraft":{"version":"1.19.2"}}"#),
+            ("overrides/config/a.toml", b"x=1"),
+            ("override/options.txt", b"fov:90"),
+        ]);
+        let root = temp_instances("ok");
+        let entry = import_curse_zip(&root, "Curse", &bytes, &launch_template()).expect("import");
+        assert_eq!(entry.version_id, "1.19.2");
+        let dir = root.join(&entry.folder);
+        assert_eq!(std::fs::read(dir.join("config/a.toml")).unwrap(), b"x=1");
+        assert_eq!(std::fs::read(dir.join("options.txt")).unwrap(), b"fov:90");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn curse_import_rejects_unsafe_override_paths() {
+        for name in [
+            "overrides/instance.json",
+            "overrides/licht-modpack.json",
+            "overrides/C:evil.txt",
+            "overrides/CON",
+            "overrides/mods/CON.txt",
+            "overrides/../../outside.txt",
+            "overrides/..\\..\\outside.txt",
+            "override/instance.json",
+        ] {
+            let bytes = curse_zip(&[("manifest.json", br#"{}"#), (name, b"pwned")]);
+            let root = temp_instances("bad");
+            let error =
+                import_curse_zip(&root, "Curse", &bytes, &launch_template()).expect_err(name);
+            assert!(matches!(error, CoreError::ModpackArchive), "{name}");
+            let _ = std::fs::remove_dir_all(&root);
+        }
+    }
 }
