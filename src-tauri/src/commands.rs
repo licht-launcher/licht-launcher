@@ -10,9 +10,9 @@ use licht_core::{
     SharedCache, VersionSummary, browse_start_directory, clear_launch_lock, configured_java,
     create_instance_from_modpack as create_instance_from_modpack_core,
     create_instance_with_platform as create_instance_with_platform_core, detect_known_javas,
-    fetch_version_manifest, game_cache, get_active_profile, global_launch, install_game,
-    install_mrpack_files, install_temurin, installed_java, kill_launch_process, list_accounts,
-    list_loader_versions as list_loader_versions_core,
+    fetch_version_manifest, game_cache, get_active_profile, global_launch,
+    install_curseforge_files, install_game, install_mrpack_files, install_temurin, installed_java,
+    kill_launch_process, list_accounts, list_loader_versions as list_loader_versions_core,
     list_modpack_versions as list_modpack_versions_core, list_running_launch_folders,
     load_instance, load_resolved_version_json, load_settings, local_inherits_from,
     local_version_exists, log_codec, login_with_browser, logout_account, offline_account,
@@ -359,7 +359,9 @@ pub async fn install_modpack_files(
     );
     let (progress, mut incoming) = mpsc::channel(4096);
     let installing = tauri::async_runtime::spawn(async move {
-        install_mrpack_files(&cache, &settings, &dir, progress).await
+        install_mrpack_files(&cache, &settings, &dir, progress.clone()).await?;
+        // CurseForge uses its own allowlisted client (forgecdn hosts).
+        install_curseforge_files(&cache, &settings, &dir, progress).await
     });
     let mut throttle = ProgressThrottle::new();
     while let Some(progress) = incoming.recv().await {

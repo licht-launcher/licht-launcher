@@ -44,6 +44,20 @@ describe("friendly errors", () => {
     expect(friendlyError("version was not found")).toMatch(/missing/i);
   });
 
+  it("lists curseforge mods that disallow third-party distribution", () => {
+    const message = friendlyError(
+      "curseforge mods disallow third-party distribution: " +
+        "Iris (iris.jar), Sodium (sodium.jar)",
+    );
+    expect(message).toMatch(/Iris \(iris\.jar\)/);
+    expect(message).toMatch(/Sodium \(sodium\.jar\)/);
+    expect(message).toMatch(/not installed/);
+  });
+
+  it("names a curseforge file that the api no longer returns", () => {
+    expect(friendlyError("curseforge file was not found: 42")).toMatch(/42/);
+  });
+
   it("keeps an unknown message", () => {
     expect(friendlyError("something totally unknown")).toBe(
       "something totally unknown",
