@@ -94,6 +94,7 @@ fn plan_files(
         }
         // Reject the joined path here, before anything is written.
         let _ = safe_instance_path(Path::new("."), &path, &PROTECTED_ROOT_NAMES)?;
+        require_verifiable_hash(&remote.sha1, &remote.md5)?;
         plan.files.push(PlannedFile {
             path,
             url,
@@ -108,6 +109,23 @@ fn plan_files(
         });
     }
     Ok(plan)
+}
+
+/// CurseForge must expose sha1 and/or md5 so the download can be verified.
+fn require_verifiable_hash(sha1: &Option<String>, md5: &Option<String>) -> Result<()> {
+    let has_sha1 = sha1
+        .as_deref()
+        .map(str::trim)
+        .is_some_and(|value| !value.is_empty());
+    let has_md5 = md5
+        .as_deref()
+        .map(str::trim)
+        .is_some_and(|value| !value.is_empty());
+    if has_sha1 || has_md5 {
+        Ok(())
+    } else {
+        Err(CoreError::ModpackArchive)
+    }
 }
 
 /// CurseForge Minecraft class ids. Unknown classes land in `mods`.
@@ -288,6 +306,21 @@ mod tests {
         remote.file_name = "../evil.jar".into();
         let error = plan_files(&[manifest_file(2, 1)], &[remote], &[]).unwrap_err();
         assert!(matches!(error, CoreError::ModpackArchive));
+    }
+
+    #[test]
+    fn rejects_a_file_without_sha1_or_md5() {
+        let mut remote = remote_at(1, 2, "https://edge.forgecdn.net/files/1/2/a.jar");
+        remote.sha1 = None;
+        remote.md5 = None;
+        let error = plan_files(&[manifest_file(2, 1)], &[remote], &[]).unwrap_err();
+        assert!(matches!(error, CoreError::ModpackArchive));
+
+        let mut md5_only = remote_at(1, 2, "https://edge.forgecdn.net/files/1/2/a.jar");
+        md5_only.sha1 = None;
+        md5_only.md5 = Some("5eb63bbbe01eeed093cb22bb8f5acdc3".into());
+        let plan = plan_files(&[manifest_file(2, 1)], &[md5_only], &[]).expect("md5 is enough");
+        assert_eq!(plan.files.len(), 1);
     }
 
     fn manifest_file(project_id: u64, file_id: u64) -> ManifestFile {
