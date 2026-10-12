@@ -17,5 +17,8 @@ This project does **not** embed a CurseForge key in the repository. Forks and of
 ## Scope in Licht
 
 - Search Minecraft modpacks and list file versions.
-- Download a pack archive and create an instance (game version from `manifest.json`, overlays from `overrides/`).
-- Full CurseForge dependency resolution and Forge installer processors may land in later work.
+- Download a pack archive from the CurseForge CDN over HTTPS. Allowed hosts are `edge.forgecdn.net`, `mediafilez.forgecdn.net`, and `media.forgecdn.net`, checked again on every redirect. The API key is sent as the `x-api-key` header and is not written into the instance or the logs.
+- Read `manifest.json`: Minecraft version, overlays from `overrides/` (and `override/`), and the `files` list.
+- Resolve each file with `POST /v1/mods/files` and `POST /v1/mods`. SHA1 is checked when the API sends one; MD5 is checked when that is the hash available. The resolved list is stored in `licht-curseforge.json` and downloaded on install, in the same pass as `.mrpack` files.
+- A null or empty `downloadUrl` means the author disabled third-party distribution. Those files are not downloaded and the URL is not guessed. Import stops before the instance is created and the error names each blocked mod.
+- Mod loader install and Forge installer processors are still later work. The instance keeps the Minecraft version from the manifest.

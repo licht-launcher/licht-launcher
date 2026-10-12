@@ -18,6 +18,8 @@ pub enum CoreError {
     AssetIndex(#[source] serde_json::Error),
     #[error("downloaded SHA1 does not match")]
     Sha1Mismatch { expected: String, actual: String },
+    #[error("downloaded MD5 does not match")]
+    Md5Mismatch { expected: String, actual: String },
     #[error("downloaded SHA256 does not match")]
     Sha256Mismatch { expected: String, actual: String },
     #[error("downloaded SHA512 does not match")]
@@ -136,6 +138,14 @@ pub enum CoreError {
     ModpackMeta { detail: String },
     #[error("LICHT_CURSEFORGE_API_KEY is missing or empty")]
     CurseforgeKeyMissing,
+    #[error("curseforge download host is not allowed")]
+    CurseforgeDownloadHost,
+    #[error("curseforge pack disallows third-party distribution")]
+    CurseforgePackDistributionDenied,
+    #[error("curseforge mods disallow third-party distribution: {mods}")]
+    CurseforgeDistributionDenied { mods: String },
+    #[error("curseforge file was not found: {file_id}")]
+    CurseforgeFileMissing { file_id: u64 },
     #[error("modpack archive is invalid")]
     ModpackArchive,
 }
