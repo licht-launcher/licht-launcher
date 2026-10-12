@@ -8,7 +8,7 @@ use licht_core::{
 
 #[test]
 fn windows_command_joins_the_classpath_with_semicolons_and_omits_native_jars() {
-    let version = parse_version(include_str!("fixtures/version-1.21.11.json")).expect("1.21.11");
+    let version = parse_version(include_str!("../fixtures/version-1.21.11.json")).expect("1.21.11");
     let cache = SharedCache::at("game-cache");
     let environment = environment(OsName::Windows, Arch::X86_64);
     let joined = classpath(&cache, "1.21.11", &version, &environment).expect("classpath");
@@ -61,7 +61,7 @@ fn windows_command_joins_the_classpath_with_semicolons_and_omits_native_jars() {
 
 #[test]
 fn linux_uses_colons_and_skips_arguments_for_other_systems() {
-    let version = parse_version(include_str!("fixtures/version-1.21.11.json")).expect("1.21.11");
+    let version = parse_version(include_str!("../fixtures/version-1.21.11.json")).expect("1.21.11");
     let cache = SharedCache::at("game-cache");
     let linux = environment(OsName::Linux, Arch::X86_64);
     let joined = classpath(&cache, "1.21.11", &version, &linux).expect("classpath");
@@ -94,7 +94,7 @@ fn linux_uses_colons_and_skips_arguments_for_other_systems() {
 
 #[test]
 fn legacy_command_adds_the_jvm_prefix_and_keeps_the_main_jar() {
-    let version = parse_version(include_str!("fixtures/version-1.8.9.json")).expect("1.8.9");
+    let version = parse_version(include_str!("../fixtures/version-1.8.9.json")).expect("1.8.9");
     let cache = SharedCache::at("game-cache");
     let environment = environment(OsName::Windows, Arch::X86_64);
     let java = Path::new("runtime/java");
@@ -144,7 +144,7 @@ fn legacy_command_adds_the_jvm_prefix_and_keeps_the_main_jar() {
 
 #[test]
 fn feature_rules_stay_out_until_the_feature_is_enabled() {
-    let version = parse_version(include_str!("fixtures/version-1.21.11.json")).expect("1.21.11");
+    let version = parse_version(include_str!("../fixtures/version-1.21.11.json")).expect("1.21.11");
     let cache = SharedCache::at("game-cache");
     let mut environment = environment(OsName::Linux, Arch::X86_64);
     let values = values(&[("resolution_width", "1280"), ("resolution_height", "720")]);
@@ -189,7 +189,7 @@ fn feature_rules_stay_out_until_the_feature_is_enabled() {
 
 #[test]
 fn an_unknown_placeholder_is_left_unchanged() {
-    let version = parse_version(include_str!("fixtures/version-1.21.11.json")).expect("1.21.11");
+    let version = parse_version(include_str!("../fixtures/version-1.21.11.json")).expect("1.21.11");
     let command = launch_command(
         Path::new("runtime/java"),
         &SharedCache::at("game-cache"),
@@ -239,7 +239,7 @@ fn a_java_library_suffix_points_at_the_version_folder() {
 
 #[test]
 fn an_invalid_version_id_is_rejected() {
-    let version = parse_version(include_str!("fixtures/version-1.8.9.json")).expect("1.8.9");
+    let version = parse_version(include_str!("../fixtures/version-1.8.9.json")).expect("1.8.9");
     let error = classpath(
         &SharedCache::at("game-cache"),
         "..",

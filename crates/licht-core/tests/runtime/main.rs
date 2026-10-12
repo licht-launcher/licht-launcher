@@ -61,19 +61,23 @@ fn an_installed_runtime_java_is_offered_and_a_missing_file_is_invalid() {
 #[test]
 fn saved_versions_name_their_runtime() {
     for (json, component, major) in [
-        (include_str!("fixtures/version-1.8.9.json"), "jre-legacy", 8),
         (
-            include_str!("fixtures/version-1.12.2.json"),
+            include_str!("../fixtures/version-1.8.9.json"),
             "jre-legacy",
             8,
         ),
         (
-            include_str!("fixtures/version-1.20.6.json"),
+            include_str!("../fixtures/version-1.12.2.json"),
+            "jre-legacy",
+            8,
+        ),
+        (
+            include_str!("../fixtures/version-1.20.6.json"),
             "java-runtime-delta",
             21,
         ),
         (
-            include_str!("fixtures/version-1.21.11.json"),
+            include_str!("../fixtures/version-1.21.11.json"),
             "java-runtime-delta",
             21,
         ),
@@ -115,7 +119,7 @@ fn a_version_without_java_version_has_no_required_runtime() {
 
 #[test]
 fn the_saved_runtime_index_points_at_java_21_and_java_8() {
-    let index = parse_java_runtime_index(include_str!("fixtures/java-runtime-index.json"))
+    let index = parse_java_runtime_index(include_str!("../fixtures/java-runtime-index.json"))
         .expect("the saved runtime index should parse");
 
     let modern = select_runtime(&index, OsName::Windows, Arch::X86_64, "java-runtime-delta")
@@ -133,7 +137,7 @@ fn the_saved_runtime_index_points_at_java_21_and_java_8() {
 
 #[test]
 fn the_saved_runtime_manifest_lists_java_exe() {
-    let manifest = parse_java_runtime_manifest(include_str!("fixtures/java-runtime-delta.json"))
+    let manifest = parse_java_runtime_manifest(include_str!("../fixtures/java-runtime-delta.json"))
         .expect("the saved runtime manifest should parse");
     assert!(matches!(
         manifest.files.get("bin"),
@@ -374,8 +378,9 @@ fn one_point_eight_and_one_point_twenty_one_need_different_javas() {
     let broken = write_java_stub(&directory, "broken", "nope", StubKind::Stderr);
     let failed = write_java_stub(&directory, "failed", "21.0.7", StubKind::Fail);
 
-    let version_8 = parse_version(include_str!("fixtures/version-1.8.9.json")).expect("1.8.9");
-    let version_21 = parse_version(include_str!("fixtures/version-1.21.11.json")).expect("1.21.11");
+    let version_8 = parse_version(include_str!("../fixtures/version-1.8.9.json")).expect("1.8.9");
+    let version_21 =
+        parse_version(include_str!("../fixtures/version-1.21.11.json")).expect("1.21.11");
     let legacy = required_runtime(&version_8).expect("1.8.9 names a runtime");
     let modern = required_runtime(&version_21).expect("1.21.11 names a runtime");
 

@@ -12,8 +12,8 @@ use zip::write::SimpleFileOptions;
 
 #[test]
 fn saved_versions_pick_one_native_per_architecture() {
-    let legacy = parse_version(include_str!("fixtures/version-1.8.9.json")).expect("1.8.9");
-    let modern = parse_version(include_str!("fixtures/version-1.21.11.json")).expect("1.21.11");
+    let legacy = parse_version(include_str!("../fixtures/version-1.8.9.json")).expect("1.8.9");
+    let modern = parse_version(include_str!("../fixtures/version-1.21.11.json")).expect("1.21.11");
 
     let windows_64 = paths(&legacy, OsName::Windows, Arch::X86_64);
     assert!(

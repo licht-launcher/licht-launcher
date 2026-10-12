@@ -1,0 +1,5 @@
+//! On-disk cache root, SQLite metadata, and global settings.
+
+pub(crate) mod cache;
+pub(crate) mod db;
+pub(crate) mod settings;

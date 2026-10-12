@@ -5,10 +5,10 @@ use licht_core::{CoreError, parse_asset_index};
 #[test]
 fn parses_saved_asset_indexes() {
     for json in [
-        include_str!("fixtures/asset-index-1.8.json"),
-        include_str!("fixtures/asset-index-1.12.json"),
-        include_str!("fixtures/asset-index-16.json"),
-        include_str!("fixtures/asset-index-29.json"),
+        include_str!("../fixtures/asset-index-1.8.json"),
+        include_str!("../fixtures/asset-index-1.12.json"),
+        include_str!("../fixtures/asset-index-16.json"),
+        include_str!("../fixtures/asset-index-29.json"),
     ] {
         let index = parse_asset_index(json).expect("the saved asset index should parse");
         assert!(!index.objects.is_empty());
@@ -22,7 +22,7 @@ fn parses_saved_asset_indexes() {
 
 #[test]
 fn saved_indexes_keep_the_known_icon_and_leave_flags_off() {
-    let legacy = parse_asset_index(include_str!("fixtures/asset-index-1.8.json"))
+    let legacy = parse_asset_index(include_str!("../fixtures/asset-index-1.8.json"))
         .expect("the 1.8 index should parse");
     let legacy_icon = legacy
         .objects
@@ -33,7 +33,7 @@ fn saved_indexes_keep_the_known_icon_and_leave_flags_off() {
     assert!(!legacy.virtual_assets);
     assert!(!legacy.map_to_resources);
 
-    let modern = parse_asset_index(include_str!("fixtures/asset-index-29.json"))
+    let modern = parse_asset_index(include_str!("../fixtures/asset-index-29.json"))
         .expect("the 29 index should parse");
     let modern_icon = modern
         .objects

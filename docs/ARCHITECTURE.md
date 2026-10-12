@@ -10,7 +10,7 @@ workspace. [AGENTS.md](../AGENTS.md) defines the project rules;
 
 | Location            | Responsibility                                                                           | Boundary                                           |
 | ------------------- | ---------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| `crates/licht-core` | Minecraft manifests, rules, downloads, Java runtimes, game execution, and authentication | A standalone Rust library with no Tauri dependency |
+| `crates/licht-core` | Minecraft manifests, rules, downloads, Java runtimes, game execution, and authentication | A standalone Rust library with no Tauri dependency. Internally grouped as `meta/`, `transfer/`, `game/`, `instance/`, `runtime/`, `store/`, plus `auth/`, `loaders/`, and `modpacks/` |
 | `src-tauri`         | Application startup, logging configuration, thin commands, and frontend events           | Delegates game behavior to the core                |
 | `src`               | Screens, UI state, and calls to the Tauri adapter                                        | Contains no Minecraft domain logic                 |
 
@@ -65,9 +65,11 @@ tokens, secrets, or personal data.
 
 ## Testing
 
-The core is testable independently with `cargo test -p licht-core`. Domain tests
-use saved Mojang JSON fixtures and must not depend on network access. Frontend
-tests use Vitest, Testing Library, and jsdom.
+The core is testable independently with `cargo test -p licht-core`. Integration
+tests under `crates/licht-core/tests/` mirror the source domains (`meta`,
+`transfer`, `game`, `instance`, `runtime`, `store`); fixtures stay in
+`tests/fixtures/`. Domain tests use saved Mojang JSON and must not depend on
+network access. Frontend tests use Vitest, Testing Library, and jsdom.
 
 CI runs Biome checks, TypeScript typechecking, frontend tests, Rust formatting,
 Clippy, Rust tests, and a Tauri release build on Windows and Ubuntu. Automated
