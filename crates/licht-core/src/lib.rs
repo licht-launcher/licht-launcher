@@ -7,6 +7,7 @@
 mod auth;
 mod error;
 mod game;
+mod hashes;
 mod instance;
 mod loaders;
 mod meta;

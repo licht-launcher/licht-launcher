@@ -5,8 +5,9 @@ use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use tokio::sync::mpsc;
 
-use super::archive::{extract_java_archive, hex_encode, java_executable, mark_executable};
+use super::archive::{extract_java_archive, java_executable, mark_executable};
 use super::require::required_java_major;
+use crate::hashes::hex_encode;
 use crate::{
     Arch, CoreError, DownloadProgress, LaunchEnvironment, OsName, Result, SharedCache, Version,
 };
@@ -347,8 +348,8 @@ mod tests {
 
     use sha2::{Digest, Sha256};
 
-    use super::super::archive::hex_encode;
     use super::{install_temurin, platform_label, temurin_folder_name};
+    use crate::hashes::hex_encode;
     use crate::{Arch, CoreError, DownloadProgress, LaunchEnvironment, OsName, SharedCache};
 
     #[test]

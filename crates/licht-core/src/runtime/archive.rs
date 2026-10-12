@@ -140,14 +140,6 @@ pub(crate) fn place_link(link: &Path, target: &str) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn hex_encode(bytes: &[u8]) -> String {
-    let mut hex = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        hex.push_str(&format!("{byte:02x}"));
-    }
-    hex
-}
-
 #[cfg(test)]
 mod tests {
     use std::io::Write;

@@ -6,13 +6,13 @@ use std::time::Duration;
 
 use futures_util::TryStreamExt;
 use serde::Serialize;
-use sha1::{Digest, Sha1};
 use tokio::io::AsyncReadExt;
 use tokio::sync::{Mutex, Notify, mpsc};
 use tokio_util::io::StreamReader;
 use tracing::warn;
 use ts_rs::TS;
 
+use crate::hashes::{file_matches_sha1, sha1_hex};
 use crate::{CoreError, Result};
 
 const CHUNK_SIZE: usize = 64 * 1024;
@@ -290,7 +290,7 @@ async fn download_one(job: TransferJob<'_>) -> Result<()> {
     {
         let lock = destination_lock(job.destination);
         let _guard = lock.lock().await;
-        if file_matches(job.destination, job.expected_sha1).await? {
+        if file_matches_sha1(job.destination, job.expected_sha1)? {
             if let Some(progress) = job.progress {
                 progress.add(job.published_size);
             }
@@ -326,7 +326,7 @@ async fn download_one(job: TransferJob<'_>) -> Result<()> {
                 "download has no SHA1; content is not verified"
             );
         } else {
-            let actual = hex_encode(Sha1::digest(&fetched).as_slice());
+            let actual = sha1_hex(&fetched);
             if !actual.eq_ignore_ascii_case(job.expected_sha1) {
                 if let Some(progress) = job.progress {
                     progress.subtract(fetched.len() as u64);
@@ -349,7 +349,7 @@ async fn download_one(job: TransferJob<'_>) -> Result<()> {
         let _write = job.limits.write.acquire(job.write_concurrency).await;
         let lock = destination_lock(job.destination);
         let _guard = lock.lock().await;
-        if file_matches(job.destination, job.expected_sha1).await? {
+        if file_matches_sha1(job.destination, job.expected_sha1)? {
             return Ok(());
         }
         match write_bytes(job.destination, &fetched).await {
@@ -429,28 +429,6 @@ fn destination_lock(destination: &Path) -> Arc<Mutex<()>> {
             .entry(destination.to_path_buf())
             .or_insert_with(|| Arc::new(Mutex::new(()))),
     )
-}
-
-async fn file_matches(path: &Path, expected_sha1: &str) -> Result<bool> {
-    // Existence is not verification. Callers that omit a hash re-download.
-    if expected_sha1.is_empty() {
-        return Ok(false);
-    }
-    let mut file = match tokio::fs::File::open(path).await {
-        Ok(file) => file,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
-        Err(error) => return Err(error.into()),
-    };
-    let mut hasher = Sha1::new();
-    let mut buffer = vec![0_u8; CHUNK_SIZE];
-    loop {
-        let read = file.read(&mut buffer).await?;
-        if read == 0 {
-            break;
-        }
-        hasher.update(&buffer[..read]);
-    }
-    Ok(hex_encode(hasher.finalize().as_slice()).eq_ignore_ascii_case(expected_sha1))
 }
 
 struct ByteProgress {
@@ -535,12 +513,4 @@ fn part_path(destination: &Path) -> Result<PathBuf> {
     let mut part_name = name.to_os_string();
     part_name.push(".part");
     Ok(destination.with_file_name(part_name))
-}
-
-fn hex_encode(bytes: &[u8]) -> String {
-    let mut hex = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        hex.push_str(&format!("{byte:02x}"));
-    }
-    hex
 }

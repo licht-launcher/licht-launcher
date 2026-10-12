@@ -2,15 +2,8 @@ use std::fs;
 use std::io::Read;
 use std::path::Path;
 
+use crate::hashes::hex_encode;
 use crate::{CoreError, Result};
-
-pub(super) fn hex_encode(bytes: &[u8]) -> String {
-    let mut hex = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        hex.push_str(&format!("{byte:02x}"));
-    }
-    hex
-}
 
 /// Returns `(sha1, sha512)` as lowercase hex, or `None` when the file does not exist.
 pub(super) fn hash_file(path: &Path) -> Result<Option<(String, String)>> {
@@ -146,11 +139,6 @@ mod tests {
 
     const HELLO_WORLD_SHA1: &str = "2aae6c35c94fcfb415dbe95f408b9ce91ee846ed";
     const HELLO_WORLD_MD5: &str = "5eb63bbbe01eeed093cb22bb8f5acdc3";
-
-    #[test]
-    fn encodes_lowercase_hex() {
-        assert_eq!(hex_encode(&[0x00, 0x0f, 0xab, 0xff]), "000fabff");
-    }
 
     #[test]
     fn hashes_a_file_and_reports_missing_ones() {
