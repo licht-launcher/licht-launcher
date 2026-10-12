@@ -1,0 +1,5 @@
+//! Integration tests for cache, database, and settings (`store/`).
+
+mod cache;
+mod db;
+mod settings;

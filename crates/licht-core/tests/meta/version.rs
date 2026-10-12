@@ -5,8 +5,8 @@ use licht_core::{CoreError, GameArguments, parse_version};
 #[test]
 fn parses_legacy_version_files() {
     for (json, asset_id) in [
-        (include_str!("fixtures/version-1.8.9.json"), "1.8"),
-        (include_str!("fixtures/version-1.12.2.json"), "1.12"),
+        (include_str!("../fixtures/version-1.8.9.json"), "1.8"),
+        (include_str!("../fixtures/version-1.12.2.json"), "1.12"),
     ] {
         let version = parse_version(json).expect("the saved version should parse");
         assert!(matches!(version.arguments, GameArguments::Legacy(_)));
@@ -23,8 +23,8 @@ fn parses_legacy_version_files() {
 #[test]
 fn parses_modern_version_files() {
     for json in [
-        include_str!("fixtures/version-1.20.6.json"),
-        include_str!("fixtures/version-1.21.11.json"),
+        include_str!("../fixtures/version-1.20.6.json"),
+        include_str!("../fixtures/version-1.21.11.json"),
     ] {
         let version = parse_version(json).expect("the saved version should parse");
         assert!(matches!(version.arguments, GameArguments::Modern { .. }));

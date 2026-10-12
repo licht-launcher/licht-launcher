@@ -65,9 +65,11 @@ tokens, secrets, or personal data.
 
 ## Testing
 
-The core is testable independently with `cargo test -p licht-core`. Domain tests
-use saved Mojang JSON fixtures and must not depend on network access. Frontend
-tests use Vitest, Testing Library, and jsdom.
+The core is testable independently with `cargo test -p licht-core`. Integration
+tests under `crates/licht-core/tests/` mirror the source domains (`meta`,
+`transfer`, `game`, `instance`, `java`, `store`); fixtures stay in
+`tests/fixtures/`. Domain tests use saved Mojang JSON and must not depend on
+network access. Frontend tests use Vitest, Testing Library, and jsdom.
 
 CI runs Biome checks, TypeScript typechecking, frontend tests, Rust formatting,
 Clippy, Rust tests, and a Tauri release build on Windows and Ubuntu. Automated

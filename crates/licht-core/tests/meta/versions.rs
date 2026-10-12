@@ -7,7 +7,7 @@ use licht_core::{
 
 #[test]
 fn the_saved_manifest_names_its_latest_release() {
-    let manifest = parse_version_manifest(include_str!("fixtures/version_manifest_v2.json"))
+    let manifest = parse_version_manifest(include_str!("../fixtures/version_manifest_v2.json"))
         .expect("manifest");
     let lines = version_lines(&manifest);
     assert!(

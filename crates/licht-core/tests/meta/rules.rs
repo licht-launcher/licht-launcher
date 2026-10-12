@@ -79,7 +79,7 @@ fn an_os_version_pattern_must_match_and_an_invalid_pattern_does_not() {
 
 #[test]
 fn saved_1_21_11_keeps_natives_for_the_requested_os() {
-    let version = parse_version(include_str!("fixtures/version-1.21.11.json"))
+    let version = parse_version(include_str!("../fixtures/version-1.21.11.json"))
         .expect("the saved version should parse");
 
     let linux = names(&version, OsName::Linux, Arch::X86_64);
