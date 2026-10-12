@@ -1,15 +1,18 @@
-use std::path::{Path, PathBuf};
+//! Eclipse Temurin (Adoptium) Java install and discovery.
 
-use futures_util::StreamExt;
-use serde::Deserialize;
-use sha2::{Digest, Sha256};
+mod api;
+mod download;
+mod layout;
+
+pub(crate) use layout::{find_temurin, temurin_folder_name};
+
+use std::path::PathBuf;
+
 use tokio::sync::mpsc;
 
-use super::archive::{extract_java_archive, hex_encode, java_executable, mark_executable};
+use super::archive::{extract_java_archive, java_executable, mark_executable};
 use super::require::required_java_major;
-use crate::{
-    Arch, CoreError, DownloadProgress, LaunchEnvironment, OsName, Result, SharedCache, Version,
-};
+use crate::{CoreError, DownloadProgress, LaunchEnvironment, Result, SharedCache, Version};
 
 pub const ADOPTIUM_API: &str = "https://api.adoptium.net";
 
@@ -39,8 +42,8 @@ pub async fn install_temurin(
     }
 
     let release =
-        temurin_package(client, api_base, major, environment.os, environment.arch).await?;
-    let root = runtime_folder(
+        api::temurin_package(client, api_base, major, environment.os, environment.arch).await?;
+    let root = layout::runtime_folder(
         cache,
         &temurin_folder_name(
             major,
@@ -54,9 +57,9 @@ pub async fn install_temurin(
     std::fs::create_dir_all(&root)?;
 
     let package = &release.package;
-    let name = archive_name(&package.name)?;
+    let name = download::archive_name(&package.name)?;
     let archive = root.join(name);
-    download_sha256(
+    download::download_sha256(
         client,
         &package.link,
         &archive,
@@ -82,286 +85,17 @@ pub async fn install_temurin(
     Ok(executable)
 }
 
-fn runtime_folder(cache: &SharedCache, name: &str) -> Result<PathBuf> {
-    if name.is_empty() || name.contains(['/', '\\']) || name == "." || name == ".." {
-        return Err(CoreError::CachePath);
-    }
-    Ok(cache.root().join("runtime").join(name))
-}
-
-/// `temurin25-jre25.0.2-win_x64`: one folder, with the package and the machine in the name.
-pub(crate) fn temurin_folder_name(
-    major: u32,
-    image: &str,
-    version: &str,
-    os: OsName,
-    arch: Arch,
-) -> Result<String> {
-    if image != "jre" && image != "jdk" {
-        return Err(CoreError::JavaRuntimeMissing);
-    }
-    if version.is_empty()
-        || version.contains(['/', '\\', '-'])
-        || version
-            .split('.')
-            .any(|part| part.is_empty() || part.parse::<u32>().is_err())
-    {
-        return Err(CoreError::JavaRuntimeMissing);
-    }
-    Ok(format!(
-        "temurin{major}-{image}{version}-{}",
-        platform_label(os, arch)
-    ))
-}
-
-pub(crate) fn platform_label(os: OsName, arch: Arch) -> String {
-    let os = match os {
-        OsName::Windows => "win",
-        OsName::Linux => "linux",
-        OsName::Osx => "mac",
-    };
-    let arch = match arch {
-        Arch::X86_64 => "x64",
-        Arch::X86 => "x86",
-    };
-    format!("{os}_{arch}")
-}
-
-pub(crate) fn find_temurin(
-    cache: &SharedCache,
-    major: u32,
-    environment: &LaunchEnvironment,
-) -> Result<Option<PathBuf>> {
-    let runtime = cache.root().join("runtime");
-    let platform = platform_label(environment.os, environment.arch);
-    let entries = match std::fs::read_dir(&runtime) {
-        Ok(entries) => entries,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(error) => return Err(error.into()),
-    };
-    let mut found = Vec::new();
-    for entry in entries {
-        let entry = entry?;
-        let path = entry.path();
-        if !path.is_dir() {
-            continue;
-        }
-        let Ok(name) = entry.file_name().into_string() else {
-            continue;
-        };
-        if folder_middle(&name, major, &platform).is_none() {
-            continue;
-        }
-        if java_executable(&path, environment.os).is_file() {
-            found.push((name, path));
-        }
-    }
-    found.sort_by_key(|left| std::cmp::Reverse(temurin_rank(&left.0)));
-    Ok(found.into_iter().next().map(|(_, path)| path))
-}
-
-fn folder_middle<'a>(name: &'a str, major: u32, platform: &str) -> Option<&'a str> {
-    let rest = name.strip_prefix(&format!("temurin{major}-"))?;
-    let middle = rest.strip_suffix(&format!("-{platform}"))?;
-    if middle.starts_with("jre") || middle.starts_with("jdk") {
-        Some(middle)
-    } else {
-        None
-    }
-}
-
-fn temurin_rank(name: &str) -> (bool, Vec<u32>) {
-    let middle = name.split('-').nth(1).unwrap_or("");
-    let (jre, version) = if let Some(version) = middle.strip_prefix("jre") {
-        (true, version)
-    } else if let Some(version) = middle.strip_prefix("jdk") {
-        (false, version)
-    } else {
-        (false, "")
-    };
-    let parts = version
-        .split('.')
-        .filter(|part| !part.is_empty())
-        .map(|part| part.parse().unwrap_or(0))
-        .collect();
-    (jre, parts)
-}
-
-fn adoptium_os(os: OsName) -> &'static str {
-    match os {
-        OsName::Windows => "windows",
-        OsName::Linux => "linux",
-        OsName::Osx => "mac",
-    }
-}
-
-fn adoptium_arch(arch: Arch) -> &'static str {
-    match arch {
-        Arch::X86_64 => "x64",
-        Arch::X86 => "x86",
-    }
-}
-
-fn assets_url(api_base: &str, major: u32, os: &str, arch: &str, image: &str) -> String {
-    format!(
-        "{}/v3/assets/latest/{major}/hotspot?architecture={arch}&image_type={image}&os={os}&vendor=eclipse",
-        api_base.trim_end_matches('/')
-    )
-}
-
-async fn temurin_package(
-    client: &reqwest::Client,
-    api_base: &str,
-    major: u32,
-    os: OsName,
-    arch: Arch,
-) -> Result<TemurinRelease> {
-    let os_name = adoptium_os(os);
-    let arch_name = adoptium_arch(arch);
-    if let Some(release) = fetch_assets(client, api_base, major, os_name, arch_name, "jre").await? {
-        return Ok(release);
-    }
-    fetch_assets(client, api_base, major, os_name, arch_name, "jdk")
-        .await?
-        .ok_or(CoreError::JavaRuntimeMissing)
-}
-
-async fn fetch_assets(
-    client: &reqwest::Client,
-    api_base: &str,
-    major: u32,
-    os: &str,
-    arch: &str,
-    image: &str,
-) -> Result<Option<TemurinRelease>> {
-    let body = client
-        .get(assets_url(api_base, major, os, arch, image))
-        .send()
-        .await?
-        .error_for_status()?
-        .text()
-        .await?;
-    let assets: Vec<TemurinAsset> = serde_json::from_str(&body).map_err(CoreError::JavaRuntime)?;
-    let Some(asset) = assets.into_iter().next() else {
-        return Ok(None);
-    };
-    Ok(Some(TemurinRelease {
-        image: asset.binary.image_type,
-        version: release_number(&asset.version.semver)?,
-        package: asset.binary.package,
-    }))
-}
-
-fn release_number(semver: &str) -> Result<String> {
-    let version = semver
-        .split_once('+')
-        .map_or(semver, |(version, _)| version);
-    if version.is_empty() {
-        return Err(CoreError::JavaRuntimeMissing);
-    }
-    Ok(version.to_string())
-}
-
-#[derive(Debug, Deserialize)]
-struct TemurinAsset {
-    binary: TemurinBinary,
-    version: TemurinVersion,
-}
-
-#[derive(Debug, Deserialize)]
-struct TemurinBinary {
-    image_type: String,
-    package: TemurinPackage,
-}
-
-#[derive(Debug, Deserialize)]
-struct TemurinVersion {
-    semver: String,
-}
-
-struct TemurinRelease {
-    image: String,
-    version: String,
-    package: TemurinPackage,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-struct TemurinPackage {
-    checksum: String,
-    link: String,
-    name: String,
-    size: u64,
-}
-
-fn archive_name(name: &str) -> Result<&str> {
-    if name.is_empty() || name.contains(['/', '\\']) || name == "." || name == ".." {
-        return Err(CoreError::CachePath);
-    }
-    Ok(name)
-}
-
-async fn download_sha256(
-    client: &reqwest::Client,
-    url: &str,
-    destination: &Path,
-    expected_sha256: &str,
-    size: u64,
-    progress: &mpsc::Sender<DownloadProgress>,
-) -> Result<()> {
-    let response = client.get(url).send().await?.error_for_status()?;
-    let mut stream = response.bytes_stream();
-    let mut file = tokio::fs::File::create(destination).await?;
-    let mut hasher = Sha256::new();
-    let mut done = 0_u64;
-    while let Some(chunk) = stream.next().await {
-        let chunk = chunk?;
-        hasher.update(&chunk);
-        tokio::io::AsyncWriteExt::write_all(&mut file, &chunk).await?;
-        done = done.saturating_add(chunk.len() as u64);
-        let _ = progress.try_send(DownloadProgress {
-            finished: 0,
-            failed: 0,
-            total: 1,
-            bytes_done: done,
-            bytes_total: size,
-        });
-    }
-    tokio::io::AsyncWriteExt::flush(&mut file).await?;
-    drop(file);
-    let actual = hex_encode(hasher.finalize().as_slice());
-    if !actual.eq_ignore_ascii_case(expected_sha256) {
-        let _ = std::fs::remove_file(destination);
-        return Err(CoreError::Sha256Mismatch {
-            expected: expected_sha256.to_string(),
-            actual,
-        });
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use std::io::Write;
 
+    use sha2::{Digest, Sha256};
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-    use sha2::{Digest, Sha256};
-
-    use super::super::archive::hex_encode;
-    use super::{install_temurin, platform_label, temurin_folder_name};
+    use super::install_temurin;
+    use super::layout::platform_label;
+    use crate::hashes::hex_encode;
     use crate::{Arch, CoreError, DownloadProgress, LaunchEnvironment, OsName, SharedCache};
-
-    #[test]
-    fn a_temurin_folder_names_the_package_and_the_machine() {
-        assert_eq!(
-            temurin_folder_name(25, "jre", "25.0.2", OsName::Windows, Arch::X86_64).expect("name"),
-            "temurin25-jre25.0.2-win_x64"
-        );
-        assert_eq!(
-            temurin_folder_name(8, "jdk", "8.0.422", OsName::Linux, Arch::X86).expect("name"),
-            "temurin8-jdk8.0.422-linux_x86"
-        );
-    }
 
     #[tokio::test]
     async fn temurin_is_stored_under_its_major_version() {
