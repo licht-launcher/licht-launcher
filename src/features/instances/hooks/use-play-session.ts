@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import {
   installModpackFiles,
   installVersion,
+  isVersionReady,
   launchVersion,
   listRunningGames,
   stopGame,
@@ -12,17 +13,14 @@ import {
 } from "@/lib/commands";
 import { friendlyError, messageOf } from "@/lib/errors";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
-import type { VersionSummary } from "@/lib/generated/VersionSummary";
 
 export type PlayPhase = "idle" | "starting" | "running" | "stopping";
 
 export function usePlaySession({
-  versions,
   username,
   clearVersionProgress,
   clearFolderLog,
 }: {
-  versions: VersionSummary[] | undefined;
   username: string;
   clearVersionProgress: (versionId: string) => void;
   clearFolderLog: (folder: string) => void;
@@ -150,12 +148,9 @@ export function usePlaySession({
       return;
     }
 
-    const summary = versions?.find(
-      (version) => version.id === instance.versionId,
-    );
-    const needsGame = summary === undefined || !summary.installed;
-    if (!needsGame) {
-      // Already installed: refresh modpack files without the play-panel spinner.
+    const ready = await isVersionReady(instance.versionId);
+    if (ready) {
+      // Already ready: refresh modpack files without the play-panel spinner.
       await installModpackFiles(instance.folder);
       return;
     }
@@ -181,7 +176,10 @@ export function usePlaySession({
     clearFolderLog(instance.folder);
 
     try {
-      await prepareInstance(instance);
+      const ready = await isVersionReady(instance.versionId);
+      if (!ready) {
+        await prepareInstance(instance);
+      }
       markStarting(instance.folder);
       launchPendingRef.current.add(instance.folder);
       try {

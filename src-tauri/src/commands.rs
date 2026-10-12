@@ -6,22 +6,23 @@ use licht_core::{
     ADOPTIUM_API, ASSET_OBJECT_BASE, AccountProfile, Arch, CoreError, DownloadProgress, GameExit,
     GameInstall, GameLogEvent, InstallProgress, InstanceEntry, InstanceFsEntry, InstanceSettings,
     JavaDetections, JavaPaths, JavaStatus, LaunchEnvironment, LoaderChannel, LoaderPlatform,
-    ModpackListItem, ModpackSource, ModpackVersionItem, OsName, Settings, SettingsSnapshot,
-    SharedCache, VersionSummary, browse_start_directory, clear_launch_lock, configured_java,
-    create_instance_from_modpack as create_instance_from_modpack_core,
+    MANIFEST_REQUEST_TIMEOUT, ModpackListItem, ModpackSource, ModpackVersionItem, OsName, Settings,
+    SettingsSnapshot, SharedCache, VersionSummary, browse_start_directory, clear_launch_lock,
+    configured_java, create_instance_from_modpack as create_instance_from_modpack_core,
     create_instance_with_platform as create_instance_with_platform_core, detect_known_javas,
     fetch_version_manifest, game_cache, get_active_profile, global_launch,
     install_curseforge_files, install_game, install_mrpack_files, install_temurin, installed_java,
-    kill_launch_process, list_accounts, list_loader_versions as list_loader_versions_core,
+    is_version_ready, kill_launch_process, list_accounts,
+    list_loader_versions as list_loader_versions_core,
     list_modpack_versions as list_modpack_versions_core, list_running_launch_folders,
-    load_instance, load_resolved_version_json, load_settings, local_inherits_from,
-    local_version_exists, log_codec, login_with_browser, logout_account, offline_account,
-    parse_version, prepare_microsoft_launch, prepare_offline_launch, probe_java_major,
-    process_matches_lock, read_launch_lock, required_java_major, resolved_java_path,
-    resolved_launch, run_game, runtime_java_paths, search_modpacks as search_modpacks_core,
-    session_for_launch, set_active_account, set_java_path, settings_snapshot,
-    touch_last_opened as touch_instance_opened, update_instance, update_instance_version,
-    version_summaries, write_launch_lock_for_pid,
+    list_version_summaries, load_instance, load_resolved_version_json, load_settings,
+    local_inherits_from, local_version_exists, log_codec, login_with_browser, logout_account,
+    offline_account, parse_version, prepare_microsoft_launch, prepare_offline_launch,
+    probe_java_major, process_matches_lock, read_launch_lock, required_java_major,
+    resolved_java_path, resolved_launch, run_game, runtime_java_paths,
+    search_modpacks as search_modpacks_core, session_for_launch, set_active_account, set_java_path,
+    settings_snapshot, touch_last_opened as touch_instance_opened, update_instance,
+    update_instance_version, write_launch_lock_for_pid,
 };
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::{DialogExt, FileDialogBuilder};
@@ -30,6 +31,14 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::task::AbortHandle;
 
 use crate::progress::ProgressThrottle;
+
+/// Shared HTTP client with a per-request timeout (avoids hanging forever on Mojang).
+fn http_client() -> Result<reqwest::Client, CoreError> {
+    reqwest::Client::builder()
+        .timeout(MANIFEST_REQUEST_TIMEOUT)
+        .build()
+        .map_err(CoreError::from)
+}
 
 enum LaunchSession {
     Starting,
@@ -252,7 +261,7 @@ pub async fn list_loader_versions(
     let platform =
         LoaderPlatform::parse(&platform).ok_or_else(|| "unknown platform".to_string())?;
     let channel = LoaderChannel::parse(&channel).ok_or_else(|| "unknown channel".to_string())?;
-    let client = reqwest::Client::new();
+    let client = http_client().map_err(failure)?;
     list_loader_versions_core(&client, platform, &game_version, channel)
         .await
         .map_err(failure)
@@ -273,7 +282,7 @@ pub async fn create_instance_with_platform(
         LoaderChannel::parse(&loader_channel).ok_or_else(|| "unknown channel".to_string())?;
     let root = instances_root(&paths).map_err(failure)?;
     let settings = load_settings(&paths.settings).map_err(failure)?;
-    let client = reqwest::Client::new();
+    let client = http_client().map_err(failure)?;
     create_instance_with_platform_core(
         &client,
         &paths.game,
@@ -291,7 +300,7 @@ pub async fn create_instance_with_platform(
 
 #[tauri::command]
 pub async fn search_modpacks(query: String) -> Result<Vec<ModpackListItem>, String> {
-    let client = reqwest::Client::new();
+    let client = http_client().map_err(failure)?;
     search_modpacks_core(&client, &query).await.map_err(failure)
 }
 
@@ -302,7 +311,7 @@ pub async fn list_modpack_versions(
 ) -> Result<Vec<ModpackVersionItem>, String> {
     let source =
         ModpackSource::parse(&source).ok_or_else(|| "unknown modpack source".to_string())?;
-    let client = reqwest::Client::new();
+    let client = http_client().map_err(failure)?;
     list_modpack_versions_core(&client, source, &project_id)
         .await
         .map_err(failure)
@@ -320,7 +329,7 @@ pub async fn create_instance_from_modpack(
         ModpackSource::parse(&source).ok_or_else(|| "unknown modpack source".to_string())?;
     let root = instances_root(&paths).map_err(failure)?;
     let settings = load_settings(&paths.settings).map_err(failure)?;
-    let client = reqwest::Client::new();
+    let client = http_client().map_err(failure)?;
     create_instance_from_modpack_core(
         &client,
         &paths.game,
@@ -503,7 +512,7 @@ pub async fn begin_microsoft_login(
     app: AppHandle,
     paths: State<'_, LauncherPaths>,
 ) -> Result<AccountProfile, String> {
-    let client = reqwest::Client::new();
+    let client = http_client().map_err(failure)?;
     let opener = app.clone();
     login_with_browser(&client, &paths.settings, move |url| {
         opener
@@ -582,7 +591,7 @@ pub async fn install_recommended_java(
     let settings = paths.settings.clone();
     let environment = host_environment().map_err(failure)?;
     let executable = install_temurin(
-        &reqwest::Client::new(),
+        &http_client().map_err(failure)?,
         &game,
         major,
         &environment,
@@ -661,10 +670,18 @@ pub async fn browse_application_directory(
 #[tauri::command]
 pub async fn list_versions(paths: State<'_, LauncherPaths>) -> Result<Vec<VersionSummary>, String> {
     let cache = paths.game.clone();
-    let manifest = fetch_version_manifest(&reqwest::Client::new())
+    let client = http_client().map_err(failure)?;
+    list_version_summaries(&client, &cache)
         .await
-        .map_err(failure)?;
-    Ok(version_summaries(&manifest, &cache))
+        .map_err(failure)
+}
+
+#[tauri::command]
+pub async fn is_version_ready_cmd(
+    paths: State<'_, LauncherPaths>,
+    version_id: String,
+) -> Result<bool, String> {
+    Ok(is_version_ready(&paths.game, &version_id))
 }
 
 #[tauri::command]
@@ -676,6 +693,27 @@ pub async fn install_version(
     install_one(&app, &paths.game, &paths.settings, &version_id, &version_id)
         .await
         .map_err(failure)
+}
+
+/// Re-downloads game assets and modpack files for an instance (Repair).
+#[tauri::command]
+pub async fn repair_instance(
+    app: AppHandle,
+    paths: State<'_, LauncherPaths>,
+    folder: String,
+) -> Result<(), String> {
+    let dir = paths.game.instance_dir(&folder).map_err(failure)?;
+    let instance = load_instance(&dir).map_err(failure)?;
+    install_one(
+        &app,
+        &paths.game,
+        &paths.settings,
+        &instance.version_id,
+        &instance.version_id,
+    )
+    .await
+    .map_err(failure)?;
+    install_modpack_files(app, paths, folder).await
 }
 
 fn emit_install_progress(app: &AppHandle, progress_version_id: &str, progress: DownloadProgress) {
@@ -706,17 +744,24 @@ async fn install_one(
 
     let cache = game.clone();
     let settings = settings.clone();
-    let client = reqwest::Client::new();
-    let manifest = fetch_version_manifest(&client).await?;
-    let entry = manifest
-        .versions
-        .iter()
-        .find(|version| version.id == version_id);
+    let client = http_client()?;
+    let manifest = fetch_version_manifest(&client, &cache).await;
+    let entry = match &manifest {
+        Ok(manifest) => manifest
+            .versions
+            .iter()
+            .find(|version| version.id == version_id)
+            .cloned(),
+        Err(_) => None,
+    };
 
-    // Custom loader profiles are not on Mojang's list; install their parent first.
+    // Custom loader profiles, or offline when only a local JSON exists.
     if entry.is_none() {
         if !local_version_exists(&cache, version_id) {
-            return Err(CoreError::VersionMissing);
+            return Err(match manifest {
+                Err(error) => error,
+                Ok(_) => CoreError::VersionMissing,
+            });
         }
         if let Some(parent) = local_inherits_from(&cache, version_id)? {
             Box::pin(install_one(
@@ -895,7 +940,7 @@ async fn launch_one(
     };
     let codec = log_codec(major);
     let launch = resolved_launch(&profile, &global_launch(&settings));
-    let http = reqwest::Client::new();
+    let http = http_client()?;
     let prepared = match session_for_launch(&http, settings_home).await {
         Ok(session) => prepare_microsoft_launch(
             &java,

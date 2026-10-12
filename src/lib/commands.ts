@@ -201,8 +201,16 @@ export function listVersions(): Promise<VersionSummary[]> {
   return invoke("list_versions");
 }
 
+export function isVersionReady(versionId: string): Promise<boolean> {
+  return invoke("is_version_ready_cmd", { versionId });
+}
+
 export function installVersion(versionId: string): Promise<string> {
   return invoke("install_version", { versionId });
+}
+
+export function repairInstance(folder: string): Promise<void> {
+  return invoke("repair_instance", { folder });
 }
 
 export function installModpackFiles(folder: string): Promise<void> {

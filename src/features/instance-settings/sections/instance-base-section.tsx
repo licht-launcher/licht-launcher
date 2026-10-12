@@ -1,25 +1,64 @@
-import { BoxIcon, LayersIcon, PencilIcon } from "lucide-react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { BoxIcon, LayersIcon, PencilIcon, WrenchIcon } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { EditInstanceVersionDialog } from "@/features/instance-settings/components/edit-instance-version-dialog";
+import { listVersions, repairInstance } from "@/lib/commands";
+import { friendlyError, messageOf } from "@/lib/errors";
 import type { VersionSummary } from "@/lib/generated/VersionSummary";
 
+function versionsForPicker(
+  versions: VersionSummary[] | undefined,
+  versionId: string,
+): VersionSummary[] {
+  if (versions !== undefined && versions.length > 0) {
+    return versions;
+  }
+  return [
+    {
+      id: versionId,
+      versionType: "old_alpha",
+      installed: true,
+    },
+  ];
+}
+
 export function InstanceBaseSection({
+  folder,
   versionId,
-  versions,
   busy,
   versionBusy,
   onChangeVersion,
 }: {
+  folder: string;
   versionId: string;
-  versions: VersionSummary[];
   busy: boolean;
   versionBusy: boolean;
   onChangeVersion: (versionId: string) => void;
 }) {
   const [editOpen, setEditOpen] = useState(false);
+  const versions = useQuery({
+    queryKey: ["versions"],
+    queryFn: listVersions,
+    enabled: editOpen,
+    retry: false,
+  });
+  const repair = useMutation({
+    mutationFn: () => repairInstance(folder),
+    onSuccess: () => {
+      toast.success("Instance files were repaired.");
+    },
+    onError: (error: unknown) => {
+      toast.error(friendlyError(messageOf(error)));
+    },
+  });
+
+  const pickerVersions = versionsForPicker(versions.data, versionId);
+  const versionsLoading = editOpen && versions.isPending;
+  const versionsFailed = editOpen && versions.isError;
 
   return (
     <div className="flex flex-col gap-6">
@@ -62,7 +101,7 @@ export function InstanceBaseSection({
           type="button"
           variant="warning"
           className="self-start"
-          disabled={busy || versionBusy || versions.length === 0}
+          disabled={busy || versionBusy}
           onClick={() => {
             setEditOpen(true);
           }}
@@ -72,10 +111,45 @@ export function InstanceBaseSection({
         </Button>
       </div>
 
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-1">
+          <h3 className="text-sm font-medium">Repair</h3>
+          <p className="text-sm text-muted-foreground">
+            Re-download missing game files and modpack content for this
+            instance.
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          className="self-start"
+          disabled={busy || versionBusy || repair.isPending}
+          onClick={() => {
+            repair.mutate();
+          }}
+        >
+          {repair.isPending ? (
+            <Spinner
+              className="size-3.5"
+              data-icon="inline-start"
+              aria-hidden
+            />
+          ) : (
+            <WrenchIcon data-icon="inline-start" aria-hidden />
+          )}
+          Repair
+        </Button>
+      </div>
+
       <EditInstanceVersionDialog
         open={editOpen}
         versionId={versionId}
-        versions={versions}
+        versions={pickerVersions}
+        versionsPending={versionsLoading}
+        versionsError={versionsFailed}
+        onRetryVersions={() => {
+          void versions.refetch();
+        }}
         busy={busy || versionBusy}
         onOpenChange={setEditOpen}
         onSave={onChangeVersion}

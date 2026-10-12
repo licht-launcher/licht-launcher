@@ -230,6 +230,10 @@ export function NewInstancePage() {
               includeSnapshots={state.includeSnapshots}
               versions={versions.data ?? []}
               versionsPending={versions.isPending}
+              versionsError={versions.isError}
+              onRetryVersions={() => {
+                void versions.refetch();
+              }}
               loaderChannel={state.loaderChannel}
               loaderVersion={state.loaderVersion}
               loaderVersions={loaderVersions.data ?? []}

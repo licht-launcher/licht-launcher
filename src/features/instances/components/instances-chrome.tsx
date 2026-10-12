@@ -92,7 +92,6 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
     prepareInstance,
     stopInstance,
   } = usePlaySession({
-    versions: versions.data,
     username,
     clearVersionProgress,
     clearFolderLog,

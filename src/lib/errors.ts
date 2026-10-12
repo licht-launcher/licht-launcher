@@ -33,6 +33,8 @@ const FRIENDLY: Record<string, string> = {
     "No loader build matches this game version. Try another version or channel.",
   "version was not found":
     "That game version is missing. Install it again or pick another version.",
+  "version manifest is unavailable":
+    "Could not load the version list. Check your connection and try again.",
   "LICHT_CURSEFORGE_API_KEY is missing or empty":
     "CurseForge needs LICHT_CURSEFORGE_API_KEY. Modrinth packs still work.",
   "curseforge download host is not allowed":

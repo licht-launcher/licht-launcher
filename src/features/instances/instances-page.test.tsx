@@ -218,14 +218,14 @@ describe("InstancesPage", () => {
           { id: "24w14a", versionType: "snapshot", installed: false },
         ]);
       }
+      if (command === "is_version_ready_cmd") {
+        return Promise.resolve(true);
+      }
       if (command === "get_settings") {
         return Promise.resolve({
           ...snapshot,
           settings: { ...snapshot.settings, username: "Mateus" },
         });
-      }
-      if (command === "install_modpack_files") {
-        return Promise.resolve();
       }
       if (command === "touch_last_opened") {
         return Promise.resolve({
@@ -311,6 +311,10 @@ describe("InstancesPage", () => {
       "install_version",
       expect.anything(),
     );
+    expect(invoke).not.toHaveBeenCalledWith(
+      "install_modpack_files",
+      expect.anything(),
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Stop" }));
     expect(
@@ -384,6 +388,9 @@ describe("InstancesPage", () => {
           { id: "1.5.2", versionType: "release", installed: true },
           { id: "1.20.1", versionType: "release", installed: true },
         ]);
+      }
+      if (command === "is_version_ready_cmd") {
+        return Promise.resolve(true);
       }
       if (command === "get_settings") {
         return Promise.resolve(snapshot);
@@ -480,6 +487,9 @@ describe("InstancesPage", () => {
           { id: "1.20.1", versionType: "release", installed: false },
         ]);
       }
+      if (command === "is_version_ready_cmd") {
+        return Promise.resolve(false);
+      }
       if (command === "get_settings") {
         return Promise.resolve(snapshot);
       }
@@ -545,7 +555,7 @@ describe("InstancesPage", () => {
     });
   });
 
-  it("skips game install when a loader version is already installed", async () => {
+  it("skips prepare when the version is already ready", async () => {
     invoke.mockImplementation((command: string) => {
       if (command === "list_instances") {
         return Promise.resolve([
@@ -567,11 +577,11 @@ describe("InstancesPage", () => {
           },
         ]);
       }
+      if (command === "is_version_ready_cmd") {
+        return Promise.resolve(true);
+      }
       if (command === "get_settings") {
         return Promise.resolve(snapshot);
-      }
-      if (command === "install_modpack_files") {
-        return Promise.resolve();
       }
       if (command === "touch_last_opened") {
         return Promise.resolve({
@@ -595,9 +605,6 @@ describe("InstancesPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Play" }));
 
     await waitFor(() => {
-      expect(invoke).toHaveBeenCalledWith("install_modpack_files", {
-        folder: "modded",
-      });
       expect(invoke).toHaveBeenCalledWith("launch", {
         folder: "modded",
         username: "Steve",
@@ -605,6 +612,10 @@ describe("InstancesPage", () => {
     });
     expect(invoke).not.toHaveBeenCalledWith(
       "install_version",
+      expect.anything(),
+    );
+    expect(invoke).not.toHaveBeenCalledWith(
+      "install_modpack_files",
       expect.anything(),
     );
   });
@@ -630,6 +641,9 @@ describe("InstancesPage", () => {
             installed: false,
           },
         ]);
+      }
+      if (command === "is_version_ready_cmd") {
+        return Promise.resolve(false);
       }
       if (command === "get_settings") {
         return Promise.resolve(snapshot);
@@ -726,6 +740,9 @@ describe("InstancesPage", () => {
           { id: "1.20.1", versionType: "release", installed: false },
           { id: "1.21.1", versionType: "release", installed: false },
         ]);
+      }
+      if (command === "is_version_ready_cmd") {
+        return Promise.resolve(false);
       }
       if (command === "get_settings") {
         return Promise.resolve(snapshot);

@@ -54,7 +54,9 @@ pub fn run() -> anyhow::Result<()> {
             commands::browse_java,
             commands::browse_application_directory,
             commands::list_versions,
+            commands::is_version_ready_cmd,
             commands::install_version,
+            commands::repair_instance,
             commands::launch,
             commands::list_running_games,
             commands::stop_game
