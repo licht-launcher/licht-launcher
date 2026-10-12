@@ -63,7 +63,7 @@ mod tests {
 
         tracing::subscriber::with_default(subscriber, || {
             tracing::debug!("debug event");
-            tracing::info!(version = "0.1.0", "startup event");
+            tracing::info!(version = "0.1.1", "startup event");
             tracing::warn!("warning event");
         });
 
@@ -79,7 +79,7 @@ mod tests {
         let logs = capture_logs(None);
 
         assert!(logs.contains("startup event"));
-        assert!(logs.contains("version=\"0.1.0\""));
+        assert!(logs.contains("version=\"0.1.1\""));
         assert!(logs.contains("warning event"));
         assert!(!logs.contains("debug event"));
     }

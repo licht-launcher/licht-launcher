@@ -25,7 +25,7 @@ describe("SettingsSidebar", () => {
 
     expect(screen.getByRole("heading", { name: "Settings" })).toBeVisible();
     expect(screen.getByText("Licht Launcher")).toBeInTheDocument();
-    expect(screen.getByText("0.1.0 · Lilie")).toBeInTheDocument();
+    expect(screen.getByText("0.1.1 · Lilie")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "GitHub repository" }));
     expect(invoke).toHaveBeenCalledWith("open_repository");
   });
