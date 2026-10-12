@@ -61,7 +61,11 @@ fn an_installed_runtime_java_is_offered_and_a_missing_file_is_invalid() {
 #[test]
 fn saved_versions_name_their_runtime() {
     for (json, component, major) in [
-        (include_str!("../fixtures/version-1.8.9.json"), "jre-legacy", 8),
+        (
+            include_str!("../fixtures/version-1.8.9.json"),
+            "jre-legacy",
+            8,
+        ),
         (
             include_str!("../fixtures/version-1.12.2.json"),
             "jre-legacy",
@@ -375,7 +379,8 @@ fn one_point_eight_and_one_point_twenty_one_need_different_javas() {
     let failed = write_java_stub(&directory, "failed", "21.0.7", StubKind::Fail);
 
     let version_8 = parse_version(include_str!("../fixtures/version-1.8.9.json")).expect("1.8.9");
-    let version_21 = parse_version(include_str!("../fixtures/version-1.21.11.json")).expect("1.21.11");
+    let version_21 =
+        parse_version(include_str!("../fixtures/version-1.21.11.json")).expect("1.21.11");
     let legacy = required_runtime(&version_8).expect("1.8.9 names a runtime");
     let modern = required_runtime(&version_21).expect("1.21.11 names a runtime");
 
