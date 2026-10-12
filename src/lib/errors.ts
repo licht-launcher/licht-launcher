@@ -4,7 +4,8 @@ const FRIENDLY: Record<string, string> = {
   "I/O operation failed":
     "The disk could not be written. Free some space and try again.",
   "downloaded SHA1 does not match": "A downloaded file was damaged. Try again.",
-  "downloaded SHA512 does not match": "A downloaded file was damaged. Try again.",
+  "downloaded SHA512 does not match":
+    "A downloaded file was damaged. Try again.",
   "LICHT_MSA_CLIENT_ID is missing or empty":
     "Microsoft sign-in is not configured. Set LICHT_MSA_CLIENT_ID and try again.",
   "Microsoft sign-in timed out":
