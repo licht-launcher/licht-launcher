@@ -106,7 +106,7 @@ The codename appears on the About screen, in the GitHub release title, and in th
 **Goal:** have the right Java for each game version, without the user installing anything.
 
 - [x] **3.1** Discover the required runtime (`javaVersion` from the version JSON).
-- [x] **3.2** Download and install the Mojang runtime (`java-runtime` manifest) or Adoptium/Temurin.
+- [x] **3.2** Download and install Adoptium/Temurin for the required major (Mojang's own `java-runtime` packages are not used).
   - Decision: Eclipse Temurin by default, JRE when Adoptium publishes one, otherwise the JDK. The major version comes from `javaVersion.majorVersion`, or from the version id when that field is absent. `--java` uses the given executable. A Java already installed on the machine is not selected on its own.
 - [x] **3.3** Detect already installed Javas (optional) and validate the version.
 

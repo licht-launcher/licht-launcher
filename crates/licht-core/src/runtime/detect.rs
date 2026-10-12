@@ -78,6 +78,14 @@ pub fn validate_java(executable: &Path, required: &crate::JavaVersion) -> Result
     Ok(found)
 }
 
+/// Accepts an existing JVM for `--java` / custom install paths (no download).
+pub fn use_custom_java(executable: &Path) -> Result<PathBuf> {
+    if !executable.is_file() {
+        return Err(CoreError::JavaPath);
+    }
+    Ok(executable.to_path_buf())
+}
+
 /// `java` / `java.exe` under each root, including the usual `bin` and macOS `.jdk` layouts.
 pub fn discover_javas(roots: &[PathBuf], os: OsName) -> Vec<PathBuf> {
     let name = java_binary_name(os);

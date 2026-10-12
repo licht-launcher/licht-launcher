@@ -1,8 +1,5 @@
 use std::fs::File;
-use std::io::Read;
 use std::path::{Component, Path, PathBuf};
-
-use sha1::{Digest, Sha1};
 
 use crate::{CoreError, OsName, Result};
 
@@ -107,38 +104,6 @@ pub(crate) fn java_executable(root: &Path, os: OsName) -> PathBuf {
         OsName::Windows => root.join("bin").join("java.exe"),
         OsName::Linux | OsName::Osx => root.join("bin").join("java"),
     }
-}
-
-pub(crate) fn under(root: &Path, relative: &str) -> Result<PathBuf> {
-    if relative.is_empty() {
-        return Err(CoreError::CachePath);
-    }
-    let mut full = root.to_path_buf();
-    for component in relative.split(['/', '\\']) {
-        if component.is_empty() || component == "." || component == ".." {
-            return Err(CoreError::CachePath);
-        }
-        full.push(component);
-    }
-    Ok(full)
-}
-
-pub(crate) fn file_matches(path: &Path, expected_sha1: &str) -> Result<bool> {
-    let mut file = match File::open(path) {
-        Ok(file) => file,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
-        Err(error) => return Err(error.into()),
-    };
-    let mut hasher = Sha1::new();
-    let mut buffer = [0_u8; 64 * 1024];
-    loop {
-        let read = file.read(&mut buffer)?;
-        if read == 0 {
-            break;
-        }
-        hasher.update(&buffer[..read]);
-    }
-    Ok(hex_encode(hasher.finalize().as_slice()).eq_ignore_ascii_case(expected_sha1))
 }
 
 pub(crate) fn mark_executable(path: &Path) -> Result<()> {

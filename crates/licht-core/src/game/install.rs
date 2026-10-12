@@ -8,10 +8,9 @@ use tokio::sync::mpsc;
 use crate::download::DownloadProgress;
 use crate::natives::{classifier_matches, native_classifier};
 use crate::{
-    ADOPTIUM_API, AssetIndexFile, CoreError, DEFAULT_RETRY, DownloadTask, JavaChoice,
-    LaunchEnvironment, Result, SharedCache, Version, applicable_libraries, download_all,
-    download_concurrency, install_java, install_temurin, parse_asset_index, parse_version,
-    required_java_major,
+    ADOPTIUM_API, AssetIndexFile, CoreError, DEFAULT_RETRY, DownloadTask, LaunchEnvironment,
+    Result, SharedCache, Version, applicable_libraries, download_all, download_concurrency,
+    install_temurin, parse_asset_index, parse_version, required_java_major, use_custom_java,
 };
 
 pub const ASSET_OBJECT_BASE: &str = "https://resources.download.minecraft.net";
@@ -151,7 +150,7 @@ pub async fn install_game(
     .await?;
 
     if let Some(java) = request.java {
-        return install_java(client, cache, settings, JavaChoice::Custom(java), progress).await;
+        return use_custom_java(java);
     }
 
     let major = required_java_major(request.version_id, &version);

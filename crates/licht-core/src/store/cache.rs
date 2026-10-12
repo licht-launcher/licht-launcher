@@ -100,14 +100,6 @@ impl SharedCache {
             .join(format!("{name}.jar")))
     }
 
-    pub fn runtime_dir(&self, component: &str, platform: &str) -> Result<PathBuf> {
-        Ok(self
-            .root
-            .join("runtime")
-            .join(single_component(component)?)
-            .join(single_component(platform)?))
-    }
-
     pub fn version_json(&self, id: &str) -> Result<PathBuf> {
         let name = single_component(id)?;
         Ok(self
