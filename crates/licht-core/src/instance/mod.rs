@@ -491,8 +491,33 @@ fn directory_name(dir: &Path) -> Result<String> {
 }
 
 fn single_component(name: &str) -> Result<()> {
-    if name.is_empty() || name.contains('/') || name.contains('\\') || name == "." || name == ".." {
+    // Same rule as modpacks/path_safety: a colon is never a normal path component.
+    // On Windows, joining `C:evil` replaces the path instead of nesting under it.
+    if name.is_empty()
+        || name.contains('/')
+        || name.contains('\\')
+        || name.contains(':')
+        || name.contains('\0')
+        || name == "."
+        || name == ".."
+    {
         return Err(CoreError::CachePath);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod path_tests {
+    use super::*;
+
+    #[test]
+    fn rejects_drive_relative_folder_names() {
+        for name in ["C:evil", "foo:bar", "a\0b", "..", ".", "a/b", "a\\b", ""] {
+            assert!(
+                matches!(single_component(name), Err(CoreError::CachePath)),
+                "{name:?}"
+            );
+        }
+        assert!(single_component("vanilla-1.20").is_ok());
+    }
 }

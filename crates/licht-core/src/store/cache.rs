@@ -115,7 +115,13 @@ impl SharedCache {
         }
         let mut full = self.root.clone();
         for component in path.split(['/', '\\']) {
-            if component.is_empty() || component == "." || component == ".." {
+            // `:` is not a separator here, but on Windows `join("C:evil")` leaves the root.
+            if component.is_empty()
+                || component == "."
+                || component == ".."
+                || component.contains(':')
+                || component.contains('\0')
+            {
                 return Err(CoreError::CachePath);
             }
             full.push(component);
@@ -125,8 +131,43 @@ impl SharedCache {
 }
 
 fn single_component(name: &str) -> Result<String> {
-    if name.is_empty() || name.contains('/') || name.contains('\\') || name == "." || name == ".." {
+    // Same rule as modpacks/path_safety: a colon is never a normal path component.
+    // On Windows, joining `C:evil` replaces the path instead of nesting under it.
+    if name.is_empty()
+        || name.contains('/')
+        || name.contains('\\')
+        || name.contains(':')
+        || name.contains('\0')
+        || name == "."
+        || name == ".."
+    {
         return Err(CoreError::CachePath);
     }
     Ok(name.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejects_drive_relative_and_nul_components() {
+        let cache = SharedCache::at("/tmp/licht-cache");
+        for name in ["C:evil", "foo:bar", "a\0b", "..", ".", "a/b", "a\\b", ""] {
+            assert!(
+                matches!(single_component(name), Err(CoreError::CachePath)),
+                "{name:?}"
+            );
+            assert!(
+                matches!(cache.instance_dir(name), Err(CoreError::CachePath)),
+                "instance_dir {name:?}"
+            );
+        }
+        assert!(matches!(
+            cache.library("com/example/C:evil.jar"),
+            Err(CoreError::CachePath)
+        ));
+        assert!(cache.instance_dir("vanilla-1.20").is_ok());
+        assert!(cache.library("com/example/lib.jar").is_ok());
+    }
 }
