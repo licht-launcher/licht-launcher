@@ -31,8 +31,9 @@ describe("AppearanceSection", () => {
     expect(
       screen.getByRole("switch", { name: "Disable custom title bar" }),
     ).not.toBeChecked();
-    const hint = screen.getByText(/This change applies after restart\./);
-    expect(hint).toHaveClass("text-destructive");
+    expect(
+      screen.getByText("This change applies after restart."),
+    ).toHaveClass("text-destructive");
     expect(screen.queryByLabelText("Username")).not.toBeInTheDocument();
   });
 
