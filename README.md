@@ -89,6 +89,10 @@ cargo test --workspace --locked
 The same checks and the Tauri release build run in GitHub Actions on Windows and
 Ubuntu. `pnpm lint` checks formatting and imports as well as lint rules.
 
+Release signing and the automatic update flow are documented in
+[docs/UPDATES.md](docs/UPDATES.md). The update private key must remain outside
+the repository and be configured as a GitHub Actions secret.
+
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md): layer responsibilities and project boundaries.

@@ -15,8 +15,8 @@ import {
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Spinner } from "@/components/ui/spinner";
 import {
   type FilesSortDir,
   type FilesSortKey,
@@ -47,6 +47,16 @@ function breadcrumbParts(relativePath: string): string[] {
   }
   return relativePath.split("/");
 }
+
+const filesSkeletonRows = ["one", "two", "three", "four", "five", "six"];
+const filesSkeletonOpacity = [
+  "opacity-100",
+  "opacity-85",
+  "opacity-70",
+  "opacity-55",
+  "opacity-40",
+  "opacity-25",
+];
 
 export function FilesBreadcrumb({
   folder,
@@ -149,10 +159,70 @@ export function FilesSection({
           Select an instance to browse its files.
         </p>
       ) : listing.isPending ? (
-        <div className="flex items-center gap-2 p-3 text-sm leading-normal text-muted-foreground">
-          <Spinner className="size-4" />
-          Loading…
-        </div>
+        <>
+          <div className="min-w-[48rem]">
+            <table className="w-full table-fixed text-sm leading-normal">
+              <colgroup>
+                <col />
+                <col className="w-24" />
+                <col className="w-44" />
+              </colgroup>
+              <FilesTableHead
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onSort={() => {}}
+              />
+            </table>
+          </div>
+          <Progress aria-label="Loading files" className="h-px rounded-none" />
+          <ScrollArea className="min-h-0 flex-1">
+            <div className="min-w-[48rem]">
+              <table className="w-full table-fixed text-sm leading-normal">
+                <colgroup>
+                  <col />
+                  <col className="w-24" />
+                  <col className="w-44" />
+                </colgroup>
+                <tbody>
+                  {filesSkeletonRows.map((row, index) => (
+                    <tr
+                      key={row}
+                      className="border-b border-border/60 last:border-b-0 odd:bg-black/10"
+                    >
+                      <td className="px-3 py-3">
+                        <div
+                          className={cn(
+                            "flex items-center gap-2 transition-opacity",
+                            filesSkeletonOpacity[index],
+                          )}
+                        >
+                          <div className="size-4 animate-pulse rounded bg-muted" />
+                          <div className="h-4 w-2/5 animate-pulse rounded bg-muted" />
+                        </div>
+                      </td>
+                      <td className="px-3 py-3">
+                        <div
+                          className={cn(
+                            "h-3 w-12 animate-pulse rounded bg-muted",
+                            filesSkeletonOpacity[index],
+                          )}
+                        />
+                      </td>
+                      <td className="px-3 py-3">
+                        <div
+                          className={cn(
+                            "h-3 w-28 animate-pulse rounded bg-muted",
+                            filesSkeletonOpacity[index],
+                          )}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </ScrollArea>
+        </>
       ) : listing.isError ? (
         <div className="flex flex-col gap-2 p-3">
           <p className="text-sm leading-normal text-destructive">

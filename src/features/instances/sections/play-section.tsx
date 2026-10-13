@@ -56,6 +56,13 @@ function MetaTip({
   );
 }
 
+function formatSpeed(bytesPerSecond: number): string {
+  if (bytesPerSecond < 1024 * 1024) {
+    return `${Math.max(0, Math.round(bytesPerSecond / 1024))} KB/s`;
+  }
+  return `${(bytesPerSecond / (1024 * 1024)).toFixed(1)} MB/s`;
+}
+
 export function PlaySection({
   instance,
   busy,
@@ -63,6 +70,7 @@ export function PlaySection({
   phase,
   installing,
   progress,
+  speedBytesPerSecond = 0,
   onPlay,
   onStop,
   onConfigure,
@@ -73,6 +81,7 @@ export function PlaySection({
   phase: PlayPhase;
   installing: boolean;
   progress: DownloadProgress | null;
+  speedBytesPerSecond?: number;
   onPlay: () => void;
   onStop: () => void;
   onConfigure: () => void;
@@ -160,9 +169,16 @@ export function PlaySection({
       {installing ? (
         <div className="flex w-full min-w-0 flex-col gap-1">
           <span className="text-xs text-muted-foreground">
-            {progress !== null && !isPreparingProgress(progress)
-              ? progressText(progress)
-              : "Preparing…"}
+            <span className="font-medium">
+              {progress !== null && !isPreparingProgress(progress)
+                ? progressText(progress)
+                : "Preparing…"}
+            </span>
+            <span className="ml-2">
+              {speedBytesPerSecond > 0
+                ? `Downloading content · ${formatSpeed(speedBytesPerSecond)}`
+                : "Preparing game files and modpack content…"}
+            </span>
           </span>
           <Progress
             aria-label="Install progress"

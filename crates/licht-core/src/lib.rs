@@ -57,6 +57,10 @@ pub use install::{
     ASSET_OBJECT_BASE, GameInstall, InstallArgs, InstallPlan, install_game, install_game_version,
     install_version, parse_install_args,
 };
+pub use instance::content::{
+    InstanceContentEntry, InstanceContentKind, list_instance_content,
+    list_instance_content_with_metadata, remove_instance_content, set_instance_content_enabled,
+};
 pub use instance::icon::{ICON_FILE, download_instance_icon, icon_url_allowed};
 pub use instance::{
     Instance, InstanceEntry, InstanceSettings, create_instance, delete_instance,

@@ -11,4 +11,15 @@ describe("Progress", () => {
       screen.getByRole("progressbar", { name: "Instalação" }),
     ).toHaveAttribute("aria-valuenow", "40");
   });
+
+  it("animates when no value is provided", () => {
+    render(<Progress aria-label="Carregando" />);
+
+    expect(
+      screen.getByRole("progressbar", { name: "Carregando" }),
+    ).toHaveAttribute("data-state", "indeterminate");
+    expect(
+      document.querySelector('[data-slot="progress-indicator"]'),
+    ).toHaveClass("progress-indeterminate", "bg-primary-soft");
+  });
 });

@@ -226,7 +226,17 @@ pub async fn install_forge_like(
         game_version: game_version.to_string(),
     };
     request.validate()?;
-    let id = format!("{}-{}", family.prefix(), request.build);
+    let id = match family {
+        ForgeFamily::NeoForge => {
+            format!(
+                "{}-{}-{}",
+                family.prefix(),
+                request.game_version,
+                request.build
+            )
+        }
+        _ => format!("{}-{}", family.prefix(), request.build),
+    };
     let _guard = INSTALL_LOCK.lock().await;
     if installation_ready(cache, &id) {
         return Ok(id);

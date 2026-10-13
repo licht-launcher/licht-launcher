@@ -1,5 +1,5 @@
 import type { UseQueryResult } from "@tanstack/react-query";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   createContext,
@@ -38,7 +38,7 @@ import {
   sidebarLayoutStorage,
 } from "@/features/instances/lib/sidebar-layout";
 import { useCustomTitleBar } from "@/hooks/use-custom-title-bar";
-import { getLastPlayedFolder } from "@/lib/commands";
+import { getLastPlayedFolder, listInstanceContent } from "@/lib/commands";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 import type { HomeSearch } from "@/routes/_app/index";
 
@@ -53,6 +53,7 @@ export type InstancesChromeContext = {
   playPhase: (folder: string) => PlayPhase;
   isInstalling: (folder: string) => boolean;
   progressForVersion: ReturnType<typeof useGameEvents>["progressForVersion"];
+  speedForVersion: ReturnType<typeof useGameEvents>["speedForVersion"];
   logsByFolder: ReturnType<typeof useGameEvents>["logsByFolder"];
   clearFolderLog: ReturnType<typeof useGameEvents>["clearFolderLog"];
   lastPlayedFolder: string | null;
@@ -100,6 +101,18 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
     instances.data,
     onWizard ? null : instanceParam,
   );
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (selectedFolder === null) {
+      return;
+    }
+    void queryClient.prefetchQuery({
+      queryKey: ["instance-content", selectedFolder],
+      queryFn: () => listInstanceContent(selectedFolder),
+      staleTime: Number.POSITIVE_INFINITY,
+    });
+  }, [queryClient, selectedFolder]);
 
   useEffect(() => {
     if (onWizard || instances.data === undefined || selectedFolder === null) {
@@ -128,6 +141,7 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
   const markStartedRef = useRef<(folder: string) => void>(() => {});
   const {
     progressForVersion,
+    speedForVersion,
     clearVersionProgress,
     logsByFolder,
     clearFolderLog,
@@ -183,6 +197,7 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
       playPhase,
       isInstalling,
       progressForVersion,
+      speedForVersion,
       logsByFolder,
       clearFolderLog,
       lastPlayedFolder: lastPlayed.data ?? null,
@@ -202,6 +217,7 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
       playPhase,
       isInstalling,
       progressForVersion,
+      speedForVersion,
       logsByFolder,
       clearFolderLog,
       lastPlayed.data,

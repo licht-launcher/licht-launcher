@@ -62,6 +62,9 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build Tauri application
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: pnpm tauri build --ci --bundles ${{ matrix.bundles }} -- --locked
 
       - name: Stage Windows artifacts
@@ -77,6 +80,12 @@ jobs:
           }
           Copy-Item $nsis[0].FullName `
             "release-assets/Licht-Launcher-0.1.1-Lilie-windows-x64-setup.exe"
+          $signature = Get-ChildItem "target/release/bundle/nsis/*.sig" -ErrorAction SilentlyContinue
+          if (-not $signature) {
+            throw "NSIS updater signature not found"
+          }
+          Copy-Item $signature[0].FullName `
+            "release-assets/Licht-Launcher-0.1.1-Lilie-windows-x64-setup.exe.sig"
 
       - name: Stage Linux artifacts
         if: runner.os == 'Linux'
@@ -99,6 +108,12 @@ jobs:
           cp "${appimages[0]}" \
             release-assets/Licht-Launcher-0.1.1-Lilie-linux-x64.AppImage
           chmod +x release-assets/Licht-Launcher-0.1.1-Lilie-linux-x64.AppImage
+          if [ ! -f "${appimages[0]}.sig" ]; then
+            echo "AppImage updater signature not found" >&2
+            exit 1
+          fi
+          cp "${appimages[0]}.sig" \
+            release-assets/Licht-Launcher-0.1.1-Lilie-linux-x64.AppImage.sig
           cp "${debs[0]}" \
             release-assets/Licht-Launcher-0.1.1-Lilie-linux-x64.deb
 
@@ -128,6 +143,32 @@ jobs:
         with:
           name: licht-ubuntu-latest
           path: release-assets
+
+      - name: Create updater manifest
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          windows_signature="$(cat release-assets/Licht-Launcher-0.1.1-Lilie-windows-x64-setup.exe.sig)"
+          linux_signature="$(cat release-assets/Licht-Launcher-0.1.1-Lilie-linux-x64.AppImage.sig)"
+          jq -n \
+            --arg version "$version" \
+            --arg windows_signature "$windows_signature" \
+            --arg linux_signature "$linux_signature" \
+            '{
+              version: $version,
+              notes: "See the GitHub release notes for this version.",
+              pub_date: (now | strftime("%Y-%m-%dT%H:%M:%SZ")),
+              platforms: {
+                "windows-x86_64": {
+                  signature: $windows_signature,
+                  url: ("https://github.com/mateusneiva/licht-launcher/releases/download/v" + $version + "/Licht-Launcher-0.1.1-Lilie-windows-x64-setup.exe")
+                },
+                "linux-x86_64": {
+                  signature: $linux_signature,
+                  url: ("https://github.com/mateusneiva/licht-launcher/releases/download/v" + $version + "/Licht-Launcher-0.1.1-Lilie-linux-x64.AppImage")
+                }
+              }
+            }' > release-assets/latest.json
 
       - name: Publish release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2

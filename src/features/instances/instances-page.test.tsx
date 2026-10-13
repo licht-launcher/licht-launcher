@@ -275,9 +275,6 @@ describe("InstancesPage", () => {
       name: "Instances",
     });
     expect(within(sidebar).getByText("Classic")).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Open folder" }),
-    ).toBeInTheDocument();
     expect(within(sidebar).getByText("Classic")).toHaveClass("truncate");
     expect(within(sidebar).queryByText("1.5.2")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Username")).not.toBeInTheDocument();

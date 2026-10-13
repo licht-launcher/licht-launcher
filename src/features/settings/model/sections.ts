@@ -2,6 +2,7 @@ import {
   BoxesIcon,
   DownloadIcon,
   PaletteIcon,
+  RefreshCwIcon,
   TerminalIcon,
   UserRoundIcon,
 } from "lucide-react";
@@ -37,6 +38,12 @@ export const SECTIONS = [
     label: "Downloads",
     description: "How many files download at once.",
     icon: DownloadIcon,
+  },
+  {
+    id: "updater",
+    label: "Updater",
+    description: "How Licht Launcher checks and installs updates.",
+    icon: RefreshCwIcon,
   },
 ] as const;
 

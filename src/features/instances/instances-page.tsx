@@ -21,6 +21,7 @@ export function InstancesPage() {
     playPhase,
     isInstalling,
     progressForVersion,
+    speedForVersion,
     logsByFolder,
     clearFolderLog,
     playInstance,
@@ -56,6 +57,8 @@ export function InstancesPage() {
   const installing = selected !== null && isInstalling(selected.folder);
   const progress =
     installing && selected ? progressForVersion(selected.versionId) : null;
+  const speed =
+    installing && selected ? speedForVersion(selected.versionId) : 0;
 
   return (
     <HomePanel
@@ -65,6 +68,7 @@ export function InstancesPage() {
       phase={phase}
       installing={installing}
       progress={progress}
+      speedBytesPerSecond={speed}
       lines={
         selectedFolder === null ? [] : (logsByFolder[selectedFolder] ?? [])
       }

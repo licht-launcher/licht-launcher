@@ -151,8 +151,12 @@ export function usePlaySession({
 
     const ready = await isVersionReady(instance.versionId);
     if (ready) {
-      // Already ready: refresh modpack files without the play-panel spinner.
-      await installModpackFiles(instance.folder);
+      beginInstall(instance.folder, instance.versionId);
+      try {
+        await installModpackFiles(instance.folder);
+      } finally {
+        endInstall(instance.folder, instance.versionId);
+      }
       return;
     }
 

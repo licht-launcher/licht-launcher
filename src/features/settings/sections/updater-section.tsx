@@ -1,0 +1,122 @@
+import { RefreshCwIcon } from "lucide-react";
+import { useEffect, useState } from "react";
+
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import type { Draft } from "@/features/settings/model/draft";
+import {
+  LATEST_VERSION_EVENT,
+  LATEST_VERSION_KEY,
+  MANUAL_UPDATE_CHECK_EVENT,
+  UPDATE_CHECK_STATUS_EVENT,
+} from "@/features/updater/components/update-check";
+import { appReleaseLabel } from "@/lib/app-release";
+
+export function UpdaterSection({
+  draft,
+  onChange,
+}: {
+  draft: Draft;
+  onChange: (patch: Partial<Draft>) => void;
+}) {
+  const [latestVersion, setLatestVersion] = useState<string | null>(() =>
+    localStorage.getItem(LATEST_VERSION_KEY),
+  );
+  const [checking, setChecking] = useState(false);
+
+  useEffect(() => {
+    const updateLatestVersion = () => {
+      setLatestVersion(localStorage.getItem(LATEST_VERSION_KEY));
+    };
+    window.addEventListener(LATEST_VERSION_EVENT, updateLatestVersion);
+    const updateChecking = (event: Event) => {
+      const detail = (event as CustomEvent<{ checking?: boolean }>).detail;
+      setChecking(detail?.checking === true);
+    };
+    window.addEventListener(UPDATE_CHECK_STATUS_EVENT, updateChecking);
+    return () => {
+      window.removeEventListener(LATEST_VERSION_EVENT, updateLatestVersion);
+      window.removeEventListener(UPDATE_CHECK_STATUS_EVENT, updateChecking);
+    };
+  }, []);
+
+  return (
+    <section className="flex flex-col gap-4">
+      <div className="overflow-hidden rounded-lg border border-border/60 bg-muted/30">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] border-b border-border/60 px-3 py-2.5 text-sm">
+          <span className="font-medium">Current version</span>
+          <span className="font-brand text-muted-foreground">
+            {appReleaseLabel}
+          </span>
+        </div>
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] px-3 py-2.5 text-sm">
+          <span className="font-medium">Latest version</span>
+          <span className="font-brand text-muted-foreground">
+            {latestVersion ?? "Not checked yet"}
+          </span>
+        </div>
+      </div>
+      <Button
+        type="button"
+        variant="outline"
+        className="self-start"
+        disabled={checking}
+        onClick={() => {
+          window.dispatchEvent(new Event(MANUAL_UPDATE_CHECK_EVENT));
+        }}
+      >
+        <RefreshCwIcon
+          data-icon="inline-start"
+          aria-hidden
+          className={checking ? "animate-spin" : undefined}
+        />
+        Check for updates
+      </Button>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-col gap-1">
+          <label htmlFor="check-for-updates" className="text-sm font-medium">
+            Check for updates automatically
+          </label>
+          <p
+            id="check-for-updates-hint"
+            className="text-sm text-muted-foreground"
+          >
+            Check for a new launcher version when the launcher opens.
+          </p>
+        </div>
+        <Switch
+          id="check-for-updates"
+          className="shrink-0"
+          aria-describedby="check-for-updates-hint"
+          checked={draft.checkForUpdates}
+          onCheckedChange={(checkForUpdates) => onChange({ checkForUpdates })}
+        />
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-col gap-1">
+          <label
+            htmlFor="install-updates-on-restart"
+            className="text-sm font-medium"
+          >
+            Install deferred updates on restart
+          </label>
+          <p
+            id="install-updates-on-restart-hint"
+            className="text-sm text-muted-foreground"
+          >
+            Install an update automatically the next time the launcher opens.
+          </p>
+        </div>
+        <Switch
+          id="install-updates-on-restart"
+          className="shrink-0"
+          aria-describedby="install-updates-on-restart-hint"
+          checked={draft.installUpdatesOnRestart}
+          onCheckedChange={(installUpdatesOnRestart) =>
+            onChange({ installUpdatesOnRestart })
+          }
+        />
+      </div>
+    </section>
+  );
+}

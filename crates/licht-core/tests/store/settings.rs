@@ -34,6 +34,8 @@ fn sample(download_concurrency: u32) -> Settings {
         write_concurrency: 8,
         data_directory: None,
         disable_custom_title_bar: false,
+        check_for_updates: true,
+        install_updates_on_restart: true,
     }
 }
 

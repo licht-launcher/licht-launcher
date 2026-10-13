@@ -18,6 +18,8 @@ export type Draft = {
   writeConcurrency: number;
   dataDirectory: string;
   disableCustomTitleBar: boolean;
+  checkForUpdates: boolean;
+  installUpdatesOnRestart: boolean;
 };
 
 function clampStep(value: number, min: number, max: number, step: number) {
@@ -61,6 +63,8 @@ export function fromSnapshot(
     writeConcurrency: settings.writeConcurrency,
     dataDirectory: snapshot.applicationDirectory,
     disableCustomTitleBar: settings.disableCustomTitleBar,
+    checkForUpdates: settings.checkForUpdates,
+    installUpdatesOnRestart: settings.installUpdatesOnRestart,
   };
 }
 
@@ -108,5 +112,7 @@ export function toSettings(
     writeConcurrency: draft.writeConcurrency,
     dataDirectory: emptyToNull(draft.dataDirectory),
     disableCustomTitleBar: draft.disableCustomTitleBar,
+    checkForUpdates: draft.checkForUpdates,
+    installUpdatesOnRestart: draft.installUpdatesOnRestart,
   };
 }

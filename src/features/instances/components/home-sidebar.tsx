@@ -197,12 +197,12 @@ export function HomeSidebar({
                     const phase = playPhase(instance.folder);
                     const active = phase === "starting" || phase === "running";
                     return (
-                      <li key={instance.folder} className="min-w-0">
+                      <li key={instance.folder} className="min-w-0 max-w-full">
                         <Button
                           type="button"
                           variant={selected ? "secondary" : "ghost"}
                           className={cn(
-                            "w-full min-w-0 max-w-full justify-start gap-2 overflow-hidden px-1 text-[0.8rem]",
+                            "grid w-full min-w-0 max-w-full grid-cols-[auto_minmax(0,1fr)_auto] gap-2 overflow-hidden px-1 text-[0.8rem]",
                             !selected && "text-muted-foreground/70",
                           )}
                           aria-current={selected ? "page" : undefined}
@@ -217,13 +217,16 @@ export function HomeSidebar({
                           }}
                         >
                           <InstanceIcon iconPath={instance.iconPath} />
-                          <span className="min-w-0 flex-1 truncate text-left">
+                          <span
+                            className="min-w-0 overflow-hidden text-left text-ellipsis whitespace-nowrap"
+                            title={instance.name}
+                          >
                             {instance.name}
                           </span>
                           {active ? (
                             <span
                               aria-hidden
-                              className="ml-auto inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-success"
+                              className="inline-flex min-w-0 items-center gap-1.5 overflow-hidden text-ellipsis whitespace-nowrap text-xs font-medium text-success"
                             >
                               {phase === "starting" ? "Starting" : "Running"}
                               {phase === "starting" ? (

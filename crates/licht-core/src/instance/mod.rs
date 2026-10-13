@@ -1,5 +1,6 @@
 //! Instance profiles (`instance.json`) and folder listing.
 
+pub(crate) mod content;
 pub mod icon;
 pub(crate) mod listing;
 

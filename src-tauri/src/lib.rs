@@ -22,6 +22,8 @@ pub fn run() -> anyhow::Result<()> {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_window_controls::init())
         .manage(paths)
         .manage(commands::LaunchSessions::new())
@@ -52,6 +54,9 @@ pub fn run() -> anyhow::Result<()> {
             commands::instances::set_instance_version,
             commands::instances::open_instance_folder,
             commands::instances::list_instance_entries,
+            commands::instances::list_instance_content,
+            commands::instances::set_instance_content_enabled,
+            commands::instances::remove_instance_content,
             commands::shell::open_repository,
             commands::shell::custom_title_bar_active,
             commands::shell::restart_app,

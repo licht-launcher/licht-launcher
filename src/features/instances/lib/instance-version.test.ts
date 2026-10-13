@@ -24,11 +24,28 @@ describe("describeInstanceVersion", () => {
     });
   });
 
+  it("parses NeoForge ids with the game version", () => {
+    expect(describeInstanceVersion("neoforge-1.21.1-21.1.80")).toEqual({
+      gameVersion: "1.21.1",
+      loaderLabel: "NeoForge 21.1.80",
+    });
+  });
+
+  it("derives the game version from legacy NeoForge build ids", () => {
+    expect(describeInstanceVersion("neoforge-21.1.80")).toEqual({
+      gameVersion: "1.21.1",
+      loaderLabel: "NeoForge 21.1.80",
+    });
+  });
+
   it("formats a single display line", () => {
     expect(formatInstanceVersionLine("fabric-loader-0.16.0-1.20.1")).toBe(
       "1.20.1 · Fabric 0.16.0",
     );
     expect(formatInstanceVersionLine("1.5.2")).toBe("1.5.2 · Vanilla");
     expect(formatInstanceVersionLine("forge-47.2.0")).toBe("Forge 47.2.0");
+    expect(formatInstanceVersionLine("neoforge-1.21.1-21.1.80")).toBe(
+      "1.21.1 · NeoForge 21.1.80",
+    );
   });
 });

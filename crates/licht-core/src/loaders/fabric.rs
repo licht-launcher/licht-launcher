@@ -90,7 +90,9 @@ pub async fn install_fabric_like(
             detail: format!("loader_profile_http_{status}"),
         });
     }
-    let profile: Value = serde_json::from_str(&body).map_err(CoreError::LoaderJson)?;
+    let mut profile: Value = serde_json::from_str(&body).map_err(CoreError::LoaderJson)?;
+    fill_missing_maven_hashes(client, &mut profile).await?;
+    let body = serde_json::to_string(&profile).map_err(CoreError::LoaderJson)?;
     let id = profile
         .get("id")
         .and_then(Value::as_str)
@@ -98,6 +100,59 @@ pub async fn install_fabric_like(
         .unwrap_or_else(|| format!("{id_prefix}-{loader}-{game_version}"));
     write_version_json(cache, &id, &body)?;
     Ok(id)
+}
+
+async fn fill_missing_maven_hashes(client: &Client, profile: &mut Value) -> Result<()> {
+    let Some(libraries) = profile.get_mut("libraries").and_then(Value::as_array_mut) else {
+        return Ok(());
+    };
+    for library in libraries {
+        let Some(object) = library.as_object_mut() else {
+            continue;
+        };
+        let has_hash = object
+            .get("sha1")
+            .and_then(Value::as_str)
+            .is_some_and(|hash| !hash.is_empty());
+        if has_hash {
+            continue;
+        }
+        let Some(name) = object.get("name").and_then(Value::as_str) else {
+            continue;
+        };
+        let Some(base_url) = object.get("url").and_then(Value::as_str) else {
+            continue;
+        };
+        let Some(path) = crate::maven_library_path(name) else {
+            continue;
+        };
+        let hash_url = format!("{}/{}.sha1", base_url.trim_end_matches('/'), path);
+        let hash = client
+            .get(&hash_url)
+            .send()
+            .await
+            .map_err(|error| CoreError::LoaderMeta {
+                detail: format!("library_sha1_request: {error}"),
+            })?
+            .error_for_status()
+            .map_err(|error| CoreError::LoaderMeta {
+                detail: format!("library_sha1_http: {error}"),
+            })?
+            .text()
+            .await
+            .map_err(|error| CoreError::LoaderMeta {
+                detail: format!("library_sha1_body: {error}"),
+            })?
+            .trim()
+            .to_string();
+        if hash.len() != 40 || !hash.chars().all(|character| character.is_ascii_hexdigit()) {
+            return Err(CoreError::LoaderMeta {
+                detail: format!("invalid library SHA-1 for {name}"),
+            });
+        }
+        object.insert("sha1".to_string(), Value::String(hash));
+    }
+    Ok(())
 }
 
 fn write_version_json(cache: &SharedCache, id: &str, body: &str) -> Result<()> {

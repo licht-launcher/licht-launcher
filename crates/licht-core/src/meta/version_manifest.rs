@@ -5,8 +5,9 @@ use std::time::{Duration, SystemTime};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use crate::hashes::file_matches_sha1;
 use crate::meta::version_resolve::{local_inherits_from, local_version_exists};
-use crate::{CoreError, Result, SharedCache};
+use crate::{CoreError, Result, SharedCache, parse_version};
 
 /// Primary Mojang host (Piston Meta).
 pub const VERSION_MANIFEST_URL: &str =
@@ -81,10 +82,7 @@ pub fn version_manifest_cache_path(cache: &SharedCache) -> PathBuf {
     cache.root().join("versions").join(MANIFEST_CACHE_FILE)
 }
 
-/// True when this version can be launched without fetching Mojang metadata.
-///
-/// Requires a local version JSON and a client jar for this id, or — for loader
-/// profiles with `inheritsFrom` — a parent JSON and the parent's client jar.
+/// True when this version can be launched without downloading any required file.
 pub fn is_version_ready(cache: &SharedCache, id: &str) -> bool {
     if !local_version_exists(cache, id) {
         return false;
@@ -97,16 +95,49 @@ pub fn is_version_ready(cache: &SharedCache, id: &str) -> bool {
         }
         Ok(None) => {}
     }
-    if cache.version_jar(id).is_ok_and(|path| path.is_file()) {
-        return true;
+    let Ok(resolved) = crate::load_resolved_version_json(cache, id) else {
+        return false;
+    };
+    let Ok(version) = parse_version(&resolved) else {
+        return false;
+    };
+    let Ok(client_id) = inherited_root_id(cache, id) else {
+        return false;
+    };
+    let Ok(client_path) = cache.version_jar(&client_id) else {
+        return false;
+    };
+    if !file_matches_sha1(&client_path, &version.downloads.client.sha1).unwrap_or(false) {
+        return false;
     }
-    match local_inherits_from(cache, id) {
-        Ok(Some(parent)) => {
-            local_version_exists(cache, &parent)
-                && cache.version_jar(&parent).is_ok_and(|path| path.is_file())
-        }
-        _ => false,
+    version
+        .libraries
+        .iter()
+        .filter_map(|library| {
+            library
+                .downloads
+                .as_ref()
+                .and_then(|downloads| downloads.artifact.as_ref())
+        })
+        .all(|artifact| {
+            cache
+                .library(&artifact.path)
+                .ok()
+                .is_some_and(|path| file_matches_sha1(&path, &artifact.sha1).unwrap_or(false))
+        })
+}
+
+fn inherited_root_id(cache: &SharedCache, id: &str) -> Result<String> {
+    let mut current = id.to_string();
+    for _ in 0..8 {
+        let Some(parent) = local_inherits_from(cache, &current)? else {
+            return Ok(current);
+        };
+        current = parent;
     }
+    Err(CoreError::LoaderInstall {
+        detail: "cyclic or excessively deep version inheritance".to_string(),
+    })
 }
 
 /// Summaries built only from folders under `versions/` (no network, no cache file).
@@ -149,8 +180,8 @@ pub fn list_installed_version_summaries(cache: &SharedCache) -> Vec<VersionSumma
 ///
 /// Local loader profiles (Fabric, Forge, …) that are not on Mojang's list are
 /// appended with [`VersionType::OldAlpha`] so the create-instance version picker
-/// (release/snapshot only) ignores them. For those, `installed` means the client
-/// jar exists — the profile JSON alone is written at instance creation.
+/// (release/snapshot only) ignores them. Their `installed` state is based on
+/// the same artifact checks used before launch.
 ///
 /// An id that cannot be a single path segment is listed and not installed.
 pub fn version_summaries(manifest: &VersionManifest, cache: &SharedCache) -> Vec<VersionSummary> {
@@ -358,6 +389,7 @@ async fn read_text(client: &reqwest::Client, url: &str) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::hashes::sha1_hex;
 
     fn temp_cache(label: &str) -> SharedCache {
         let stamp = std::time::SystemTime::now()
@@ -371,6 +403,15 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(root.join("versions")).unwrap();
         SharedCache::at(root)
+    }
+
+    fn minimal_version_json(id: &str, client: &[u8]) -> String {
+        format!(
+            r#"{{"id":"{id}","minecraftArguments":"","libraries":[],"assetIndex":{{"id":"test","sha1":"{}","size":0,"totalSize":0,"url":""}},"mainClass":"Main","downloads":{{"client":{{"sha1":"{}","size":{},"url":""}}}}}}"#,
+            sha1_hex(b""),
+            sha1_hex(client),
+            client.len()
+        )
     }
 
     #[test]
@@ -390,7 +431,11 @@ mod tests {
         let id = "1.20.1";
         let dir = cache.root().join("versions").join(id);
         std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join(format!("{id}.json")), br#"{"id":"1.20.1"}"#).unwrap();
+        std::fs::write(
+            dir.join(format!("{id}.json")),
+            minimal_version_json(id, b"jar"),
+        )
+        .unwrap();
         std::fs::write(dir.join(format!("{id}.jar")), b"jar").unwrap();
         // Ignore the cache file if present as a non-version folder name.
         let summaries = list_installed_version_summaries(&cache);
@@ -408,7 +453,7 @@ mod tests {
         std::fs::create_dir_all(&vanilla_dir).unwrap();
         std::fs::write(
             vanilla_dir.join(format!("{vanilla}.json")),
-            br#"{"id":"1.20.1"}"#,
+            minimal_version_json(vanilla, b"jar"),
         )
         .unwrap();
         assert!(!is_version_ready(&cache, vanilla));
@@ -420,9 +465,18 @@ mod tests {
         std::fs::create_dir_all(&loader_dir).unwrap();
         std::fs::write(
             loader_dir.join(format!("{loader}.json")),
-            br#"{"id":"fabric-loader-0.16.0-1.20.1","inheritsFrom":"1.20.1"}"#,
+            format!(
+                r#"{{"id":"{loader}","inheritsFrom":"{vanilla}","libraries":[{{"name":"net.fabricmc:fabric-loader:0.16.0","url":"https://example.invalid/","sha1":"{}","size":6}}]}}"#,
+                sha1_hex(b"loader")
+            ),
         )
         .unwrap();
+        assert!(!is_version_ready(&cache, loader));
+        let loader_jar = cache
+            .library("net/fabricmc/fabric-loader/0.16.0/fabric-loader-0.16.0.jar")
+            .unwrap();
+        std::fs::create_dir_all(loader_jar.parent().expect("loader parent")).unwrap();
+        std::fs::write(loader_jar, b"loader").unwrap();
         assert!(is_version_ready(&cache, loader));
         let _ = std::fs::remove_dir_all(cache.root());
     }
