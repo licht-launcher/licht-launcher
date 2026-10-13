@@ -1,8 +1,13 @@
 use anyhow::Context;
+use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 
 mod commands;
 mod logging;
 mod progress;
+
+/// Logical height of the custom title bar strip (matches frontend `h-9`).
+#[cfg(windows)]
+const TITLE_BAR_HEIGHT: u32 = 36;
 
 pub fn run() -> anyhow::Result<()> {
     licht_core::load_env_files();
@@ -17,8 +22,20 @@ pub fn run() -> anyhow::Result<()> {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_window_controls::init())
         .manage(paths)
         .manage(commands::LaunchSessions::new())
+        .setup(|app| {
+            let paths = app.state::<commands::LauncherPaths>();
+            let settings =
+                licht_core::load_settings(&paths.settings).map_err(|error| error.to_string())?;
+            let custom_title_bar = !settings.disable_custom_title_bar;
+            app.manage(commands::shell::TitleBarMode {
+                custom: custom_title_bar,
+            });
+            create_main_window(app, custom_title_bar)?;
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             commands::instances::list_instances,
             commands::instances::create_instance,
@@ -36,6 +53,8 @@ pub fn run() -> anyhow::Result<()> {
             commands::instances::open_instance_folder,
             commands::instances::list_instance_entries,
             commands::shell::open_repository,
+            commands::shell::custom_title_bar_active,
+            commands::shell::restart_app,
             commands::instances::get_last_played_folder,
             commands::instances::set_last_played_folder,
             commands::instances::touch_last_opened,
@@ -63,4 +82,36 @@ pub fn run() -> anyhow::Result<()> {
         ])
         .run(tauri::generate_context!())
         .context("Failed to run Licht Launcher")
+}
+
+fn create_main_window(app: &tauri::App, custom_title_bar: bool) -> tauri::Result<()> {
+    let builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::default())
+        .title("Licht Launcher")
+        .inner_size(1200.0, 800.0)
+        .min_inner_size(960.0, 560.0)
+        .max_inner_size(1200.0, 960.0)
+        .fullscreen(false)
+        .maximizable(false)
+        .decorations(!custom_title_bar)
+        .theme(Some(tauri::Theme::Dark))
+        .background_color(tauri::window::Color(0x12, 0x12, 0x12, 0xff));
+
+    if !custom_title_bar {
+        builder.build()?;
+        return Ok(());
+    }
+
+    #[cfg(windows)]
+    {
+        use tauri_plugin_window_controls::WindowControlsBuilderExt;
+        // Native min / (disabled) max / close above the WebView. Maximize stays
+        // grayed while `maximizable(false)` clears WS_MAXIMIZEBOX.
+        builder.window_controls_height(TITLE_BAR_HEIGHT).build()?;
+    }
+    #[cfg(not(windows))]
+    {
+        builder.build()?;
+    }
+
+    Ok(())
 }

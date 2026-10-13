@@ -9,10 +9,12 @@ import { SettingsDialog } from "@/features/settings/settings-dialog";
 export { invoke } from "@/features/settings/fixtures/invoke";
 export { snapshot } from "@/features/settings/fixtures/snapshot";
 
-export function mockSettingsCommands(implement?: (command: string) => unknown) {
+export function mockSettingsCommands(
+  implement?: (command: string, args?: unknown) => unknown,
+) {
   invoke.mockReset();
-  invoke.mockImplementation((command: string) => {
-    const custom = implement?.(command);
+  invoke.mockImplementation((command: string, args?: unknown) => {
+    const custom = implement?.(command, args);
     if (custom !== undefined) {
       return custom;
     }
@@ -51,6 +53,12 @@ export function mockSettingsCommands(implement?: (command: string) => unknown) {
     }
     if (command === "save_settings") {
       return Promise.resolve(snapshot.settings);
+    }
+    if (command === "custom_title_bar_active") {
+      return Promise.resolve(true);
+    }
+    if (command === "restart_app") {
+      return Promise.resolve();
     }
     return Promise.resolve(null);
   });

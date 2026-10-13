@@ -46,6 +46,7 @@ export function HomeSidebar({
   busy,
   loading,
   playPhase,
+  showTitleband,
   onSelect,
   onCreate,
   onOpenSettings,
@@ -56,6 +57,7 @@ export function HomeSidebar({
   busy: boolean;
   loading: boolean;
   playPhase: (folder: string) => PlayPhase;
+  showTitleband: boolean;
   onSelect: (folder: string) => void;
   onCreate: () => void;
   onOpenSettings: () => void;
@@ -64,134 +66,155 @@ export function HomeSidebar({
   const ordered = sortInstances(instances, sort, lastPlayedFolder);
 
   return (
-    <div className="flex h-full w-72 shrink-0 flex-col gap-6 overflow-hidden bg-black/20 px-4 pt-6 pb-10">
-      <nav
-        aria-label="Instances"
-        className="flex min-h-0 flex-1 flex-col gap-2"
-      >
-        <div className="flex items-center gap-2 px-2">
-          <h2 className="min-w-0 flex-1 font-brand text-xs font-medium leading-none text-muted-foreground">
-            Instances
-          </h2>
-          <Select
-            value={sort}
-            onValueChange={(value) => {
-              if (value === "lastPlayed" || value === "name") {
-                setSort(value);
-              }
-            }}
+    <div className="flex h-full w-72 shrink-0 flex-col overflow-hidden border-r border-border bg-black/20">
+      {showTitleband ? (
+        <div
+          data-tauri-drag-region
+          className="flex h-9 shrink-0 items-center px-4"
+        >
+          <span
+            data-tauri-drag-region
+            className="font-brand text-xs font-medium tracking-widest text-muted-foreground uppercase select-none"
           >
-            <SelectTrigger
-              size="sm"
-              aria-label="Sort instances"
-              className="h-auto w-auto max-w-40 shrink-0 gap-1 border-0 bg-transparent px-0 py-0 font-brand text-xs font-medium leading-none text-muted-foreground shadow-none dark:bg-transparent dark:hover:bg-transparent [&_svg:not([class*='size-'])]:size-3.5"
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent
-              align="end"
-              className="font-brand text-xs font-medium"
-            >
-              <SelectItem value="lastPlayed" className="text-xs">
-                <SortLabel icon={HistoryIcon} label="Last played" />
-              </SelectItem>
-              <SelectItem value="name" className="text-xs">
-                <SortLabel icon={ArrowDownAZIcon} label="Name" />
-              </SelectItem>
-            </SelectContent>
-          </Select>
+            Licht Launcher
+          </span>
         </div>
-        {loading ? (
-          <p className="px-2 text-sm text-muted-foreground">Loading…</p>
-        ) : null}
-        {!loading && instances.length === 0 ? (
-          <p className="px-2 text-sm text-muted-foreground">
-            No instances yet.
-          </p>
-        ) : null}
-        {!loading && ordered.length > 0 ? (
-          <ScrollArea className="min-h-0 flex-1">
-            <ul className="flex w-full min-w-0 flex-col gap-1 pr-3">
-              {ordered.map((instance) => {
-                const selected = instance.folder === selectedFolder;
-                const phase = playPhase(instance.folder);
-                const active = phase === "starting" || phase === "running";
-                return (
-                  <li key={instance.folder} className="min-w-0">
-                    <Button
-                      type="button"
-                      variant={selected ? "secondary" : "ghost"}
-                      className="w-full min-w-0 max-w-full justify-start gap-2 overflow-hidden px-3"
-                      aria-current={selected ? "page" : undefined}
-                      aria-label={
-                        active
-                          ? `${instance.name} (${phase === "starting" ? "starting" : "running"})`
-                          : undefined
-                      }
-                      disabled={busy}
-                      onClick={() => {
-                        onSelect(instance.folder);
-                      }}
-                    >
-                      <span className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
-                        <InstanceIcon />
-                        <span className="w-0 min-w-0 flex-1 truncate text-left">
-                          {instance.name}
-                        </span>
-                        {active ? (
-                          <span
-                            aria-hidden
-                            className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-success"
-                          >
-                            {phase === "starting" ? "Starting" : "Running"}
-                            {phase === "starting" ? (
-                              <Loader2Icon
-                                className="size-3.5 shrink-0 animate-spin"
-                                strokeWidth={2}
-                              />
-                            ) : (
-                              <span className="relative flex size-2 shrink-0">
-                                <span className="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-75" />
-                                <span className="relative inline-flex size-2 rounded-full bg-success" />
-                              </span>
-                            )}
+      ) : null}
+      <div
+        className={
+          showTitleband
+            ? "flex min-h-0 flex-1 flex-col gap-6 px-4 pt-4 pb-10"
+            : "flex min-h-0 flex-1 flex-col gap-6 px-4 pt-6 pb-10"
+        }
+      >
+        <nav
+          aria-label="Instances"
+          className="flex min-h-0 flex-1 flex-col gap-2"
+        >
+          <div className="flex items-center gap-2 px-2">
+            <h2 className="min-w-0 flex-1 font-brand text-xs font-medium leading-none text-muted-foreground">
+              Instances
+            </h2>
+            <Select
+              value={sort}
+              onValueChange={(value) => {
+                if (value === "lastPlayed" || value === "name") {
+                  setSort(value);
+                }
+              }}
+            >
+              <SelectTrigger
+                size="sm"
+                aria-label="Sort instances"
+                className="h-auto w-auto max-w-40 shrink-0 gap-1 border-0 bg-transparent px-0 py-0 font-brand text-xs font-medium leading-none text-muted-foreground shadow-none dark:bg-transparent dark:hover:bg-transparent [&_svg:not([class*='size-'])]:size-3.5"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent
+                align="end"
+                className="font-brand text-xs font-medium"
+              >
+                <SelectItem value="lastPlayed" className="text-xs">
+                  <SortLabel icon={HistoryIcon} label="Last played" />
+                </SelectItem>
+                <SelectItem value="name" className="text-xs">
+                  <SortLabel icon={ArrowDownAZIcon} label="Name" />
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {loading ? (
+            <p className="px-2 text-sm text-muted-foreground">Loading…</p>
+          ) : null}
+          {!loading && instances.length === 0 ? (
+            <p className="px-2 text-sm text-muted-foreground">
+              No instances yet.
+            </p>
+          ) : null}
+          {!loading && ordered.length > 0 ? (
+            <ScrollArea className="min-h-0 flex-1">
+              <ul className="flex w-full min-w-0 flex-col gap-1 pr-3">
+                {ordered.map((instance) => {
+                  const selected = instance.folder === selectedFolder;
+                  const phase = playPhase(instance.folder);
+                  const active = phase === "starting" || phase === "running";
+                  return (
+                    <li key={instance.folder} className="min-w-0">
+                      <Button
+                        type="button"
+                        variant={selected ? "secondary" : "ghost"}
+                        className="w-full min-w-0 max-w-full justify-start gap-2 overflow-hidden px-3"
+                        aria-current={selected ? "page" : undefined}
+                        aria-label={
+                          active
+                            ? `${instance.name} (${phase === "starting" ? "starting" : "running"})`
+                            : undefined
+                        }
+                        disabled={busy}
+                        onClick={() => {
+                          onSelect(instance.folder);
+                        }}
+                      >
+                        <span className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+                          <InstanceIcon />
+                          <span className="w-0 min-w-0 flex-1 truncate text-left">
+                            {instance.name}
                           </span>
-                        ) : null}
-                      </span>
-                    </Button>
-                  </li>
-                );
-              })}
-            </ul>
-          </ScrollArea>
-        ) : null}
+                          {active ? (
+                            <span
+                              aria-hidden
+                              className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-success"
+                            >
+                              {phase === "starting" ? "Starting" : "Running"}
+                              {phase === "starting" ? (
+                                <Loader2Icon
+                                  className="size-3.5 shrink-0 animate-spin"
+                                  strokeWidth={2}
+                                />
+                              ) : (
+                                <span className="relative flex size-2 shrink-0">
+                                  <span className="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-75" />
+                                  <span className="relative inline-flex size-2 rounded-full bg-success" />
+                                </span>
+                              )}
+                            </span>
+                          ) : null}
+                        </span>
+                      </Button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </ScrollArea>
+          ) : null}
 
-        <Button
-          type="button"
-          variant="secondary"
-          className="w-full justify-start px-3"
-          disabled={busy}
-          onClick={onCreate}
-        >
-          <PlusIcon data-icon="inline-start" aria-hidden />
-          New instance
-        </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            className="w-full justify-start px-3"
+            disabled={busy}
+            onClick={onCreate}
+          >
+            <PlusIcon data-icon="inline-start" aria-hidden />
+            New instance
+          </Button>
 
-        <Button
-          type="button"
-          variant="ghost"
-          className="w-full justify-start px-3"
-          aria-label="Settings"
-          onClick={onOpenSettings}
-        >
-          <SettingsIcon data-icon="inline-start" aria-hidden />
-          Settings
-        </Button>
-      </nav>
+          <Button
+            type="button"
+            variant="ghost"
+            className="w-full justify-start px-3"
+            aria-label="Settings"
+            onClick={onOpenSettings}
+          >
+            <SettingsIcon data-icon="inline-start" aria-hidden />
+            Settings
+          </Button>
+        </nav>
 
-      <p className="mt-auto px-3 text-xs leading-relaxed text-muted-foreground">
-        Unofficial, not affiliated with Mojang Studios or Microsoft.
-      </p>
+        <p className="mt-auto px-3 text-xs leading-relaxed text-muted-foreground">
+          Unofficial, not affiliated with Mojang Studios or Microsoft.
+        </p>
+      </div>
     </div>
   );
 }

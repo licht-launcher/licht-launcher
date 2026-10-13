@@ -8,8 +8,10 @@ export const Route = createFileRoute("/_app")({
 
 function AppLayout() {
   return (
-    <InstancesChrome>
-      <Outlet />
-    </InstancesChrome>
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <InstancesChrome>
+        <Outlet />
+      </InstancesChrome>
+    </div>
   );
 }

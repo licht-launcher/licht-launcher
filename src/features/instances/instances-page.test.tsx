@@ -179,7 +179,7 @@ describe("InstancesPage", () => {
       screen.getByText("Create an instance to get started."),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "New instance" })).toBeEnabled();
-    expect(screen.getAllByText("0.1.1 · Lilie").length).toBeGreaterThan(0);
+    expect(screen.getByText("Licht Launcher")).toBeInTheDocument();
     expect(
       screen.getByText(
         "Unofficial, not affiliated with Mojang Studios or Microsoft.",

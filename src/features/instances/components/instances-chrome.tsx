@@ -8,6 +8,7 @@ import {
   useMemo,
   useRef,
 } from "react";
+import { TitleBar } from "@/components/title-bar/title-bar";
 import { HomeSidebar } from "@/features/instances/components/home-sidebar";
 import { InstanceDialogs } from "@/features/instances/components/instance-dialogs";
 import { useGameEvents } from "@/features/instances/hooks/use-game-events";
@@ -19,6 +20,7 @@ import {
   type PlayPhase,
   usePlaySession,
 } from "@/features/instances/hooks/use-play-session";
+import { useCustomTitleBar } from "@/hooks/use-custom-title-bar";
 import { getLastPlayedFolder } from "@/lib/commands";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 import type { VersionSummary } from "@/lib/generated/VersionSummary";
@@ -54,6 +56,7 @@ export function useInstancesChrome(): InstancesChromeContext {
 }
 
 export function InstancesChrome({ children }: { children: ReactNode }) {
+  const customTitleBar = useCustomTitleBar().data ?? true;
   const navigate = useNavigate();
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
@@ -154,7 +157,7 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
 
   return (
     <>
-      <div className="flex h-full w-full overflow-hidden bg-popover text-popover-foreground">
+      <div className="flex min-h-0 h-full w-full flex-1 overflow-hidden bg-popover text-popover-foreground">
         <HomeSidebar
           instances={instances.data ?? []}
           lastPlayedFolder={lastPlayed.data ?? null}
@@ -162,6 +165,7 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
           busy={busy}
           loading={instances.isPending}
           playPhase={playPhase}
+          showTitleband={customTitleBar}
           onSelect={(folder) => {
             setSelectedFolder(folder);
             if (onWizard) {
@@ -173,9 +177,14 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
           }}
           onOpenSettings={() => dialogs.openGlobalSettings("account")}
         />
-        <ChromeContext.Provider value={context}>
-          {children}
-        </ChromeContext.Provider>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-muted/30">
+          {customTitleBar ? <TitleBar /> : null}
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            <ChromeContext.Provider value={context}>
+              {children}
+            </ChromeContext.Provider>
+          </div>
+        </div>
       </div>
 
       <InstanceDialogs

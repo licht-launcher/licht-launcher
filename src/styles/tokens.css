@@ -58,6 +58,8 @@
 }
 
 :root {
+  /* Three native caption buttons × 46 logical px (tauri-plugin-window-controls). */
+  --native-caption-inset: 138px;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -144,6 +146,25 @@
   --normal-text: var(--popover-foreground);
   --normal-border: var(--border);
   --border-radius: var(--radius);
+}
+
+@keyframes title-bar-restart-toast-progress {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+.toast-progress-bar {
+  transform-origin: left center;
+  animation: title-bar-restart-toast-progress 12s linear forwards;
+}
+
+.group\/toast:hover .toast-progress-bar,
+.group\/toast:focus-within .toast-progress-bar {
+  animation-play-state: paused;
 }
 
 @layer base {
