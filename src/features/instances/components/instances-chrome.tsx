@@ -160,7 +160,6 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
       <div className="flex min-h-0 h-full w-full flex-1 overflow-hidden bg-popover text-popover-foreground">
         <HomeSidebar
           instances={instances.data ?? []}
-          lastPlayedFolder={lastPlayed.data ?? null}
           selectedFolder={onWizard ? null : selectedFolder}
           busy={busy}
           loading={instances.isPending}

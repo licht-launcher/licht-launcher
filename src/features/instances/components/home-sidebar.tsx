@@ -41,7 +41,6 @@ function SortLabel({
 
 export function HomeSidebar({
   instances,
-  lastPlayedFolder,
   selectedFolder,
   busy,
   loading,
@@ -52,7 +51,6 @@ export function HomeSidebar({
   onOpenSettings,
 }: {
   instances: InstanceEntry[];
-  lastPlayedFolder: string | null;
   selectedFolder: string | null;
   busy: boolean;
   loading: boolean;
@@ -63,7 +61,7 @@ export function HomeSidebar({
   onOpenSettings: () => void;
 }) {
   const [sort, setSort] = useState<InstanceSort>("lastPlayed");
-  const ordered = sortInstances(instances, sort, lastPlayedFolder);
+  const ordered = sortInstances(instances, sort);
 
   return (
     <div className="flex h-full w-72 shrink-0 flex-col overflow-hidden border-r border-border bg-black/20">
