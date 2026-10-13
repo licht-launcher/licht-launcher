@@ -20,8 +20,3 @@ pub fn open_repository(app: AppHandle) -> Result<(), String> {
 pub fn custom_title_bar_active(mode: State<'_, TitleBarMode>) -> bool {
     mode.custom
 }
-
-#[tauri::command]
-pub fn restart_app(app: AppHandle) {
-    app.request_restart();
-}

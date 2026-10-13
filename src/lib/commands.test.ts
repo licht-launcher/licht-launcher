@@ -34,7 +34,6 @@ import {
   openRepository,
   renameInstance,
   repairInstance,
-  restartApp,
   runtimeJava,
   saveInstance,
   saveSettings,
@@ -201,11 +200,9 @@ describe("launcher commands", () => {
     expect(invoke).toHaveBeenCalledWith("get_settings");
   });
 
-  it("reads the applied title bar mode and can request a restart", async () => {
+  it("reads the applied title bar mode", async () => {
     await customTitleBarActive();
     expect(invoke).toHaveBeenCalledWith("custom_title_bar_active");
-    await restartApp();
-    expect(invoke).toHaveBeenCalledWith("restart_app");
   });
 
   it("saves settings and asks for Java and folders", async () => {
