@@ -36,6 +36,12 @@ import {
 } from "@/features/instances/lib/sort-instances";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 
+const sidebarOrbWrapClassName =
+  "inline-flex transition-transform duration-200 ease-out hover:-translate-y-2";
+
+const sidebarOrbClassName =
+  "size-10 rounded-full shadow-[0_4px_12px_0_rgb(0_0_0/0.28)] transition-shadow duration-200 ease-out hover:shadow-[0_6px_16px_0_rgb(0_0_0/0.38)] disabled:pointer-events-auto disabled:shadow-[0_4px_12px_0_rgb(0_0_0/0.28)] [&_svg:not([class*='size-'])]:size-5";
+
 function SortLabel({
   icon: Icon,
   label,
@@ -243,20 +249,22 @@ export function HomeSidebar({
           </div>
 
           <TooltipProvider delayDuration={300}>
-            <div className="mt-auto flex items-center justify-center gap-1.5">
+            <div className="mt-auto flex items-center justify-center gap-1.5 pt-2">
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="icon-lg"
-                    className="size-10 rounded-full [&_svg:not([class*='size-'])]:size-5"
-                    aria-label="New instance"
-                    disabled={busy}
-                    onClick={onCreate}
-                  >
-                    <PlusIcon aria-hidden />
-                  </Button>
+                  <span className={sidebarOrbWrapClassName}>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="icon-lg"
+                      className={sidebarOrbClassName}
+                      aria-label="New instance"
+                      disabled={busy}
+                      onClick={onCreate}
+                    >
+                      <PlusIcon aria-hidden />
+                    </Button>
+                  </span>
                 </TooltipTrigger>
                 <TooltipContent side="top" align="center" sideOffset={2}>
                   New instance
@@ -264,12 +272,12 @@ export function HomeSidebar({
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <span className="inline-flex">
+                  <span className={sidebarOrbWrapClassName}>
                     <Button
                       type="button"
                       variant="secondary"
                       size="icon-lg"
-                      className="size-10 rounded-full [&_svg:not([class*='size-'])]:size-5"
+                      className={sidebarOrbClassName}
                       aria-label="Downloads"
                       disabled
                     >
@@ -283,12 +291,12 @@ export function HomeSidebar({
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <span className="inline-flex">
+                  <span className={sidebarOrbWrapClassName}>
                     <Button
                       type="button"
                       variant="secondary"
                       size="icon-lg"
-                      className="size-10 rounded-full [&_svg:not([class*='size-'])]:size-5"
+                      className={sidebarOrbClassName}
                       aria-label="Discover"
                       disabled
                     >
@@ -302,16 +310,18 @@ export function HomeSidebar({
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="icon-lg"
-                    className="size-10 rounded-full [&_svg:not([class*='size-'])]:size-5"
-                    aria-label="Settings"
-                    onClick={onOpenSettings}
-                  >
-                    <SettingsIcon aria-hidden />
-                  </Button>
+                  <span className={sidebarOrbWrapClassName}>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="icon-lg"
+                      className={sidebarOrbClassName}
+                      aria-label="Settings"
+                      onClick={onOpenSettings}
+                    >
+                      <SettingsIcon aria-hidden />
+                    </Button>
+                  </span>
                 </TooltipTrigger>
                 <TooltipContent side="top" align="center" sideOffset={2}>
                   Settings
