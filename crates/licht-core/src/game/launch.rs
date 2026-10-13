@@ -69,27 +69,48 @@ pub fn launch_command(
     environment: &LaunchEnvironment,
     values: &BTreeMap<String, String>,
 ) -> Result<Vec<String>> {
+    if crate::loaders::forge::request(cache, version_id)?.is_some()
+        && !crate::loaders::forge::installation_ready(cache, version_id)
+    {
+        return Err(crate::CoreError::LoaderInstall {
+            detail: "install or repair the loader before launching".to_string(),
+        });
+    }
+    let mut values = values.clone();
+    values.insert(
+        "library_directory".to_string(),
+        cache.root().join("libraries").display().to_string(),
+    );
+    values.insert(
+        "classpath_separator".to_string(),
+        if environment.os == OsName::Windows {
+            ";"
+        } else {
+            ":"
+        }
+        .to_string(),
+    );
     let classpath = classpath(cache, version_id, version, environment)?;
     let mut command = Vec::new();
     command.push(java.display().to_string());
 
     match &version.arguments {
         GameArguments::Modern { jvm, game } => {
-            command.extend(evaluated_arguments(jvm, environment, values, &classpath));
+            command.extend(evaluated_arguments(jvm, environment, &values, &classpath));
             command.push(version.main_class.clone());
-            command.extend(evaluated_arguments(game, environment, values, &classpath));
+            command.extend(evaluated_arguments(game, environment, &values, &classpath));
         }
         GameArguments::Legacy(game) => {
             command.push(substitute(
                 "-Djava.library.path=${natives_directory}",
-                values,
+                &values,
                 &classpath,
             ));
             command.push("-cp".to_string());
             command.push(classpath.clone());
             command.push(version.main_class.clone());
             for token in game.split_ascii_whitespace() {
-                command.push(substitute(token, values, &classpath));
+                command.push(substitute(token, &values, &classpath));
             }
         }
     }

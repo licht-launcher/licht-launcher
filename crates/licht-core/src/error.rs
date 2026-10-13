@@ -136,6 +136,12 @@ pub enum CoreError {
     LoaderVersionMissing,
     #[error("mod loader JSON is invalid")]
     LoaderJson(#[source] serde_json::Error),
+    #[error("mod loader installer archive is invalid")]
+    LoaderArchive(#[source] zip::result::ZipError),
+    #[error("mod loader installation failed: {detail}")]
+    LoaderInstall { detail: String },
+    #[error("mod loader client processor {processor} failed (exit code {code:?})")]
+    LoaderProcessor { processor: usize, code: Option<i32> },
     #[error("modpack metadata failed: {detail}")]
     ModpackMeta { detail: String },
     #[error("LICHT_CURSEFORGE_API_KEY is missing or empty")]

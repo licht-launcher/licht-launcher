@@ -89,6 +89,14 @@ pub fn is_version_ready(cache: &SharedCache, id: &str) -> bool {
     if !local_version_exists(cache, id) {
         return false;
     }
+    match crate::loaders::forge::request(cache, id) {
+        Ok(Some(_)) => return crate::loaders::forge::installation_ready(cache, id),
+        Err(error) => {
+            tracing::warn!(error = %error, "Loader profile is invalid");
+            return false;
+        }
+        Ok(None) => {}
+    }
     if cache.version_jar(id).is_ok_and(|path| path.is_file()) {
         return true;
     }

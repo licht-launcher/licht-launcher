@@ -1,4 +1,6 @@
-use licht_core::{SharedCache, VersionType, parse_version_manifest, version_summaries};
+use licht_core::{
+    SharedCache, VersionType, is_version_ready, parse_version_manifest, version_summaries,
+};
 
 fn manifest() -> licht_core::VersionManifest {
     parse_version_manifest(
@@ -83,4 +85,34 @@ fn a_local_loader_profile_is_listed_and_needs_its_jar() {
     assert!(loader.installed);
 
     let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn provisional_forge_profiles_are_not_launch_ready() {
+    let root = std::env::temp_dir().join(format!("licht-forge-ready-{}", std::process::id()));
+    let cache = SharedCache::at(&root);
+    let parent = cache.version_json("1.20.1").expect("parent path");
+    std::fs::create_dir_all(parent.parent().expect("parent directory")).expect("mkdir");
+    std::fs::write(parent, "{}").expect("parent metadata");
+    std::fs::write(cache.version_jar("1.20.1").expect("jar"), b"client").expect("client");
+    for family in ["forge", "neoforge"] {
+        let build = if family == "forge" {
+            "1.20.1-47.3.0"
+        } else {
+            "20.1.80"
+        };
+        let id = format!("{family}-{build}");
+        let path = cache.version_json(&id).expect("profile path");
+        std::fs::create_dir_all(path.parent().expect("profile directory")).expect("mkdir");
+        let profile = serde_json::json!({
+            "id": id, "inheritsFrom": "1.20.1", "mainClass": "net.minecraft.client.main.Main",
+            "libraries": [], "lichtLoader": {"family": family, "build": build, "gameVersion": "1.20.1"}
+        });
+        std::fs::write(path, profile.to_string()).expect("provisional profile");
+        assert!(
+            !is_version_ready(&cache, &id),
+            "a vanilla parent is not a completed loader"
+        );
+    }
+    std::fs::remove_dir_all(root).expect("cleanup");
 }

@@ -99,6 +99,10 @@ fn merge_version_json(mut parent: Value, child: Value) -> Value {
         child_obj.get("libraries").cloned(),
     ) {
         (Some(Value::Array(mut parent_libs)), Some(Value::Array(child_libs))) => {
+            let replacements: Vec<_> = child_libs.iter().filter_map(library_key).collect();
+            parent_libs.retain(|library| {
+                library_key(library).is_none_or(|key| !replacements.contains(&key))
+            });
             parent_libs.extend(child_libs);
             parent_obj.insert("libraries".to_string(), Value::Array(parent_libs));
         }
@@ -110,6 +114,18 @@ fn merge_version_json(mut parent: Value, child: Value) -> Value {
 
     parent_obj.remove("inheritsFrom");
     parent
+}
+
+fn library_key(library: &Value) -> Option<String> {
+    let name = library.get("name")?.as_str()?;
+    let (coordinate, extension) = name.split_once('@').unwrap_or((name, "jar"));
+    let parts: Vec<_> = coordinate.split(':').collect();
+    Some(format!(
+        "{}:{}:{}@{extension}",
+        parts.first()?,
+        parts.get(1)?,
+        parts.get(3).unwrap_or(&"")
+    ))
 }
 
 fn append_arg_list(target: &mut Map<String, Value>, source: &Map<String, Value>, key: &str) {
@@ -128,6 +144,73 @@ fn append_arg_list(target: &mut Map<String, Value>, source: &Map<String, Value>,
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn loader_libraries_override_the_same_artifact_in_the_parent() {
+        let merged = merge_version_json(
+            json!({"libraries":[{"name":"org.ow2.asm:asm:9.1"}]}),
+            json!({"libraries":[{"name":"org.ow2.asm:asm:9.7@jar"}]}),
+        );
+        assert_eq!(merged["libraries"].as_array().expect("libraries").len(), 1);
+        assert_eq!(merged["libraries"][0]["name"], "org.ow2.asm:asm:9.7@jar");
+    }
+
+    #[test]
+    fn official_forge_profiles_preserve_loader_arguments_and_expand_library_tokens() {
+        for (body, expected_main) in [
+            (
+                include_str!("../../tests/fixtures/loaders/forge-legacy-version.json"),
+                "net.minecraft.launchwrapper.Launch",
+            ),
+            (
+                include_str!("../../tests/fixtures/loaders/forge-modern-version.json"),
+                "cpw.mods.bootstraplauncher.BootstrapLauncher",
+            ),
+            (
+                include_str!("../../tests/fixtures/loaders/neoforge-version.json"),
+                "cpw.mods.bootstraplauncher.BootstrapLauncher",
+            ),
+        ] {
+            let child: serde_json::Value = serde_json::from_str(body).expect("profile");
+            let parent = if child.get("minecraftArguments").is_some() {
+                serde_json::from_str(include_str!("../../tests/fixtures/version-1.12.2.json"))
+                    .expect("parent")
+            } else {
+                serde_json::from_str(include_str!("../../tests/fixtures/version-1.20.6.json"))
+                    .expect("parent")
+            };
+            let version = crate::parse_version(&merge_version_json(parent, child).to_string())
+                .expect("resolved profile");
+            assert_eq!(version.main_class, expected_main);
+            for os in [crate::OsName::Windows, crate::OsName::Linux] {
+                let environment = crate::LaunchEnvironment {
+                    os,
+                    arch: crate::Arch::X86_64,
+                    os_version: String::new(),
+                    features: std::collections::BTreeMap::new(),
+                };
+                let cache = crate::SharedCache::at(
+                    std::env::temp_dir().join("licht-profile-argument-fixture"),
+                );
+                let command = crate::launch_command(
+                    std::path::Path::new("java"),
+                    &cache,
+                    "profile-fixture",
+                    &version,
+                    &environment,
+                    &std::collections::BTreeMap::new(),
+                )
+                .expect("launch arguments");
+                assert!(
+                    command
+                        .iter()
+                        .all(|argument| !argument.contains("${library_directory}")
+                            && !argument.contains("${classpath_separator}"))
+                );
+                assert!(command.iter().any(|argument| argument == expected_main));
+            }
+        }
+    }
 
     #[test]
     fn child_overrides_main_class_and_appends_libraries() {

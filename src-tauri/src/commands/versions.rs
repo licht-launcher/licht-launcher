@@ -1,8 +1,6 @@
 use licht_core::{
-    ADOPTIUM_API, ASSET_OBJECT_BASE, CoreError, DownloadProgress, GameInstall, SharedCache,
-    VersionSummary, fetch_version_manifest, install_game, install_temurin, is_version_ready,
-    list_version_summaries, load_instance, load_resolved_version_json, local_inherits_from,
-    local_version_exists, parse_version, required_java_major,
+    CoreError, DownloadProgress, SharedCache, VersionSummary, install_game_version,
+    is_version_ready, list_version_summaries, load_instance,
 };
 use tauri::{AppHandle, State};
 use tokio::sync::mpsc;
@@ -84,110 +82,11 @@ async fn install_one(
     let cache = game.clone();
     let settings = settings.clone();
     let client = http_client()?;
-    let manifest = fetch_version_manifest(&client, &cache).await;
-    let entry = match &manifest {
-        Ok(manifest) => manifest
-            .versions
-            .iter()
-            .find(|version| version.id == version_id)
-            .cloned(),
-        Err(_) => None,
-    };
-
-    // Custom loader profiles, or offline when only a local JSON exists.
-    if entry.is_none() {
-        if !local_version_exists(&cache, version_id) {
-            return Err(match manifest {
-                Err(error) => error,
-                Ok(_) => CoreError::VersionMissing,
-            });
-        }
-        if let Some(parent) = local_inherits_from(&cache, version_id)? {
-            Box::pin(install_one(
-                app,
-                game,
-                &settings,
-                &parent,
-                progress_version_id,
-            ))
-            .await?;
-        }
-        let resolved = load_resolved_version_json(&cache, version_id)?;
-        let version = parse_version(&resolved)?;
-        let environment = host_environment()?;
-        let (progress, mut incoming) = mpsc::channel(4096);
-        let id = version_id.to_string();
-        let cache_task = cache.clone();
-        let settings_task = settings.clone();
-        let installing = tauri::async_runtime::spawn(async move {
-            let index_json = client
-                .get(&version.asset_index.url)
-                .send()
-                .await?
-                .error_for_status()?
-                .text()
-                .await?;
-            let assets = licht_core::parse_asset_index(&index_json)?;
-            licht_core::install_version(
-                &client,
-                &cache_task,
-                &settings_task,
-                licht_core::InstallPlan {
-                    version_id: &id,
-                    version: &version,
-                    asset_index_json: &index_json,
-                    assets: &assets,
-                    environment: &environment,
-                    asset_base: ASSET_OBJECT_BASE,
-                },
-                progress.clone(),
-            )
-            .await?;
-            let major = required_java_major(&id, &version);
-            install_temurin(
-                &client,
-                &cache_task,
-                major,
-                &environment,
-                ADOPTIUM_API,
-                progress,
-            )
-            .await
-        });
-        let mut throttle = ProgressThrottle::new();
-        while let Some(progress) = incoming.recv().await {
-            if throttle.should_emit(progress, std::time::Instant::now()) {
-                emit_install_progress(app, progress_version_id, progress);
-            }
-        }
-        let java = installing
-            .await
-            .map_err(|_| CoreError::Io(std::io::Error::other("install task failed")))??;
-        return Ok(java.display().to_string());
-    }
-
-    let entry = entry.expect("checked above");
     let (progress, mut incoming) = mpsc::channel(4096);
-    let version_url = entry.url.clone();
-    let version_sha1 = entry.sha1.clone();
     let id = version_id.to_string();
     let environment = host_environment()?;
     let installing = tauri::async_runtime::spawn(async move {
-        install_game(
-            &client,
-            &cache,
-            &settings,
-            GameInstall {
-                version_id: &id,
-                version_json_url: &version_url,
-                version_sha1: &version_sha1,
-                environment: &environment,
-                asset_base: ASSET_OBJECT_BASE,
-                java: None,
-            },
-            progress,
-        )
-        .await
+        install_game_version(&client, &cache, &settings, &id, &environment, progress).await
     });
 
     let mut throttle = ProgressThrottle::new();

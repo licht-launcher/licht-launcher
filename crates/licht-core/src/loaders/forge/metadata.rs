@@ -1,21 +1,12 @@
-use std::fs;
-
 use reqwest::Client;
-use serde_json::{Value, json};
 
 use crate::loaders::types::LoaderChannel;
-use crate::{CoreError, Result, SharedCache};
+use crate::{CoreError, Result};
 
 pub const FORGE_METADATA: &str =
     "https://maven.minecraftforge.net/net/minecraftforge/forge/maven-metadata.xml";
 pub const NEOFORGE_METADATA: &str =
     "https://maven.neoforged.net/releases/net/neoforged/neoforge/maven-metadata.xml";
-
-#[derive(Debug, Clone, Copy)]
-pub enum ForgeFamily {
-    Forge,
-    NeoForge,
-}
 
 pub async fn list_forge_like_versions(
     client: &Client,
@@ -76,67 +67,6 @@ fn neo_matches_game(neo_version: &str, game_version: &str) -> bool {
     let stripped = game_version.strip_prefix("1.").unwrap_or(game_version);
     neo_version.starts_with(&format!("{stripped}."))
         || neo_version.starts_with(&format!("{stripped}-"))
-}
-
-/// Writes a thin wrapper version JSON that inherits the vanilla game version.
-/// Full Forge/NeoForge processor install runs on first play via the official installer later;
-/// this records the chosen loader build so the instance is created consistently.
-pub async fn install_forge_like(
-    client: &Client,
-    cache: &SharedCache,
-    family: ForgeFamily,
-    game_version: &str,
-    channel: LoaderChannel,
-    loader_version: Option<&str>,
-) -> Result<String> {
-    let metadata = match family {
-        ForgeFamily::Forge => FORGE_METADATA,
-        ForgeFamily::NeoForge => NEOFORGE_METADATA,
-    };
-    let versions = list_forge_like_versions(client, metadata, game_version, channel).await?;
-    let build = match loader_version {
-        Some(explicit) if !explicit.is_empty() => explicit.to_string(),
-        _ => versions
-            .into_iter()
-            .next()
-            .ok_or(CoreError::LoaderVersionMissing)?,
-    };
-    let prefix = match family {
-        ForgeFamily::Forge => "forge",
-        ForgeFamily::NeoForge => "neoforge",
-    };
-    let id = format!("{prefix}-{build}");
-    let profile = json!({
-        "id": id,
-        "inheritsFrom": game_version,
-        "time": "1970-01-01T00:00:00Z",
-        "releaseTime": "1970-01-01T00:00:00Z",
-        "type": "release",
-        "mainClass": "net.minecraft.client.main.Main",
-        "arguments": {
-            "game": [],
-            "jvm": []
-        },
-        "libraries": [],
-        "lichtLoader": {
-            "family": prefix,
-            "build": build,
-            "gameVersion": game_version
-        }
-    });
-    write_version_json(cache, &id, &profile)?;
-    let _ = client;
-    Ok(id)
-}
-
-fn write_version_json(cache: &SharedCache, id: &str, profile: &Value) -> Result<()> {
-    let path = cache.version_json(id)?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    let body = serde_json::to_string_pretty(profile).map_err(CoreError::LoaderJson)?;
-    fs::write(path, body)?;
-    Ok(())
 }
 
 #[cfg(test)]
