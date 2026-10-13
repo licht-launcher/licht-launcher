@@ -8,7 +8,6 @@ import {
 import type { SectionId } from "@/features/settings/model/sections";
 import { SettingsDialog } from "@/features/settings/settings-dialog";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
-import type { VersionSummary } from "@/lib/generated/VersionSummary";
 
 type DialogMutations = {
   rename: UseMutationResult<
@@ -32,7 +31,6 @@ type DialogMutations = {
 
 export function InstanceDialogs({
   configuring,
-  versions,
   busy,
   mutations,
   configuringOpen,
@@ -49,7 +47,6 @@ export function InstanceDialogs({
   onOpenDelete,
 }: {
   configuring: InstanceEntry | null;
-  versions: VersionSummary[];
   busy: boolean;
   mutations: DialogMutations;
   configuringOpen: boolean;
@@ -103,13 +100,10 @@ export function InstanceDialogs({
           }
           mutations.rename.mutate({ folder: configuring.folder, name });
         }}
-        onChangeVersion={(versionId) => {
+        onChangeVersion={(versionId, installed) => {
           if (!configuring || versionId === configuring.versionId) {
             return;
           }
-          const installed =
-            versions.find((version) => version.id === versionId)?.installed ??
-            false;
           mutations.changeVersion.mutate({
             folder: configuring.folder,
             versionId,

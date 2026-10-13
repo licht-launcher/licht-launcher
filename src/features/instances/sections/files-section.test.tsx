@@ -102,6 +102,10 @@ describe("FilesSection", () => {
     expect(screen.getByText("options.txt")).toBeInTheDocument();
     expect(screen.getByText("12 B")).toBeInTheDocument();
     expect(screen.getByText("—")).toBeInTheDocument();
+    const folderRow = screen.getByRole("button", { name: "saves, folder" });
+    expect(folderRow.querySelector("svg")).toHaveClass("text-muted-foreground");
+    const fileRow = screen.getByLabelText("options.txt, file");
+    expect(fileRow.querySelector("svg")).toHaveClass("text-muted-foreground");
 
     fireEvent.click(
       within(screen.getByRole("columnheader", { name: /Size/ })).getByRole(

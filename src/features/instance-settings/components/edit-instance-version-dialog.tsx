@@ -52,7 +52,7 @@ export function EditInstanceVersionDialog({
   onRetryVersions: () => void;
   busy: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (versionId: string) => void;
+  onSave: (versionId: string, installed: boolean) => void;
 }) {
   const [draftVersion, setDraftVersion] = useState(versionId);
   const versionChoices = releaseOptions(versions, versionId);
@@ -147,7 +147,10 @@ export function EditInstanceVersionDialog({
               draftVersion === versionId
             }
             onClick={() => {
-              onSave(draftVersion);
+              const installed =
+                versions.find((version) => version.id === draftVersion)
+                  ?.installed ?? false;
+              onSave(draftVersion, installed);
               onOpenChange(false);
             }}
           >

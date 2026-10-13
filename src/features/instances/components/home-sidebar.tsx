@@ -1,5 +1,8 @@
+import { useRouter, useRouterState } from "@tanstack/react-router";
 import {
   ArrowDownAZIcon,
+  ArrowLeftIcon,
+  ArrowRightIcon,
   HistoryIcon,
   Loader2Icon,
   PlusIcon,
@@ -39,6 +42,48 @@ function SortLabel({
   );
 }
 
+function SidebarHistoryNav() {
+  const router = useRouter();
+  useRouterState({
+    select: (state) =>
+      `${String(state.location.state.__TSR_index)}:${state.location.href}`,
+  });
+  const canGoBack = router.history.canGoBack();
+  const canGoForward =
+    router.history.location.state.__TSR_index < router.history.length - 1;
+
+  return (
+    <div className="flex shrink-0 items-center gap-0.5">
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        aria-label="Back"
+        className="text-muted-foreground"
+        disabled={!canGoBack}
+        onClick={() => {
+          router.history.back();
+        }}
+      >
+        <ArrowLeftIcon aria-hidden />
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        aria-label="Forward"
+        className="text-muted-foreground"
+        disabled={!canGoForward}
+        onClick={() => {
+          router.history.forward();
+        }}
+      >
+        <ArrowRightIcon aria-hidden />
+      </Button>
+    </div>
+  );
+}
+
 export function HomeSidebar({
   instances,
   selectedFolder,
@@ -65,31 +110,28 @@ export function HomeSidebar({
 
   return (
     <div className="flex h-full w-full min-w-0 flex-col overflow-hidden bg-black/20">
-      {showTitleband ? (
+      <div className="flex h-9 shrink-0 items-center justify-between gap-2 pr-1.5 pl-4">
         <div
           data-tauri-drag-region
-          className="flex h-9 shrink-0 items-center px-4"
+          className="flex min-h-9 min-w-0 flex-1 items-center"
         >
-          <span
-            data-tauri-drag-region
-            className="font-brand text-xs font-medium tracking-widest text-muted-foreground uppercase select-none"
-          >
-            Licht Launcher
-          </span>
+          {showTitleband ? (
+            <span
+              data-tauri-drag-region
+              className="font-brand text-xs font-medium tracking-widest text-muted-foreground uppercase select-none"
+            >
+              Licht Launcher
+            </span>
+          ) : null}
         </div>
-      ) : null}
-      <div
-        className={
-          showTitleband
-            ? "flex min-h-0 flex-1 flex-col gap-6 px-4 pt-4 pb-10"
-            : "flex min-h-0 flex-1 flex-col gap-6 px-4 pt-6 pb-10"
-        }
-      >
+        <SidebarHistoryNav />
+      </div>
+      <div className="flex min-h-0 flex-1 flex-col gap-6 px-4 pt-4 pb-10">
         <nav
           aria-label="Instances"
           className="flex min-h-0 flex-1 flex-col gap-2"
         >
-          <div className="flex items-center gap-2 px-2">
+          <div className="flex items-center gap-2 px-3">
             <h2 className="min-w-0 flex-1 font-brand text-xs font-medium leading-none text-muted-foreground">
               Instances
             </h2>
@@ -122,16 +164,16 @@ export function HomeSidebar({
             </Select>
           </div>
           {loading ? (
-            <p className="px-2 text-sm text-muted-foreground">Loading…</p>
+            <p className="px-3 text-sm text-muted-foreground">Loading…</p>
           ) : null}
           {!loading && instances.length === 0 ? (
-            <p className="px-2 text-sm text-muted-foreground">
+            <p className="px-3 text-sm text-muted-foreground">
               No instances yet.
             </p>
           ) : null}
           {!loading && ordered.length > 0 ? (
             <ScrollArea className="min-h-0 flex-1">
-              <ul className="flex w-full min-w-0 flex-col gap-1 pr-3">
+              <ul className="flex w-full min-w-0 flex-col gap-1">
                 {ordered.map((instance) => {
                   const selected = instance.folder === selectedFolder;
                   const phase = playPhase(instance.folder);

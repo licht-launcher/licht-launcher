@@ -6,7 +6,8 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { EditInstanceVersionDialog } from "@/features/instance-settings/components/edit-instance-version-dialog";
-import { listVersions, repairInstance } from "@/lib/commands";
+import { versionsQueryOptions } from "@/features/instances/lib/versions-query";
+import { repairInstance } from "@/lib/commands";
 import { friendlyError, messageOf } from "@/lib/errors";
 import type { VersionSummary } from "@/lib/generated/VersionSummary";
 
@@ -37,14 +38,12 @@ export function InstanceBaseSection({
   versionId: string;
   busy: boolean;
   versionBusy: boolean;
-  onChangeVersion: (versionId: string) => void;
+  onChangeVersion: (versionId: string, installed: boolean) => void;
 }) {
   const [editOpen, setEditOpen] = useState(false);
   const versions = useQuery({
-    queryKey: ["versions"],
-    queryFn: listVersions,
+    ...versionsQueryOptions,
     enabled: editOpen,
-    retry: false,
   });
   const repair = useMutation({
     mutationFn: () => repairInstance(folder),

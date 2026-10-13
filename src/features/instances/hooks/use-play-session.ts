@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { VERSIONS_QUERY_KEY } from "@/features/instances/lib/versions-query";
 import {
   installModpackFiles,
   installVersion,
@@ -158,7 +159,7 @@ export function usePlaySession({
     beginInstall(instance.folder, instance.versionId);
     try {
       await installVersion(instance.versionId);
-      await queryClient.invalidateQueries({ queryKey: ["versions"] });
+      await queryClient.invalidateQueries({ queryKey: VERSIONS_QUERY_KEY });
       await installModpackFiles(instance.folder);
     } finally {
       endInstall(instance.folder, instance.versionId);

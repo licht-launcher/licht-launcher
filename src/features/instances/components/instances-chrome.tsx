@@ -5,6 +5,7 @@ import {
   createContext,
   type ReactNode,
   useContext,
+  useEffect,
   useMemo,
   useRef,
 } from "react";
@@ -39,10 +40,9 @@ import {
 import { useCustomTitleBar } from "@/hooks/use-custom-title-bar";
 import { getLastPlayedFolder } from "@/lib/commands";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
-import type { VersionSummary } from "@/lib/generated/VersionSummary";
+import type { HomeSearch } from "@/routes/_app/index";
 
 export type InstancesChromeContext = {
-  versions: UseQueryResult<VersionSummary[], Error>;
   instances: UseQueryResult<InstanceEntry[], Error>;
   username: string;
   selectedFolder: string | null;
@@ -83,12 +83,46 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
+  const homeSearch = useRouterState({
+    select: (state): HomeSearch | null => {
+      if (state.location.pathname !== "/") {
+        return null;
+      }
+      return state.location.search as HomeSearch;
+    },
+  });
   const onWizard = pathname === "/instances/new";
+  const instanceParam = homeSearch?.instance ?? null;
 
-  const { versions, instances, username } = useInstancesData();
+  const { instances, username } = useInstancesData();
   const { selectedFolder, setSelectedFolder, selected } = useInstanceSelection(
     instances.data,
+    onWizard ? null : instanceParam,
   );
+
+  useEffect(() => {
+    if (onWizard || instances.data === undefined || selectedFolder === null) {
+      return;
+    }
+    if (homeSearch?.prepare !== undefined) {
+      return;
+    }
+    if (homeSearch?.instance === selectedFolder) {
+      return;
+    }
+    void navigate({
+      to: "/",
+      search: { instance: selectedFolder },
+      replace: true,
+    });
+  }, [
+    onWizard,
+    instances.data,
+    selectedFolder,
+    homeSearch?.instance,
+    homeSearch?.prepare,
+    navigate,
+  ]);
   const dialogs = useInstanceDialogs();
   const markStartedRef = useRef<(folder: string) => void>(() => {});
   const {
@@ -138,7 +172,6 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
 
   const context = useMemo<InstancesChromeContext>(
     () => ({
-      versions,
       instances,
       username,
       selectedFolder,
@@ -157,7 +190,6 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
       openConfigure: dialogs.openConfigure,
     }),
     [
-      versions,
       instances,
       username,
       selectedFolder,
@@ -201,10 +233,14 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
             playPhase={playPhase}
             showTitleband={customTitleBar}
             onSelect={(folder) => {
-              setSelectedFolder(folder);
-              if (onWizard) {
-                void navigate({ to: "/", search: {} });
+              if (!onWizard && folder === selectedFolder) {
+                return;
               }
+              setSelectedFolder(folder);
+              void navigate({
+                to: "/",
+                search: { instance: folder },
+              });
             }}
             onCreate={() => {
               void navigate({ to: "/instances/new" });
@@ -227,7 +263,6 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
 
       <InstanceDialogs
         configuring={configuring}
-        versions={versions.data ?? []}
         busy={busy}
         mutations={{
           rename,

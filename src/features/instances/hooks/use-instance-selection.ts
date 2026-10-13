@@ -2,7 +2,10 @@ import { useEffect, useState } from "react";
 
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 
-export function useInstanceSelection(list: InstanceEntry[] | undefined) {
+export function useInstanceSelection(
+  list: InstanceEntry[] | undefined,
+  preferredFolder: string | null,
+) {
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
 
   useEffect(() => {
@@ -14,12 +17,20 @@ export function useInstanceSelection(list: InstanceEntry[] | undefined) {
       return;
     }
     if (
-      selectedFolder === null ||
-      !list.some((instance) => instance.folder === selectedFolder)
+      preferredFolder !== null &&
+      list.some((instance) => instance.folder === preferredFolder)
     ) {
-      setSelectedFolder(list[0]?.folder ?? null);
+      setSelectedFolder(preferredFolder);
+      return;
     }
-  }, [list, selectedFolder]);
+    if (
+      selectedFolder !== null &&
+      list.some((instance) => instance.folder === selectedFolder)
+    ) {
+      return;
+    }
+    setSelectedFolder(list[0]?.folder ?? null);
+  }, [list, preferredFolder, selectedFolder]);
 
   const selected =
     list?.find((instance) => instance.folder === selectedFolder) ?? null;

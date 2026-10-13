@@ -416,10 +416,7 @@ function FileRow({
         <span className="flex min-w-0 items-center gap-2">
           <Icon
             aria-hidden
-            className={cn(
-              "size-4 shrink-0",
-              entry.isDir ? "text-success" : "text-muted-foreground",
-            )}
+            className="size-4 shrink-0 text-muted-foreground"
             strokeWidth={2}
           />
           <span className="min-w-0 truncate font-medium text-foreground">

@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
+import { VERSIONS_QUERY_KEY } from "@/features/instances/lib/versions-query";
 import {
   deleteInstance,
   duplicateInstance,
@@ -83,7 +84,7 @@ export function useInstanceMutations({
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["instances"] });
-      await queryClient.invalidateQueries({ queryKey: ["versions"] });
+      await queryClient.invalidateQueries({ queryKey: VERSIONS_QUERY_KEY });
     },
     onError: (error: unknown) => {
       toast.error(friendlyError(messageOf(error)));
