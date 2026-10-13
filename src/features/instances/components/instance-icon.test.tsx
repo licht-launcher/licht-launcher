@@ -3,11 +3,25 @@ import { describe, expect, it, vi } from "vitest";
 
 import { InstanceIcon } from "@/features/instances/components/instance-icon";
 
+const convertFileSrcMock = vi.fn((path: string) => `asset://localhost/${path}`);
+
 vi.mock("@tauri-apps/api/core", () => ({
-  convertFileSrc: (path: string) => `asset://localhost/${path}`,
+  convertFileSrc: (path: string) => convertFileSrcMock(path),
 }));
 
 describe("InstanceIcon", () => {
+  it("falls back to grass when convertFileSrc is unavailable", () => {
+    convertFileSrcMock.mockImplementationOnce(() => {
+      throw new Error("Cannot read properties of undefined (reading 'metadata')");
+    });
+    const { container } = render(
+      <InstanceIcon iconPath="C:/data/instances/classic/icon.png" />,
+    );
+    expect(container.querySelector("img")?.getAttribute("src")).not.toContain(
+      "asset://",
+    );
+  });
+
   it("renders the grass fallback when there is no icon path", () => {
     const { container } = render(<InstanceIcon />);
     const tile = container.firstElementChild;

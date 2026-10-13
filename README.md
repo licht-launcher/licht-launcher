@@ -35,9 +35,9 @@ Still open: `${auth_session}` is left literal on versions that include it
 (through 1.5.2). The live launch checks so far were on Windows.
 
 ```sh
-cargo run -p licht-core --bin licht -- versions
-cargo run -p licht-core --bin licht -- install --version 1.20.1
-cargo run -p licht-core --bin licht -- launch --version 1.20.1 --username Player
+cargo run -p licht-core --features cli --bin licht -- versions
+cargo run -p licht-core --features cli --bin licht -- install --version 1.20.1
+cargo run -p licht-core --features cli --bin licht -- launch --version 1.20.1 --username Player
 ```
 
 `launch` does not download. `install` does. `--game-dir` replaces the instance

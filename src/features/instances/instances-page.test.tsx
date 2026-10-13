@@ -26,6 +26,7 @@ const { invoke, listeners } = vi.hoisted(() => ({
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke,
+  convertFileSrc: (path: string) => `asset://localhost/${path}`,
 }));
 
 vi.mock("@tauri-apps/api/event", () => ({

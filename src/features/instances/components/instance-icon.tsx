@@ -12,6 +12,14 @@ const sizes = {
   },
 } as const;
 
+function assetSrc(iconPath: string): string | null {
+  try {
+    return convertFileSrc(iconPath);
+  } catch {
+    return null;
+  }
+}
+
 /** Instance tile: modpack `icon.png` when present, otherwise original grass-block art. */
 export function InstanceIcon({
   iconPath = null,
@@ -25,7 +33,7 @@ export function InstanceIcon({
   const tokens = sizes[size];
   const src =
     iconPath !== null && iconPath !== ""
-      ? convertFileSrc(iconPath)
+      ? (assetSrc(iconPath) ?? grassFallback)
       : grassFallback;
 
   return (
