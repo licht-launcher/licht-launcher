@@ -127,7 +127,7 @@ export function HomeSidebar({
           {showTitleband ? (
             <span
               data-tauri-drag-region
-              className="border border-transparent px-1 font-brand text-xs font-medium tracking-widest text-muted-foreground uppercase select-none"
+              className="ml-px border border-transparent px-1 font-brand text-xs font-medium tracking-widest text-muted-foreground uppercase select-none"
             >
               Licht Launcher
             </span>
@@ -141,7 +141,7 @@ export function HomeSidebar({
           className="flex min-h-0 flex-1 flex-col gap-2"
         >
           <div className="flex min-h-0 flex-1 flex-col">
-          <div className="flex items-center gap-2 border border-transparent px-1">
+          <div className="ml-px flex items-center gap-2 border border-transparent px-1">
             <h2 className="min-w-0 flex-1 font-brand text-xs font-medium leading-none text-muted-foreground">
               Instances
             </h2>
@@ -185,7 +185,7 @@ export function HomeSidebar({
           ) : null}
           {!loading && ordered.length > 0 ? (
             <ScrollArea className="min-h-0 flex-1">
-              <ul className="flex w-full min-w-0 flex-col">
+              <ul className="flex w-full min-w-0 flex-col px-px">
                 {ordered.map((instance) => {
                   const selected = instance.folder === selectedFolder;
                   const phase = playPhase(instance.folder);
@@ -243,14 +243,14 @@ export function HomeSidebar({
           </div>
 
           <TooltipProvider delayDuration={300}>
-            <div className="mt-auto flex items-center justify-center gap-3">
+            <div className="mt-auto flex items-center justify-center gap-1.5">
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
                     type="button"
                     variant="secondary"
                     size="icon-lg"
-                    className="rounded-full"
+                    className="size-10 rounded-full [&_svg:not([class*='size-'])]:size-5"
                     aria-label="New instance"
                     disabled={busy}
                     onClick={onCreate}
@@ -269,7 +269,7 @@ export function HomeSidebar({
                       type="button"
                       variant="secondary"
                       size="icon-lg"
-                      className="rounded-full"
+                      className="size-10 rounded-full [&_svg:not([class*='size-'])]:size-5"
                       aria-label="Downloads"
                       disabled
                     >
@@ -288,7 +288,7 @@ export function HomeSidebar({
                       type="button"
                       variant="secondary"
                       size="icon-lg"
-                      className="rounded-full"
+                      className="size-10 rounded-full [&_svg:not([class*='size-'])]:size-5"
                       aria-label="Discover"
                       disabled
                     >
@@ -306,7 +306,7 @@ export function HomeSidebar({
                     type="button"
                     variant="secondary"
                     size="icon-lg"
-                    className="rounded-full"
+                    className="size-10 rounded-full [&_svg:not([class*='size-'])]:size-5"
                     aria-label="Settings"
                     onClick={onOpenSettings}
                   >
