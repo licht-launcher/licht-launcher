@@ -4,40 +4,20 @@ import { toast } from "sonner";
 
 import { useToastError } from "@/features/settings/hooks/use-toast-error";
 import {
+  dismissTitleBarRestartToast,
+  promptTitleBarRestart,
+} from "@/features/settings/lib/title-bar-restart-toast";
+import {
   type Draft,
   fromSnapshot,
   optionalSize,
   toSettings,
 } from "@/features/settings/model/draft";
-import {
-  getSettings,
-  restartApp,
-  runtimeJava,
-  saveSettings,
-} from "@/lib/commands";
+import { getSettings, runtimeJava, saveSettings } from "@/lib/commands";
 import { friendlyError, messageOf } from "@/lib/errors";
 import type { Settings } from "@/lib/generated/Settings";
 
 const SAVE_DELAY_MS = 400;
-
-function promptTitleBarRestart() {
-  toast("Restart required", {
-    id: "title-bar-restart",
-    description: "Apply the title bar change now?",
-    position: "bottom-center",
-    duration: Number.POSITIVE_INFINITY,
-    action: {
-      label: "Restart",
-      onClick: () => {
-        void restartApp();
-      },
-    },
-    cancel: {
-      label: "Later",
-      onClick: () => undefined,
-    },
-  });
-}
 
 export function useSettingsDraft(open: boolean) {
   const queryClient = useQueryClient();
@@ -70,6 +50,8 @@ export function useSettingsDraft(open: boolean) {
         saved.disableCustomTitleBar !== appliedDisableCustomTitleBar.current
       ) {
         promptTitleBarRestart();
+      } else {
+        dismissTitleBarRestartToast();
       }
     },
     onError: (error: unknown) => {
@@ -106,6 +88,7 @@ export function useSettingsDraft(open: boolean) {
       if (timerRef.current !== null) {
         clearTimeout(timerRef.current);
       }
+      dismissTitleBarRestartToast();
     };
   }, []);
 
@@ -117,6 +100,15 @@ export function useSettingsDraft(open: boolean) {
     const next = { ...current, ...patch };
     draftRef.current = next;
     setDraft(next);
+
+    if (
+      patch.disableCustomTitleBar !== undefined &&
+      appliedDisableCustomTitleBar.current !== null &&
+      patch.disableCustomTitleBar === appliedDisableCustomTitleBar.current
+    ) {
+      dismissTitleBarRestartToast();
+    }
+
     if (timerRef.current !== null) {
       clearTimeout(timerRef.current);
     }

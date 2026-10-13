@@ -31,9 +31,9 @@ describe("AppearanceSection", () => {
     expect(
       screen.getByRole("switch", { name: "Disable custom title bar" }),
     ).not.toBeChecked();
-    expect(
-      screen.getByText("This change applies after restart."),
-    ).toHaveClass("text-destructive");
+    expect(screen.getByText("This change applies after restart.")).toHaveClass(
+      "text-destructive",
+    );
     expect(screen.queryByLabelText("Username")).not.toBeInTheDocument();
   });
 
@@ -62,6 +62,37 @@ describe("AppearanceSection", () => {
     fireEvent.click(screen.getByRole("button", { name: "Restart" }));
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("restart_app");
+    });
+  });
+
+  it("dismisses the restart toast when the title bar option is reverted", async () => {
+    let savedDisableCustomTitleBar = false;
+    mockSettingsCommands((command, args) => {
+      if (command === "save_settings") {
+        const settings = (
+          args as { settings?: { disableCustomTitleBar?: boolean } } | undefined
+        )?.settings;
+        savedDisableCustomTitleBar = settings?.disableCustomTitleBar ?? false;
+        return Promise.resolve({
+          ...snapshot.settings,
+          disableCustomTitleBar: savedDisableCustomTitleBar,
+        });
+      }
+      return undefined;
+    });
+
+    await renderSettings();
+    fireEvent.click(await screen.findByRole("button", { name: "Appearance" }));
+    const toggle = screen.getByRole("switch", {
+      name: "Disable custom title bar",
+    });
+
+    fireEvent.click(toggle);
+    expect(await screen.findByText("Restart required")).toBeInTheDocument();
+
+    fireEvent.click(toggle);
+    await waitFor(() => {
+      expect(screen.queryByText("Restart required")).not.toBeInTheDocument();
     });
   });
 });
