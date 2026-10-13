@@ -15,7 +15,7 @@ describe("Resizable", () => {
           <ResizablePanel id="left" defaultSize={120} minSize={80}>
             Left
           </ResizablePanel>
-          <ResizableHandle withHandle />
+          <ResizableHandle />
           <ResizablePanel id="right" minSize={80}>
             Right
           </ResizablePanel>
