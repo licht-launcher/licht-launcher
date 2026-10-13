@@ -70,21 +70,21 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path release-assets | Out-Null
           Copy-Item "target/release/licht.exe" `
-            "release-assets/Licht-Launcher-0.1.0-Lilie-windows-x64-portable.exe"
+            "release-assets/Licht-Launcher-0.1.1-Lilie-windows-x64-portable.exe"
           $nsis = Get-ChildItem "target/release/bundle/nsis/*.exe" -ErrorAction SilentlyContinue
           if (-not $nsis) {
             throw "NSIS installer not found"
           }
           Copy-Item $nsis[0].FullName `
-            "release-assets/Licht-Launcher-0.1.0-Lilie-windows-x64-setup.exe"
+            "release-assets/Licht-Launcher-0.1.1-Lilie-windows-x64-setup.exe"
 
       - name: Stage Linux artifacts
         if: runner.os == 'Linux'
         run: |
           mkdir -p release-assets
           cp target/release/licht \
-            release-assets/Licht-Launcher-0.1.0-Lilie-linux-x64-portable
-          chmod +x release-assets/Licht-Launcher-0.1.0-Lilie-linux-x64-portable
+            release-assets/Licht-Launcher-0.1.1-Lilie-linux-x64-portable
+          chmod +x release-assets/Licht-Launcher-0.1.1-Lilie-linux-x64-portable
           shopt -s nullglob
           appimages=(target/release/bundle/appimage/*.AppImage)
           debs=(target/release/bundle/deb/*.deb)
@@ -97,10 +97,10 @@ jobs:
             exit 1
           fi
           cp "${appimages[0]}" \
-            release-assets/Licht-Launcher-0.1.0-Lilie-linux-x64.AppImage
-          chmod +x release-assets/Licht-Launcher-0.1.0-Lilie-linux-x64.AppImage
+            release-assets/Licht-Launcher-0.1.1-Lilie-linux-x64.AppImage
+          chmod +x release-assets/Licht-Launcher-0.1.1-Lilie-linux-x64.AppImage
           cp "${debs[0]}" \
-            release-assets/Licht-Launcher-0.1.0-Lilie-linux-x64.deb
+            release-assets/Licht-Launcher-0.1.1-Lilie-linux-x64.deb
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -132,20 +132,27 @@ jobs:
       - name: Publish release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
-          name: Licht Launcher 0.1.0 · Lilie
+          name: Licht Launcher 0.1.1 · Lilie
           draft: false
           prerelease: false
           generate_release_notes: true
           body: |
-            First public release of **Licht Launcher** (codename **Lilie**).
+            Patch release of **Licht Launcher** (codename **Lilie**).
 
             Unofficial project — not affiliated with Mojang Studios or Microsoft.
+
+            ### Highlights
+            - Harden modpack installs (strict CSP, Modrinth CDN allowlist, required hashes)
+            - Safer path handling on Windows (drive-relative components, reserved names)
+            - Keep Temurin extract symlinks inside the install root
+            - Launch offline-ready versions without re-fetching the manifest
+            - CurseForge downloads require sha1 or md5
 
             ### Downloads
             | Platform | Portable | Installer |
             | --- | --- | --- |
-            | Windows (x64) | `Licht-Launcher-0.1.0-Lilie-windows-x64-portable.exe` | `Licht-Launcher-0.1.0-Lilie-windows-x64-setup.exe` (NSIS) |
-            | Linux (x64) | `Licht-Launcher-0.1.0-Lilie-linux-x64-portable` | `.AppImage` and `.deb` |
+            | Windows (x64) | `Licht-Launcher-0.1.1-Lilie-windows-x64-portable.exe` | `Licht-Launcher-0.1.1-Lilie-windows-x64-setup.exe` (NSIS) |
+            | Linux (x64) | `Licht-Launcher-0.1.1-Lilie-linux-x64-portable` | `.AppImage` and `.deb` |
 
             The portable builds are single binaries; no installer required.
           files: release-assets/*

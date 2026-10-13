@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use crate::path_component::path_component_safe;
 use crate::{CoreError, Result};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -115,13 +116,7 @@ impl SharedCache {
         }
         let mut full = self.root.clone();
         for component in path.split(['/', '\\']) {
-            // `:` is not a separator here, but on Windows `join("C:evil")` leaves the root.
-            if component.is_empty()
-                || component == "."
-                || component == ".."
-                || component.contains(':')
-                || component.contains('\0')
-            {
+            if !path_component_safe(component) {
                 return Err(CoreError::CachePath);
             }
             full.push(component);
@@ -131,16 +126,8 @@ impl SharedCache {
 }
 
 fn single_component(name: &str) -> Result<String> {
-    // Same rule as modpacks/path_safety: a colon is never a normal path component.
-    // On Windows, joining `C:evil` replaces the path instead of nesting under it.
-    if name.is_empty()
-        || name.contains('/')
-        || name.contains('\\')
-        || name.contains(':')
-        || name.contains('\0')
-        || name == "."
-        || name == ".."
-    {
+    // Same rules as modpack path segments (reserved names, `:`, trailing junk).
+    if name.contains('/') || name.contains('\\') || !path_component_safe(name) {
         return Err(CoreError::CachePath);
     }
     Ok(name.to_string())
@@ -151,9 +138,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn rejects_drive_relative_and_nul_components() {
+    fn rejects_drive_relative_reserved_and_trailing_junk_names() {
         let cache = SharedCache::at("/tmp/licht-cache");
-        for name in ["C:evil", "foo:bar", "a\0b", "..", ".", "a/b", "a\\b", ""] {
+        for name in [
+            "C:evil", "foo:bar", "a\0b", "..", ".", "a/b", "a\\b", "", "CON", "nul.txt", "com1",
+            "foo.", "foo ",
+        ] {
             assert!(
                 matches!(single_component(name), Err(CoreError::CachePath)),
                 "{name:?}"
@@ -165,6 +155,10 @@ mod tests {
         }
         assert!(matches!(
             cache.library("com/example/C:evil.jar"),
+            Err(CoreError::CachePath)
+        ));
+        assert!(matches!(
+            cache.library("com/example/CON.jar"),
             Err(CoreError::CachePath)
         ));
         assert!(cache.instance_dir("vanilla-1.20").is_ok());
