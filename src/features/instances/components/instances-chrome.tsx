@@ -33,6 +33,8 @@ import {
   SIDEBAR_MAX_SIZE_PX,
   SIDEBAR_MIN_SIZE_PX,
   SIDEBAR_PANEL_ID,
+  SIDEBAR_PANEL_IDS,
+  sidebarLayoutStorage,
 } from "@/features/instances/lib/sidebar-layout";
 import { useCustomTitleBar } from "@/hooks/use-custom-title-bar";
 import { getLastPlayedFolder } from "@/lib/commands";
@@ -73,7 +75,8 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
   const customTitleBar = useCustomTitleBar().data ?? true;
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
     id: SIDEBAR_LAYOUT_ID,
-    storage: localStorage,
+    panelIds: [...SIDEBAR_PANEL_IDS],
+    storage: sidebarLayoutStorage,
     onlySaveAfterUserInteractions: true,
   });
   const navigate = useNavigate();

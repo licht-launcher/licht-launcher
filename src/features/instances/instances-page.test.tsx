@@ -143,6 +143,9 @@ describe("InstancesPage", () => {
     await waitFor(() => {
       expect(names()).toEqual(["Classic", "Zeta", "Alpha"]);
     });
+    expect(
+      screen.getByRole("separator", { name: "Resize sidebar" }),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("combobox", { name: "Sort instances" }));
     fireEvent.click(await screen.findByRole("option", { name: "Name" }));
