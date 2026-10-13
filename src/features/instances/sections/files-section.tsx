@@ -123,6 +123,7 @@ export function FilesSection({
     queryKey: ["instance-entries", folder, relativePath],
     queryFn: () => listInstanceEntries(folder ?? "", relativePath),
     enabled: folder !== null,
+    placeholderData: (previous) => previous,
   });
   const entries = sortFileEntries(listing.data ?? [], sortKey, sortDir);
 
@@ -369,7 +370,7 @@ function ParentRow({
   return (
     <tr
       className={cn(
-        "border-b border-border/60 transition-colors hover:bg-muted/40",
+        "border-b border-border/60 hover:bg-muted/40",
         striped && "bg-black/15",
       )}
     >
@@ -414,7 +415,7 @@ function FileRow({
   return (
     <tr
       className={cn(
-        "border-b border-border/60 transition-colors last:border-b-0",
+        "border-b border-border/60 last:border-b-0",
         striped && "bg-black/15",
         entry.isDir && "cursor-pointer hover:bg-muted/40",
         !entry.isDir && "hover:bg-muted/30",

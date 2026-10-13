@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { ArrowLeftIcon, ArrowRightIcon, PlusIcon, XIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,8 @@ import { WizardStepper } from "@/features/new-instance/components/wizard-stepper
 import {
   canAdvance,
   initialWizardState,
+  type ModpackListItem,
+  type ModpackVersionItem,
   nextStep,
   platformNeedsLoader,
   previousStep,
@@ -28,6 +30,11 @@ import {
   type WizardState,
 } from "@/features/new-instance/model/wizard";
 import {
+  type NewInstanceSearch,
+  searchFromWizardState,
+  wizardStateFromSearch,
+} from "@/features/new-instance/model/wizard-search";
+import {
   createInstanceFromModpack,
   createInstanceWithPlatform,
   listLoaderVersions,
@@ -35,13 +42,94 @@ import {
   searchModpacks,
 } from "@/lib/commands";
 import { friendlyError, messageOf } from "@/lib/errors";
+import { Route } from "@/routes/_app/instances.new";
+
+function resolveModpack(
+  search: NewInstanceSearch,
+  items: ModpackListItem[],
+): ModpackListItem | null {
+  if (search.modpackId === undefined) {
+    return null;
+  }
+  const found = items.find((item) => item.id === search.modpackId);
+  if (found !== undefined) {
+    return found;
+  }
+  return {
+    id: search.modpackId,
+    source: search.modpackSource ?? "modrinth",
+    name: search.name ?? search.modpackId,
+    description: "",
+    downloads: 0,
+    iconUrl: null,
+    author: "",
+  };
+}
+
+function resolveModpackVersion(
+  search: NewInstanceSearch,
+  versions: ModpackVersionItem[],
+): ModpackVersionItem | null {
+  if (search.modpackVersionId === undefined) {
+    return null;
+  }
+  const found = versions.find((item) => item.id === search.modpackVersionId);
+  if (found !== undefined) {
+    return found;
+  }
+  return {
+    id: search.modpackVersionId,
+    name: search.modpackVersionId,
+    gameVersions: [],
+    loaders: [],
+  };
+}
 
 export function NewInstancePage() {
-  const navigate = useNavigate();
+  const navigate = useNavigate({ from: "/instances/new" });
+  const search = Route.useSearch();
   const queryClient = useQueryClient();
-  const [state, setState] = useState<WizardState>(initialWizardState);
 
   const versions = useQuery(versionsQueryOptions);
+
+  const modpacks = useQuery({
+    queryKey: ["modpacks", search.modpackQuery ?? ""],
+    queryFn: () => searchModpacks(search.modpackQuery ?? ""),
+    enabled: search.step === "modpack" || search.modpackId !== undefined,
+    retry: false,
+  });
+
+  const packVersions = useQuery({
+    queryKey: [
+      "modpack-versions",
+      search.modpackSource ?? "modrinth",
+      search.modpackId ?? "",
+    ],
+    queryFn: () =>
+      listModpackVersions(
+        search.modpackSource ?? "modrinth",
+        search.modpackId ?? "",
+      ),
+    enabled:
+      (search.step === "modpack-version" ||
+        search.modpackVersionId !== undefined) &&
+      search.modpackId !== undefined,
+    retry: false,
+  });
+
+  const modpack = useMemo(
+    () => resolveModpack(search, modpacks.data ?? []),
+    [search, modpacks.data],
+  );
+  const modpackVersion = useMemo(
+    () => resolveModpackVersion(search, packVersions.data ?? []),
+    [search, packVersions.data],
+  );
+
+  const state = useMemo(
+    () => wizardStateFromSearch(search, modpack, modpackVersion),
+    [search, modpack, modpackVersion],
+  );
 
   const loaderVersions = useQuery({
     queryKey: [
@@ -63,23 +151,27 @@ export function NewInstancePage() {
     retry: false,
   });
 
-  const modpacks = useQuery({
-    queryKey: ["modpacks", state.modpackQuery],
-    queryFn: () => searchModpacks(state.modpackQuery),
-    enabled: state.step === "modpack",
-    retry: false,
-  });
+  const replaceState = useCallback(
+    (next: WizardState) => {
+      void navigate({
+        to: "/instances/new",
+        search: searchFromWizardState(next),
+        replace: true,
+      });
+    },
+    [navigate],
+  );
 
-  const packVersions = useQuery({
-    queryKey: ["modpack-versions", state.modpack?.source, state.modpack?.id],
-    queryFn: () =>
-      listModpackVersions(
-        state.modpack?.source ?? "modrinth",
-        state.modpack?.id ?? "",
-      ),
-    enabled: state.step === "modpack-version" && state.modpack !== null,
-    retry: false,
-  });
+  const pushState = useCallback(
+    (next: WizardState) => {
+      void navigate({
+        to: "/instances/new",
+        search: searchFromWizardState(next),
+        replace: false,
+      });
+    },
+    [navigate],
+  );
 
   useEffect(() => {
     if (state.step !== "details" || state.gameVersion !== "") {
@@ -90,9 +182,9 @@ export function NewInstancePage() {
       state.includeSnapshots,
     );
     if (choices[0] !== undefined) {
-      setState((current) => ({ ...current, gameVersion: choices[0].id }));
+      replaceState({ ...state, gameVersion: choices[0].id });
     }
-  }, [state.step, state.gameVersion, state.includeSnapshots, versions.data]);
+  }, [state, versions.data, replaceState]);
 
   useEffect(() => {
     if (
@@ -104,15 +196,9 @@ export function NewInstancePage() {
     }
     const first = loaderVersions.data?.[0];
     if (first !== undefined && state.loaderVersion !== first) {
-      setState((current) => ({ ...current, loaderVersion: first }));
+      replaceState({ ...state, loaderVersion: first });
     }
-  }, [
-    state.step,
-    state.platform,
-    state.loaderChannel,
-    state.loaderVersion,
-    loaderVersions.data,
-  ]);
+  }, [state, loaderVersions.data, replaceState]);
 
   useEffect(() => {
     if (state.step !== "modpack-version" || state.modpackVersion !== null) {
@@ -120,16 +206,14 @@ export function NewInstancePage() {
     }
     const first = packVersions.data?.[0];
     if (first !== undefined) {
-      setState((current) => ({
-        ...current,
+      replaceState({
+        ...state,
         modpackVersion: first,
         name:
-          current.name.trim() === ""
-            ? (current.modpack?.name ?? "")
-            : current.name,
-      }));
+          state.name.trim() === "" ? (state.modpack?.name ?? "") : state.name,
+      });
     }
-  }, [state.step, state.modpackVersion, packVersions.data]);
+  }, [state, packVersions.data, replaceState]);
 
   const create = useMutation({
     mutationFn: async () => {
@@ -181,7 +265,7 @@ export function NewInstancePage() {
       create.mutate();
       return;
     }
-    setState((current) => ({ ...current, step: nextStep(current) }));
+    pushState({ ...state, step: nextStep(state) });
   }
 
   function goBack() {
@@ -189,7 +273,7 @@ export function NewInstancePage() {
       void navigate({ to: "/", search: {} });
       return;
     }
-    setState((current) => ({ ...current, step: previousStep(current) }));
+    pushState({ ...state, step: previousStep(state) });
   }
 
   return (
@@ -202,7 +286,7 @@ export function NewInstancePage() {
             <StepSource
               value={state.source}
               onChange={(source) => {
-                setState({
+                replaceState({
                   ...initialWizardState,
                   step: "source",
                   source,
@@ -214,11 +298,11 @@ export function NewInstancePage() {
             <StepPlatform
               value={state.platform}
               onChange={(platform) => {
-                setState((current) => ({
-                  ...current,
+                replaceState({
+                  ...state,
                   platform,
                   loaderVersion: "",
-                }));
+                });
               }}
             />
           ) : null}
@@ -239,27 +323,27 @@ export function NewInstancePage() {
               loaderVersions={loaderVersions.data ?? []}
               loaderVersionsPending={loaderVersions.isPending}
               onNameChange={(name) => {
-                setState((current) => ({ ...current, name }));
+                replaceState({ ...state, name });
               }}
               onGameVersionChange={(gameVersion) => {
-                setState((current) => ({
-                  ...current,
+                replaceState({
+                  ...state,
                   gameVersion,
                   loaderVersion: "",
-                }));
+                });
               }}
               onIncludeSnapshotsChange={(includeSnapshots) => {
-                setState((current) => ({ ...current, includeSnapshots }));
+                replaceState({ ...state, includeSnapshots });
               }}
               onLoaderChannelChange={(loaderChannel) => {
-                setState((current) => ({
-                  ...current,
+                replaceState({
+                  ...state,
                   loaderChannel,
                   loaderVersion: "",
-                }));
+                });
               }}
               onLoaderVersionChange={(loaderVersion) => {
-                setState((current) => ({ ...current, loaderVersion }));
+                replaceState({ ...state, loaderVersion });
               }}
             />
           ) : null}
@@ -275,15 +359,15 @@ export function NewInstancePage() {
                   : null
               }
               onQueryChange={(modpackQuery) => {
-                setState((current) => ({ ...current, modpackQuery }));
+                replaceState({ ...state, modpackQuery });
               }}
-              onSelect={(modpack) => {
-                setState((current) => ({
-                  ...current,
-                  modpack,
+              onSelect={(nextModpack) => {
+                replaceState({
+                  ...state,
+                  modpack: nextModpack,
                   modpackVersion: null,
-                  name: modpack.name,
-                }));
+                  name: nextModpack.name,
+                });
               }}
             />
           ) : null}
@@ -294,13 +378,13 @@ export function NewInstancePage() {
               versionId={state.modpackVersion?.id ?? ""}
               versionsPending={packVersions.isPending}
               onNameChange={(name) => {
-                setState((current) => ({ ...current, name }));
+                replaceState({ ...state, name });
               }}
               onVersionChange={(versionId) => {
-                const modpackVersion =
+                const nextVersion =
                   packVersions.data?.find((entry) => entry.id === versionId) ??
                   null;
-                setState((current) => ({ ...current, modpackVersion }));
+                replaceState({ ...state, modpackVersion: nextVersion });
               }}
             />
           ) : null}

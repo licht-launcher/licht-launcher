@@ -1,4 +1,9 @@
-import { FolderIcon, FolderOpenIcon, SquareTerminalIcon } from "lucide-react";
+import {
+  EraserIcon,
+  FolderIcon,
+  FolderOpenIcon,
+  SquareTerminalIcon,
+} from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -30,6 +35,7 @@ export function HomePanel({
   onPlay,
   onStop,
   onConfigure,
+  onClearLog,
 }: {
   instance: InstanceEntry | null;
   busy: boolean;
@@ -41,6 +47,7 @@ export function HomePanel({
   onPlay: () => void;
   onStop: () => void;
   onConfigure: () => void;
+  onClearLog: () => void;
 }) {
   const [tab, setTab] = useState("files");
   const [logLevels, setLogLevels] = useState<LogLevelSelection>(
@@ -87,7 +94,18 @@ export function HomePanel({
             </TabsTrigger>
           </TabsList>
           {tab === "console" ? (
-            <div className="ml-auto shrink-0">
+            <div className="ml-auto flex shrink-0 items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={lines.length === 0}
+                aria-label="Clear console"
+                onClick={onClearLog}
+              >
+                <EraserIcon data-icon="inline-start" aria-hidden />
+                Clear
+              </Button>
               <ConsoleLogLevelFilter
                 selected={logLevels}
                 onSelectedChange={setLogLevels}

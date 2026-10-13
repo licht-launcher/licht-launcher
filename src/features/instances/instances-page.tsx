@@ -22,6 +22,7 @@ export function InstancesPage() {
     isInstalling,
     progressForVersion,
     logsByFolder,
+    clearFolderLog,
     playInstance,
     prepareInstance,
     stopInstance,
@@ -80,6 +81,11 @@ export function InstancesPage() {
       onConfigure={() => {
         if (selected) {
           openConfigure(selected.folder);
+        }
+      }}
+      onClearLog={() => {
+        if (selectedFolder !== null) {
+          clearFolderLog(selectedFolder);
         }
       }}
     />

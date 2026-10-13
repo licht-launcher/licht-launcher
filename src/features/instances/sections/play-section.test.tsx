@@ -52,4 +52,36 @@ describe("PlaySection", () => {
     fireEvent.focus(screen.getByRole("button", { name: /minutes ago/ }));
     expect(await screen.findByRole("tooltip")).toHaveTextContent("Last played");
   });
+
+  it("places install progress below the title row", () => {
+    const { container } = render(
+      <PlaySection
+        instance={instance}
+        busy={false}
+        playDisabled={false}
+        phase="idle"
+        installing
+        progress={{
+          finished: 1,
+          failed: 0,
+          total: 10,
+          bytesDone: 100,
+          bytesTotal: 1000,
+        }}
+        onPlay={vi.fn()}
+        onStop={vi.fn()}
+        onConfigure={vi.fn()}
+      />,
+    );
+
+    const root = container.firstElementChild;
+    expect(root).toHaveClass("flex-col");
+    expect(screen.getByRole("progressbar", { name: "Install progress" })).toBe(
+      root?.lastElementChild?.querySelector('[role="progressbar"]'),
+    );
+    expect(screen.getByRole("button", { name: "Play" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Configure Classic" }),
+    ).toBeInTheDocument();
+  });
 });

@@ -54,6 +54,7 @@ export type InstancesChromeContext = {
   isInstalling: (folder: string) => boolean;
   progressForVersion: ReturnType<typeof useGameEvents>["progressForVersion"];
   logsByFolder: ReturnType<typeof useGameEvents>["logsByFolder"];
+  clearFolderLog: ReturnType<typeof useGameEvents>["clearFolderLog"];
   lastPlayedFolder: string | null;
   playInstance: ReturnType<typeof usePlaySession>["playInstance"];
   prepareInstance: ReturnType<typeof usePlaySession>["prepareInstance"];
@@ -183,6 +184,7 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
       isInstalling,
       progressForVersion,
       logsByFolder,
+      clearFolderLog,
       lastPlayedFolder: lastPlayed.data ?? null,
       playInstance,
       prepareInstance,
@@ -201,6 +203,7 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
       isInstalling,
       progressForVersion,
       logsByFolder,
+      clearFolderLog,
       lastPlayed.data,
       playInstance,
       prepareInstance,
@@ -243,7 +246,10 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
               });
             }}
             onCreate={() => {
-              void navigate({ to: "/instances/new" });
+              void navigate({
+                to: "/instances/new",
+                search: { step: "source" },
+              });
             }}
             onOpenSettings={() => dialogs.openGlobalSettings("account")}
           />

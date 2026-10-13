@@ -1,4 +1,5 @@
 import {
+  ArrowDownIcon,
   CheckIcon,
   ChevronDownIcon,
   CircleAlertIcon,
@@ -6,6 +7,7 @@ import {
   ListIcon,
   TriangleAlertIcon,
 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -28,6 +30,12 @@ import {
 } from "@/features/instances/lib/log-line-parts";
 import type { ConsoleLine } from "@/features/instances/model/console-line";
 import { cn } from "@/lib/utils";
+
+/** Decorative flowers for the empty console. */
+export const CONSOLE_EMPTY_LILY = "❀ ✿ ❁";
+
+const BOTTOM_THRESHOLD_PX = 48;
+const SCROLLBAR_REVEAL_MS = 2000;
 
 const LEVEL_OPTIONS = [
   {
@@ -93,6 +101,17 @@ function ConsoleLineView({
         </span>
       ))}
     </div>
+  );
+}
+
+function viewportOf(root: HTMLElement | null): HTMLElement | null {
+  return root?.querySelector("[data-slot='scroll-area-viewport']") ?? null;
+}
+
+function isNearBottom(element: HTMLElement): boolean {
+  return (
+    element.scrollHeight - element.scrollTop - element.clientHeight <=
+    BOTTOM_THRESHOLD_PX
   );
 }
 
@@ -171,29 +190,103 @@ export function ConsoleSection({
   lines: ConsoleLine[];
   selected: LogLevelSelection;
 }) {
-  const levels = effectiveLogLevels(lines);
-  const visible = lines.flatMap((line, index) => {
-    const effectiveLevel = levels[index] ?? "info";
-    if (!levelMatchesSelection(effectiveLevel, selected)) {
-      return [];
-    }
-    return [{ line, effectiveLevel }];
-  });
+  const visible = useMemo(() => {
+    const levels = effectiveLogLevels(lines);
+    return lines.flatMap((line, index) => {
+      const effectiveLevel = levels[index] ?? "info";
+      if (!levelMatchesSelection(effectiveLevel, selected)) {
+        return [];
+      }
+      return [{ line, effectiveLevel }];
+    });
+  }, [lines, selected]);
   const logSelect =
     "cursor-text select-text selection:bg-muted-foreground/35 selection:text-foreground";
 
+  const rootRef = useRef<HTMLDivElement>(null);
+  const stickToBottomRef = useRef(true);
+  const [stickToBottom, setStickToBottom] = useState(true);
+  const [revealScrollbar, setRevealScrollbar] = useState(false);
+  const lastLineId = lines.at(-1)?.id;
+
+  useEffect(() => {
+    if (lastLineId === undefined) {
+      setRevealScrollbar(false);
+      return;
+    }
+    setRevealScrollbar(true);
+    const timer = window.setTimeout(() => {
+      setRevealScrollbar(false);
+    }, SCROLLBAR_REVEAL_MS);
+    return () => window.clearTimeout(timer);
+  }, [lastLineId]);
+
+  useEffect(() => {
+    const viewport = viewportOf(rootRef.current);
+    if (viewport === null) {
+      return;
+    }
+    const onScroll = () => {
+      const nearBottom = isNearBottom(viewport);
+      stickToBottomRef.current = nearBottom;
+      setStickToBottom(nearBottom);
+    };
+    viewport.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      viewport.removeEventListener("scroll", onScroll);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (visible.length === 0 || !stickToBottomRef.current) {
+      return;
+    }
+    const viewport = viewportOf(rootRef.current);
+    if (viewport === null) {
+      return;
+    }
+    // Only content changes pin the viewport; scroll events must not interrupt a smooth jump.
+    viewport.scrollTop = viewport.scrollHeight;
+  }, [visible]);
+
+  function jumpToBottom() {
+    const viewport = viewportOf(rootRef.current);
+    if (viewport !== null) {
+      const reduceMotion = window.matchMedia(
+        "(prefers-reduced-motion: reduce)",
+      ).matches;
+      viewport.scrollTo({
+        top: viewport.scrollHeight,
+        behavior: reduceMotion ? "auto" : "smooth",
+      });
+    }
+  }
+
   return (
-    <section aria-label="Game log" className="flex min-h-0 flex-1 flex-col">
-      <ScrollArea className="min-h-0 flex-1 rounded-lg border border-border/60 bg-black/20">
+    <section
+      aria-label="Game log"
+      className="relative flex min-h-0 flex-1 flex-col"
+      ref={rootRef}
+    >
+      <ScrollArea
+        type={revealScrollbar ? "always" : "hover"}
+        className="min-h-0 flex-1 rounded-lg border border-border/60 bg-black/20"
+      >
         {lines.length === 0 ? (
-          <p
+          <div
             className={cn(
               logSelect,
-              "p-3 font-mono text-sm leading-relaxed text-muted-foreground",
+              "flex flex-col gap-3 p-3 font-mono text-sm leading-relaxed text-muted-foreground",
             )}
           >
-            The game log will appear here.
-          </p>
+            <p>The game log will appear here.</p>
+            <p
+              aria-hidden
+              className="select-none font-sans text-lg leading-none text-muted-foreground/70"
+            >
+              {CONSOLE_EMPTY_LILY}
+            </p>
+          </div>
         ) : visible.length === 0 ? (
           <p
             className={cn(
@@ -217,6 +310,18 @@ export function ConsoleSection({
           </pre>
         )}
       </ScrollArea>
+      {!stickToBottom && visible.length > 0 ? (
+        <Button
+          type="button"
+          size="icon-sm"
+          variant="secondary"
+          className="absolute right-3 bottom-3 z-10 shadow-sm"
+          aria-label="Scroll to bottom"
+          onClick={jumpToBottom}
+        >
+          <ArrowDownIcon aria-hidden />
+        </Button>
+      ) : null}
     </section>
   );
 }

@@ -96,8 +96,8 @@ export function PlaySection({
     formatRelativeOpenedAt(instance.lastOpenedAt) ?? "Not opened yet";
 
   return (
-    <div className="flex flex-wrap items-start justify-between gap-3">
-      <div className="flex min-w-0 flex-1 flex-wrap items-start gap-4">
+    <div className="flex flex-col gap-3">
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <InstanceIcon iconPath={instance.iconPath} size="md" />
           <div className="flex min-w-0 flex-col gap-0.5">
@@ -123,57 +123,57 @@ export function PlaySection({
             </TooltipProvider>
           </div>
         </div>
-        {installing ? (
-          <div className="flex min-w-0 max-w-sm flex-1 flex-col gap-1 pt-1">
-            <span className="text-xs text-muted-foreground">
-              {progress !== null && !isPreparingProgress(progress)
-                ? progressText(progress)
-                : "Preparing…"}
-            </span>
-            <Progress
-              aria-label="Install progress"
-              value={
-                progress !== null && !isPreparingProgress(progress)
-                  ? barValue(progress)
-                  : 0
-              }
-            />
-          </div>
-        ) : null}
-      </div>
-      <div className="flex shrink-0 flex-wrap items-center gap-2">
-        {showStop ? (
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {showStop ? (
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={busy || stopping}
+              className={cn(stopping && "animate-pulse disabled:opacity-100")}
+              onClick={onStop}
+            >
+              <SquareIcon data-icon="inline-start" aria-hidden />
+              {stopping ? "Stopping…" : "Stop"}
+            </Button>
+          ) : (
+            <Button
+              disabled={busy || playDisabled || installing || starting}
+              className={cn(starting && "animate-pulse disabled:opacity-100")}
+              onClick={onPlay}
+            >
+              <PlayIcon data-icon="inline-start" aria-hidden />
+              {starting ? "Starting…" : "Play"}
+            </Button>
+          )}
           <Button
             type="button"
-            variant="destructive"
-            disabled={busy || stopping}
-            className={cn(stopping && "animate-pulse disabled:opacity-100")}
-            onClick={onStop}
+            variant="outline"
+            disabled={busy}
+            aria-label={`Configure ${instance.name}`}
+            onClick={onConfigure}
           >
-            <SquareIcon data-icon="inline-start" aria-hidden />
-            {stopping ? "Stopping…" : "Stop"}
+            <Settings2Icon data-icon="inline-start" aria-hidden />
+            Configure
           </Button>
-        ) : (
-          <Button
-            disabled={busy || playDisabled || installing || starting}
-            className={cn(starting && "animate-pulse disabled:opacity-100")}
-            onClick={onPlay}
-          >
-            <PlayIcon data-icon="inline-start" aria-hidden />
-            {starting ? "Starting…" : "Play"}
-          </Button>
-        )}
-        <Button
-          type="button"
-          variant="outline"
-          disabled={busy}
-          aria-label={`Configure ${instance.name}`}
-          onClick={onConfigure}
-        >
-          <Settings2Icon data-icon="inline-start" aria-hidden />
-          Configure
-        </Button>
+        </div>
       </div>
+      {installing ? (
+        <div className="flex w-full min-w-0 flex-col gap-1">
+          <span className="text-xs text-muted-foreground">
+            {progress !== null && !isPreparingProgress(progress)
+              ? progressText(progress)
+              : "Preparing…"}
+          </span>
+          <Progress
+            aria-label="Install progress"
+            value={
+              progress !== null && !isPreparingProgress(progress)
+                ? barValue(progress)
+                : 0
+            }
+          />
+        </div>
+      ) : null}
     </div>
   );
 }
