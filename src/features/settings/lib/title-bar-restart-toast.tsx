@@ -16,25 +16,27 @@ export function dismissTitleBarRestartToast() {
 export function promptTitleBarRestart() {
   toast.custom(
     (id) => (
-      <div className="group/toast pointer-events-auto relative z-100 flex w-[min(24rem,calc(100vw-2rem))] items-center gap-3 overflow-hidden rounded-xl border border-border bg-popover px-3 pt-3 pb-3.5 text-popover-foreground shadow-none">
-        <div
-          aria-hidden
-          className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"
-        >
-          <RotateCcwIcon className="size-4" strokeWidth={2} />
+      <div className="group/toast pointer-events-auto relative z-100 flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-3 overflow-hidden rounded-xl border border-border bg-popover px-3 pt-3 pb-3.5 text-popover-foreground shadow-none">
+        <div className="flex items-start gap-3">
+          <div
+            aria-hidden
+            className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"
+          >
+            <RotateCcwIcon className="size-4" strokeWidth={2} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="font-brand text-sm font-medium">Restart required</p>
+            <p className="text-sm text-muted-foreground">
+              Apply the title bar change now?
+            </p>
+          </div>
         </div>
-        <div className="min-w-0 flex-1">
-          <p className="font-brand text-sm font-medium">Restart required</p>
-          <p className="text-sm text-muted-foreground">
-            Apply the title bar change now?
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-1.5">
+        <div className="flex items-center gap-1.5">
           <Button
             type="button"
             variant="ghost"
             size="sm"
-            className="cursor-pointer"
+            className="min-w-0 flex-1 cursor-pointer"
             onClick={(event) => {
               event.stopPropagation();
               toast.dismiss(id);
@@ -46,7 +48,7 @@ export function promptTitleBarRestart() {
           <Button
             type="button"
             size="sm"
-            className="cursor-pointer"
+            className="min-w-0 flex-1 cursor-pointer"
             onClick={(event) => {
               event.stopPropagation();
               toast.dismiss(id);
