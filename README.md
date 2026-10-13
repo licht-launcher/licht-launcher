@@ -14,6 +14,10 @@ its own folder, memory, and Java settings. Fabric, Quilt, Forge, and NeoForge
 can be chosen when creating an instance. Modrinth and CurseForge modpacks can
 be imported; CurseForge search needs `LICHT_CURSEFORGE_API_KEY`.
 
+Forge/NeoForge use official installer profiles and run client processors during
+Install/Repair. Generated libraries are verified before launch; existing
+provisional loader profiles are upgraded without changing the instance folder.
+
 `licht` lists Mojang's manifest, installs a version, and launches it with an
 offline name. It does not sign in to Microsoft. See the
 [roadmap](docs/ROADMAP.md).
@@ -95,6 +99,7 @@ Ubuntu. `pnpm lint` checks formatting and imports as well as lint rules.
 - [Legacy assets](docs/core/LEGACY-ASSETS.md): why versions through 1.7.2 need a sound copy at launch.
 - [Runtime](docs/core/RUNTIME.md): Eclipse Temurin, the major each version asks for, and `--java`.
 - [Natives](docs/core/NATIVES.md): which native jar is downloaded, and where the binaries are extracted.
+- [Forge/NeoForge](docs/core/FORGE.md): official profiles, client processors, readiness, and repair.
 - [Log](docs/core/LOG.md): why old versions were failing on a Windows-1252 line, and how the log is decoded.
 - [Project rules](AGENTS.md): development conventions.
 

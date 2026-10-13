@@ -163,6 +163,171 @@ pub async fn install_game(
     .await
 }
 
+/// Installs a vanilla version or an existing inherited loader profile through the same pipeline.
+pub async fn install_game_version(
+    client: &reqwest::Client,
+    cache: &SharedCache,
+    settings: &SharedCache,
+    id: &str,
+    environment: &LaunchEnvironment,
+    progress: mpsc::Sender<DownloadProgress>,
+) -> Result<PathBuf> {
+    install_requested(
+        client,
+        cache,
+        settings,
+        id,
+        environment,
+        progress,
+        Vec::new(),
+    )
+    .await
+}
+
+async fn install_requested(
+    client: &reqwest::Client,
+    cache: &SharedCache,
+    settings: &SharedCache,
+    id: &str,
+    environment: &LaunchEnvironment,
+    progress: mpsc::Sender<DownloadProgress>,
+    mut chain: Vec<String>,
+) -> Result<PathBuf> {
+    cache.version_json(id)?;
+    if chain.len() >= 8 || chain.iter().any(|version| version == id) {
+        return Err(CoreError::LoaderInstall {
+            detail: "cyclic or excessively deep version inheritance".to_string(),
+        });
+    }
+    chain.push(id.to_string());
+    if let Some(parent) = crate::local_inherits_from(cache, id)? {
+        Box::pin(install_requested(
+            client,
+            cache,
+            settings,
+            &parent,
+            environment,
+            progress.clone(),
+            chain,
+        ))
+        .await?;
+        return install_local_version(client, cache, settings, id, environment, progress).await;
+    }
+    let manifest = crate::fetch_version_manifest(client, cache).await;
+    if let Ok(manifest) = &manifest
+        && let Some(entry) = manifest.versions.iter().find(|entry| entry.id == id)
+    {
+        return install_game(
+            client,
+            cache,
+            settings,
+            GameInstall {
+                version_id: id,
+                version_json_url: &entry.url,
+                version_sha1: &entry.sha1,
+                environment,
+                asset_base: ASSET_OBJECT_BASE,
+                java: None,
+            },
+            progress,
+        )
+        .await;
+    }
+    if crate::local_version_exists(cache, id) {
+        return install_local_version(client, cache, settings, id, environment, progress).await;
+    }
+    match manifest {
+        Err(error) => Err(error),
+        Ok(_) => Err(CoreError::VersionMissing),
+    }
+}
+
+async fn install_local_version(
+    client: &reqwest::Client,
+    cache: &SharedCache,
+    settings: &SharedCache,
+    id: &str,
+    environment: &LaunchEnvironment,
+    progress: mpsc::Sender<DownloadProgress>,
+) -> Result<PathBuf> {
+    cache.create()?;
+    let cache = installation_cache(cache)?;
+    let is_forge = crate::loaders::forge::request(&cache, id)?.is_some();
+    let _loader_guard = if is_forge {
+        Some(crate::loaders::forge::INSTALL_LOCK.lock().await)
+    } else {
+        None
+    };
+    let version = parse_version(&crate::load_resolved_version_json(&cache, id)?)?;
+    let major = required_java_major(id, &version);
+    let configured = crate::load_settings(settings)?;
+    let java = match crate::configured_java(&configured, major) {
+        Some(java) => {
+            let found = crate::probe_java_major(&java)?;
+            if found != major {
+                return Err(CoreError::JavaMajor {
+                    required: major,
+                    found,
+                });
+            }
+            java
+        }
+        None => {
+            install_temurin(
+                client,
+                &cache,
+                major,
+                environment,
+                ADOPTIUM_API,
+                progress.clone(),
+            )
+            .await?
+        }
+    };
+    let loader_files = crate::loaders::forge::prepare(
+        client,
+        &cache,
+        settings,
+        id,
+        &java,
+        environment,
+        progress.clone(),
+    )
+    .await?;
+    let version = parse_version(&crate::load_resolved_version_json(&cache, id)?)?;
+    let index_path = cache.asset_index(&version.asset_index.id)?;
+    let index_json = if file_matches_sha1(&index_path, &version.asset_index.sha1)? {
+        std::fs::read_to_string(index_path)?
+    } else {
+        read_text(client, &version.asset_index.url).await?
+    };
+    let assets = parse_asset_index(&index_json)?;
+    install_version(
+        client,
+        &cache,
+        settings,
+        InstallPlan {
+            version_id: id,
+            version: &version,
+            asset_index_json: &index_json,
+            assets: &assets,
+            environment,
+            asset_base: ASSET_OBJECT_BASE,
+        },
+        progress,
+    )
+    .await?;
+    if let Some(files) = loader_files {
+        crate::loaders::forge::complete(&cache, id, &files)?;
+    }
+    Ok(java)
+}
+
+fn installation_cache(cache: &SharedCache) -> Result<SharedCache> {
+    // Java's Windows classpath reader does not accept canonicalize's verbatim prefix.
+    Ok(SharedCache::at(std::path::absolute(cache.root())?))
+}
+
 async fn read_text(client: &reqwest::Client, url: &str) -> Result<String> {
     let mut last_error = None;
     for _ in 0..3 {
@@ -280,4 +445,16 @@ fn task_for_artifact(cache: &SharedCache, artifact: &crate::Artifact) -> Result<
         sha1: artifact.sha1.clone(),
         size: artifact.size,
     })
+}
+
+#[cfg(test)]
+mod loader_path_tests {
+    #[test]
+    fn installation_paths_are_absolute_and_usable_by_java() {
+        let cache = crate::SharedCache::at(std::env::temp_dir().join("licht loader Java paths"));
+        let resolved = super::installation_cache(&cache).expect("absolute path");
+        assert!(resolved.root().is_absolute());
+        #[cfg(windows)]
+        assert!(!resolved.root().display().to_string().starts_with(r"\\?\"));
+    }
 }

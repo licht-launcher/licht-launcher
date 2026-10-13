@@ -191,7 +191,7 @@ Decisions (see [docs/auth/MICROSOFT.md](auth/MICROSOFT.md)): authorization code 
 
 - [x] **8.1** **Fabric** (metadata API): install the loader on an instance.
 - [x] **8.2** **Quilt** (same approach).
-- [x] **8.3** **NeoForge/Forge** (thin inheritsFrom profile + metadata list; full installer/processors later).
+- [x] **8.3** **NeoForge/Forge** (official installer profiles, verified libraries, client processors, completion receipts, and repair of provisional profiles). See [FORGE.md](core/FORGE.md) for the pipeline and validated combinations.
   - 🛑 Included in the New Instance wizard scope.
 - [x] **8.4** Loader and loader-version selection when creating an instance (`/instances/new`).
 
