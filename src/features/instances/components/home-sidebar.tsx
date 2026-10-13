@@ -1,8 +1,11 @@
 import { useRouter, useRouterState } from "@tanstack/react-router";
+import { cn } from "cn";
 import {
   ArrowDownAZIcon,
   ArrowLeftIcon,
   ArrowRightIcon,
+  CompassIcon,
+  DownloadIcon,
   HistoryIcon,
   Loader2Icon,
   PlusIcon,
@@ -19,6 +22,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { InstanceIcon } from "@/features/instances/components/instance-icon";
 import type { PlayPhase } from "@/features/instances/hooks/use-play-session";
 import {
@@ -110,7 +119,7 @@ export function HomeSidebar({
 
   return (
     <div className="flex h-full w-full min-w-0 flex-col overflow-hidden bg-black/20">
-      <div className="flex h-9 shrink-0 items-center justify-between gap-2 pr-1.5 pl-4">
+      <div className="flex h-9 shrink-0 items-center justify-between gap-2 px-2">
         <div
           data-tauri-drag-region
           className="flex min-h-9 min-w-0 flex-1 items-center"
@@ -118,7 +127,7 @@ export function HomeSidebar({
           {showTitleband ? (
             <span
               data-tauri-drag-region
-              className="font-brand text-xs font-medium tracking-widest text-muted-foreground uppercase select-none"
+              className="border border-transparent px-1 font-brand text-xs font-medium tracking-widest text-muted-foreground uppercase select-none"
             >
               Licht Launcher
             </span>
@@ -126,12 +135,13 @@ export function HomeSidebar({
         </div>
         <SidebarHistoryNav />
       </div>
-      <div className="flex min-h-0 flex-1 flex-col gap-6 px-4 pt-4 pb-10">
+      <div className="flex min-h-0 flex-1 flex-col gap-6 px-2 pt-1 pb-10">
         <nav
           aria-label="Instances"
           className="flex min-h-0 flex-1 flex-col gap-2"
         >
-          <div className="flex items-center gap-2 px-3">
+          <div className="flex min-h-0 flex-1 flex-col">
+          <div className="flex items-center gap-2 border border-transparent px-1">
             <h2 className="min-w-0 flex-1 font-brand text-xs font-medium leading-none text-muted-foreground">
               Instances
             </h2>
@@ -164,16 +174,18 @@ export function HomeSidebar({
             </Select>
           </div>
           {loading ? (
-            <p className="px-3 text-sm text-muted-foreground">Loading…</p>
+            <p className="border border-transparent px-1 text-sm text-muted-foreground">
+              Loading…
+            </p>
           ) : null}
           {!loading && instances.length === 0 ? (
-            <p className="px-3 text-sm text-muted-foreground">
+            <p className="border border-transparent px-1 text-sm text-muted-foreground">
               No instances yet.
             </p>
           ) : null}
           {!loading && ordered.length > 0 ? (
             <ScrollArea className="min-h-0 flex-1">
-              <ul className="flex w-full min-w-0 flex-col gap-1">
+              <ul className="flex w-full min-w-0 flex-col">
                 {ordered.map((instance) => {
                   const selected = instance.folder === selectedFolder;
                   const phase = playPhase(instance.folder);
@@ -183,7 +195,10 @@ export function HomeSidebar({
                       <Button
                         type="button"
                         variant={selected ? "secondary" : "ghost"}
-                        className="w-full min-w-0 max-w-full justify-start gap-2 overflow-hidden px-3"
+                        className={cn(
+                          "w-full min-w-0 max-w-full justify-start gap-2 overflow-hidden px-1 text-[0.8rem]",
+                          !selected && "text-muted-foreground/70",
+                        )}
                         aria-current={selected ? "page" : undefined}
                         aria-label={
                           active
@@ -195,31 +210,29 @@ export function HomeSidebar({
                           onSelect(instance.folder);
                         }}
                       >
-                        <span className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
-                          <InstanceIcon />
-                          <span className="w-0 min-w-0 flex-1 truncate text-left">
-                            {instance.name}
-                          </span>
-                          {active ? (
-                            <span
-                              aria-hidden
-                              className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-success"
-                            >
-                              {phase === "starting" ? "Starting" : "Running"}
-                              {phase === "starting" ? (
-                                <Loader2Icon
-                                  className="size-3.5 shrink-0 animate-spin"
-                                  strokeWidth={2}
-                                />
-                              ) : (
-                                <span className="relative flex size-2 shrink-0">
-                                  <span className="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-75" />
-                                  <span className="relative inline-flex size-2 rounded-full bg-success" />
-                                </span>
-                              )}
-                            </span>
-                          ) : null}
+                        <InstanceIcon />
+                        <span className="min-w-0 flex-1 truncate text-left">
+                          {instance.name}
                         </span>
+                        {active ? (
+                          <span
+                            aria-hidden
+                            className="ml-auto inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-success"
+                          >
+                            {phase === "starting" ? "Starting" : "Running"}
+                            {phase === "starting" ? (
+                              <Loader2Icon
+                                className="size-3.5 shrink-0 animate-spin"
+                                strokeWidth={2}
+                              />
+                            ) : (
+                              <span className="relative flex size-2 shrink-0">
+                                <span className="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-75" />
+                                <span className="relative inline-flex size-2 rounded-full bg-success" />
+                              </span>
+                            )}
+                          </span>
+                        ) : null}
                       </Button>
                     </li>
                   );
@@ -227,33 +240,86 @@ export function HomeSidebar({
               </ul>
             </ScrollArea>
           ) : null}
+          </div>
 
-          <Button
-            type="button"
-            variant="secondary"
-            className="w-full justify-start px-3"
-            disabled={busy}
-            onClick={onCreate}
-          >
-            <PlusIcon data-icon="inline-start" aria-hidden />
-            New instance
-          </Button>
-
-          <Button
-            type="button"
-            variant="ghost"
-            className="w-full justify-start px-3"
-            aria-label="Settings"
-            onClick={onOpenSettings}
-          >
-            <SettingsIcon data-icon="inline-start" aria-hidden />
-            Settings
-          </Button>
+          <TooltipProvider delayDuration={300}>
+            <div className="mt-auto flex items-center justify-center gap-3">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="icon-lg"
+                    className="rounded-full"
+                    aria-label="New instance"
+                    disabled={busy}
+                    onClick={onCreate}
+                  >
+                    <PlusIcon aria-hidden />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top" align="center" sideOffset={2}>
+                  New instance
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="icon-lg"
+                      className="rounded-full"
+                      aria-label="Downloads"
+                      disabled
+                    >
+                      <DownloadIcon aria-hidden />
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" align="center" sideOffset={2}>
+                  Downloads
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="icon-lg"
+                      className="rounded-full"
+                      aria-label="Discover"
+                      disabled
+                    >
+                      <CompassIcon aria-hidden />
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" align="center" sideOffset={2}>
+                  Discover
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="icon-lg"
+                    className="rounded-full"
+                    aria-label="Settings"
+                    onClick={onOpenSettings}
+                  >
+                    <SettingsIcon aria-hidden />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top" align="center" sideOffset={2}>
+                  Settings
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          </TooltipProvider>
         </nav>
-
-        <p className="mt-auto px-3 text-xs leading-relaxed text-muted-foreground">
-          Unofficial, not affiliated with Mojang Studios or Microsoft.
-        </p>
       </div>
     </div>
   );

@@ -197,11 +197,6 @@ describe("InstancesPage", () => {
     expect(screen.getByRole("button", { name: "New instance" })).toBeEnabled();
     expect(screen.getByText("Licht Launcher")).toBeInTheDocument();
     expect(
-      screen.getByText(
-        "Unofficial, not affiliated with Mojang Studios or Microsoft.",
-      ),
-    ).toBeInTheDocument();
-    expect(
       screen.queryByRole("list", { name: "Versions" }),
     ).not.toBeInTheDocument();
     expect(
