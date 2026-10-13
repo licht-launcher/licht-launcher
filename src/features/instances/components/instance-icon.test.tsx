@@ -12,7 +12,9 @@ vi.mock("@tauri-apps/api/core", () => ({
 describe("InstanceIcon", () => {
   it("falls back to grass when convertFileSrc is unavailable", () => {
     convertFileSrcMock.mockImplementationOnce(() => {
-      throw new Error("Cannot read properties of undefined (reading 'metadata')");
+      throw new Error(
+        "Cannot read properties of undefined (reading 'metadata')",
+      );
     });
     const { container } = render(
       <InstanceIcon iconPath="C:/data/instances/classic/icon.png" />,
