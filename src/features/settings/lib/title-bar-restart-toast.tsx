@@ -34,7 +34,7 @@ export function promptTitleBarRestart() {
         <div className="flex items-center gap-1.5">
           <Button
             type="button"
-            variant="ghost"
+            variant="outline"
             size="sm"
             className="min-w-0 flex-1 cursor-pointer"
             onClick={(event) => {
