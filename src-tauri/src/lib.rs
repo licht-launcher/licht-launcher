@@ -6,6 +6,7 @@ mod logging;
 mod progress;
 
 /// Logical height of the custom title bar strip (matches frontend `h-9`).
+#[cfg(windows)]
 const TITLE_BAR_HEIGHT: u32 = 36;
 
 pub fn run() -> anyhow::Result<()> {
