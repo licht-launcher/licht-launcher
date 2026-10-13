@@ -52,6 +52,12 @@ export function mockSettingsCommands(implement?: (command: string) => unknown) {
     if (command === "save_settings") {
       return Promise.resolve(snapshot.settings);
     }
+    if (command === "restart_app") {
+      return Promise.resolve();
+    }
+    if (command === "custom_title_bar_active") {
+      return Promise.resolve(true);
+    }
     return Promise.resolve(null);
   });
 }

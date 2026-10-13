@@ -10,6 +10,7 @@ import {
   createInstance,
   createInstanceFromModpack,
   createInstanceWithPlatform,
+  customTitleBarActive,
   deleteInstance,
   detectJavaInstallations,
   duplicateInstance,
@@ -33,6 +34,7 @@ import {
   openRepository,
   renameInstance,
   repairInstance,
+  restartApp,
   runtimeJava,
   saveInstance,
   saveSettings,
@@ -197,6 +199,13 @@ describe("launcher commands", () => {
   it("reads settings without arguments", async () => {
     await getSettings();
     expect(invoke).toHaveBeenCalledWith("get_settings");
+  });
+
+  it("reads the applied title bar mode and can request a restart", async () => {
+    await customTitleBarActive();
+    expect(invoke).toHaveBeenCalledWith("custom_title_bar_active");
+    await restartApp();
+    expect(invoke).toHaveBeenCalledWith("restart_app");
   });
 
   it("saves settings and asks for Java and folders", async () => {

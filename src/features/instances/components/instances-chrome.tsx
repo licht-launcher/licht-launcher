@@ -20,7 +20,7 @@ import {
   type PlayPhase,
   usePlaySession,
 } from "@/features/instances/hooks/use-play-session";
-import { useTitleBarDecorations } from "@/hooks/use-title-bar-decorations";
+import { useCustomTitleBar } from "@/hooks/use-custom-title-bar";
 import { getLastPlayedFolder } from "@/lib/commands";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 import type { VersionSummary } from "@/lib/generated/VersionSummary";
@@ -56,7 +56,7 @@ export function useInstancesChrome(): InstancesChromeContext {
 }
 
 export function InstancesChrome({ children }: { children: ReactNode }) {
-  const { disableCustomTitleBar } = useTitleBarDecorations();
+  const customTitleBar = useCustomTitleBar().data ?? true;
   const navigate = useNavigate();
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
@@ -165,6 +165,7 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
           busy={busy}
           loading={instances.isPending}
           playPhase={playPhase}
+          showTitleband={customTitleBar}
           onSelect={(folder) => {
             setSelectedFolder(folder);
             if (onWizard) {
@@ -177,7 +178,7 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
           onOpenSettings={() => dialogs.openGlobalSettings("account")}
         />
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-muted/30">
-          {disableCustomTitleBar ? null : <TitleBar />}
+          {customTitleBar ? <TitleBar /> : null}
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             <ChromeContext.Provider value={context}>
               {children}

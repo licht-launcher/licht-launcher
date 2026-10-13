@@ -46,6 +46,7 @@ export function HomeSidebar({
   busy,
   loading,
   playPhase,
+  showTitleband,
   onSelect,
   onCreate,
   onOpenSettings,
@@ -56,6 +57,7 @@ export function HomeSidebar({
   busy: boolean;
   loading: boolean;
   playPhase: (folder: string) => PlayPhase;
+  showTitleband: boolean;
   onSelect: (folder: string) => void;
   onCreate: () => void;
   onOpenSettings: () => void;
@@ -65,18 +67,26 @@ export function HomeSidebar({
 
   return (
     <div className="flex h-full w-72 shrink-0 flex-col overflow-hidden border-r border-border bg-black/20">
-      <div
-        data-tauri-drag-region
-        className="flex h-9 shrink-0 items-center px-4"
-      >
-        <span
+      {showTitleband ? (
+        <div
           data-tauri-drag-region
-          className="font-brand text-xs font-medium tracking-widest text-muted-foreground uppercase select-none"
+          className="flex h-9 shrink-0 items-center px-4"
         >
-          Licht Launcher
-        </span>
-      </div>
-      <div className="flex min-h-0 flex-1 flex-col gap-6 px-4 pt-4 pb-10">
+          <span
+            data-tauri-drag-region
+            className="font-brand text-xs font-medium tracking-widest text-muted-foreground uppercase select-none"
+          >
+            Licht Launcher
+          </span>
+        </div>
+      ) : null}
+      <div
+        className={
+          showTitleband
+            ? "flex min-h-0 flex-1 flex-col gap-6 px-4 pt-4 pb-10"
+            : "flex min-h-0 flex-1 flex-col gap-6 px-4 pt-6 pb-10"
+        }
+      >
         <nav
           aria-label="Instances"
           className="flex min-h-0 flex-1 flex-col gap-2"

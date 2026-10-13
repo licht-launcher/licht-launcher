@@ -48,7 +48,8 @@ export function AppearanceSection({
             id="disable-custom-title-bar-hint"
             className="text-sm text-muted-foreground"
           >
-            Use the operating system title bar instead of Licht's.
+            Use the operating system title bar instead of Licht's. This change
+            applies after restart.
           </p>
         </div>
         <Switch

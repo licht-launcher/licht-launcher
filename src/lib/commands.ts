@@ -167,6 +167,14 @@ export function getSettings(): Promise<SettingsSnapshot> {
   return invoke("get_settings");
 }
 
+export function customTitleBarActive(): Promise<boolean> {
+  return invoke("custom_title_bar_active");
+}
+
+export function restartApp(): Promise<void> {
+  return invoke("restart_app");
+}
+
 export function saveSettings(settings: Settings): Promise<Settings> {
   return invoke("save_settings", { settings });
 }

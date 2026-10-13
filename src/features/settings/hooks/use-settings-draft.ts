@@ -9,8 +9,14 @@ import {
   optionalSize,
   toSettings,
 } from "@/features/settings/model/draft";
-import { getSettings, runtimeJava, saveSettings } from "@/lib/commands";
+import {
+  getSettings,
+  restartApp,
+  runtimeJava,
+  saveSettings,
+} from "@/lib/commands";
 import { friendlyError, messageOf } from "@/lib/errors";
+import type { Settings } from "@/lib/generated/Settings";
 
 const SAVE_DELAY_MS = 400;
 
@@ -34,11 +40,18 @@ export function useSettingsDraft(open: boolean) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const schemaRef = useRef(1);
   const persistRef = useRef<(current: Draft) => void>(() => {});
+  const appliedDisableCustomTitleBar = useRef<boolean | null>(null);
 
   const save = useMutation({
     mutationFn: saveSettings,
-    onSuccess: async () => {
+    onSuccess: async (saved: Settings) => {
       await queryClient.invalidateQueries({ queryKey: ["settings"] });
+      if (
+        appliedDisableCustomTitleBar.current !== null &&
+        saved.disableCustomTitleBar !== appliedDisableCustomTitleBar.current
+      ) {
+        await restartApp();
+      }
     },
     onError: (error: unknown) => {
       toast.error(friendlyError(messageOf(error)));
@@ -58,6 +71,8 @@ export function useSettingsDraft(open: boolean) {
   useEffect(() => {
     if (settings.data && runtime.isFetched && draft === null) {
       schemaRef.current = settings.data.settings.schema;
+      appliedDisableCustomTitleBar.current =
+        settings.data.settings.disableCustomTitleBar;
       const next = fromSnapshot(settings.data, runtime.data ?? null);
       draftRef.current = next;
       setDraft(next);
