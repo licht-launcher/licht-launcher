@@ -1,3 +1,4 @@
+import { ClockIcon, RefreshCwIcon, RotateCcwIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,12 @@ export function promptTitleBarRestart() {
   toast.custom(
     (id) => (
       <div className="group/toast pointer-events-auto relative z-100 flex w-[min(24rem,calc(100vw-2rem))] items-center gap-3 overflow-hidden rounded-xl border border-border bg-popover px-3 pt-3 pb-3.5 text-popover-foreground shadow-none">
+        <div
+          aria-hidden
+          className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"
+        >
+          <RotateCcwIcon className="size-4" strokeWidth={2} />
+        </div>
         <div className="min-w-0 flex-1">
           <p className="font-brand text-sm font-medium">Restart required</p>
           <p className="text-sm text-muted-foreground">
@@ -33,6 +40,7 @@ export function promptTitleBarRestart() {
               toast.dismiss(id);
             }}
           >
+            <ClockIcon data-icon="inline-start" aria-hidden />
             Later
           </Button>
           <Button
@@ -45,6 +53,7 @@ export function promptTitleBarRestart() {
               void restartApp();
             }}
           >
+            <RefreshCwIcon data-icon="inline-start" aria-hidden />
             Restart
           </Button>
         </div>
