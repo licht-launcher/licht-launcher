@@ -113,6 +113,7 @@ describe("NewInstancePage", () => {
           overrideJvmArguments: false,
           javaPath: null,
           lastOpenedAt: null,
+          iconPath: null,
         });
       }
       if (command === "create_instance_from_modpack") {
@@ -132,6 +133,7 @@ describe("NewInstancePage", () => {
           overrideJvmArguments: false,
           javaPath: null,
           lastOpenedAt: null,
+          iconPath: null,
         });
       }
       return Promise.resolve(undefined);
@@ -254,6 +256,7 @@ describe("NewInstancePage", () => {
         source: "modrinth",
         projectId: "ABC",
         versionId: "v1",
+        iconUrl: null,
       });
     });
   });

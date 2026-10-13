@@ -38,6 +38,7 @@ pub async fn create_instance_from_modpack(
     source: String,
     project_id: String,
     version_id: String,
+    icon_url: Option<String>,
 ) -> Result<InstanceEntry, String> {
     let source =
         ModpackSource::parse(&source).ok_or_else(|| "unknown modpack source".to_string())?;
@@ -52,6 +53,7 @@ pub async fn create_instance_from_modpack(
         source,
         &project_id,
         &version_id,
+        icon_url.as_deref(),
         &global_launch(&settings),
     )
     .await

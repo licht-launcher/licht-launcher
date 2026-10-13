@@ -142,6 +142,7 @@ export function NewInstancePage() {
           source: state.modpack.source,
           projectId: state.modpack.id,
           versionId: state.modpackVersion.id,
+          iconUrl: state.modpack.iconUrl,
         });
       }
       if (state.platform === null) {

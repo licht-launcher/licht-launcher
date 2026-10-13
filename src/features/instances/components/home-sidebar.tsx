@@ -210,7 +210,7 @@ export function HomeSidebar({
                             onSelect(instance.folder);
                           }}
                         >
-                          <InstanceIcon />
+                          <InstanceIcon iconPath={instance.iconPath} />
                           <span className="min-w-0 flex-1 truncate text-left">
                             {instance.name}
                           </span>

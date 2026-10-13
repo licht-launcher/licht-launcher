@@ -69,12 +69,14 @@ export function createInstanceFromModpack(input: {
   source: ModpackSource;
   projectId: string;
   versionId: string;
+  iconUrl?: string | null;
 }): Promise<InstanceEntry> {
   return invoke("create_instance_from_modpack", {
     name: input.name,
     source: input.source,
     projectId: input.projectId,
     versionId: input.versionId,
+    iconUrl: input.iconUrl ?? null,
   });
 }
 

@@ -80,6 +80,7 @@ const classicInstance = {
   overrideJvmArguments: false,
   javaPath: null,
   lastOpenedAt: null as string | null,
+  iconPath: null as string | null,
 };
 
 describe("InstancesPage", () => {

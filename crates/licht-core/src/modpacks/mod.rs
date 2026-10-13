@@ -17,7 +17,8 @@ pub use types::{ModpackListItem, ModpackSource, ModpackVersionItem};
 
 use reqwest::Client;
 
-use crate::instance::InstanceEntry;
+use crate::instance::icon::download_instance_icon;
+use crate::instance::{InstanceEntry, instance_entry};
 use crate::settings::GlobalLaunch;
 use crate::{CoreError, Result, SharedCache};
 use std::path::Path;
@@ -54,6 +55,7 @@ pub async fn create_instance_from_modpack(
     source: ModpackSource,
     project_id: &str,
     version_id: &str,
+    icon_url: Option<&str>,
     template: &GlobalLaunch,
 ) -> Result<InstanceEntry> {
     let (_file_name, bytes) = match source {
@@ -64,13 +66,21 @@ pub async fn create_instance_from_modpack(
             curseforge::download_curseforge_pack(client, project_id, version_id).await?
         }
     };
-    match source {
+    let entry = match source {
         ModpackSource::Modrinth => {
             let entry = import_mrpack_bytes(instances_dir, name, &bytes, template)?;
-            apply_mrpack_loader(client, cache, instances_dir, &entry).await
+            apply_mrpack_loader(client, cache, instances_dir, &entry).await?
         }
         ModpackSource::Curseforge => {
-            curseforge::import_curseforge_pack(client, instances_dir, name, &bytes, template).await
+            curseforge::import_curseforge_pack(client, instances_dir, name, &bytes, template)
+                .await?
         }
+    };
+    let dir = instances_dir.join(&entry.folder);
+    if let Some(url) = icon_url
+        && let Err(error) = download_instance_icon(client, &dir, url).await
+    {
+        tracing::warn!(error = %error, "instance icon download failed");
     }
+    instance_entry(&dir, &entry.folder)
 }

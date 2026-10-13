@@ -31,6 +31,7 @@ const entry: InstanceEntry = {
   overrideJvmArguments: false,
   javaPath: null,
   lastOpenedAt: null,
+  iconPath: null,
 };
 
 function renderDialog(

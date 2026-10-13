@@ -20,6 +20,7 @@ const instance: InstanceEntry = {
   overrideJvmArguments: false,
   javaPath: null,
   lastOpenedAt: new Date(Date.now() - 5 * 60_000).toISOString(),
+  iconPath: null,
 };
 
 describe("PlaySection", () => {

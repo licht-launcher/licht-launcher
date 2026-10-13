@@ -5,4 +5,8 @@
  *
  * `folder` is chosen once and does not change when the profile is renamed.
  */
-export type InstanceEntry = { folder: string, name: string, versionId: string, minMemoryMb: number, maxMemoryMb: number, jvmArguments: Array<string>, fullscreen: boolean, width: number | null, height: number | null, overrideWindow: boolean, overrideMemory: boolean, overrideJava: boolean, overrideJvmArguments: boolean, javaPath: string | null, lastOpenedAt: string | null, };
+export type InstanceEntry = { folder: string, name: string, versionId: string, minMemoryMb: number, maxMemoryMb: number, jvmArguments: Array<string>, fullscreen: boolean, width: number | null, height: number | null, overrideWindow: boolean, overrideMemory: boolean, overrideJava: boolean, overrideJvmArguments: boolean, javaPath: string | null, lastOpenedAt: string | null, 
+/**
+ * Absolute path to `icon.png` when present beside `instance.json`.
+ */
+iconPath: string | null, };

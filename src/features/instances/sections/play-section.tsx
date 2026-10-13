@@ -99,7 +99,7 @@ export function PlaySection({
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="flex min-w-0 flex-1 flex-wrap items-start gap-4">
         <div className="flex min-w-0 items-center gap-3">
-          <InstanceIcon size="md" />
+          <InstanceIcon iconPath={instance.iconPath} size="md" />
           <div className="flex min-w-0 flex-col gap-0.5">
             <h2 className="text-lg font-medium">{instance.name}</h2>
             <TooltipProvider delayDuration={300}>

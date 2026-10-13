@@ -105,6 +105,7 @@ describe("launcher commands", () => {
       source: "modrinth",
       projectId: "ABC",
       versionId: "v1",
+      iconUrl: null,
     });
     await renameInstance("Survival", "Classic");
     expect(invoke).toHaveBeenCalledWith("rename_instance", {
