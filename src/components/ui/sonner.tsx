@@ -11,7 +11,7 @@ function Toaster({ theme = "dark", ...props }: ToasterProps) {
   return (
     <Sonner
       theme={theme}
-      className="toaster group"
+      className="toaster group z-100"
       icons={{
         success: <CircleCheckIcon className="size-4" />,
         info: <InfoIcon className="size-4" />,
@@ -21,7 +21,7 @@ function Toaster({ theme = "dark", ...props }: ToasterProps) {
       }}
       toastOptions={{
         classNames: {
-          toast: "cn-toast",
+          toast: "cn-toast pointer-events-auto",
         },
       }}
       {...props}
