@@ -5,7 +5,7 @@ import { restartApp } from "@/lib/commands";
 
 export const TITLE_BAR_RESTART_TOAST_ID = "title-bar-restart";
 
-/** Long enough to read and act; still auto-dismisses if ignored. */
+/** Keep in sync with `.toast-progress-bar` animation duration in tokens.css. */
 const TITLE_BAR_RESTART_TOAST_MS = 12_000;
 
 export function dismissTitleBarRestartToast() {
@@ -15,7 +15,7 @@ export function dismissTitleBarRestartToast() {
 export function promptTitleBarRestart() {
   toast.custom(
     (id) => (
-      <div className="pointer-events-auto relative z-100 flex w-[min(24rem,calc(100vw-2rem))] items-center gap-3 rounded-xl border border-border bg-popover px-3 py-3 text-popover-foreground shadow-none">
+      <div className="group/toast pointer-events-auto relative z-100 flex w-[min(24rem,calc(100vw-2rem))] items-center gap-3 overflow-hidden rounded-xl border border-border bg-popover px-3 pt-3 pb-3.5 text-popover-foreground shadow-none">
         <div className="min-w-0 flex-1">
           <p className="font-brand text-sm font-medium">Restart required</p>
           <p className="text-sm text-muted-foreground">
@@ -48,6 +48,10 @@ export function promptTitleBarRestart() {
             Restart
           </Button>
         </div>
+        <div
+          aria-hidden
+          className="toast-progress-bar absolute inset-x-0 bottom-0 h-0.5 bg-primary"
+        />
       </div>
     ),
     {

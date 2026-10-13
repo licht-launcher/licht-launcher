@@ -148,6 +148,25 @@
   --border-radius: var(--radius);
 }
 
+@keyframes title-bar-restart-toast-progress {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+.toast-progress-bar {
+  transform-origin: left center;
+  animation: title-bar-restart-toast-progress 12s linear forwards;
+}
+
+.group\/toast:hover .toast-progress-bar,
+.group\/toast:focus-within .toast-progress-bar {
+  animation-play-state: paused;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
