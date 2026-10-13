@@ -8,7 +8,7 @@ use crate::{CoreError, Result};
 
 const SEARCH_URL: &str = "https://api.modrinth.com/v2/search";
 const PROJECT_VERSIONS: &str = "https://api.modrinth.com/v2/project";
-const USER_AGENT: &str = "licht-launcher/0.1.0 (https://github.com/mateusneiva/licht-launcher)";
+const USER_AGENT: &str = "licht-launcher/0.1.1 (https://github.com/mateusneiva/licht-launcher)";
 
 #[derive(Debug, Deserialize)]
 struct SearchResponse {
