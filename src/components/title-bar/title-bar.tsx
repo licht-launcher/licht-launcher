@@ -13,7 +13,6 @@ import {
 } from "@/features/instances/lib/download-progress";
 import { useInstallActivity } from "@/hooks/use-install-activity";
 import { useTitleBarDecorations } from "@/hooks/use-title-bar-decorations";
-import { appReleaseLabel } from "@/lib/app-release";
 import { usesNativeCaptionButtons } from "@/lib/native-caption";
 import { requestOpenSettings } from "@/lib/shell-events";
 import { cn } from "@/lib/utils";
@@ -44,34 +43,14 @@ export function TitleBar() {
         : "No downloads in progress";
 
   return (
-    <header className="relative z-60 shrink-0 border-b border-border bg-popover text-popover-foreground">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 bg-black/20"
-      />
+    <header className="relative z-60 shrink-0 text-popover-foreground">
       <div
         className={cn(
-          "relative flex h-9 items-stretch",
+          "flex h-9 items-stretch",
           nativeCaption && "pr-[var(--native-caption-inset)]",
         )}
       >
-        <div
-          data-tauri-drag-region
-          className="flex min-w-0 flex-1 items-center gap-3 px-3"
-        >
-          <span
-            data-tauri-drag-region
-            className="font-brand text-xs font-medium tracking-widest text-muted-foreground uppercase select-none"
-          >
-            Licht Launcher
-          </span>
-          <span
-            data-tauri-drag-region
-            className="truncate text-xs text-muted-foreground select-none"
-          >
-            {appReleaseLabel}
-          </span>
-        </div>
+        <div data-tauri-drag-region className="min-w-0 flex-1" aria-hidden />
         <div className="flex shrink-0 items-center gap-1.5 px-2 text-muted-foreground">
           <Button
             type="button"

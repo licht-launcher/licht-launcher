@@ -193,7 +193,7 @@ export function NewInstancePage() {
   }
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-muted/30 px-8 pt-6 pr-12 pb-8">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-8 pt-6 pr-12 pb-8">
       <div className="flex min-h-0 flex-1 flex-col gap-4">
         <WizardStepper steps={path} currentIndex={Math.max(index, 0)} />
 
