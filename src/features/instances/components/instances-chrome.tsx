@@ -8,7 +8,13 @@ import {
   useMemo,
   useRef,
 } from "react";
+import { useDefaultLayout } from "react-resizable-panels";
 import { TitleBar } from "@/components/title-bar/title-bar";
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "@/components/ui/resizable";
 import { HomeSidebar } from "@/features/instances/components/home-sidebar";
 import { InstanceDialogs } from "@/features/instances/components/instance-dialogs";
 import { useGameEvents } from "@/features/instances/hooks/use-game-events";
@@ -20,6 +26,14 @@ import {
   type PlayPhase,
   usePlaySession,
 } from "@/features/instances/hooks/use-play-session";
+import {
+  MAIN_PANEL_ID,
+  SIDEBAR_DEFAULT_SIZE_PX,
+  SIDEBAR_LAYOUT_ID,
+  SIDEBAR_MAX_SIZE_PX,
+  SIDEBAR_MIN_SIZE_PX,
+  SIDEBAR_PANEL_ID,
+} from "@/features/instances/lib/sidebar-layout";
 import { useCustomTitleBar } from "@/hooks/use-custom-title-bar";
 import { getLastPlayedFolder } from "@/lib/commands";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
@@ -57,6 +71,11 @@ export function useInstancesChrome(): InstancesChromeContext {
 
 export function InstancesChrome({ children }: { children: ReactNode }) {
   const customTitleBar = useCustomTitleBar().data ?? true;
+  const { defaultLayout, onLayoutChanged } = useDefaultLayout({
+    id: SIDEBAR_LAYOUT_ID,
+    storage: localStorage,
+    onlySaveAfterUserInteractions: true,
+  });
   const navigate = useNavigate();
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
@@ -157,34 +176,50 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
 
   return (
     <>
-      <div className="flex min-h-0 h-full w-full flex-1 overflow-hidden bg-popover text-popover-foreground">
-        <HomeSidebar
-          instances={instances.data ?? []}
-          selectedFolder={onWizard ? null : selectedFolder}
-          busy={busy}
-          loading={instances.isPending}
-          playPhase={playPhase}
-          showTitleband={customTitleBar}
-          onSelect={(folder) => {
-            setSelectedFolder(folder);
-            if (onWizard) {
-              void navigate({ to: "/", search: {} });
-            }
-          }}
-          onCreate={() => {
-            void navigate({ to: "/instances/new" });
-          }}
-          onOpenSettings={() => dialogs.openGlobalSettings("account")}
-        />
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-muted/30">
-          {customTitleBar ? <TitleBar /> : null}
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-            <ChromeContext.Provider value={context}>
-              {children}
-            </ChromeContext.Provider>
+      <ResizablePanelGroup
+        id={SIDEBAR_LAYOUT_ID}
+        orientation="horizontal"
+        className="min-h-0 h-full w-full flex-1 overflow-hidden bg-popover text-popover-foreground"
+        defaultLayout={defaultLayout}
+        onLayoutChanged={onLayoutChanged}
+      >
+        <ResizablePanel
+          id={SIDEBAR_PANEL_ID}
+          defaultSize={SIDEBAR_DEFAULT_SIZE_PX}
+          minSize={SIDEBAR_MIN_SIZE_PX}
+          maxSize={SIDEBAR_MAX_SIZE_PX}
+        >
+          <HomeSidebar
+            instances={instances.data ?? []}
+            selectedFolder={onWizard ? null : selectedFolder}
+            busy={busy}
+            loading={instances.isPending}
+            playPhase={playPhase}
+            showTitleband={customTitleBar}
+            onSelect={(folder) => {
+              setSelectedFolder(folder);
+              if (onWizard) {
+                void navigate({ to: "/", search: {} });
+              }
+            }}
+            onCreate={() => {
+              void navigate({ to: "/instances/new" });
+            }}
+            onOpenSettings={() => dialogs.openGlobalSettings("account")}
+          />
+        </ResizablePanel>
+        <ResizableHandle withHandle aria-label="Resize sidebar" />
+        <ResizablePanel id={MAIN_PANEL_ID} minSize={480}>
+          <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-muted/30">
+            {customTitleBar ? <TitleBar /> : null}
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+              <ChromeContext.Provider value={context}>
+                {children}
+              </ChromeContext.Provider>
+            </div>
           </div>
-        </div>
-      </div>
+        </ResizablePanel>
+      </ResizablePanelGroup>
 
       <InstanceDialogs
         configuring={configuring}

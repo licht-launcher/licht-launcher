@@ -19,6 +19,11 @@ export {
   PopoverTrigger,
 } from "@/components/ui/popover";
 export { Progress } from "@/components/ui/progress";
+export {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "@/components/ui/resizable";
 export { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 export {
   Select,
