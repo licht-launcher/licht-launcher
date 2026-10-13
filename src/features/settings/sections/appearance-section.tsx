@@ -46,7 +46,7 @@ export function AppearanceSection({
           </label>
           <p
             id="disable-custom-title-bar-hint"
-            className="text-sm text-muted-foreground"
+            className="text-sm text-destructive"
           >
             Use the operating system title bar instead of Licht's. This change
             applies after restart.

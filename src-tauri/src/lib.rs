@@ -54,6 +54,7 @@ pub fn run() -> anyhow::Result<()> {
             commands::instances::list_instance_entries,
             commands::shell::open_repository,
             commands::shell::custom_title_bar_active,
+            commands::shell::restart_app,
             commands::instances::get_last_played_folder,
             commands::instances::set_last_played_folder,
             commands::instances::touch_last_opened,

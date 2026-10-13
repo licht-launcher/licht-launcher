@@ -55,6 +55,9 @@ export function mockSettingsCommands(implement?: (command: string) => unknown) {
     if (command === "custom_title_bar_active") {
       return Promise.resolve(true);
     }
+    if (command === "restart_app") {
+      return Promise.resolve();
+    }
     return Promise.resolve(null);
   });
 }
