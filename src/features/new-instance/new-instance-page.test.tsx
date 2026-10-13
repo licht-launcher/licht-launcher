@@ -113,6 +113,7 @@ describe("NewInstancePage", () => {
           overrideJvmArguments: false,
           javaPath: null,
           lastOpenedAt: null,
+          iconPath: null,
         });
       }
       if (command === "create_instance_from_modpack") {
@@ -132,6 +133,7 @@ describe("NewInstancePage", () => {
           overrideJvmArguments: false,
           javaPath: null,
           lastOpenedAt: null,
+          iconPath: null,
         });
       }
       return Promise.resolve(undefined);
@@ -149,17 +151,19 @@ describe("NewInstancePage", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Vanilla/ }));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
-    fireEvent.change(await screen.findByLabelText("Name"), {
+    const nameInput = await screen.findByLabelText("Instance Name");
+    expect(nameInput).toHaveAttribute("placeholder", "Survival");
+    fireEvent.change(nameInput, {
       target: { value: "Survival" },
     });
-    fireEvent.click(
-      await screen.findByRole("combobox", { name: "Game version" }),
-    );
-    const releaseOption = await screen.findByRole("option", {
+    expect(
+      await screen.findByRole("button", { name: "1.20 versions" }),
+    ).toBeInTheDocument();
+    const releaseOption = await screen.findByRole("button", {
       name: "1.20.1",
     });
     expect(
-      screen.queryByRole("option", { name: /24w14a/ }),
+      screen.queryByRole("button", { name: /24w14a/ }),
     ).not.toBeInTheDocument();
     fireEvent.click(releaseOption);
 
@@ -177,7 +181,7 @@ describe("NewInstancePage", () => {
     });
   });
 
-  it("includes snapshots when the switch is on", async () => {
+  it("includes snapshots when the snapshots button is on", async () => {
     await renderWizard();
 
     fireEvent.click(screen.getByRole("button", { name: /From scratch/ }));
@@ -185,21 +189,43 @@ describe("NewInstancePage", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Vanilla/ }));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
-    fireEvent.click(
-      await screen.findByRole("combobox", { name: "Game version" }),
-    );
     expect(
-      await screen.findByRole("option", { name: "1.20.1" }),
+      await screen.findByRole("button", { name: "1.20.1" }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("option", { name: /24w14a/ }),
+      screen.queryByRole("button", { name: /24w14a/ }),
     ).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("option", { name: "1.20.1" }));
+    fireEvent.click(screen.getByRole("button", { name: "1.20.1" }));
 
-    fireEvent.click(screen.getByRole("switch", { name: "Include snapshots" }));
-    fireEvent.click(screen.getByRole("combobox", { name: "Game version" }));
+    fireEvent.click(screen.getByRole("button", { name: "Include snapshots" }));
     expect(
-      await screen.findByRole("option", { name: "24w14a" }),
+      await screen.findByRole("button", { name: "Snapshots versions" }),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: "24w14a" }),
+    ).toBeInTheDocument();
+  });
+
+  it("filters the version list from the search field", async () => {
+    await renderWizard();
+
+    fireEvent.click(screen.getByRole("button", { name: /From scratch/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Vanilla/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(
+      await screen.findByRole("button", { name: "1.20.1" }),
+    ).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Search versions"), {
+      target: { value: "nope" },
+    });
+    expect(await screen.findByText("No versions match.")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Search versions"), {
+      target: { value: "1.20" },
+    });
+    expect(
+      await screen.findByRole("button", { name: "1.20.1" }),
     ).toBeInTheDocument();
   });
 
@@ -215,7 +241,7 @@ describe("NewInstancePage", () => {
     expect(
       screen.getByRole("combobox", { name: "Loader channel" }),
     ).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("Name"), {
+    fireEvent.change(screen.getByLabelText("Instance Name"), {
       target: { value: "Modded" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
@@ -254,6 +280,7 @@ describe("NewInstancePage", () => {
         source: "modrinth",
         projectId: "ABC",
         versionId: "v1",
+        iconUrl: null,
       });
     });
   });
@@ -298,7 +325,7 @@ describe("NewInstancePage", () => {
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(
-      await screen.findByRole("combobox", { name: "Game version" }),
+      await screen.findByRole("button", { name: "1.20.1" }),
     ).toBeInTheDocument();
   });
 });

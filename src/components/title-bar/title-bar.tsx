@@ -23,8 +23,16 @@ const controlClass =
 const chipClass =
   "h-6 max-w-36 gap-1.5 rounded-md border border-border/60 bg-muted/40 px-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground";
 
+function currentWindow() {
+  try {
+    return getCurrentWindow();
+  } catch {
+    return null;
+  }
+}
+
 export function TitleBar() {
-  const windowApi = getCurrentWindow();
+  const windowApi = currentWindow();
   const { username } = useTitleBarDecorations();
   const { active, activeCount, progress, label } = useInstallActivity();
   const nativeCaption = usesNativeCaptionButtons();
@@ -105,7 +113,7 @@ export function TitleBar() {
               className={controlClass}
               aria-label="Minimize"
               onClick={() => {
-                void windowApi.minimize();
+                void windowApi?.minimize();
               }}
             >
               <Minus aria-hidden className="size-4" strokeWidth={1.75} />
@@ -119,7 +127,7 @@ export function TitleBar() {
               )}
               aria-label="Close"
               onClick={() => {
-                void windowApi.close();
+                void windowApi?.close();
               }}
             >
               <svg

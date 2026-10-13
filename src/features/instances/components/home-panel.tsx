@@ -42,7 +42,7 @@ export function HomePanel({
   onStop: () => void;
   onConfigure: () => void;
 }) {
-  const [tab, setTab] = useState("console");
+  const [tab, setTab] = useState("files");
   const [logLevels, setLogLevels] = useState<LogLevelSelection>(
     () => new Set(),
   );
@@ -52,7 +52,7 @@ export function HomePanel({
   if (pathFolder !== folder) {
     setPathFolder(folder);
     setFilesPath("");
-    setTab("console");
+    setTab("files");
   }
 
   return (
@@ -77,13 +77,13 @@ export function HomePanel({
       >
         <div className="flex shrink-0 items-center gap-3">
           <TabsList className="w-fit shrink-0">
-            <TabsTrigger value="console" className="gap-1.5 px-3">
-              <SquareTerminalIcon aria-hidden className="size-4 shrink-0" />
-              Console
-            </TabsTrigger>
             <TabsTrigger value="files" className="gap-1.5 px-3">
               <FolderIcon aria-hidden className="size-4 shrink-0" />
               Files
+            </TabsTrigger>
+            <TabsTrigger value="console" className="gap-1.5 px-3">
+              <SquareTerminalIcon aria-hidden className="size-4 shrink-0" />
+              Console
             </TabsTrigger>
           </TabsList>
           {tab === "console" ? (
@@ -119,12 +119,6 @@ export function HomePanel({
           )}
         </div>
         <TabsContent
-          value="console"
-          className="mt-0 flex min-h-0 flex-1 flex-col outline-none"
-        >
-          <ConsoleSection lines={lines} selected={logLevels} />
-        </TabsContent>
-        <TabsContent
           value="files"
           className="mt-0 flex min-h-0 flex-1 flex-col outline-none"
         >
@@ -133,6 +127,12 @@ export function HomePanel({
             relativePath={filesPath}
             onRelativePathChange={setFilesPath}
           />
+        </TabsContent>
+        <TabsContent
+          value="console"
+          className="mt-0 flex min-h-0 flex-1 flex-col outline-none"
+        >
+          <ConsoleSection lines={lines} selected={logLevels} />
         </TabsContent>
       </Tabs>
     </div>

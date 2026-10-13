@@ -182,7 +182,19 @@ fn create_rename_duplicate_and_delete_keep_the_folder_stable() {
     assert_eq!(created.folder, "My-World");
     assert_eq!(created.name, "My World");
     assert_eq!(created.version_id, "1.20.1");
+    assert!(created.icon_path.is_none());
     assert!(instances.join("My-World").join("instance.json").is_file());
+    fs::write(instances.join("My-World").join("icon.png"), [0u8, 1, 2, 3]).expect("icon");
+    let with_icon = list_instances(&instances).expect("list with icon");
+    let path = with_icon
+        .iter()
+        .find(|entry| entry.folder == "My-World")
+        .expect("instance")
+        .icon_path
+        .as_deref()
+        .expect("icon path");
+    assert!(path.ends_with("icon.png"));
+    assert!(std::path::Path::new(path).is_file());
     assert!(matches!(
         create_instance(&instances, "My World", "1.20.1", &plain_template()),
         Err(CoreError::InstanceExists)

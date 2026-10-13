@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::Value;
@@ -9,6 +11,8 @@ use crate::{CoreError, Result};
 const SEARCH_URL: &str = "https://api.modrinth.com/v2/search";
 const PROJECT_VERSIONS: &str = "https://api.modrinth.com/v2/project";
 const USER_AGENT: &str = "licht-launcher/0.1.1 (https://github.com/mateusneiva/licht-launcher)";
+/// Pack archives can be ~100 MB; the shared API client timeout is too short.
+const PACK_ARCHIVE_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 
 #[derive(Debug, Deserialize)]
 struct SearchResponse {
@@ -182,11 +186,18 @@ pub async fn download_modrinth_mrpack(
         .and_then(Value::as_str)
         .unwrap_or("pack.mrpack")
         .to_string();
-    let bytes = client
+    // Use a dedicated client: the shared one times out after 30s (API metadata).
+    let pack_client = Client::builder()
+        .timeout(PACK_ARCHIVE_TIMEOUT)
+        .build()
+        .map_err(CoreError::from)?;
+    let bytes = pack_client
         .get(download_url)
         .header("User-Agent", USER_AGENT)
         .send()
         .await?
+        .error_for_status()
+        .map_err(CoreError::from)?
         .bytes()
         .await?
         .to_vec();

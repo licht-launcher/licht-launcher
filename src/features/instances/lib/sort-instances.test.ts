@@ -24,6 +24,7 @@ function entry(
     overrideJvmArguments: false,
     javaPath: null,
     lastOpenedAt,
+    iconPath: null,
   };
 }
 

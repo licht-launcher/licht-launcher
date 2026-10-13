@@ -5,6 +5,17 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
+# Keep the CLI off the default build: it shares the binary name `licht` with
+# the Tauri app and would overwrite `target/debug/licht.exe`.
+[[bin]]
+name = "licht"
+path = "src/bin/licht.rs"
+required-features = ["cli"]
+
+[features]
+default = []
+cli = []
+
 [dependencies]
 base64 = { version = "=0.22.1", default-features = false, features = ["std"] }
 directories = "=6.0.0"

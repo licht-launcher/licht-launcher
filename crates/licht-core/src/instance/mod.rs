@@ -1,5 +1,6 @@
 //! Instance profiles (`instance.json`) and folder listing.
 
+pub mod icon;
 pub(crate) mod listing;
 
 use std::fs;
@@ -9,6 +10,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use crate::instance::icon::ICON_FILE;
 use crate::settings::GlobalLaunch;
 use crate::{CoreError, Result};
 
@@ -70,6 +72,8 @@ pub struct InstanceEntry {
     pub override_jvm_arguments: bool,
     pub java_path: Option<String>,
     pub last_opened_at: Option<String>,
+    /// Absolute path to `icon.png` when present beside `instance.json`.
+    pub icon_path: Option<String>,
 }
 
 /// Launch personalization written from the instance settings dialog.
@@ -134,9 +138,10 @@ pub fn list_instances(instances_dir: &Path) -> Result<Vec<InstanceEntry>> {
     for entry in fs::read_dir(instances_dir)? {
         let entry = entry?;
         if entry.file_type()?.is_dir() {
-            let folder = directory_name(&entry.path())?;
-            let instance = load_instance(&entry.path())?;
-            instances.push(entry_from(folder, instance));
+            let path = entry.path();
+            let folder = directory_name(&path)?;
+            let instance = load_instance(&path)?;
+            instances.push(entry_from(&path, folder, instance));
         }
     }
     instances.sort_by(|left, right| {
@@ -164,7 +169,7 @@ pub fn create_instance(
     fs::create_dir(&dir)?;
     let instance = instance_from_template(name, version_id.to_string(), template);
     write_instance(&dir, &instance)?;
-    Ok(entry_from(folder, instance))
+    Ok(entry_from(&dir, folder, instance))
 }
 
 pub fn rename_instance(instances_dir: &Path, folder: &str, name: &str) -> Result<InstanceEntry> {
@@ -173,7 +178,7 @@ pub fn rename_instance(instances_dir: &Path, folder: &str, name: &str) -> Result
     let mut instance = load_instance(&dir)?;
     instance.name = name;
     write_instance(&dir, &instance)?;
-    Ok(entry_from(folder.to_string(), instance))
+    Ok(entry_from(&dir, folder.to_string(), instance))
 }
 
 pub fn duplicate_instance(instances_dir: &Path, folder: &str, name: &str) -> Result<InstanceEntry> {
@@ -196,7 +201,7 @@ pub fn duplicate_instance(instances_dir: &Path, folder: &str, name: &str) -> Res
         let _ = fs::remove_dir_all(&destination);
         return Err(error);
     }
-    Ok(entry_from(new_folder, instance))
+    Ok(entry_from(&destination, new_folder, instance))
 }
 
 /// Records that the instance was opened now (RFC 3339 UTC on the profile).
@@ -205,7 +210,7 @@ pub fn touch_last_opened(instances_dir: &Path, folder: &str) -> Result<InstanceE
     let mut instance = load_instance(&dir)?;
     instance.last_opened_at = Some(utc_now_rfc3339()?);
     write_instance(&dir, &instance)?;
-    Ok(entry_from(folder.to_string(), instance))
+    Ok(entry_from(&dir, folder.to_string(), instance))
 }
 
 pub fn delete_instance(instances_dir: &Path, folder: &str) -> Result<()> {
@@ -234,7 +239,7 @@ pub fn update_instance(
     instance.height = settings.height;
     validate(&instance)?;
     write_instance(&dir, &instance)?;
-    Ok(entry_from(folder.to_string(), instance))
+    Ok(entry_from(&dir, folder.to_string(), instance))
 }
 
 /// Points the instance at another game version. Does not download files.
@@ -249,7 +254,7 @@ pub fn update_instance_version(
     instance.version_id = version_id.to_string();
     validate(&instance)?;
     write_instance(&dir, &instance)?;
-    Ok(entry_from(folder.to_string(), instance))
+    Ok(entry_from(&dir, folder.to_string(), instance))
 }
 
 fn default_instance(name: String, version_id: String) -> Instance {
@@ -346,7 +351,15 @@ pub fn resolved_java_path(instance: &Instance) -> Option<PathBuf> {
     Some(PathBuf::from(path))
 }
 
-fn entry_from(folder: String, instance: Instance) -> InstanceEntry {
+/// Builds an [`InstanceEntry`] from the profile and optional `icon.png` on disk.
+pub fn instance_entry(dir: &Path, folder: &str) -> Result<InstanceEntry> {
+    let instance = load_instance(dir)?;
+    Ok(entry_from(dir, folder.to_string(), instance))
+}
+
+fn entry_from(dir: &Path, folder: String, instance: Instance) -> InstanceEntry {
+    let icon = dir.join(ICON_FILE);
+    let icon_path = icon.is_file().then(|| icon.to_string_lossy().into_owned());
     InstanceEntry {
         folder,
         name: instance.name,
@@ -363,6 +376,7 @@ fn entry_from(folder: String, instance: Instance) -> InstanceEntry {
         override_jvm_arguments: instance.override_jvm_arguments,
         java_path: instance.java_path,
         last_opened_at: instance.last_opened_at,
+        icon_path,
     }
 }
 

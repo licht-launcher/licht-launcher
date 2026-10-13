@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -18,6 +18,9 @@ pub const VERSION_MANIFEST_LEGACY_URL: &str =
 
 /// Per-request timeout for manifest downloads (each host gets this budget).
 pub const MANIFEST_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// How long the on-disk manifest is reused before contacting Mojang again.
+pub const MANIFEST_CACHE_TTL: Duration = Duration::from_secs(5 * 60);
 
 const MANIFEST_CACHE_FILE: &str = "version_manifest_v2.json";
 
@@ -166,7 +169,8 @@ pub fn version_summaries(manifest: &VersionManifest, cache: &SharedCache) -> Vec
     summaries
 }
 
-/// Lists versions for the UI: online hosts, then disk cache, then installed only.
+/// Lists versions for the UI: fresh disk cache, then online hosts, then stale
+/// cache / installed-only fallback.
 pub async fn list_version_summaries(
     client: &reqwest::Client,
     cache: &SharedCache,
@@ -229,7 +233,8 @@ pub fn parse_version_manifest(json: &str) -> Result<VersionManifest> {
     Ok(serde_json::from_str(json)?)
 }
 
-/// Fetches the version manifest: Piston Meta → Launchermeta legacy → local cache.
+/// Fetches the version manifest: fresh on-disk cache → Piston Meta →
+/// Launchermeta legacy → stale on-disk cache.
 ///
 /// A successful download from either host updates the on-disk cache.
 pub async fn fetch_version_manifest(
@@ -244,11 +249,40 @@ pub async fn fetch_version_manifest(
     .await
 }
 
+fn manifest_cache_is_fresh(cache: &SharedCache, max_age: Duration) -> bool {
+    let path = version_manifest_cache_path(cache);
+    let Ok(metadata) = std::fs::metadata(path) else {
+        return false;
+    };
+    let Ok(modified) = metadata.modified() else {
+        return false;
+    };
+    match SystemTime::now().duration_since(modified) {
+        Ok(age) => age < max_age,
+        // Clock went backwards; treat the file as usable.
+        Err(_) => true,
+    }
+}
+
 async fn fetch_version_manifest_from_urls(
     client: &reqwest::Client,
     cache: &SharedCache,
     urls: &[&str],
 ) -> Result<VersionManifest> {
+    if manifest_cache_is_fresh(cache, MANIFEST_CACHE_TTL)
+        && let Ok(body) = read_manifest_cache(cache)
+    {
+        match parse_version_manifest(&body) {
+            Ok(manifest) => return Ok(manifest),
+            Err(error) => {
+                tracing::warn!(
+                    error = %error,
+                    "version manifest cache was invalid; re-fetching"
+                );
+            }
+        }
+    }
+
     for url in urls {
         match read_text(client, url).await {
             Ok(body) => match parse_version_manifest(&body) {
@@ -398,6 +432,51 @@ mod tests {
         let manifest = fetch_version_manifest_from_urls(&client, &cache, &[dead, dead])
             .await
             .expect("cache");
+        assert!(!manifest.versions.is_empty());
+        let _ = std::fs::remove_dir_all(cache.root());
+    }
+
+    #[tokio::test]
+    async fn fresh_cache_skips_network() {
+        let cache = temp_cache("fresh-ttl");
+        let body = include_str!("../../tests/fixtures/version_manifest_v2.json");
+        write_manifest_cache(&cache, body).expect("write");
+        assert!(manifest_cache_is_fresh(&cache, MANIFEST_CACHE_TTL));
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_millis(200))
+            .build()
+            .expect("client");
+        // Unreachable hosts: success means we never needed HTTP.
+        let dead = "http://127.0.0.1:1/version_manifest_v2.json";
+        let manifest = fetch_version_manifest_from_urls(&client, &cache, &[dead, dead])
+            .await
+            .expect("fresh cache");
+        assert!(!manifest.versions.is_empty());
+        let _ = std::fs::remove_dir_all(cache.root());
+    }
+
+    #[tokio::test]
+    async fn expired_cache_falls_back_after_network_failure() {
+        let cache = temp_cache("expired-ttl");
+        let body = include_str!("../../tests/fixtures/version_manifest_v2.json");
+        write_manifest_cache(&cache, body).expect("write");
+        let path = version_manifest_cache_path(&cache);
+        let file = std::fs::File::options()
+            .write(true)
+            .open(&path)
+            .expect("open cache");
+        let stale = SystemTime::now() - MANIFEST_CACHE_TTL - Duration::from_secs(30);
+        file.set_modified(stale).expect("set mtime");
+        assert!(!manifest_cache_is_fresh(&cache, MANIFEST_CACHE_TTL));
+
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_millis(200))
+            .build()
+            .expect("client");
+        let dead = "http://127.0.0.1:1/version_manifest_v2.json";
+        let manifest = fetch_version_manifest_from_urls(&client, &cache, &[dead, dead])
+            .await
+            .expect("stale cache fallback");
         assert!(!manifest.versions.is_empty());
         let _ = std::fs::remove_dir_all(cache.root());
     }

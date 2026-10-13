@@ -35,7 +35,7 @@ export function InstanceSettingsPanel({
   versionBusy: boolean;
   onChange: (patch: Partial<InstanceDraft>) => void;
   onRename: (name: string) => void;
-  onChangeVersion: (versionId: string) => void;
+  onChangeVersion: (versionId: string, installed: boolean) => void;
   onOpenFolder: () => void;
   onDuplicate: () => void;
   onDelete: () => void;

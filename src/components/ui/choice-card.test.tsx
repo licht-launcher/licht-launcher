@@ -13,6 +13,7 @@ describe("ChoiceCard", () => {
         title="From a modpack"
         description="Browse packs"
         icon={<PackageIcon aria-hidden />}
+        iconTone="warning"
         selected
         onSelect={onSelect}
       />,
@@ -22,8 +23,11 @@ describe("ChoiceCard", () => {
     expect(button).toHaveAttribute("aria-pressed", "true");
     fireEvent.click(button);
     expect(onSelect).toHaveBeenCalledOnce();
-    expect(button.querySelector(".text-instance")).toBeInTheDocument();
-    expect(button.className).toContain("bg-primary/15");
+    expect(button.className).toContain("bg-muted");
+    expect(button.className).toContain("ring-2");
+    expect(button.className).toContain("ring-primary");
+    expect(button.className).not.toContain("border-primary");
+    expect(button.querySelector(".text-warning")).toBeInTheDocument();
   });
 
   it("keeps loader icon wells neutral", () => {
@@ -42,5 +46,25 @@ describe("ChoiceCard", () => {
     expect(well).toBeInTheDocument();
     expect(well?.className).not.toContain("grayscale");
     expect(well?.className).not.toContain("text-instance");
+  });
+
+  it("does not select when disabled", () => {
+    const onSelect = vi.fn();
+    render(
+      <ChoiceCard
+        title="Upload .mrpack"
+        description="Import a local Modrinth pack file."
+        iconTone="file"
+        selected={false}
+        disabled
+        onSelect={onSelect}
+      />,
+    );
+
+    const button = screen.getByRole("button", { name: /Upload \.mrpack/ });
+    expect(button).toBeDisabled();
+    expect(button.className).toContain("disabled:opacity-50");
+    fireEvent.click(button);
+    expect(onSelect).not.toHaveBeenCalled();
   });
 });

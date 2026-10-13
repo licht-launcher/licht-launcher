@@ -41,7 +41,11 @@ export function InstancesPage() {
     }
     preparedRef.current = prepare;
     setSelectedFolder(prepare);
-    void navigate({ to: "/", search: {}, replace: true });
+    void navigate({
+      to: "/",
+      search: { instance: prepare },
+      replace: true,
+    });
     void prepareInstance(instance).catch((error: unknown) => {
       toast.error(friendlyError(messageOf(error)));
     });

@@ -31,6 +31,7 @@ const entry: InstanceEntry = {
   overrideJvmArguments: false,
   javaPath: null,
   lastOpenedAt: null,
+  iconPath: null,
 };
 
 function renderDialog(
@@ -189,7 +190,7 @@ describe("InstanceSettingsDialog", () => {
     ).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("option", { name: "1.21.1" }));
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    expect(onChangeVersion).toHaveBeenCalledWith("1.21.1");
+    expect(onChangeVersion).toHaveBeenCalledWith("1.21.1", false);
   });
 
   it("repairs the instance from the base section", async () => {

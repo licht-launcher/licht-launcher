@@ -57,11 +57,12 @@ pub use install::{
     ASSET_OBJECT_BASE, GameInstall, InstallArgs, InstallPlan, install_game, install_version,
     parse_install_args,
 };
+pub use instance::icon::{ICON_FILE, download_instance_icon, icon_url_allowed};
 pub use instance::{
     Instance, InstanceEntry, InstanceSettings, create_instance, delete_instance,
-    duplicate_instance, instance_launch, list_instances, load_instance, parse_instance,
-    rename_instance, resolved_java_path, resolved_launch, touch_last_opened, update_instance,
-    update_instance_version,
+    duplicate_instance, instance_entry, instance_launch, list_instances, load_instance,
+    parse_instance, rename_instance, resolved_java_path, resolved_launch, touch_last_opened,
+    update_instance, update_instance_version,
 };
 pub use instance_fs::{InstanceFsEntry, list_instance_entries};
 pub use launch::{apply_global_launch, classpath, launch_command};

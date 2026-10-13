@@ -19,7 +19,7 @@ tauri-build = { version = "=2.7.1", features = [] }
 anyhow = "=1.0.104"
 licht-core = { path = "../crates/licht-core" }
 reqwest = { version = "=0.13.5", default-features = false, features = ["json", "rustls", "stream"] }
-tauri = { version = "=2.12.1", features = [] }
+tauri = { version = "=2.12.1", features = ["protocol-asset"] }
 tauri-plugin-dialog = "=2.8.1"
 tauri-plugin-opener = "=2.7.0"
 tauri-plugin-window-controls = "=0.2.1"

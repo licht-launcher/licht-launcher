@@ -26,6 +26,7 @@ const { invoke, listeners } = vi.hoisted(() => ({
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke,
+  convertFileSrc: (path: string) => `asset://localhost/${path}`,
 }));
 
 vi.mock("@tauri-apps/api/event", () => ({
@@ -80,6 +81,7 @@ const classicInstance = {
   overrideJvmArguments: false,
   javaPath: null,
   lastOpenedAt: null as string | null,
+  iconPath: null as string | null,
 };
 
 describe("InstancesPage", () => {
@@ -197,11 +199,6 @@ describe("InstancesPage", () => {
     expect(screen.getByRole("button", { name: "New instance" })).toBeEnabled();
     expect(screen.getByText("Licht Launcher")).toBeInTheDocument();
     expect(
-      screen.getByText(
-        "Unofficial, not affiliated with Mojang Studios or Microsoft.",
-      ),
-    ).toBeInTheDocument();
-    expect(
       screen.queryByRole("list", { name: "Versions" }),
     ).not.toBeInTheDocument();
     expect(
@@ -263,6 +260,12 @@ describe("InstancesPage", () => {
       if (command === "stop_game") {
         return Promise.resolve(undefined);
       }
+      if (command === "list_instance_entries") {
+        return Promise.resolve([]);
+      }
+      if (command === "custom_title_bar_active") {
+        return Promise.resolve(true);
+      }
       return Promise.resolve(undefined);
     });
 
@@ -272,15 +275,18 @@ describe("InstancesPage", () => {
       name: "Instances",
     });
     expect(within(sidebar).getByText("Classic")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Open folder" }),
+    ).toBeInTheDocument();
     expect(within(sidebar).getByText("Classic")).toHaveClass("truncate");
     expect(within(sidebar).queryByText("1.5.2")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Username")).not.toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: "Classic" }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText("1.5.2 • Vanilla • 5 minutes ago"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("1.5.2")).toBeInTheDocument();
+    expect(screen.getByText("Vanilla")).toBeInTheDocument();
+    expect(screen.getByText("5 minutes ago")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Configure Classic" }),
     ).toBeInTheDocument();
@@ -317,12 +323,18 @@ describe("InstancesPage", () => {
         line: "Sound engine started",
       } satisfies GameLogEvent,
     });
-    expect(await screen.findByText("Sound engine started")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Stop" })).toBeEnabled();
+    });
     expect(
       screen.queryByRole("button", { name: "Starting…" }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Stop" })).toBeEnabled();
-    expect(screen.getByText("Console")).toBeInTheDocument();
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Console" }));
+    expect(
+      await screen.findByRole("button", { name: "Log level" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Sound engine started")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Files" })).toBeInTheDocument();
     expect(invoke).not.toHaveBeenCalledWith(
       "install_version",
       expect.anything(),
@@ -426,6 +438,12 @@ describe("InstancesPage", () => {
       if (command === "list_running_games") {
         return Promise.resolve([]);
       }
+      if (command === "list_instance_entries") {
+        return Promise.resolve([]);
+      }
+      if (command === "custom_title_bar_active") {
+        return Promise.resolve(true);
+      }
       return Promise.resolve(undefined);
     });
 
@@ -469,12 +487,20 @@ describe("InstancesPage", () => {
       } satisfies GameLogEvent,
     });
 
-    expect(await screen.findByText("next-log")).toBeInTheDocument();
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Console" }));
+    expect(
+      await screen.findByRole("button", { name: "Log level" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("next-log")).toBeInTheDocument();
     expect(screen.queryByText("classic-log")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Stop" })).toBeEnabled();
 
     fireEvent.click(within(sidebar).getByRole("button", { name: /^Classic/ }));
-    expect(await screen.findByText("classic-log")).toBeInTheDocument();
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Console" }));
+    expect(
+      await screen.findByRole("button", { name: "Log level" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("classic-log")).toBeInTheDocument();
     expect(screen.queryByText("next-log")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Stop" })).toBeEnabled();
 
@@ -879,6 +905,116 @@ describe("InstancesPage", () => {
     );
     expect(
       await screen.findByRole("heading", { name: "How do you want to start?" }),
+    ).toBeInTheDocument();
+  });
+
+  it("navigates back and forward from the sidebar history buttons", async () => {
+    invoke.mockImplementation((command: string) => {
+      if (command === "list_instances") {
+        return Promise.resolve([]);
+      }
+      if (command === "list_versions") {
+        return Promise.resolve([
+          { id: "1.20.1", versionType: "release", installed: false },
+        ]);
+      }
+      if (command === "get_settings") {
+        return Promise.resolve(snapshot);
+      }
+      if (command === "list_running_games") {
+        return Promise.resolve([]);
+      }
+      if (command === "custom_title_bar_active") {
+        return Promise.resolve(true);
+      }
+      return Promise.resolve(undefined);
+    });
+
+    await renderAt("/");
+
+    const back = await screen.findByRole("button", { name: "Back" });
+    const forward = screen.getByRole("button", { name: "Forward" });
+    expect(back).toBeDisabled();
+    expect(forward).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "New instance" }));
+    expect(
+      await screen.findByRole("heading", { name: "How do you want to start?" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Back" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Forward" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(
+      await screen.findByText("Create an instance to get started."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Back" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Forward" })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Forward" }));
+    expect(
+      await screen.findByRole("heading", { name: "How do you want to start?" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Back" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Forward" })).toBeDisabled();
+  });
+
+  it("treats instance switches as history entries", async () => {
+    const nextInstance = {
+      ...classicInstance,
+      folder: "next",
+      name: "Next",
+      versionId: "1.20.1",
+    };
+    invoke.mockImplementation((command: string) => {
+      if (command === "list_instances") {
+        return Promise.resolve([classicInstance, nextInstance]);
+      }
+      if (command === "list_versions") {
+        return Promise.resolve([
+          { id: "1.5.2", versionType: "release", installed: true },
+          { id: "1.20.1", versionType: "release", installed: true },
+        ]);
+      }
+      if (command === "get_settings") {
+        return Promise.resolve(snapshot);
+      }
+      if (command === "list_running_games") {
+        return Promise.resolve([]);
+      }
+      if (command === "custom_title_bar_active") {
+        return Promise.resolve(true);
+      }
+      if (command === "list_instance_entries") {
+        return Promise.resolve([]);
+      }
+      return Promise.resolve(undefined);
+    });
+
+    await renderAt("/");
+    const sidebar = await screen.findByRole("navigation", {
+      name: "Instances",
+    });
+    expect(
+      await screen.findByRole("heading", { name: "Classic" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Back" })).toBeDisabled();
+
+    fireEvent.click(within(sidebar).getByRole("button", { name: /^Next/ }));
+    expect(
+      await screen.findByRole("heading", { name: "Next" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Back" })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(
+      await screen.findByRole("heading", { name: "Classic" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Forward" })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Forward" }));
+    expect(
+      await screen.findByRole("heading", { name: "Next" }),
     ).toBeInTheDocument();
   });
 

@@ -1,5 +1,11 @@
+import { useRouter, useRouterState } from "@tanstack/react-router";
+import { cn } from "cn";
 import {
   ArrowDownAZIcon,
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  CompassIcon,
+  DownloadIcon,
   HistoryIcon,
   Loader2Icon,
   PlusIcon,
@@ -16,6 +22,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { InstanceIcon } from "@/features/instances/components/instance-icon";
 import type { PlayPhase } from "@/features/instances/hooks/use-play-session";
 import {
@@ -23,6 +35,12 @@ import {
   sortInstances,
 } from "@/features/instances/lib/sort-instances";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
+
+const sidebarOrbWrapClassName =
+  "inline-flex transition-transform duration-200 ease-out hover:-translate-y-2";
+
+const sidebarOrbClassName =
+  "size-10 rounded-full shadow-[0_4px_12px_0_rgb(0_0_0/0.28)] transition-shadow duration-200 ease-out hover:shadow-[0_6px_16px_0_rgb(0_0_0/0.38)] disabled:pointer-events-auto disabled:shadow-[0_4px_12px_0_rgb(0_0_0/0.28)] [&_svg:not([class*='size-'])]:size-5";
 
 function SortLabel({
   icon: Icon,
@@ -36,6 +54,48 @@ function SortLabel({
       <Icon aria-hidden className="size-3.5 shrink-0" strokeWidth={2} />
       {label}
     </span>
+  );
+}
+
+function SidebarHistoryNav() {
+  const router = useRouter();
+  useRouterState({
+    select: (state) =>
+      `${String(state.location.state.__TSR_index)}:${state.location.href}`,
+  });
+  const canGoBack = router.history.canGoBack();
+  const canGoForward =
+    router.history.location.state.__TSR_index < router.history.length - 1;
+
+  return (
+    <div className="flex shrink-0 items-center gap-0.5">
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        aria-label="Back"
+        className="text-muted-foreground"
+        disabled={!canGoBack}
+        onClick={() => {
+          router.history.back();
+        }}
+      >
+        <ArrowLeftIcon aria-hidden />
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        aria-label="Forward"
+        className="text-muted-foreground"
+        disabled={!canGoForward}
+        onClick={() => {
+          router.history.forward();
+        }}
+      >
+        <ArrowRightIcon aria-hidden />
+      </Button>
+    </div>
   );
 }
 
@@ -65,103 +125,105 @@ export function HomeSidebar({
 
   return (
     <div className="flex h-full w-full min-w-0 flex-col overflow-hidden bg-black/20">
-      {showTitleband ? (
+      <div className="flex h-9 shrink-0 items-center justify-between gap-2 px-2">
         <div
           data-tauri-drag-region
-          className="flex h-9 shrink-0 items-center px-4"
+          className="flex min-h-9 min-w-0 flex-1 items-center"
         >
-          <span
-            data-tauri-drag-region
-            className="font-brand text-xs font-medium tracking-widest text-muted-foreground uppercase select-none"
-          >
-            Licht Launcher
-          </span>
+          {showTitleband ? (
+            <span
+              data-tauri-drag-region
+              className="ml-px border border-transparent px-1 font-brand text-xs font-medium tracking-widest text-muted-foreground uppercase select-none"
+            >
+              Licht Launcher
+            </span>
+          ) : null}
         </div>
-      ) : null}
-      <div
-        className={
-          showTitleband
-            ? "flex min-h-0 flex-1 flex-col gap-6 px-4 pt-4 pb-10"
-            : "flex min-h-0 flex-1 flex-col gap-6 px-4 pt-6 pb-10"
-        }
-      >
+        <SidebarHistoryNav />
+      </div>
+      <div className="flex min-h-0 flex-1 flex-col gap-6 px-2 pt-1 pb-10">
         <nav
           aria-label="Instances"
           className="flex min-h-0 flex-1 flex-col gap-2"
         >
-          <div className="flex items-center gap-2 px-2">
-            <h2 className="min-w-0 flex-1 font-brand text-xs font-medium leading-none text-muted-foreground">
-              Instances
-            </h2>
-            <Select
-              value={sort}
-              onValueChange={(value) => {
-                if (value === "lastPlayed" || value === "name") {
-                  setSort(value);
-                }
-              }}
-            >
-              <SelectTrigger
-                size="sm"
-                aria-label="Sort instances"
-                className="h-auto w-auto max-w-40 shrink-0 gap-1 border-0 bg-transparent px-0 py-0 font-brand text-xs font-medium leading-none text-muted-foreground shadow-none dark:bg-transparent dark:hover:bg-transparent [&_svg:not([class*='size-'])]:size-3.5"
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div className="ml-px flex items-center gap-2 border border-transparent px-1">
+              <h2 className="min-w-0 flex-1 font-brand text-xs font-medium leading-none text-muted-foreground">
+                Instances
+              </h2>
+              <Select
+                value={sort}
+                onValueChange={(value) => {
+                  if (value === "lastPlayed" || value === "name") {
+                    setSort(value);
+                  }
+                }}
               >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent
-                align="end"
-                className="font-brand text-xs font-medium"
-              >
-                <SelectItem value="lastPlayed" className="text-xs">
-                  <SortLabel icon={HistoryIcon} label="Last played" />
-                </SelectItem>
-                <SelectItem value="name" className="text-xs">
-                  <SortLabel icon={ArrowDownAZIcon} label="Name" />
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          {loading ? (
-            <p className="px-2 text-sm text-muted-foreground">Loading…</p>
-          ) : null}
-          {!loading && instances.length === 0 ? (
-            <p className="px-2 text-sm text-muted-foreground">
-              No instances yet.
-            </p>
-          ) : null}
-          {!loading && ordered.length > 0 ? (
-            <ScrollArea className="min-h-0 flex-1">
-              <ul className="flex w-full min-w-0 flex-col gap-1 pr-3">
-                {ordered.map((instance) => {
-                  const selected = instance.folder === selectedFolder;
-                  const phase = playPhase(instance.folder);
-                  const active = phase === "starting" || phase === "running";
-                  return (
-                    <li key={instance.folder} className="min-w-0">
-                      <Button
-                        type="button"
-                        variant={selected ? "secondary" : "ghost"}
-                        className="w-full min-w-0 max-w-full justify-start gap-2 overflow-hidden px-3"
-                        aria-current={selected ? "page" : undefined}
-                        aria-label={
-                          active
-                            ? `${instance.name} (${phase === "starting" ? "starting" : "running"})`
-                            : undefined
-                        }
-                        disabled={busy}
-                        onClick={() => {
-                          onSelect(instance.folder);
-                        }}
-                      >
-                        <span className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
-                          <InstanceIcon />
-                          <span className="w-0 min-w-0 flex-1 truncate text-left">
+                <SelectTrigger
+                  size="sm"
+                  aria-label="Sort instances"
+                  className="h-auto w-auto max-w-40 shrink-0 gap-1 border-0 bg-transparent px-0 py-0 font-brand text-xs font-medium leading-none text-muted-foreground shadow-none dark:bg-transparent dark:hover:bg-transparent [&_svg:not([class*='size-'])]:size-3.5"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent
+                  align="end"
+                  className="font-brand text-xs font-medium"
+                >
+                  <SelectItem value="lastPlayed" className="text-xs">
+                    <SortLabel icon={HistoryIcon} label="Last played" />
+                  </SelectItem>
+                  <SelectItem value="name" className="text-xs">
+                    <SortLabel icon={ArrowDownAZIcon} label="Name" />
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {loading ? (
+              <p className="border border-transparent px-1 text-sm text-muted-foreground">
+                Loading…
+              </p>
+            ) : null}
+            {!loading && instances.length === 0 ? (
+              <p className="border border-transparent px-1 text-sm text-muted-foreground">
+                No instances yet.
+              </p>
+            ) : null}
+            {!loading && ordered.length > 0 ? (
+              <ScrollArea className="min-h-0 flex-1">
+                <ul className="flex w-full min-w-0 flex-col px-px">
+                  {ordered.map((instance) => {
+                    const selected = instance.folder === selectedFolder;
+                    const phase = playPhase(instance.folder);
+                    const active = phase === "starting" || phase === "running";
+                    return (
+                      <li key={instance.folder} className="min-w-0">
+                        <Button
+                          type="button"
+                          variant={selected ? "secondary" : "ghost"}
+                          className={cn(
+                            "w-full min-w-0 max-w-full justify-start gap-2 overflow-hidden px-1 text-[0.8rem]",
+                            !selected && "text-muted-foreground/70",
+                          )}
+                          aria-current={selected ? "page" : undefined}
+                          aria-label={
+                            active
+                              ? `${instance.name} (${phase === "starting" ? "starting" : "running"})`
+                              : undefined
+                          }
+                          disabled={busy}
+                          onClick={() => {
+                            onSelect(instance.folder);
+                          }}
+                        >
+                          <InstanceIcon iconPath={instance.iconPath} />
+                          <span className="min-w-0 flex-1 truncate text-left">
                             {instance.name}
                           </span>
                           {active ? (
                             <span
                               aria-hidden
-                              className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-success"
+                              className="ml-auto inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-success"
                             >
                               {phase === "starting" ? "Starting" : "Running"}
                               {phase === "starting" ? (
@@ -177,41 +239,97 @@ export function HomeSidebar({
                               )}
                             </span>
                           ) : null}
-                        </span>
-                      </Button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </ScrollArea>
-          ) : null}
+                        </Button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </ScrollArea>
+            ) : null}
+          </div>
 
-          <Button
-            type="button"
-            variant="secondary"
-            className="w-full justify-start px-3"
-            disabled={busy}
-            onClick={onCreate}
-          >
-            <PlusIcon data-icon="inline-start" aria-hidden />
-            New instance
-          </Button>
-
-          <Button
-            type="button"
-            variant="ghost"
-            className="w-full justify-start px-3"
-            aria-label="Settings"
-            onClick={onOpenSettings}
-          >
-            <SettingsIcon data-icon="inline-start" aria-hidden />
-            Settings
-          </Button>
+          <TooltipProvider delayDuration={300}>
+            <div className="mt-auto flex items-center justify-center gap-1.5 pt-2">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className={sidebarOrbWrapClassName}>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="icon-lg"
+                      className={sidebarOrbClassName}
+                      aria-label="New instance"
+                      disabled={busy}
+                      onClick={onCreate}
+                    >
+                      <PlusIcon aria-hidden />
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" align="center" sideOffset={2}>
+                  New instance
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className={sidebarOrbWrapClassName}>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="icon-lg"
+                      className={sidebarOrbClassName}
+                      aria-label="Downloads"
+                      disabled
+                    >
+                      <DownloadIcon aria-hidden />
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" align="center" sideOffset={2}>
+                  Downloads
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className={sidebarOrbWrapClassName}>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="icon-lg"
+                      className={sidebarOrbClassName}
+                      aria-label="Discover"
+                      disabled
+                    >
+                      <CompassIcon aria-hidden />
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" align="center" sideOffset={2}>
+                  Discover
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className={sidebarOrbWrapClassName}>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="icon-lg"
+                      className={sidebarOrbClassName}
+                      aria-label="Settings"
+                      onClick={onOpenSettings}
+                    >
+                      <SettingsIcon aria-hidden />
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" align="center" sideOffset={2}>
+                  Settings
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          </TooltipProvider>
         </nav>
-
-        <p className="mt-auto px-3 text-xs leading-relaxed text-muted-foreground">
-          Unofficial, not affiliated with Mojang Studios or Microsoft.
-        </p>
       </div>
     </div>
   );

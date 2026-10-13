@@ -30,7 +30,7 @@ export function InstanceSettingsDialog({
   onOpenChange: (open: boolean) => void;
   onOpenGlobalSettings: () => void;
   onRename: (name: string) => void;
-  onChangeVersion: (versionId: string) => void;
+  onChangeVersion: (versionId: string, installed: boolean) => void;
   onOpenFolder: () => void;
   onDuplicate: () => void;
   onDelete: () => void;

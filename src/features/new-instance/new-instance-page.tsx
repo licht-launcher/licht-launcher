@@ -5,6 +5,10 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import {
+  VERSIONS_QUERY_KEY,
+  versionsQueryOptions,
+} from "@/features/instances/lib/versions-query";
 import { createVersionChoices } from "@/features/instances/model/create-versions";
 import { StepConfirm } from "@/features/new-instance/components/step-confirm";
 import { StepDetails } from "@/features/new-instance/components/step-details";
@@ -28,7 +32,6 @@ import {
   createInstanceWithPlatform,
   listLoaderVersions,
   listModpackVersions,
-  listVersions,
   searchModpacks,
 } from "@/lib/commands";
 import { friendlyError, messageOf } from "@/lib/errors";
@@ -38,11 +41,7 @@ export function NewInstancePage() {
   const queryClient = useQueryClient();
   const [state, setState] = useState<WizardState>(initialWizardState);
 
-  const versions = useQuery({
-    queryKey: ["versions"],
-    queryFn: listVersions,
-    retry: false,
-  });
+  const versions = useQuery(versionsQueryOptions);
 
   const loaderVersions = useQuery({
     queryKey: [
@@ -143,6 +142,7 @@ export function NewInstancePage() {
           source: state.modpack.source,
           projectId: state.modpack.id,
           versionId: state.modpackVersion.id,
+          iconUrl: state.modpack.iconUrl,
         });
       }
       if (state.platform === null) {
@@ -159,7 +159,7 @@ export function NewInstancePage() {
     },
     onSuccess: async (entry) => {
       await queryClient.invalidateQueries({ queryKey: ["instances"] });
-      await queryClient.invalidateQueries({ queryKey: ["versions"] });
+      await queryClient.invalidateQueries({ queryKey: VERSIONS_QUERY_KEY });
       await navigate({
         to: "/",
         search: { prepare: entry.folder },

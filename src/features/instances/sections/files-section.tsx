@@ -1,12 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
 import {
+  ArrowDownAZIcon,
   ArrowDownIcon,
   ArrowUpIcon,
+  BinaryIcon,
   ChevronRightIcon,
+  ClockIcon,
   CornerLeftUpIcon,
   FileIcon,
   FolderIcon,
   FolderOpenIcon,
+  type LucideIcon,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -195,6 +199,7 @@ export function FilesSection({
                     </colgroup>
                     <tbody>
                       <ParentRow
+                        striped
                         onOpen={() => {
                           onRelativePathChange(parentRelative(relativePath));
                         }}
@@ -214,25 +219,29 @@ export function FilesSection({
                 <tbody>
                   {relativePath !== "" ? (
                     <ParentRow
+                      striped
                       onOpen={() => {
                         onRelativePathChange(parentRelative(relativePath));
                       }}
                     />
                   ) : null}
-                  {entries.map((entry, index) => (
-                    <FileRow
-                      key={`${entry.isDir ? "d" : "f"}:${entry.name}`}
-                      entry={entry}
-                      striped={index % 2 === 1}
-                      onOpen={() => {
-                        if (entry.isDir) {
-                          onRelativePathChange(
-                            joinRelative(relativePath, entry.name),
-                          );
-                        }
-                      }}
-                    />
-                  ))}
+                  {entries.map((entry, index) => {
+                    const rowIndex = relativePath !== "" ? index + 1 : index;
+                    return (
+                      <FileRow
+                        key={`${entry.isDir ? "d" : "f"}:${entry.name}`}
+                        entry={entry}
+                        striped={rowIndex % 2 === 0}
+                        onOpen={() => {
+                          if (entry.isDir) {
+                            onRelativePathChange(
+                              joinRelative(relativePath, entry.name),
+                            );
+                          }
+                        }}
+                      />
+                    );
+                  })}
                 </tbody>
               </table>
             )}
@@ -257,6 +266,7 @@ function FilesTableHead({
       <tr className="border-b border-border/60 text-left text-xs font-medium tracking-wide text-muted-foreground">
         <SortableHeader
           label="Name"
+          icon={ArrowDownAZIcon}
           column="name"
           sortKey={sortKey}
           sortDir={sortDir}
@@ -265,6 +275,7 @@ function FilesTableHead({
         />
         <SortableHeader
           label="Size"
+          icon={BinaryIcon}
           column="size"
           sortKey={sortKey}
           sortDir={sortDir}
@@ -273,6 +284,7 @@ function FilesTableHead({
         />
         <SortableHeader
           label="Created"
+          icon={ClockIcon}
           column="created"
           sortKey={sortKey}
           sortDir={sortDir}
@@ -286,6 +298,7 @@ function FilesTableHead({
 
 function SortableHeader({
   label,
+  icon: Icon,
   column,
   sortKey,
   sortDir,
@@ -293,6 +306,7 @@ function SortableHeader({
   className,
 }: {
   label: string;
+  icon: LucideIcon;
   column: FilesSortKey;
   sortKey: FilesSortKey;
   sortDir: FilesSortDir;
@@ -314,6 +328,7 @@ function SortableHeader({
           onSort(column);
         }}
       >
+        <Icon aria-hidden className="size-3.5 shrink-0" strokeWidth={2} />
         {label}
         {active ? (
           <SortIcon
@@ -344,9 +359,20 @@ function EmptyFolderState() {
   );
 }
 
-function ParentRow({ onOpen }: { onOpen: () => void }) {
+function ParentRow({
+  striped,
+  onOpen,
+}: {
+  striped?: boolean;
+  onOpen: () => void;
+}) {
   return (
-    <tr className="border-b border-border/60 transition-colors hover:bg-muted/40">
+    <tr
+      className={cn(
+        "border-b border-border/60 transition-colors hover:bg-muted/40",
+        striped && "bg-black/15",
+      )}
+    >
       <td className="px-3 py-3">
         <button
           type="button"
@@ -416,10 +442,7 @@ function FileRow({
         <span className="flex min-w-0 items-center gap-2">
           <Icon
             aria-hidden
-            className={cn(
-              "size-4 shrink-0",
-              entry.isDir ? "text-success" : "text-muted-foreground",
-            )}
+            className="size-4 shrink-0 text-muted-foreground"
             strokeWidth={2}
           />
           <span className="min-w-0 truncate font-medium text-foreground">
