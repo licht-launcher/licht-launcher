@@ -64,7 +64,7 @@ export function HomeSidebar({
   const ordered = sortInstances(instances, sort);
 
   return (
-    <div className="flex h-full w-72 shrink-0 flex-col overflow-hidden border-r border-border bg-black/20">
+    <div className="flex h-full w-full min-w-0 flex-col overflow-hidden bg-black/20">
       {showTitleband ? (
         <div
           data-tauri-drag-region
