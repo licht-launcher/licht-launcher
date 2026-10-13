@@ -269,16 +269,16 @@ async fn fetch_version_manifest_from_urls(
     cache: &SharedCache,
     urls: &[&str],
 ) -> Result<VersionManifest> {
-    if manifest_cache_is_fresh(cache, MANIFEST_CACHE_TTL) {
-        if let Ok(body) = read_manifest_cache(cache) {
-            match parse_version_manifest(&body) {
-                Ok(manifest) => return Ok(manifest),
-                Err(error) => {
-                    tracing::warn!(
-                        error = %error,
-                        "version manifest cache was invalid; re-fetching"
-                    );
-                }
+    if manifest_cache_is_fresh(cache, MANIFEST_CACHE_TTL)
+        && let Ok(body) = read_manifest_cache(cache)
+    {
+        match parse_version_manifest(&body) {
+            Ok(manifest) => return Ok(manifest),
+            Err(error) => {
+                tracing::warn!(
+                    error = %error,
+                    "version manifest cache was invalid; re-fetching"
+                );
             }
         }
     }

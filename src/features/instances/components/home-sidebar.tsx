@@ -141,105 +141,105 @@ export function HomeSidebar({
           className="flex min-h-0 flex-1 flex-col gap-2"
         >
           <div className="flex min-h-0 flex-1 flex-col">
-          <div className="ml-px flex items-center gap-2 border border-transparent px-1">
-            <h2 className="min-w-0 flex-1 font-brand text-xs font-medium leading-none text-muted-foreground">
-              Instances
-            </h2>
-            <Select
-              value={sort}
-              onValueChange={(value) => {
-                if (value === "lastPlayed" || value === "name") {
-                  setSort(value);
-                }
-              }}
-            >
-              <SelectTrigger
-                size="sm"
-                aria-label="Sort instances"
-                className="h-auto w-auto max-w-40 shrink-0 gap-1 border-0 bg-transparent px-0 py-0 font-brand text-xs font-medium leading-none text-muted-foreground shadow-none dark:bg-transparent dark:hover:bg-transparent [&_svg:not([class*='size-'])]:size-3.5"
+            <div className="ml-px flex items-center gap-2 border border-transparent px-1">
+              <h2 className="min-w-0 flex-1 font-brand text-xs font-medium leading-none text-muted-foreground">
+                Instances
+              </h2>
+              <Select
+                value={sort}
+                onValueChange={(value) => {
+                  if (value === "lastPlayed" || value === "name") {
+                    setSort(value);
+                  }
+                }}
               >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent
-                align="end"
-                className="font-brand text-xs font-medium"
-              >
-                <SelectItem value="lastPlayed" className="text-xs">
-                  <SortLabel icon={HistoryIcon} label="Last played" />
-                </SelectItem>
-                <SelectItem value="name" className="text-xs">
-                  <SortLabel icon={ArrowDownAZIcon} label="Name" />
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          {loading ? (
-            <p className="border border-transparent px-1 text-sm text-muted-foreground">
-              Loading…
-            </p>
-          ) : null}
-          {!loading && instances.length === 0 ? (
-            <p className="border border-transparent px-1 text-sm text-muted-foreground">
-              No instances yet.
-            </p>
-          ) : null}
-          {!loading && ordered.length > 0 ? (
-            <ScrollArea className="min-h-0 flex-1">
-              <ul className="flex w-full min-w-0 flex-col px-px">
-                {ordered.map((instance) => {
-                  const selected = instance.folder === selectedFolder;
-                  const phase = playPhase(instance.folder);
-                  const active = phase === "starting" || phase === "running";
-                  return (
-                    <li key={instance.folder} className="min-w-0">
-                      <Button
-                        type="button"
-                        variant={selected ? "secondary" : "ghost"}
-                        className={cn(
-                          "w-full min-w-0 max-w-full justify-start gap-2 overflow-hidden px-1 text-[0.8rem]",
-                          !selected && "text-muted-foreground/70",
-                        )}
-                        aria-current={selected ? "page" : undefined}
-                        aria-label={
-                          active
-                            ? `${instance.name} (${phase === "starting" ? "starting" : "running"})`
-                            : undefined
-                        }
-                        disabled={busy}
-                        onClick={() => {
-                          onSelect(instance.folder);
-                        }}
-                      >
-                        <InstanceIcon />
-                        <span className="min-w-0 flex-1 truncate text-left">
-                          {instance.name}
-                        </span>
-                        {active ? (
-                          <span
-                            aria-hidden
-                            className="ml-auto inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-success"
-                          >
-                            {phase === "starting" ? "Starting" : "Running"}
-                            {phase === "starting" ? (
-                              <Loader2Icon
-                                className="size-3.5 shrink-0 animate-spin"
-                                strokeWidth={2}
-                              />
-                            ) : (
-                              <span className="relative flex size-2 shrink-0">
-                                <span className="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-75" />
-                                <span className="relative inline-flex size-2 rounded-full bg-success" />
-                              </span>
-                            )}
+                <SelectTrigger
+                  size="sm"
+                  aria-label="Sort instances"
+                  className="h-auto w-auto max-w-40 shrink-0 gap-1 border-0 bg-transparent px-0 py-0 font-brand text-xs font-medium leading-none text-muted-foreground shadow-none dark:bg-transparent dark:hover:bg-transparent [&_svg:not([class*='size-'])]:size-3.5"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent
+                  align="end"
+                  className="font-brand text-xs font-medium"
+                >
+                  <SelectItem value="lastPlayed" className="text-xs">
+                    <SortLabel icon={HistoryIcon} label="Last played" />
+                  </SelectItem>
+                  <SelectItem value="name" className="text-xs">
+                    <SortLabel icon={ArrowDownAZIcon} label="Name" />
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {loading ? (
+              <p className="border border-transparent px-1 text-sm text-muted-foreground">
+                Loading…
+              </p>
+            ) : null}
+            {!loading && instances.length === 0 ? (
+              <p className="border border-transparent px-1 text-sm text-muted-foreground">
+                No instances yet.
+              </p>
+            ) : null}
+            {!loading && ordered.length > 0 ? (
+              <ScrollArea className="min-h-0 flex-1">
+                <ul className="flex w-full min-w-0 flex-col px-px">
+                  {ordered.map((instance) => {
+                    const selected = instance.folder === selectedFolder;
+                    const phase = playPhase(instance.folder);
+                    const active = phase === "starting" || phase === "running";
+                    return (
+                      <li key={instance.folder} className="min-w-0">
+                        <Button
+                          type="button"
+                          variant={selected ? "secondary" : "ghost"}
+                          className={cn(
+                            "w-full min-w-0 max-w-full justify-start gap-2 overflow-hidden px-1 text-[0.8rem]",
+                            !selected && "text-muted-foreground/70",
+                          )}
+                          aria-current={selected ? "page" : undefined}
+                          aria-label={
+                            active
+                              ? `${instance.name} (${phase === "starting" ? "starting" : "running"})`
+                              : undefined
+                          }
+                          disabled={busy}
+                          onClick={() => {
+                            onSelect(instance.folder);
+                          }}
+                        >
+                          <InstanceIcon />
+                          <span className="min-w-0 flex-1 truncate text-left">
+                            {instance.name}
                           </span>
-                        ) : null}
-                      </Button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </ScrollArea>
-          ) : null}
+                          {active ? (
+                            <span
+                              aria-hidden
+                              className="ml-auto inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-success"
+                            >
+                              {phase === "starting" ? "Starting" : "Running"}
+                              {phase === "starting" ? (
+                                <Loader2Icon
+                                  className="size-3.5 shrink-0 animate-spin"
+                                  strokeWidth={2}
+                                />
+                              ) : (
+                                <span className="relative flex size-2 shrink-0">
+                                  <span className="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-75" />
+                                  <span className="relative inline-flex size-2 rounded-full bg-success" />
+                                </span>
+                              )}
+                            </span>
+                          ) : null}
+                        </Button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </ScrollArea>
+            ) : null}
           </div>
 
           <TooltipProvider delayDuration={300}>

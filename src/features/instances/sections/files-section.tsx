@@ -3,13 +3,13 @@ import {
   ArrowDownAZIcon,
   ArrowDownIcon,
   ArrowUpIcon,
+  BinaryIcon,
   ChevronRightIcon,
   ClockIcon,
   CornerLeftUpIcon,
   FileIcon,
   FolderIcon,
   FolderOpenIcon,
-  BinaryIcon,
   type LucideIcon,
 } from "lucide-react";
 import { useState } from "react";
@@ -328,11 +328,7 @@ function SortableHeader({
           onSort(column);
         }}
       >
-        <Icon
-          aria-hidden
-          className="size-3.5 shrink-0"
-          strokeWidth={2}
-        />
+        <Icon aria-hidden className="size-3.5 shrink-0" strokeWidth={2} />
         {label}
         {active ? (
           <SortIcon
