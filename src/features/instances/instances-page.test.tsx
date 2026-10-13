@@ -495,6 +495,9 @@ describe("InstancesPage", () => {
     expect(screen.queryByText("classic-log")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Stop" })).toBeEnabled();
 
+    fireEvent.click(screen.getByRole("button", { name: "Clear console" }));
+    expect(screen.queryByText("next-log")).not.toBeInTheDocument();
+
     fireEvent.click(within(sidebar).getByRole("button", { name: /^Classic/ }));
     fireEvent.mouseDown(screen.getByRole("tab", { name: "Console" }));
     expect(

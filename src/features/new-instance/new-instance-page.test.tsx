@@ -31,13 +31,13 @@ vi.mock("@tauri-apps/api/window", () => ({
   }),
 }));
 
-async function renderWizard() {
+async function renderWizard(initialEntry = "/instances/new") {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   const router = createRouter({
     routeTree,
-    history: createMemoryHistory({ initialEntries: ["/instances/new"] }),
+    history: createMemoryHistory({ initialEntries: [initialEntry] }),
   });
   await router.load();
   return render(
@@ -46,6 +46,36 @@ async function renderWizard() {
       <Toaster />
     </QueryClientProvider>,
   );
+}
+
+/** Wait until a choice-card selection is reflected in the URL search. */
+async function selectChoice(name: string | RegExp) {
+  const button = await screen.findByRole("button", { name });
+  fireEvent.click(button);
+  await waitFor(() => {
+    expect(screen.getByRole("button", { name })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+}
+
+async function clickContinue() {
+  const button = screen.getByRole("button", { name: "Continue" });
+  await waitFor(() => {
+    expect(button).not.toBeDisabled();
+  });
+  fireEvent.click(button);
+}
+
+async function clickContinueTo(nextChoice: string | RegExp) {
+  await clickContinue();
+  expect(await screen.findByRole("button", { name: nextChoice })).toBeTruthy();
+}
+
+async function clickContinueUntil(find: () => Promise<unknown>) {
+  await clickContinue();
+  await find();
 }
 
 describe("NewInstancePage", () => {
@@ -69,6 +99,9 @@ describe("NewInstancePage", () => {
       }
       if (command === "list_running_games") {
         return Promise.resolve([]);
+      }
+      if (command === "custom_title_bar_active") {
+        return Promise.resolve(true);
       }
       if (command === "list_loader_versions") {
         return Promise.resolve(["0.16.0", "0.15.11"]);
@@ -101,19 +134,8 @@ describe("NewInstancePage", () => {
           folder: "Survival",
           name: "Survival",
           versionId: "1.20.1",
-          minMemoryMb: 512,
-          maxMemoryMb: 2048,
-          jvmArguments: [],
-          fullscreen: false,
-          width: null,
-          height: null,
-          overrideWindow: false,
-          overrideMemory: false,
-          overrideJava: false,
-          overrideJvmArguments: false,
-          javaPath: null,
-          lastOpenedAt: null,
           iconPath: null,
+          lastPlayed: null,
         });
       }
       if (command === "create_instance_from_modpack") {
@@ -121,23 +143,24 @@ describe("NewInstancePage", () => {
           folder: "Cobblemon",
           name: "Cobblemon",
           versionId: "1.20.1",
-          minMemoryMb: 512,
-          maxMemoryMb: 2048,
-          jvmArguments: [],
-          fullscreen: false,
-          width: null,
-          height: null,
-          overrideWindow: false,
-          overrideMemory: false,
-          overrideJava: false,
-          overrideJvmArguments: false,
-          javaPath: null,
-          lastOpenedAt: null,
           iconPath: null,
+          lastPlayed: null,
         });
       }
       return Promise.resolve(undefined);
     });
+  });
+
+  it("restores progress from the URL search params", async () => {
+    await renderWizard(
+      "/instances/new?step=details&source=scratch&platform=vanilla&name=Survival&gameVersion=1.20.1",
+    );
+    expect(await screen.findByLabelText("Instance Name")).toHaveValue(
+      "Survival",
+    );
+    expect(
+      await screen.findByRole("button", { name: "1.20.1" }),
+    ).toHaveAttribute("aria-pressed", "true");
   });
 
   it("creates a vanilla instance through the wizard", async () => {
@@ -146,15 +169,18 @@ describe("NewInstancePage", () => {
     expect(
       screen.getByRole("navigation", { name: "Instances" }),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /From scratch/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    fireEvent.click(screen.getByRole("button", { name: /^Vanilla/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await selectChoice(/From scratch/);
+    await clickContinueTo(/^Vanilla/);
+    await selectChoice(/^Vanilla/);
+    await clickContinueUntil(() => screen.findByLabelText("Instance Name"));
 
     const nameInput = await screen.findByLabelText("Instance Name");
     expect(nameInput).toHaveAttribute("placeholder", "Survival");
     fireEvent.change(nameInput, {
       target: { value: "Survival" },
+    });
+    await waitFor(() => {
+      expect(screen.getByLabelText("Instance Name")).toHaveValue("Survival");
     });
     expect(
       await screen.findByRole("button", { name: "1.20 versions" }),
@@ -166,8 +192,16 @@ describe("NewInstancePage", () => {
       screen.queryByRole("button", { name: /24w14a/ }),
     ).not.toBeInTheDocument();
     fireEvent.click(releaseOption);
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "1.20.1" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+    });
 
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await clickContinueUntil(() =>
+      screen.findByRole("button", { name: "Create instance" }),
+    );
     fireEvent.click(screen.getByRole("button", { name: "Create instance" }));
 
     await waitFor(() => {
@@ -184,10 +218,10 @@ describe("NewInstancePage", () => {
   it("includes snapshots when the snapshots button is on", async () => {
     await renderWizard();
 
-    fireEvent.click(screen.getByRole("button", { name: /From scratch/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    fireEvent.click(screen.getByRole("button", { name: /^Vanilla/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await selectChoice(/From scratch/);
+    await clickContinueTo(/^Vanilla/);
+    await selectChoice(/^Vanilla/);
+    await clickContinueUntil(() => screen.findByLabelText("Instance Name"));
 
     expect(
       await screen.findByRole("button", { name: "1.20.1" }),
@@ -196,6 +230,12 @@ describe("NewInstancePage", () => {
       screen.queryByRole("button", { name: /24w14a/ }),
     ).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "1.20.1" }));
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "1.20.1" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+    });
 
     fireEvent.click(screen.getByRole("button", { name: "Include snapshots" }));
     expect(
@@ -209,10 +249,10 @@ describe("NewInstancePage", () => {
   it("filters the version list from the search field", async () => {
     await renderWizard();
 
-    fireEvent.click(screen.getByRole("button", { name: /From scratch/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    fireEvent.click(screen.getByRole("button", { name: /^Vanilla/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await selectChoice(/From scratch/);
+    await clickContinueTo(/^Vanilla/);
+    await selectChoice(/^Vanilla/);
+    await clickContinueUntil(() => screen.findByLabelText("Instance Name"));
 
     expect(
       await screen.findByRole("button", { name: "1.20.1" }),
@@ -232,10 +272,12 @@ describe("NewInstancePage", () => {
   it("asks for a fabric loader channel on the details step", async () => {
     await renderWizard();
 
-    fireEvent.click(screen.getByRole("button", { name: /From scratch/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    fireEvent.click(screen.getByRole("button", { name: /^Fabric/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await selectChoice(/From scratch/);
+    await clickContinueTo(/^Fabric/);
+    await selectChoice(/^Fabric/);
+    await clickContinueUntil(() =>
+      screen.findByRole("combobox", { name: "Game version" }),
+    );
 
     await screen.findByRole("combobox", { name: "Game version" });
     expect(
@@ -244,7 +286,12 @@ describe("NewInstancePage", () => {
     fireEvent.change(screen.getByLabelText("Instance Name"), {
       target: { value: "Modded" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await waitFor(() => {
+      expect(screen.getByLabelText("Instance Name")).toHaveValue("Modded");
+    });
+    await clickContinueUntil(() =>
+      screen.findByRole("button", { name: "Create instance" }),
+    );
     fireEvent.click(screen.getByRole("button", { name: "Create instance" }));
 
     await waitFor(() => {
@@ -261,18 +308,28 @@ describe("NewInstancePage", () => {
   it("imports a modrinth modpack", async () => {
     await renderWizard();
 
-    fireEvent.click(screen.getByRole("button", { name: /From a modpack/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await selectChoice(/From a modpack/);
+    await clickContinueUntil(() => screen.findByLabelText("Search modpacks"));
 
+    fireEvent.change(await screen.findByLabelText("Search modpacks"), {
+      target: { value: "cobble" },
+    });
+    await waitFor(() => {
+      expect(screen.getByLabelText("Search modpacks")).toHaveValue("cobble");
+    });
     fireEvent.click(await screen.findByRole("button", { name: /Cobblemon/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await clickContinueUntil(() => screen.findByLabelText(/^Name$/));
 
-    expect(await screen.findByLabelText("Name")).toHaveValue("Cobblemon");
-    fireEvent.click(await screen.findByRole("button", { name: /1\.0\.0/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Create instance" }),
+    expect(await screen.findByLabelText(/^Name$/)).toHaveValue("Cobblemon");
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Continue" }),
+      ).not.toBeDisabled();
+    });
+    await clickContinueUntil(() =>
+      screen.findByRole("button", { name: "Create instance" }),
     );
+    fireEvent.click(screen.getByRole("button", { name: "Create instance" }));
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("create_instance_from_modpack", {
@@ -286,19 +343,12 @@ describe("NewInstancePage", () => {
   });
 
   it("shows retry when the version list fails", async () => {
-    let versionsCalls = 0;
     invoke.mockImplementation((command: string) => {
+      if (command === "list_versions") {
+        return Promise.reject(new Error("offline"));
+      }
       if (command === "list_instances") {
         return Promise.resolve([]);
-      }
-      if (command === "list_versions") {
-        versionsCalls += 1;
-        if (versionsCalls === 1) {
-          return Promise.reject(new Error("version manifest is unavailable"));
-        }
-        return Promise.resolve([
-          { id: "1.20.1", versionType: "release", installed: false },
-        ]);
       }
       if (command === "get_settings") {
         return Promise.resolve(snapshot);
@@ -309,20 +359,48 @@ describe("NewInstancePage", () => {
       if (command === "list_running_games") {
         return Promise.resolve([]);
       }
+      if (command === "custom_title_bar_active") {
+        return Promise.resolve(true);
+      }
       return Promise.resolve(undefined);
     });
 
     await renderWizard();
-    fireEvent.click(screen.getByRole("button", { name: /From scratch/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    fireEvent.click(screen.getByRole("button", { name: /^Vanilla/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await selectChoice(/From scratch/);
+    await clickContinueTo(/^Vanilla/);
+    await selectChoice(/^Vanilla/);
+    await clickContinueUntil(() =>
+      screen.findByText(/Could not load the version list/),
+    );
 
     expect(
-      await screen.findByText(
-        "Could not load the version list. Check your connection and try again.",
-      ),
+      await screen.findByText(/Could not load the version list/),
     ).toBeInTheDocument();
+
+    invoke.mockImplementation((command: string) => {
+      if (command === "list_versions") {
+        return Promise.resolve([
+          { id: "1.20.1", versionType: "release", installed: false },
+        ]);
+      }
+      if (command === "list_instances") {
+        return Promise.resolve([]);
+      }
+      if (command === "get_settings") {
+        return Promise.resolve(snapshot);
+      }
+      if (command === "get_last_played_folder") {
+        return Promise.resolve(null);
+      }
+      if (command === "list_running_games") {
+        return Promise.resolve([]);
+      }
+      if (command === "custom_title_bar_active") {
+        return Promise.resolve(true);
+      }
+      return Promise.resolve(undefined);
+    });
+
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(
       await screen.findByRole("button", { name: "1.20.1" }),
