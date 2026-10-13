@@ -92,9 +92,22 @@ describe("InstancesPage", () => {
     invoke.mockImplementation((command: string) => {
       if (command === "list_instances") {
         return Promise.resolve([
-          { ...classicInstance, folder: "zeta", name: "Zeta" },
-          classicInstance,
-          { ...classicInstance, folder: "alpha", name: "Alpha" },
+          {
+            ...classicInstance,
+            folder: "zeta",
+            name: "Zeta",
+            lastOpenedAt: "2026-01-01T10:00:00.000Z",
+          },
+          {
+            ...classicInstance,
+            lastOpenedAt: "2026-03-01T10:00:00.000Z",
+          },
+          {
+            ...classicInstance,
+            folder: "alpha",
+            name: "Alpha",
+            lastOpenedAt: null,
+          },
         ]);
       }
       if (command === "list_versions") {
@@ -128,7 +141,7 @@ describe("InstancesPage", () => {
         );
 
     await waitFor(() => {
-      expect(names()).toEqual(["Classic", "Alpha", "Zeta"]);
+      expect(names()).toEqual(["Classic", "Zeta", "Alpha"]);
     });
 
     fireEvent.click(screen.getByRole("combobox", { name: "Sort instances" }));
@@ -137,7 +150,7 @@ describe("InstancesPage", () => {
 
     fireEvent.click(screen.getByRole("combobox", { name: "Sort instances" }));
     fireEvent.click(await screen.findByRole("option", { name: "Last played" }));
-    expect(names()).toEqual(["Classic", "Alpha", "Zeta"]);
+    expect(names()).toEqual(["Classic", "Zeta", "Alpha"]);
   });
 
   it("shows the sidebar empty state and opens settings", async () => {
