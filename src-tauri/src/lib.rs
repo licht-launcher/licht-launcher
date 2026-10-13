@@ -94,7 +94,7 @@ fn create_main_window(app: &tauri::App, custom_title_bar: bool) -> tauri::Result
         .maximizable(false)
         .decorations(!custom_title_bar)
         .theme(Some(tauri::Theme::Dark))
-        .background_color(tauri::window::Color(0x12, 0x12, 0x12, 0xff));
+        .background_color(tauri::window::Color(0x11, 0x12, 0x14, 0xff));
 
     if !custom_title_bar {
         builder.build()?;
