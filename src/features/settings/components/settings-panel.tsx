@@ -6,6 +6,7 @@ import { AppearanceSection } from "@/features/settings/sections/appearance-secti
 import { DownloadsSection } from "@/features/settings/sections/downloads-section";
 import { InstancesSection } from "@/features/settings/sections/instances-section";
 import { JavaSection } from "@/features/settings/sections/java/java-section";
+import { UpdaterSection } from "@/features/settings/sections/updater-section";
 import type { SettingsSnapshot } from "@/lib/generated/SettingsSnapshot";
 
 export function SettingsPanel({
@@ -51,6 +52,9 @@ export function SettingsPanel({
           ) : null}
           {section === "downloads" ? (
             <DownloadsSection draft={draft} onChange={onChange} />
+          ) : null}
+          {section === "updater" ? (
+            <UpdaterSection draft={draft} onChange={onChange} />
           ) : null}
         </div>
       </ScrollArea>

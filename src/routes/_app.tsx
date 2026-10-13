@@ -1,6 +1,7 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router";
 
 import { InstancesChrome } from "@/features/instances/components/instances-chrome";
+import { UpdateCheck } from "@/features/updater/components/update-check";
 
 export const Route = createFileRoute("/_app")({
   component: AppLayout,
@@ -12,6 +13,7 @@ function AppLayout() {
       <InstancesChrome>
         <Outlet />
       </InstancesChrome>
+      <UpdateCheck />
     </div>
   );
 }

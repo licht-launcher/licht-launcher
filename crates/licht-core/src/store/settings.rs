@@ -38,6 +38,8 @@ pub struct Settings {
     pub write_concurrency: u32,
     pub data_directory: Option<String>,
     pub disable_custom_title_bar: bool,
+    pub check_for_updates: bool,
+    pub install_updates_on_restart: bool,
 }
 
 /// What the settings screen shows. `application_directory` is filled even when
@@ -98,6 +100,14 @@ struct StoredSettings {
     data_directory: Option<String>,
     #[serde(default)]
     disable_custom_title_bar: bool,
+    #[serde(default = "default_true")]
+    check_for_updates: bool,
+    #[serde(default = "default_true")]
+    install_updates_on_restart: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 fn default_theme() -> String {
@@ -249,6 +259,8 @@ fn validated(cache: &SharedCache, settings: Settings) -> Result<Settings> {
         write_concurrency: settings.write_concurrency,
         data_directory: normalize_directory(cache, settings.data_directory.as_deref())?,
         disable_custom_title_bar: settings.disable_custom_title_bar,
+        check_for_updates: settings.check_for_updates,
+        install_updates_on_restart: settings.install_updates_on_restart,
     })
 }
 
@@ -281,6 +293,8 @@ fn from_stored(cache: &SharedCache, stored: StoredSettings) -> Result<Settings> 
             write_concurrency: stored.write_concurrency,
             data_directory: stored.data_directory,
             disable_custom_title_bar: stored.disable_custom_title_bar,
+            check_for_updates: stored.check_for_updates,
+            install_updates_on_restart: stored.install_updates_on_restart,
         },
     )
 }
@@ -313,6 +327,8 @@ pub fn load_settings(cache: &SharedCache) -> Result<Settings> {
                 write_concurrency: default_concurrency_value(),
                 data_directory: None,
                 disable_custom_title_bar: false,
+                check_for_updates: true,
+                install_updates_on_restart: true,
             },
         );
     }

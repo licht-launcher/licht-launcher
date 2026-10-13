@@ -1,7 +1,8 @@
 use licht_core::{
-    InstanceEntry, InstanceFsEntry, InstanceSettings, LoaderChannel, LoaderPlatform, global_launch,
-    load_settings, touch_last_opened as touch_instance_opened, update_instance,
-    update_instance_version,
+    InstanceContentEntry, InstanceContentKind, InstanceEntry, InstanceFsEntry, InstanceSettings,
+    LoaderChannel, LoaderPlatform, global_launch, load_settings,
+    remove_instance_content as remove_content, set_instance_content_enabled as set_content_enabled,
+    touch_last_opened as touch_instance_opened, update_instance, update_instance_version,
 };
 use tauri::{AppHandle, State};
 use tauri_plugin_opener::OpenerExt;
@@ -140,6 +141,40 @@ pub fn list_instance_entries(
     relative_path: String,
 ) -> Result<Vec<InstanceFsEntry>, String> {
     licht_core::list_instance_entries(&paths.game, &folder, &relative_path).map_err(failure)
+}
+
+#[tauri::command]
+pub async fn list_instance_content(
+    paths: State<'_, LauncherPaths>,
+    folder: String,
+    refresh: bool,
+) -> Result<Vec<InstanceContentEntry>, String> {
+    let client = http_client().map_err(failure)?;
+    licht_core::list_instance_content_with_metadata(&paths.game, &client, &folder, refresh)
+        .await
+        .map_err(failure)
+}
+
+#[tauri::command]
+pub fn set_instance_content_enabled(
+    paths: State<'_, LauncherPaths>,
+    folder: String,
+    kind: InstanceContentKind,
+    name: String,
+    enabled: bool,
+) -> Result<(), String> {
+    set_content_enabled(&paths.game, &folder, kind, &name, enabled).map_err(failure)
+}
+
+#[tauri::command]
+pub fn remove_instance_content(
+    paths: State<'_, LauncherPaths>,
+    folder: String,
+    kind: InstanceContentKind,
+    name: String,
+    enabled: bool,
+) -> Result<(), String> {
+    remove_content(&paths.game, &folder, kind, &name, enabled).map_err(failure)
 }
 
 #[tauri::command]

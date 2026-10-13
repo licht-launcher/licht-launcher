@@ -227,6 +227,8 @@ describe("launcher commands", () => {
       writeConcurrency: 8,
       disableCustomTitleBar: false,
       dataDirectory: null,
+      checkForUpdates: true,
+      installUpdatesOnRestart: true,
     };
     await saveSettings(settings);
     expect(invoke).toHaveBeenCalledWith("save_settings", { settings });

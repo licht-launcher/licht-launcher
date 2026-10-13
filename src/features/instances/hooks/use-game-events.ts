@@ -23,6 +23,12 @@ export function useGameEvents(onGameLog?: (folder: string) => void) {
   const [logsByFolder, setLogsByFolder] = useState<
     Record<string, ConsoleLine[]>
   >({});
+  const [speedByVersion, setSpeedByVersion] = useState<Record<string, number>>(
+    {},
+  );
+  const previousProgress = useRef<
+    Record<string, { bytes: number; timestamp: number }>
+  >({});
   const nextLine = useRef(0);
   const onGameLogRef = useRef(onGameLog);
   onGameLogRef.current = onGameLog;
@@ -33,6 +39,26 @@ export function useGameEvents(onGameLog?: (folder: string) => void) {
     let unlistenLog: (() => void) | undefined;
     void listen<InstallProgress>("install-progress", (event) => {
       const { versionId } = event.payload;
+      const now = Date.now();
+      const previous = previousProgress.current[versionId];
+      if (previous !== undefined) {
+        const elapsed = now - previous.timestamp;
+        if (elapsed > 0) {
+          setSpeedByVersion((current) => ({
+            ...current,
+            [versionId]: Math.max(
+              0,
+              Math.round(
+                ((event.payload.bytesDone - previous.bytes) * 1000) / elapsed,
+              ),
+            ),
+          }));
+        }
+      }
+      previousProgress.current[versionId] = {
+        bytes: event.payload.bytesDone,
+        timestamp: now,
+      };
       setProgressByVersion((current) => ({
         ...current,
         [versionId]: toDownloadProgress(event.payload),
@@ -80,6 +106,15 @@ export function useGameEvents(onGameLog?: (folder: string) => void) {
       delete next[versionId];
       return next;
     });
+    setSpeedByVersion((current) => {
+      if (!(versionId in current)) {
+        return current;
+      }
+      const next = { ...current };
+      delete next[versionId];
+      return next;
+    });
+    delete previousProgress.current[versionId];
   }
 
   function progressForVersion(versionId: string | null | undefined) {
@@ -91,6 +126,10 @@ export function useGameEvents(onGameLog?: (folder: string) => void) {
 
   return {
     progressForVersion,
+    speedForVersion: (versionId: string | null | undefined) =>
+      versionId === null || versionId === undefined
+        ? 0
+        : (speedByVersion[versionId] ?? 0),
     clearVersionProgress,
     logsByFolder,
     clearFolderLog,

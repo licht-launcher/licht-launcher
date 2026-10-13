@@ -8,6 +8,8 @@ import type {
 } from "@/features/new-instance/model/wizard";
 import type { AccountProfile } from "@/lib/generated/AccountProfile";
 import type { GameExit } from "@/lib/generated/GameExit";
+import type { InstanceContentEntry } from "@/lib/generated/InstanceContentEntry";
+import type { InstanceContentKind } from "@/lib/generated/InstanceContentKind";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 import type { InstanceFsEntry } from "@/lib/generated/InstanceFsEntry";
 import type { InstanceSettings } from "@/lib/generated/InstanceSettings";
@@ -121,6 +123,41 @@ export function listInstanceEntries(
   relativePath: string,
 ): Promise<InstanceFsEntry[]> {
   return invoke("list_instance_entries", { folder, relativePath });
+}
+
+export function listInstanceContent(
+  folder: string,
+  refresh = false,
+): Promise<InstanceContentEntry[]> {
+  return invoke("list_instance_content", { folder, refresh });
+}
+
+export function setInstanceContentEnabled(
+  folder: string,
+  kind: InstanceContentKind,
+  name: string,
+  enabled: boolean,
+): Promise<void> {
+  return invoke("set_instance_content_enabled", {
+    folder,
+    kind,
+    name,
+    enabled,
+  });
+}
+
+export function removeInstanceContent(
+  folder: string,
+  kind: InstanceContentKind,
+  name: string,
+  enabled: boolean,
+): Promise<void> {
+  return invoke("remove_instance_content", {
+    folder,
+    kind,
+    name,
+    enabled,
+  });
 }
 
 export function openRepository(): Promise<void> {

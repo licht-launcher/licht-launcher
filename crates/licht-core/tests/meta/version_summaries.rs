@@ -51,7 +51,7 @@ fn a_saved_version_json_is_installed_and_a_bad_id_is_not() {
 }
 
 #[test]
-fn a_local_loader_profile_is_listed_and_needs_its_jar() {
+fn a_local_loader_profile_is_listed_and_needs_its_artifacts() {
     let root = std::env::temp_dir().join(format!(
         "licht-summaries-loader-{}-{}",
         std::process::id(),
@@ -82,7 +82,7 @@ fn a_local_loader_profile_is_listed_and_needs_its_jar() {
         .iter()
         .find(|entry| entry.id == id)
         .expect("local loader summary");
-    assert!(loader.installed);
+    assert!(!loader.installed);
 
     let _ = std::fs::remove_dir_all(root);
 }

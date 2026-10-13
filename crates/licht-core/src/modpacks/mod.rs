@@ -77,10 +77,15 @@ pub async fn create_instance_from_modpack(
         }
     };
     let dir = instances_dir.join(&entry.folder);
-    if let Some(url) = icon_url
-        && let Err(error) = download_instance_icon(client, &dir, url).await
-    {
-        tracing::warn!(error = %error, "instance icon download failed");
+    if let Some(url) = icon_url {
+        let client = client.clone();
+        let dir = dir.clone();
+        let url = url.to_string();
+        tokio::spawn(async move {
+            if let Err(error) = download_instance_icon(&client, &dir, &url).await {
+                tracing::warn!(error = %error, "instance icon download failed");
+            }
+        });
     }
     instance_entry(&dir, &entry.folder)
 }

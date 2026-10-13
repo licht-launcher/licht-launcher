@@ -62,6 +62,20 @@ describe("FilesSection", () => {
     ).toBeInTheDocument();
   });
 
+  it("shows skeleton rows and progress while loading", () => {
+    listInstanceEntries.mockReturnValue(new Promise(() => {}));
+
+    renderFiles("classic");
+
+    expect(
+      screen.getByRole("progressbar", { name: "Loading files" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Loading…")).not.toBeInTheDocument();
+    expect(document.querySelectorAll(".animate-pulse").length).toBeGreaterThan(
+      0,
+    );
+  });
+
   it("lists entries in a table and opens folders", async () => {
     const created = Date.UTC(2024, 0, 15, 12, 0, 0);
     const root: InstanceFsEntry[] = [
@@ -85,8 +99,9 @@ describe("FilesSection", () => {
 
     renderFiles("classic");
 
+    expect(await screen.findByText("saves")).toBeInTheDocument();
     expect(
-      await screen.findByRole("columnheader", { name: "Name" }),
+      screen.getByRole("columnheader", { name: "Name" }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("columnheader", { name: "Size" }),
@@ -98,7 +113,6 @@ describe("FilesSection", () => {
       "border-border/60",
       "bg-black/20",
     );
-    expect(screen.getByText("saves")).toBeInTheDocument();
     expect(screen.getByText("options.txt")).toBeInTheDocument();
     expect(screen.getByText("12 B")).toBeInTheDocument();
     expect(screen.getByText("—")).toBeInTheDocument();
