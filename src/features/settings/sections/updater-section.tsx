@@ -113,16 +113,6 @@ export function UpdaterSection({
           {checking ? "Checking…" : "Check for updates"}
         </Button>
         <div className="flex flex-wrap items-center gap-3">
-          <p
-            role="status"
-            className="flex items-center gap-2 text-sm text-muted-foreground"
-          >
-            <StatusIcon
-              aria-hidden
-              className={checking ? "size-4 animate-spin" : "size-4"}
-            />
-            {statusLabels[status]}
-          </p>
           {status === "available" ? (
             <Button
               type="button"
@@ -133,9 +123,19 @@ export function UpdaterSection({
               }}
             >
               <DownloadIcon data-icon="inline-start" aria-hidden />
-              Update now
+              Update and restart
             </Button>
           ) : null}
+          <p
+            role="status"
+            className="flex items-center gap-2 text-sm text-muted-foreground"
+          >
+            <StatusIcon
+              aria-hidden
+              className={checking ? "size-4 animate-spin" : "size-4"}
+            />
+            {statusLabels[status]}
+          </p>
         </div>
       </div>
       <div className="flex items-center justify-between gap-3">
