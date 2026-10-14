@@ -20,6 +20,8 @@
 
 **Unofficial project, not affiliated with Mojang Studios or Microsoft.**
 
+![Licht Launcher screenshot](.github/screenshot.png)
+
 ## Download
 
 Download the latest build from the
