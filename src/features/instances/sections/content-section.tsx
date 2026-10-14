@@ -410,8 +410,19 @@ export function ContentSection({
           <col className="w-28" />
           <col className="w-44" />
         </colgroup>
-        <ContentTableHead sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+        <ContentTableHead
+          sortKey={sortKey}
+          sortDir={sortDir}
+          onSort={onSort}
+          showBorder={!content.isFetching}
+        />
       </table>
+      {content.isFetching ? (
+        <Progress
+          aria-label="Loading content metadata"
+          className="h-px rounded-none"
+        />
+      ) : null}
       <ScrollArea className="min-h-0 flex-1">
         <div className="min-w-[48rem]">
           <table className="w-full table-fixed text-sm">
