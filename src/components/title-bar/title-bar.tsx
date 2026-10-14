@@ -111,7 +111,7 @@ export function TitleBar() {
             variant="ghost"
             className={chipClass}
             aria-label={`Account: ${username}`}
-            onPointerDown={(event) => {
+            onPointerDownCapture={(event) => {
               if (event.button === 0) {
                 requestOpenSettings("account");
               }

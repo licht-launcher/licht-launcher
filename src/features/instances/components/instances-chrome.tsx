@@ -1,14 +1,6 @@
-import type { UseQueryResult } from "@tanstack/react-query";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import {
-  createContext,
-  type ReactNode,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-} from "react";
+import { type ReactNode, useEffect, useMemo, useRef } from "react";
 import { useDefaultLayout } from "react-resizable-panels";
 import { TitleBar } from "@/components/title-bar/title-bar";
 import {
@@ -18,15 +10,16 @@ import {
 } from "@/components/ui/resizable";
 import { HomeSidebar } from "@/features/instances/components/home-sidebar";
 import { InstanceDialogs } from "@/features/instances/components/instance-dialogs";
+import {
+  ChromeContext,
+  type InstancesChromeContext,
+} from "@/features/instances/components/instances-chrome-context";
 import { useGameEvents } from "@/features/instances/hooks/use-game-events";
 import { useInstanceDialogs } from "@/features/instances/hooks/use-instance-dialogs";
 import { useInstanceMutations } from "@/features/instances/hooks/use-instance-mutations";
 import { useInstanceSelection } from "@/features/instances/hooks/use-instance-selection";
 import { useInstancesData } from "@/features/instances/hooks/use-instances-data";
-import {
-  type PlayPhase,
-  usePlaySession,
-} from "@/features/instances/hooks/use-play-session";
+import { usePlaySession } from "@/features/instances/hooks/use-play-session";
 import {
   MAIN_PANEL_ID,
   SIDEBAR_DEFAULT_SIZE_PX,
@@ -39,39 +32,7 @@ import {
 } from "@/features/instances/lib/sidebar-layout";
 import { useCustomTitleBar } from "@/hooks/use-custom-title-bar";
 import { getLastPlayedFolder, listInstanceContent } from "@/lib/commands";
-import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 import type { HomeSearch } from "@/routes/_app/index";
-
-export type InstancesChromeContext = {
-  instances: UseQueryResult<InstanceEntry[], Error>;
-  username: string;
-  selectedFolder: string | null;
-  setSelectedFolder: (folder: string | null) => void;
-  selected: InstanceEntry | null;
-  busy: boolean;
-  playBlocked: boolean;
-  playPhase: (folder: string) => PlayPhase;
-  isInstalling: (folder: string) => boolean;
-  progressForVersion: ReturnType<typeof useGameEvents>["progressForVersion"];
-  speedForVersion: ReturnType<typeof useGameEvents>["speedForVersion"];
-  logsByFolder: ReturnType<typeof useGameEvents>["logsByFolder"];
-  clearFolderLog: ReturnType<typeof useGameEvents>["clearFolderLog"];
-  lastPlayedFolder: string | null;
-  playInstance: ReturnType<typeof usePlaySession>["playInstance"];
-  prepareInstance: ReturnType<typeof usePlaySession>["prepareInstance"];
-  stopInstance: ReturnType<typeof usePlaySession>["stopInstance"];
-  openConfigure: (folder: string) => void;
-};
-
-const ChromeContext = createContext<InstancesChromeContext | null>(null);
-
-export function useInstancesChrome(): InstancesChromeContext {
-  const value = useContext(ChromeContext);
-  if (value === null) {
-    throw new Error("useInstancesChrome must be used inside InstancesChrome");
-  }
-  return value;
-}
 
 export function InstancesChrome({ children }: { children: ReactNode }) {
   const customTitleBar = useCustomTitleBar().data ?? true;

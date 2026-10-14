@@ -19,6 +19,7 @@ class ResizeObserverStub implements ResizeObserver {
 globalThis.ResizeObserver = ResizeObserverStub;
 
 Element.prototype.scrollIntoView = () => {};
+window.scrollTo = () => {};
 
 if (typeof HTMLElement.prototype.hasPointerCapture !== "function") {
   HTMLElement.prototype.hasPointerCapture = () => false;
