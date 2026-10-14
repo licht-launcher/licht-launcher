@@ -2,7 +2,7 @@
 
 ## Context
 - **Unofficial** Minecraft: Java Edition launcher, cross-platform (**Windows and Linux**), built with **Tauri v2**.
-- Frontend: **React + TypeScript + Vite**, **Tailwind CSS**, **shadcn/ui** (Radix UI), **Lucide** (icons), **TanStack Router** (file-based routes in `src/routes`, hash history). **TanStack Query** (`invoke` calls), **Zustand** (global state), and **TanStack Virtual** (large lists) are decided and not installed yet. Backend: Rust.
+- Frontend: **React + TypeScript + Vite**, **Tailwind CSS**, **shadcn/ui** (Radix UI), **Lucide** (icons), **TanStack Router** (file-based routes in `src/routes`, hash history), **TanStack Query** (installed and used for `invoke` calls), **TanStack Virtual** (installed, but not yet wired to current short lists), and no Zustand dependency. Backend: Rust.
 - Display name: **Licht Launcher**. Repository/packages: `licht-launcher`. Binary/CLI: `licht`. Core crate: `licht-core`.
 - The project owner is a senior TypeScript/Node developer, but has **LITTLE knowledge of Rust**.
 - The full plan is in `docs/ROADMAP.md`. Always work on **one item at a time**.

@@ -1,9 +1,39 @@
 # Licht Launcher
 
-An unofficial Minecraft: Java Edition launcher targeting Windows and Linux,
-built with Tauri v2, React, TypeScript, and Rust.
+<p align="center">
+  <img src="src-tauri/icons/icon.png" alt="Licht Launcher icon" width="128">
+</p>
+
+<p align="center">
+  <strong>A light, cross-platform launcher for Minecraft: Java Edition.</strong><br>
+  Built with Tauri v2, React, TypeScript, and Rust for Windows and Linux.
+</p>
+
+<p align="center">
+  <a href="https://github.com/mateusneiva/licht-launcher/actions/workflows/ci.yml"><img src="https://github.com/mateusneiva/licht-launcher/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
+  <a href="https://github.com/mateusneiva/licht-launcher/releases/latest"><img src="https://img.shields.io/github/v/release/mateusneiva/licht-launcher?label=latest%20release" alt="Latest release"></a>
+  <a href="https://github.com/mateusneiva/licht-launcher/releases"><img src="https://img.shields.io/github/downloads/mateusneiva/licht-launcher/total?label=downloads" alt="Downloads"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/mateusneiva/licht-launcher" alt="MIT license"></a>
+</p>
+
+**Current release: `0.2.2 · Iris`**
 
 **Unofficial project, not affiliated with Mojang Studios or Microsoft.**
+
+## Download
+
+Download the latest build from the
+[GitHub Releases page](https://github.com/mateusneiva/licht-launcher/releases/latest).
+
+| Platform | Recommended download |
+| --- | --- |
+| Windows x64 | NSIS installer (`.exe`) |
+| Linux x64 | AppImage |
+| Linux distributions with Debian packages | `.deb` |
+
+Portable binaries are also published for Windows and Linux. The updater uses
+GitHub Releases as its source and currently supports signed Windows NSIS and
+Linux AppImage updates.
 
 ## Project status
 
@@ -19,8 +49,9 @@ Install/Repair. Generated libraries are verified before launch; existing
 provisional loader profiles are upgraded without changing the instance folder.
 
 `licht` lists Mojang's manifest, installs a version, and launches it with an
-offline name. It does not sign in to Microsoft. See the
-[roadmap](docs/ROADMAP.md).
+offline name. The desktop application also supports Microsoft account flows,
+instances, mod loaders, modpack imports, live logs, and update checks. See the
+[roadmap](docs/ROADMAP.md) for completed work and remaining scope.
 
 What a launch does today:
 
@@ -69,6 +100,12 @@ pnpm tauri dev
 
 The frontend development server is started automatically by the Tauri command.
 
+For a frontend-only development server:
+
+```sh
+pnpm dev
+```
+
 To build the release executable without an installer:
 
 ```sh
@@ -106,6 +143,12 @@ the repository and be configured as a GitHub Actions secret.
 - [Forge/NeoForge](docs/core/FORGE.md): official profiles, client processors, readiness, and repair.
 - [Log](docs/core/LOG.md): why old versions were failing on a Windows-1252 line, and how the log is decoded.
 - [Project rules](AGENTS.md): development conventions.
+
+## Contributing
+
+Read [AGENTS.md](AGENTS.md) and [docs/ROADMAP.md](docs/ROADMAP.md) before
+starting work. Changes should be focused, tested, and submitted through a pull
+request. Do not commit game files, signing keys, API keys, or other secrets.
 
 ## License
 
