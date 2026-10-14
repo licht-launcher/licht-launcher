@@ -35,4 +35,11 @@ describe("SettingsDialog", () => {
     await new Promise((resolve) => setTimeout(resolve, 500));
     expect(invoke).not.toHaveBeenCalledWith("save_settings", expect.anything());
   });
+
+  it("keeps the application titlebar interactive while open", async () => {
+    await renderSettings();
+    await screen.findByLabelText("Offline username");
+
+    expect(document.body).not.toHaveStyle({ pointerEvents: "none" });
+  });
 });

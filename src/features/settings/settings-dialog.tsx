@@ -33,7 +33,7 @@ export function SettingsDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog modal={false} open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         className="flex h-3/4 max-h-screen gap-0 overflow-hidden p-0 sm:max-w-4xl"
         onInteractOutside={(event) => {

@@ -76,7 +76,7 @@ export function TitleBar() {
         : "No downloads in progress";
 
   return (
-    <header className="relative z-60 shrink-0 text-popover-foreground">
+    <header className="pointer-events-auto relative z-[60] shrink-0 text-popover-foreground">
       <div
         className={cn(
           "flex h-9 items-stretch",
