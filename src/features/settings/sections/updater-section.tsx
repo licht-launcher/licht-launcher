@@ -97,6 +97,18 @@ export function UpdaterSection({
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-3">
+        {status === "available" ? (
+          <Button
+            type="button"
+            className="cursor-pointer"
+            onClick={() => {
+              window.dispatchEvent(new Event(INSTALL_UPDATE_EVENT));
+            }}
+          >
+            <DownloadIcon data-icon="inline-start" aria-hidden />
+            Update
+          </Button>
+        ) : null}
         <Button
           type="button"
           variant="outline"
@@ -113,18 +125,6 @@ export function UpdaterSection({
           {checking ? "Checking…" : "Check for updates"}
         </Button>
         <div className="flex flex-wrap items-center gap-3">
-          {status === "available" ? (
-            <Button
-              type="button"
-              className="cursor-pointer"
-              onClick={() => {
-                window.dispatchEvent(new Event(INSTALL_UPDATE_EVENT));
-              }}
-            >
-              <DownloadIcon data-icon="inline-start" aria-hidden />
-              Update
-            </Button>
-          ) : null}
           <p
             role="status"
             className="flex items-center gap-2 text-sm text-muted-foreground"
