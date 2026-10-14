@@ -1,8 +1,15 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ContentSection } from "@/features/instances/sections/content-section";
+import type { InstanceContentEntry } from "@/lib/generated/InstanceContentEntry";
 
 const listInstanceContent = vi.hoisted(() => vi.fn());
 
@@ -19,11 +26,12 @@ function renderContent(
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  return render(
+  const view = render(
     <QueryClientProvider client={client}>
       <ContentSection folder={folder} filter={filter} search="" />
     </QueryClientProvider>,
   );
+  return { ...view, client };
 }
 
 describe("ContentSection", () => {
@@ -117,6 +125,58 @@ describe("ContentSection", () => {
         expect.stringContaining("bg-accent-teal/15"),
       ]),
     );
+  });
+
+  it("shows progress during refresh while keeping cached content visible", async () => {
+    const entry: InstanceContentEntry = {
+      name: "sodium.jar",
+      kind: "mods",
+      enabled: true,
+      size: 1024,
+      title: "Sodium",
+      version: "0.6.5",
+      iconUrl: null,
+    };
+    let completeRefresh: (entries: InstanceContentEntry[]) => void = () => {};
+    listInstanceContent.mockResolvedValueOnce([entry]).mockImplementationOnce(
+      () =>
+        new Promise<InstanceContentEntry[]>((resolve) => {
+          completeRefresh = resolve;
+        }),
+    );
+    const { client } = renderContent("classic");
+    expect(await screen.findByText("Sodium")).toBeVisible();
+    expect(
+      screen.queryByRole("progressbar", { name: "Loading content metadata" }),
+    ).not.toBeInTheDocument();
+
+    act(() => {
+      void client.fetchQuery({
+        queryKey: ["instance-content", "classic"],
+        queryFn: () => listInstanceContent("classic", true),
+        staleTime: 0,
+      });
+    });
+
+    expect(
+      await screen.findByRole("progressbar", {
+        name: "Loading content metadata",
+      }),
+    ).toBeVisible();
+    expect(screen.getByText("Sodium")).toBeVisible();
+    expect(
+      screen.getByRole("switch", { name: "Disable Sodium" }),
+    ).toBeVisible();
+
+    await act(async () => {
+      completeRefresh([{ ...entry, version: "0.6.6" }]);
+    });
+    expect(await screen.findByText("0.6.6 · sodium.jar")).toBeVisible();
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("progressbar", { name: "Loading content metadata" }),
+      ).not.toBeInTheDocument();
+    });
   });
 
   it("sorts content by name and size with direction indicators", async () => {
