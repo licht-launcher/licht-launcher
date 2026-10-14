@@ -13,6 +13,36 @@ export const LATEST_VERSION_KEY = "licht-launcher.latest-version";
 export const LATEST_VERSION_EVENT = "licht-launcher:latest-version";
 export const MANUAL_UPDATE_CHECK_EVENT = "licht-launcher:manual-update-check";
 export const UPDATE_CHECK_STATUS_EVENT = "licht-launcher:update-check-status";
+const UPDATE_CHECK_STATUS_KEY = "licht-launcher.update-check-status";
+
+export type UpdateCheckStatus =
+  | "not-checked"
+  | "checking"
+  | "up-to-date"
+  | "available"
+  | "failed";
+
+export function getUpdateCheckStatus(): UpdateCheckStatus {
+  const status = sessionStorage.getItem(UPDATE_CHECK_STATUS_KEY);
+  switch (status) {
+    case "checking":
+    case "up-to-date":
+    case "available":
+    case "failed":
+      return status;
+    default:
+      return "not-checked";
+  }
+}
+
+function setUpdateCheckStatus(status: UpdateCheckStatus) {
+  sessionStorage.setItem(UPDATE_CHECK_STATUS_KEY, status);
+  window.dispatchEvent(
+    new CustomEvent(UPDATE_CHECK_STATUS_EVENT, {
+      detail: { checking: status === "checking", status },
+    }),
+  );
+}
 
 export function UpdateCheck() {
   const showUpdateError = useCallback((message: string) => {
@@ -135,13 +165,18 @@ export function UpdateCheck() {
 
   useEffect(() => {
     let cancelled = false;
+    let checking = false;
 
     async function checkForUpdate(manual = false) {
-      window.dispatchEvent(
-        new CustomEvent(UPDATE_CHECK_STATUS_EVENT, {
-          detail: { checking: true },
-        }),
-      );
+      if (checking) {
+        return;
+      }
+      checking = true;
+      let status: UpdateCheckStatus = "not-checked";
+      setUpdateCheckStatus("checking");
+      const toastId = manual
+        ? toast.loading("Checking for updates…", { id: "manual-update-check" })
+        : undefined;
       try {
         const snapshot = await getSettings();
         if (!manual && !snapshot.settings.checkForUpdates) {
@@ -152,12 +187,19 @@ export function UpdateCheck() {
           return;
         }
         if (available === null) {
+          status = "up-to-date";
+          localStorage.removeItem(LATEST_VERSION_KEY);
+          window.dispatchEvent(new Event(LATEST_VERSION_EVENT));
           if (manual) {
-            toast.success("Licht Launcher is up to date.");
+            toast.success("Licht Launcher is up to date.", { id: toastId });
           }
           return;
         }
 
+        status = "available";
+        if (toastId !== undefined) {
+          toast.dismiss(toastId);
+        }
         localStorage.setItem(LATEST_VERSION_KEY, available.version);
         window.dispatchEvent(new Event(LATEST_VERSION_EVENT));
         const deferredVersion = localStorage.getItem(DEFERRED_UPDATE_KEY);
@@ -171,6 +213,10 @@ export function UpdateCheck() {
 
         showUpdateToast(available);
       } catch (error) {
+        status = "failed";
+        if (toastId !== undefined) {
+          toast.dismiss(toastId);
+        }
         if (!cancelled) {
           showUpdateError(
             `Could not check for updates: ${
@@ -179,11 +225,11 @@ export function UpdateCheck() {
           );
         }
       } finally {
-        window.dispatchEvent(
-          new CustomEvent(UPDATE_CHECK_STATUS_EVENT, {
-            detail: { checking: false },
-          }),
-        );
+        checking = false;
+        if (cancelled && toastId !== undefined) {
+          toast.dismiss(toastId);
+        }
+        setUpdateCheckStatus(status);
       }
     }
 
