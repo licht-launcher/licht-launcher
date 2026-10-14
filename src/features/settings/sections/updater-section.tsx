@@ -38,7 +38,7 @@ export function UpdaterSection({
     "not-checked": "Not checked yet",
     checking: "Checking for updates…",
     "up-to-date": "Up to date",
-    available: "",
+    available: "Update available",
     failed: "Update check failed. Try again.",
   };
   const statusIcons = {
@@ -125,18 +125,16 @@ export function UpdaterSection({
               Update
             </Button>
           ) : null}
-          {status !== "available" ? (
-            <p
-              role="status"
-              className="flex items-center gap-2 text-sm text-muted-foreground"
-            >
-              <StatusIcon
-                aria-hidden
-                className={checking ? "size-4 animate-spin" : "size-4"}
-              />
-              {statusLabels[status]}
-            </p>
-          ) : null}
+          <p
+            role="status"
+            className="flex items-center gap-2 text-sm text-muted-foreground"
+          >
+            <StatusIcon
+              aria-hidden
+              className={checking ? "size-4 animate-spin" : "size-4"}
+            />
+            {statusLabels[status]}
+          </p>
         </div>
       </div>
       <div className="flex items-center justify-between gap-3">

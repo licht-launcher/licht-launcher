@@ -166,7 +166,7 @@ describe("UpdaterSection", () => {
       screen.getByRole("region", { name: "Launcher updates" }),
     );
     expect(await section.findByText("0.2.2")).toBeVisible();
-    expect(section.queryByRole("status")).not.toBeInTheDocument();
+    expect(section.getByRole("status")).toHaveTextContent("Update available");
     expect(section.getByRole("button", { name: "Update" })).toBeEnabled();
     expect(
       await screen.findByRole("button", { name: "Update now" }),
