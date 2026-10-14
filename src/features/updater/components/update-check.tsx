@@ -18,6 +18,7 @@ const DEFERRED_UPDATE_KEY = "licht-launcher.deferred-update";
 export const LATEST_VERSION_KEY = "licht-launcher.latest-version";
 export const LATEST_VERSION_EVENT = "licht-launcher:latest-version";
 export const MANUAL_UPDATE_CHECK_EVENT = "licht-launcher:manual-update-check";
+export const INSTALL_UPDATE_EVENT = "licht-launcher:install-update";
 export const UPDATE_CHECK_STATUS_EVENT = "licht-launcher:update-check-status";
 const UPDATE_CHECK_STATUS_KEY = "licht-launcher.update-check-status";
 
@@ -225,6 +226,7 @@ export function UpdateCheck() {
   useEffect(() => {
     let cancelled = false;
     let checking = false;
+    let availableUpdate: Update | null = null;
 
     async function checkForUpdate(manual = false) {
       if (checking) {
@@ -254,6 +256,7 @@ export function UpdateCheck() {
         }
 
         status = "available";
+        availableUpdate = available;
         if (toastId !== undefined) {
           toast.dismiss(toastId);
         }
@@ -302,11 +305,18 @@ export function UpdateCheck() {
     const onManualCheck = () => {
       void checkForUpdate(true);
     };
+    const onInstallUpdate = () => {
+      if (availableUpdate !== null) {
+        void installUpdate(availableUpdate);
+      }
+    };
     window.addEventListener(MANUAL_UPDATE_CHECK_EVENT, onManualCheck);
+    window.addEventListener(INSTALL_UPDATE_EVENT, onInstallUpdate);
 
     return () => {
       cancelled = true;
       window.removeEventListener(MANUAL_UPDATE_CHECK_EVENT, onManualCheck);
+      window.removeEventListener(INSTALL_UPDATE_EVENT, onInstallUpdate);
     };
   }, [installUpdate, showUpdateError, showUpdateToast]);
 

@@ -13,6 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import type { Draft } from "@/features/settings/model/draft";
 import {
   getUpdateCheckStatus,
+  INSTALL_UPDATE_EVENT,
   LATEST_VERSION_EVENT,
   LATEST_VERSION_KEY,
   MANUAL_UPDATE_CHECK_EVENT,
@@ -111,16 +112,31 @@ export function UpdaterSection({
           />
           {checking ? "Checking…" : "Check for updates"}
         </Button>
-        <p
-          role="status"
-          className="flex items-center gap-2 text-sm text-muted-foreground"
-        >
-          <StatusIcon
-            aria-hidden
-            className={checking ? "size-4 animate-spin" : "size-4"}
-          />
-          {statusLabels[status]}
-        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <p
+            role="status"
+            className="flex items-center gap-2 text-sm text-muted-foreground"
+          >
+            <StatusIcon
+              aria-hidden
+              className={checking ? "size-4 animate-spin" : "size-4"}
+            />
+            {statusLabels[status]}
+          </p>
+          {status === "available" ? (
+            <Button
+              type="button"
+              size="sm"
+              className="cursor-pointer"
+              onClick={() => {
+                window.dispatchEvent(new Event(INSTALL_UPDATE_EVENT));
+              }}
+            >
+              <DownloadIcon data-icon="inline-start" aria-hidden />
+              Update now
+            </Button>
+          ) : null}
+        </div>
       </div>
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">

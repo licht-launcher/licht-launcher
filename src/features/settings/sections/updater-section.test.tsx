@@ -167,9 +167,10 @@ describe("UpdaterSection", () => {
     );
     expect(await section.findByText("0.2.2")).toBeVisible();
     expect(section.getByRole("status")).toHaveTextContent("Update available");
+    expect(section.getByRole("button", { name: "Update now" })).toBeEnabled();
     expect(
-      await screen.findByRole("button", { name: "Update now" }),
-    ).toBeEnabled();
+      (await screen.findAllByRole("button", { name: "Update now" })).length,
+    ).toBe(2);
   });
 
   it("shows failure in the section and a toast, then allows a retry", async () => {
@@ -264,8 +265,13 @@ describe("UpdaterSection", () => {
 
     expect(await screen.findByText("0.2.2")).toBeVisible();
     expect(
-      await screen.findByRole("button", { name: "Update now" }),
+      within(
+        screen.getByRole("region", { name: "Launcher updates" }),
+      ).getByRole("button", { name: "Update now" }),
     ).toBeEnabled();
+    expect(
+      (await screen.findAllByRole("button", { name: "Update now" })).length,
+    ).toBe(2);
   });
 
   it("closes only the updater toast without dismissing settings or another alert", async () => {
