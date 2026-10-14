@@ -116,9 +116,10 @@ describe("TitleBar", () => {
     const onOpen = vi.fn();
     window.addEventListener(OPEN_SETTINGS_EVENT, onOpen);
 
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Account: Alex" }),
-    );
+    const account = await screen.findByRole("button", {
+      name: "Account: Alex",
+    });
+    fireEvent.pointerDown(account, { button: 0 });
 
     expect(onOpen).toHaveBeenCalledOnce();
     const event = onOpen.mock.calls[0]?.[0] as CustomEvent | undefined;
