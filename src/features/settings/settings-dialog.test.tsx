@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -6,6 +7,7 @@ import {
   mockSettingsCommands,
   renderSettings,
 } from "@/features/settings/fixtures/render-settings";
+import { SettingsDialog } from "@/features/settings/settings-dialog";
 
 vi.mock("@tauri-apps/api/core", async () => {
   const { invoke: mocked } = await import(
@@ -68,5 +70,30 @@ describe("SettingsDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Titlebar action" }));
 
     expect(screen.getByLabelText("Offline username")).toBeInTheDocument();
+  });
+
+  it("switches to account when the requested section changes while open", async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const view = render(
+      <QueryClientProvider client={queryClient}>
+        <SettingsDialog open onOpenChange={() => {}} initialSection="updater" />
+      </QueryClientProvider>,
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: "Updater" }),
+    ).toBeVisible();
+
+    view.rerender(
+      <QueryClientProvider client={queryClient}>
+        <SettingsDialog open onOpenChange={() => {}} initialSection="account" />
+      </QueryClientProvider>,
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: "Account" }),
+    ).toBeVisible();
   });
 });

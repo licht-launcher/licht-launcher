@@ -113,6 +113,7 @@ export function TitleBar() {
             aria-label={`Account: ${username}`}
             onPointerDownCapture={(event) => {
               if (event.button === 0) {
+                event.preventDefault();
                 requestOpenSettings("account");
               }
             }}
