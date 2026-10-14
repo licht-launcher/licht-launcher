@@ -3,6 +3,20 @@
 Licht Launcher uses the Tauri updater with GitHub Releases as its update
 source.
 
+## 0.2.2 · Iris
+
+The `0.2.2` release adds the first complete update interaction surface:
+
+- update actions in Settings and the custom titlebar;
+- an update-available status with `Update` and `Check for updates` actions;
+- a development-only Developers section with a switch for simulating an
+  available update;
+- Settings navigation from the titlebar, including routing to Account while the
+  dialog is already open;
+- a preserved Settings backdrop while titlebar controls remain interactive;
+- stabilized hot reload behavior around the instances context;
+- cleaner frontend test output by stubbing unsupported jsdom scrolling APIs.
+
 ## Release artifacts
 
 The release workflow creates signed NSIS artifacts for Windows and signed

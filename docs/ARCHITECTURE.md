@@ -16,29 +16,23 @@ workspace. [AGENTS.md](../AGENTS.md) defines the project rules;
 
 The Cargo workspace contains `licht-core` and the `licht-launcher` application
 package. The application depends on the core through a local path dependency.
-The core also builds the `licht` command-line binary. That binary is the
-interface that can list, install, and launch today. The Tauri window does not
-call it yet.
-
-The foundation phase is complete: an empty React window, the design system,
-TanStack Router, logging, and `CoreError`. Domain work through milestone 1
-lives in the core and is reached from `licht`. Tauri commands and events are
-phase 5 and are not implemented.
+The core also builds the `licht` command-line binary. Both the CLI and the
+Tauri adapter call the same core services; the frontend uses typed commands for
+launcher actions and listens for progress and status events.
 
 ## Communication
 
-The intended flow is:
+The implemented flow is:
 
 ```text
 Frontend -> typed Tauri commands -> licht-core
 Frontend <- Tauri events <- adapter handling core progress and status
 ```
 
-The frontend will use TanStack Query for command loading, caching, and errors.
-The adapter will emit progress events with approximately 100 ms throttling.
-Shared Rust/TypeScript types must be generated rather than maintained by hand;
-the choice between `ts-rs` and `specta`, and the command/event contracts, remains
-pending.
+TanStack Query provides command loading, caching, mutations, and error states.
+The adapter emits progress events with approximately 100 ms throttling.
+Shared Rust/TypeScript types are generated with `ts-rs`; generated files live
+under `src/lib/generated`.
 
 ## Frontend layout
 
@@ -49,7 +43,10 @@ pending.
 
 The router is installed. History is hash-based (`/#/`) because the Tauri window does not rewrite paths to `index.html`. Interface copy is English.
 
-TanStack Query, Zustand, and TanStack Virtual are decided and have not been installed yet. Long lists will be virtualized, and screens will reuse the design system. The frontend runs in WebView2 on Windows and WebKitGTK on Linux.
+TanStack Query is installed and used for Tauri command state. TanStack Virtual
+is installed but not wired to the current short lists. Zustand is not installed;
+feature state currently uses React hooks and the existing query/cache layer.
+The frontend runs in WebView2 on Windows and WebKitGTK on Linux.
 
 ## Errors and logging
 
