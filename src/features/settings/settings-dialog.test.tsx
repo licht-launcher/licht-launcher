@@ -8,6 +8,7 @@ import {
   renderSettings,
 } from "@/features/settings/fixtures/render-settings";
 import { SettingsDialog } from "@/features/settings/settings-dialog";
+import { requestOpenSettings } from "@/lib/shell-events";
 
 vi.mock("@tauri-apps/api/core", async () => {
   const { invoke: mocked } = await import(
@@ -72,11 +73,11 @@ describe("SettingsDialog", () => {
     expect(screen.getByLabelText("Offline username")).toBeInTheDocument();
   });
 
-  it("switches to account when the requested section changes while open", async () => {
+  it("navigates to account when requested while already open", async () => {
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
-    const view = render(
+    render(
       <QueryClientProvider client={queryClient}>
         <SettingsDialog open onOpenChange={() => {}} initialSection="updater" />
       </QueryClientProvider>,
@@ -86,11 +87,7 @@ describe("SettingsDialog", () => {
       await screen.findByRole("heading", { name: "Updater" }),
     ).toBeVisible();
 
-    view.rerender(
-      <QueryClientProvider client={queryClient}>
-        <SettingsDialog open onOpenChange={() => {}} initialSection="account" />
-      </QueryClientProvider>,
-    );
+    requestOpenSettings("account");
 
     expect(
       await screen.findByRole("heading", { name: "Account" }),
