@@ -155,7 +155,7 @@ describe("UpdaterSection", () => {
       new Update({
         rid: 1,
         currentVersion: APP_VERSION,
-        version: "0.2.1",
+        version: "0.2.2",
         rawJson: {},
       }),
     );
@@ -165,7 +165,7 @@ describe("UpdaterSection", () => {
     const section = within(
       screen.getByRole("region", { name: "Launcher updates" }),
     );
-    expect(await section.findByText("0.2.1")).toBeVisible();
+    expect(await section.findByText("0.2.2")).toBeVisible();
     expect(section.getByRole("status")).toHaveTextContent("Update available");
     expect(
       await screen.findByRole("button", { name: "Update now" }),
