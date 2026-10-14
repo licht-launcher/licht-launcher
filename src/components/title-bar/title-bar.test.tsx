@@ -4,6 +4,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TitleBar } from "@/components/title-bar/title-bar";
 import { snapshot } from "@/features/settings/fixtures/snapshot";
+import {
+  INSTALL_UPDATE_EVENT,
+  UPDATE_CHECK_STATUS_EVENT,
+} from "@/features/updater/components/update-check";
 import type { InstallProgress } from "@/lib/generated/InstallProgress";
 import * as nativeCaption from "@/lib/native-caption";
 import { OPEN_SETTINGS_EVENT } from "@/lib/shell-events";
@@ -57,6 +61,7 @@ describe("TitleBar", () => {
     close.mockReset();
     invoke.mockReset();
     listeners.clear();
+    sessionStorage.clear();
     invoke.mockImplementation(async (command: string) => {
       if (command === "get_settings") {
         return {
@@ -111,15 +116,41 @@ describe("TitleBar", () => {
     const onOpen = vi.fn();
     window.addEventListener(OPEN_SETTINGS_EVENT, onOpen);
 
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Account: Alex" }),
-    );
+    const account = await screen.findByRole("button", {
+      name: "Account: Alex",
+    });
+    fireEvent.pointerDown(account, { button: 0 });
 
     expect(onOpen).toHaveBeenCalledOnce();
     const event = onOpen.mock.calls[0]?.[0] as CustomEvent | undefined;
     expect(event?.detail).toEqual({ section: "account" });
 
     window.removeEventListener(OPEN_SETTINGS_EVENT, onOpen);
+  });
+
+  it("shows the update action before the account chip", async () => {
+    renderTitleBar();
+    await screen.findByRole("button", { name: "Account: Alex" });
+
+    sessionStorage.setItem("licht-launcher.update-check-status", "available");
+    window.dispatchEvent(
+      new CustomEvent(UPDATE_CHECK_STATUS_EVENT, {
+        detail: { status: "available", checking: false },
+      }),
+    );
+
+    const update = await screen.findByRole("button", { name: "Update" });
+    expect(
+      update.compareDocumentPosition(
+        screen.getByRole("button", { name: "Account: Alex" }),
+      ) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    const install = vi.fn();
+    window.addEventListener(INSTALL_UPDATE_EVENT, install);
+    fireEvent.click(update);
+    expect(install).toHaveBeenCalledOnce();
+    window.removeEventListener(INSTALL_UPDATE_EVENT, install);
   });
 
   it("shows download progress on the chip and in the popover", async () => {

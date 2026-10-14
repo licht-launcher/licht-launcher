@@ -3,7 +3,7 @@ import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 
 import { HomePanel } from "@/features/instances/components/home-panel";
-import { useInstancesChrome } from "@/features/instances/components/instances-chrome";
+import { useInstancesChrome } from "@/features/instances/components/instances-chrome-context";
 import { friendlyError, messageOf } from "@/lib/errors";
 import { Route } from "@/routes/_app/index";
 

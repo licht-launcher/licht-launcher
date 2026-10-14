@@ -1,5 +1,6 @@
 import {
   BoxesIcon,
+  Code2Icon,
   DownloadIcon,
   PaletteIcon,
   RefreshCwIcon,
@@ -45,6 +46,16 @@ export const SECTIONS = [
     description: "How Licht Launcher checks and installs updates.",
     icon: RefreshCwIcon,
   },
+  ...(import.meta.env.DEV
+    ? [
+        {
+          id: "developers",
+          label: "Developers",
+          description: "Development-only tools for testing the launcher.",
+          icon: Code2Icon,
+        },
+      ]
+    : []),
 ] as const;
 
 export type SectionId = (typeof SECTIONS)[number]["id"];

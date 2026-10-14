@@ -6,6 +6,7 @@ import { SettingsPanel } from "@/features/settings/components/settings-panel";
 import { SettingsSidebar } from "@/features/settings/components/settings-sidebar";
 import { useSettingsDraft } from "@/features/settings/hooks/use-settings-draft";
 import type { SectionId } from "@/features/settings/model/sections";
+import { onOpenSettingsRequest } from "@/lib/shell-events";
 
 export function SettingsDialog({
   open,
@@ -25,6 +26,13 @@ export function SettingsDialog({
     }
   }, [open, initialSection]);
 
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    return onOpenSettingsRequest(setSection);
+  }, [open]);
+
   function handleOpenChange(next: boolean) {
     if (!next) {
       flush();
@@ -33,13 +41,17 @@ export function SettingsDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog modal={false} open={open} onOpenChange={handleOpenChange}>
+      {open ? (
+        <div aria-hidden="true" className="fixed inset-0 z-40 bg-black/60" />
+      ) : null}
       <DialogContent
         className="flex h-3/4 max-h-screen gap-0 overflow-hidden p-0 sm:max-w-4xl"
         onInteractOutside={(event) => {
           if (
             event.target instanceof Element &&
-            event.target.closest("[data-sonner-toast]") !== null
+            (event.target.closest("[data-sonner-toast]") !== null ||
+              event.target.closest("[data-title-bar]") !== null)
           ) {
             event.preventDefault();
           }
