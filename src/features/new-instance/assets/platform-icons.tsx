@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
 
-import fabricUrl from "@/assets/platforms/fabric.png";
-import forgeUrl from "@/assets/platforms/forge.png";
-import neoforgeUrl from "@/assets/platforms/neoforge.png";
-import quiltUrl from "@/assets/platforms/quilt.svg";
-import vanillaUrl from "@/assets/platforms/vanilla.svg";
+import fabricUrl from "@/assets/platforms/fabric.png?no-inline";
+import forgeUrl from "@/assets/platforms/forge.png?no-inline";
+import neoforgeUrl from "@/assets/platforms/neoforge.png?no-inline";
+import quiltUrl from "@/assets/platforms/quilt.svg?no-inline";
+import vanillaUrl from "@/assets/platforms/vanilla.svg?no-inline";
 import type { PlatformId } from "@/features/new-instance/model/wizard";
 import { cn } from "@/lib/utils";
 
