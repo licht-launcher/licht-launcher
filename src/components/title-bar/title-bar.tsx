@@ -1,5 +1,12 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Download, Loader2, Minus, UserRound } from "lucide-react";
+import {
+  Download,
+  DownloadCloud,
+  Loader2,
+  Minus,
+  UserRound,
+} from "lucide-react";
+import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -11,6 +18,11 @@ import {
   barValue,
   progressText,
 } from "@/features/instances/lib/download-progress";
+import {
+  getUpdateCheckStatus,
+  INSTALL_UPDATE_EVENT,
+  UPDATE_CHECK_STATUS_EVENT,
+} from "@/features/updater/components/update-check";
 import { useInstallActivity } from "@/hooks/use-install-activity";
 import { useTitleBarDecorations } from "@/hooks/use-title-bar-decorations";
 import { usesNativeCaptionButtons } from "@/lib/native-caption";
@@ -36,6 +48,19 @@ export function TitleBar() {
   const { username } = useTitleBarDecorations();
   const { active, activeCount, progress, label } = useInstallActivity();
   const nativeCaption = usesNativeCaptionButtons();
+  const [updateAvailable, setUpdateAvailable] = useState(
+    () => getUpdateCheckStatus() === "available",
+  );
+  useEffect(() => {
+    const updateStatus = () => {
+      setUpdateAvailable(getUpdateCheckStatus() === "available");
+    };
+    window.addEventListener(UPDATE_CHECK_STATUS_EVENT, updateStatus);
+    updateStatus();
+    return () => {
+      window.removeEventListener(UPDATE_CHECK_STATUS_EVENT, updateStatus);
+    };
+  }, []);
   const downloadChipLabel = !active
     ? "Idle"
     : activeCount > 1
@@ -60,6 +85,24 @@ export function TitleBar() {
       >
         <div data-tauri-drag-region className="min-w-0 flex-1" aria-hidden />
         <div className="flex shrink-0 items-center gap-1.5 px-2 text-muted-foreground">
+          {updateAvailable ? (
+            <Button
+              type="button"
+              variant="ghost"
+              className={cn(chipClass, "cursor-pointer")}
+              aria-label="Update"
+              onClick={() => {
+                window.dispatchEvent(new Event(INSTALL_UPDATE_EVENT));
+              }}
+            >
+              <DownloadCloud
+                aria-hidden
+                className="size-3.5 shrink-0"
+                strokeWidth={2}
+              />
+              Update
+            </Button>
+          ) : null}
           <Button
             type="button"
             variant="ghost"

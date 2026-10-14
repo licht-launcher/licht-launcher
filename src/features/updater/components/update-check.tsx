@@ -11,7 +11,7 @@ import { useCallback, useEffect } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { appReleaseLabel } from "@/lib/app-release";
+import { APP_VERSION, appReleaseLabel } from "@/lib/app-release";
 import { getSettings } from "@/lib/commands";
 
 const DEFERRED_UPDATE_KEY = "licht-launcher.deferred-update";
@@ -19,6 +19,9 @@ export const LATEST_VERSION_KEY = "licht-launcher.latest-version";
 export const LATEST_VERSION_EVENT = "licht-launcher:latest-version";
 export const MANUAL_UPDATE_CHECK_EVENT = "licht-launcher:manual-update-check";
 export const INSTALL_UPDATE_EVENT = "licht-launcher:install-update";
+export const DEV_SIMULATE_UPDATE_EVENT = "licht-launcher:dev-simulate-update";
+export const DEV_CLEAR_SIMULATED_UPDATE_EVENT =
+  "licht-launcher:dev-clear-simulated-update";
 export const UPDATE_CHECK_STATUS_EVENT = "licht-launcher:update-check-status";
 const UPDATE_CHECK_STATUS_KEY = "licht-launcher.update-check-status";
 
@@ -227,6 +230,7 @@ export function UpdateCheck() {
     let cancelled = false;
     let checking = false;
     let availableUpdate: Update | null = null;
+    let simulatedUpdate = false;
 
     async function checkForUpdate(manual = false) {
       if (checking) {
@@ -308,15 +312,49 @@ export function UpdateCheck() {
     const onInstallUpdate = () => {
       if (availableUpdate !== null) {
         void installUpdate(availableUpdate);
+      } else if (simulatedUpdate) {
+        showCheckToast(
+          "failed",
+          "Development update simulation has no downloadable release.",
+        );
       }
+    };
+    const onSimulateUpdate = () => {
+      if (!import.meta.env.DEV) {
+        return;
+      }
+      simulatedUpdate = true;
+      const version = `${APP_VERSION}-dev`;
+      localStorage.setItem(LATEST_VERSION_KEY, version);
+      window.dispatchEvent(new Event(LATEST_VERSION_EVENT));
+      setUpdateCheckStatus("available");
+    };
+    const onClearSimulatedUpdate = () => {
+      if (!import.meta.env.DEV) {
+        return;
+      }
+      simulatedUpdate = false;
+      localStorage.removeItem(LATEST_VERSION_KEY);
+      window.dispatchEvent(new Event(LATEST_VERSION_EVENT));
+      setUpdateCheckStatus("not-checked");
     };
     window.addEventListener(MANUAL_UPDATE_CHECK_EVENT, onManualCheck);
     window.addEventListener(INSTALL_UPDATE_EVENT, onInstallUpdate);
+    window.addEventListener(DEV_SIMULATE_UPDATE_EVENT, onSimulateUpdate);
+    window.addEventListener(
+      DEV_CLEAR_SIMULATED_UPDATE_EVENT,
+      onClearSimulatedUpdate,
+    );
 
     return () => {
       cancelled = true;
       window.removeEventListener(MANUAL_UPDATE_CHECK_EVENT, onManualCheck);
       window.removeEventListener(INSTALL_UPDATE_EVENT, onInstallUpdate);
+      window.removeEventListener(DEV_SIMULATE_UPDATE_EVENT, onSimulateUpdate);
+      window.removeEventListener(
+        DEV_CLEAR_SIMULATED_UPDATE_EVENT,
+        onClearSimulatedUpdate,
+      );
     };
   }, [installUpdate, showUpdateError, showUpdateToast]);
 

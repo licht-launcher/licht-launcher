@@ -3,6 +3,7 @@ import type { Draft } from "@/features/settings/model/draft";
 import { SECTIONS, type SectionId } from "@/features/settings/model/sections";
 import { AccountSection } from "@/features/settings/sections/account-section";
 import { AppearanceSection } from "@/features/settings/sections/appearance-section";
+import { DevelopersSection } from "@/features/settings/sections/developers-section";
 import { DownloadsSection } from "@/features/settings/sections/downloads-section";
 import { InstancesSection } from "@/features/settings/sections/instances-section";
 import { JavaSection } from "@/features/settings/sections/java/java-section";
@@ -53,6 +54,7 @@ export function SettingsPanel({
           {section === "downloads" ? (
             <DownloadsSection draft={draft} onChange={onChange} />
           ) : null}
+          {section === "developers" ? <DevelopersSection /> : null}
           {section === "updater" ? (
             <UpdaterSection draft={draft} onChange={onChange} />
           ) : null}
