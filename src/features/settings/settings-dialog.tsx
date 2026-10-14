@@ -42,7 +42,8 @@ export function SettingsDialog({
         onInteractOutside={(event) => {
           if (
             event.target instanceof Element &&
-            event.target.closest("[data-sonner-toast]") !== null
+            (event.target.closest("[data-sonner-toast]") !== null ||
+              event.target.closest("[data-title-bar]") !== null)
           ) {
             event.preventDefault();
           }

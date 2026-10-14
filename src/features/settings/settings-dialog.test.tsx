@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -48,5 +48,25 @@ describe("SettingsDialog", () => {
     await screen.findByLabelText("Offline username");
 
     expect(document.querySelector(".bg-black\\/60")).toBeInTheDocument();
+  });
+
+  it("does not close when the titlebar is clicked", async () => {
+    await renderSettings();
+    await screen.findByLabelText("Offline username");
+    render(
+      <header data-title-bar>
+        <button type="button">Titlebar action</button>
+      </header>,
+    );
+
+    fireEvent.pointerDown(
+      screen.getByRole("button", { name: "Titlebar action" }),
+    );
+    fireEvent.pointerUp(
+      screen.getByRole("button", { name: "Titlebar action" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Titlebar action" }));
+
+    expect(screen.getByLabelText("Offline username")).toBeInTheDocument();
   });
 });
