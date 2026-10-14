@@ -34,6 +34,9 @@ export function SettingsDialog({
 
   return (
     <Dialog modal={false} open={open} onOpenChange={handleOpenChange}>
+      {open ? (
+        <div aria-hidden="true" className="fixed inset-0 z-40 bg-black/60" />
+      ) : null}
       <DialogContent
         className="flex h-3/4 max-h-screen gap-0 overflow-hidden p-0 sm:max-w-4xl"
         onInteractOutside={(event) => {

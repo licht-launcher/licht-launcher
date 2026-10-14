@@ -42,4 +42,11 @@ describe("SettingsDialog", () => {
 
     expect(document.body).not.toHaveStyle({ pointerEvents: "none" });
   });
+
+  it("keeps the modal backdrop visible while open", async () => {
+    await renderSettings();
+    await screen.findByLabelText("Offline username");
+
+    expect(document.querySelector(".bg-black\\/60")).toBeInTheDocument();
+  });
 });
