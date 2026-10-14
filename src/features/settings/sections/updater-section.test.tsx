@@ -247,6 +247,27 @@ describe("UpdaterSection", () => {
     expect(await screen.findByText("Up to date")).toBeVisible();
   });
 
+  it("shows the update action when an automatic check finds a newer version", async () => {
+    check.mockResolvedValueOnce(
+      new Update({
+        rid: 1,
+        currentVersion: APP_VERSION,
+        version: "0.2.2",
+        rawJson: {},
+      }),
+    );
+    mockSettingsCommands((command) =>
+      command === "get_settings" ? Promise.resolve(snapshot) : undefined,
+    );
+
+    render(updaterView());
+
+    expect(await screen.findByText("0.2.2")).toBeVisible();
+    expect(
+      await screen.findByRole("button", { name: "Update now" }),
+    ).toBeEnabled();
+  });
+
   it("closes only the updater toast without dismissing settings or another alert", async () => {
     const onOpenChange = vi.fn();
     const queryClient = new QueryClient({

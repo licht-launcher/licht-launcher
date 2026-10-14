@@ -268,6 +268,14 @@ export function UpdateCheck() {
           return;
         }
 
+        if (!manual) {
+          await new Promise<void>((resolve) => {
+            setTimeout(resolve, 0);
+          });
+          if (cancelled) {
+            return;
+          }
+        }
         showUpdateToast(available);
       } catch (error) {
         status = "failed";
