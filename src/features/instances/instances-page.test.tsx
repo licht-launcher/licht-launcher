@@ -5,13 +5,14 @@ import {
   RouterProvider,
 } from "@tanstack/react-router";
 import {
+  cleanup,
   fireEvent,
   render,
   screen,
   waitFor,
   within,
 } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Toaster } from "@/components/ui/sonner";
 import { snapshot } from "@/features/settings/fixtures/snapshot";
@@ -57,12 +58,26 @@ async function renderAt(path: string) {
     history: createMemoryHistory({ initialEntries: [path] }),
   });
   await router.load();
-  return render(
+  const view = render(
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />
       <Toaster />
     </QueryClientProvider>,
   );
+  return { ...view, router };
+}
+
+function defaultCommandResponse(command: string): Promise<unknown> {
+  switch (command) {
+    case "custom_title_bar_active":
+      return Promise.resolve(true);
+    case "list_instance_content":
+      return Promise.resolve([]);
+    case "get_last_played_folder":
+      return Promise.resolve(null);
+    default:
+      return Promise.resolve(undefined);
+  }
 }
 
 const classicInstance = {
@@ -88,6 +103,22 @@ describe("InstancesPage", () => {
   beforeEach(() => {
     listeners.clear();
     invoke.mockReset();
+    vi.spyOn(console, "error");
+  });
+
+  afterEach(() => {
+    cleanup();
+    const errors = vi
+      .mocked(console.error)
+      .mock.calls.filter((args) =>
+        args.some((arg) =>
+          /Query data cannot be undefined|Maximum update depth exceeded/.test(
+            String(arg),
+          ),
+        ),
+      );
+    vi.mocked(console.error).mockRestore();
+    expect(errors).toEqual([]);
   });
 
   it("sorts instances by last played or name", async () => {
@@ -126,7 +157,7 @@ describe("InstancesPage", () => {
       if (command === "list_running_games") {
         return Promise.resolve([]);
       }
-      return Promise.resolve(undefined);
+      return defaultCommandResponse(command);
     });
 
     await renderAt("/");
@@ -187,7 +218,7 @@ describe("InstancesPage", () => {
       if (command === "get_last_played_folder") {
         return Promise.resolve(null);
       }
-      return Promise.resolve(undefined);
+      return defaultCommandResponse(command);
     });
 
     await renderAt("/");
@@ -266,7 +297,7 @@ describe("InstancesPage", () => {
       if (command === "custom_title_bar_active") {
         return Promise.resolve(true);
       }
-      return Promise.resolve(undefined);
+      return defaultCommandResponse(command);
     });
 
     await renderAt("/");
@@ -380,7 +411,7 @@ describe("InstancesPage", () => {
       if (command === "stop_game") {
         return Promise.resolve(undefined);
       }
-      return Promise.resolve(undefined);
+      return defaultCommandResponse(command);
     });
 
     await renderAt("/");
@@ -445,7 +476,7 @@ describe("InstancesPage", () => {
       if (command === "custom_title_bar_active") {
         return Promise.resolve(true);
       }
-      return Promise.resolve(undefined);
+      return defaultCommandResponse(command);
     });
 
     await renderAt("/");
@@ -560,7 +591,7 @@ describe("InstancesPage", () => {
       if (command === "list_running_games") {
         return Promise.resolve([]);
       }
-      return Promise.resolve(undefined);
+      return defaultCommandResponse(command);
     });
 
     await renderAt("/");
@@ -644,7 +675,7 @@ describe("InstancesPage", () => {
       if (command === "list_running_games") {
         return Promise.resolve([]);
       }
-      return Promise.resolve(undefined);
+      return defaultCommandResponse(command);
     });
 
     await renderAt("/");
@@ -717,7 +748,7 @@ describe("InstancesPage", () => {
       if (command === "list_running_games") {
         return Promise.resolve([]);
       }
-      return Promise.resolve(undefined);
+      return defaultCommandResponse(command);
     });
 
     await renderAt("/");
@@ -815,7 +846,7 @@ describe("InstancesPage", () => {
       if (command === "list_running_games") {
         return Promise.resolve([]);
       }
-      return Promise.resolve(undefined);
+      return defaultCommandResponse(command);
     });
 
     await renderAt("/");
@@ -900,7 +931,7 @@ describe("InstancesPage", () => {
       if (command === "list_running_games") {
         return Promise.resolve([]);
       }
-      return Promise.resolve(undefined);
+      return defaultCommandResponse(command);
     });
 
     await renderAt("/");
@@ -931,7 +962,7 @@ describe("InstancesPage", () => {
       if (command === "custom_title_bar_active") {
         return Promise.resolve(true);
       }
-      return Promise.resolve(undefined);
+      return defaultCommandResponse(command);
     });
 
     await renderAt("/");
@@ -992,7 +1023,7 @@ describe("InstancesPage", () => {
       if (command === "list_instance_entries") {
         return Promise.resolve([]);
       }
-      return Promise.resolve(undefined);
+      return defaultCommandResponse(command);
     });
 
     await renderAt("/");
@@ -1020,6 +1051,42 @@ describe("InstancesPage", () => {
     expect(
       await screen.findByRole("heading", { name: "Next" }),
     ).toBeInTheDocument();
+  });
+
+  it.each([
+    { instance: "next", folder: "next", name: "Next" },
+    { instance: "missing", folder: "classic", name: "Classic" },
+  ])("selects $folder when opening ?instance=$instance", async (entry) => {
+    invoke.mockImplementation((command: string) => {
+      if (command === "list_instances") {
+        return Promise.resolve([
+          classicInstance,
+          { ...classicInstance, folder: "next", name: "Next" },
+        ]);
+      }
+      if (command === "get_settings") {
+        return Promise.resolve(snapshot);
+      }
+      if (command === "list_running_games") {
+        return Promise.resolve([]);
+      }
+      return defaultCommandResponse(command);
+    });
+
+    const { router } = await renderAt(`/?instance=${entry.instance}`);
+    expect(
+      await screen.findByRole("heading", { name: entry.name }),
+    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(router.state.location.search).toMatchObject({
+        instance: entry.folder,
+      });
+    });
+    const sidebar = screen.getByRole("navigation", { name: "Instances" });
+    expect(
+      within(sidebar).getByRole("button", { name: entry.name }),
+    ).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("button", { name: "Back" })).toBeDisabled();
   });
 
   it("shows a network toast when the list fails", async () => {

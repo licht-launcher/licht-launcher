@@ -121,7 +121,11 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
     if (homeSearch?.prepare !== undefined) {
       return;
     }
-    if (homeSearch?.instance === selectedFolder) {
+    // A valid URL selection takes precedence while the selection hook catches up.
+    if (
+      instanceParam !== null &&
+      instances.data.some((instance) => instance.folder === instanceParam)
+    ) {
       return;
     }
     void navigate({
@@ -133,7 +137,7 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
     onWizard,
     instances.data,
     selectedFolder,
-    homeSearch?.instance,
+    instanceParam,
     homeSearch?.prepare,
     navigate,
   ]);
