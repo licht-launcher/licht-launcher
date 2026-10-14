@@ -34,7 +34,17 @@ export function SettingsDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="flex h-3/4 max-h-screen gap-0 overflow-hidden p-0 sm:max-w-4xl">
+      <DialogContent
+        className="flex h-3/4 max-h-screen gap-0 overflow-hidden p-0 sm:max-w-4xl"
+        onInteractOutside={(event) => {
+          if (
+            event.target instanceof Element &&
+            event.target.closest("[data-sonner-toast]") !== null
+          ) {
+            event.preventDefault();
+          }
+        }}
+      >
         <SettingsSidebar section={section} onSectionChange={setSection} />
         {draft && snapshot ? (
           <SettingsPanel

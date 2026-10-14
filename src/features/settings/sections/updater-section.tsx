@@ -1,14 +1,23 @@
-import { RefreshCwIcon } from "lucide-react";
+import {
+  CircleCheckIcon,
+  ClockIcon,
+  DownloadIcon,
+  OctagonXIcon,
+  PackageIcon,
+  RefreshCwIcon,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import type { Draft } from "@/features/settings/model/draft";
 import {
+  getUpdateCheckStatus,
   LATEST_VERSION_EVENT,
   LATEST_VERSION_KEY,
   MANUAL_UPDATE_CHECK_EVENT,
   UPDATE_CHECK_STATUS_EVENT,
+  type UpdateCheckStatus,
 } from "@/features/updater/components/update-check";
 import { appReleaseLabel } from "@/lib/app-release";
 
@@ -22,18 +31,34 @@ export function UpdaterSection({
   const [latestVersion, setLatestVersion] = useState<string | null>(() =>
     localStorage.getItem(LATEST_VERSION_KEY),
   );
-  const [checking, setChecking] = useState(false);
+  const [status, setStatus] = useState(getUpdateCheckStatus);
+  const checking = status === "checking";
+  const statusLabels: Record<UpdateCheckStatus, string> = {
+    "not-checked": "Not checked yet",
+    checking: "Checking for updates…",
+    "up-to-date": "Up to date",
+    available: "Update available",
+    failed: "Update check failed. Try again.",
+  };
+  const statusIcons = {
+    "not-checked": ClockIcon,
+    checking: RefreshCwIcon,
+    "up-to-date": CircleCheckIcon,
+    available: DownloadIcon,
+    failed: OctagonXIcon,
+  };
+  const StatusIcon = statusIcons[status];
 
   useEffect(() => {
     const updateLatestVersion = () => {
       setLatestVersion(localStorage.getItem(LATEST_VERSION_KEY));
     };
     window.addEventListener(LATEST_VERSION_EVENT, updateLatestVersion);
-    const updateChecking = (event: Event) => {
-      const detail = (event as CustomEvent<{ checking?: boolean }>).detail;
-      setChecking(detail?.checking === true);
+    const updateChecking = () => {
+      setStatus(getUpdateCheckStatus());
     };
     window.addEventListener(UPDATE_CHECK_STATUS_EVENT, updateChecking);
+    updateChecking();
     return () => {
       window.removeEventListener(LATEST_VERSION_EVENT, updateLatestVersion);
       window.removeEventListener(UPDATE_CHECK_STATUS_EVENT, updateChecking);
@@ -41,37 +66,62 @@ export function UpdaterSection({
   }, []);
 
   return (
-    <section className="flex flex-col gap-4">
+    <section aria-label="Launcher updates" className="flex flex-col gap-4">
       <div className="overflow-hidden rounded-lg border border-border/60 bg-muted/30">
         <div className="grid grid-cols-[minmax(0,1fr)_auto] border-b border-border/60 px-3 py-2.5 text-sm">
-          <span className="font-medium">Current version</span>
+          <span className="flex items-center gap-2 font-medium">
+            <PackageIcon aria-hidden className="size-4 text-muted-foreground" />
+            Current version
+          </span>
           <span className="font-brand text-muted-foreground">
             {appReleaseLabel}
           </span>
         </div>
         <div className="grid grid-cols-[minmax(0,1fr)_auto] px-3 py-2.5 text-sm">
-          <span className="font-medium">Latest version</span>
+          <span className="flex items-center gap-2 font-medium">
+            <DownloadIcon
+              aria-hidden
+              className="size-4 text-muted-foreground"
+            />
+            Latest version
+          </span>
           <span className="font-brand text-muted-foreground">
-            {latestVersion ?? "Not checked yet"}
+            {checking
+              ? "Checking…"
+              : status === "up-to-date"
+                ? "No newer version available"
+                : (latestVersion ??
+                  (status === "failed" ? "Unavailable" : "Not checked yet"))}
           </span>
         </div>
       </div>
-      <Button
-        type="button"
-        variant="outline"
-        className="self-start"
-        disabled={checking}
-        onClick={() => {
-          window.dispatchEvent(new Event(MANUAL_UPDATE_CHECK_EVENT));
-        }}
-      >
-        <RefreshCwIcon
-          data-icon="inline-start"
-          aria-hidden
-          className={checking ? "animate-spin" : undefined}
-        />
-        Check for updates
-      </Button>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button
+          type="button"
+          variant="outline"
+          disabled={checking}
+          onClick={() => {
+            window.dispatchEvent(new Event(MANUAL_UPDATE_CHECK_EVENT));
+          }}
+        >
+          <RefreshCwIcon
+            data-icon="inline-start"
+            aria-hidden
+            className={checking ? "animate-spin" : undefined}
+          />
+          {checking ? "Checking…" : "Check for updates"}
+        </Button>
+        <p
+          role="status"
+          className="flex items-center gap-2 text-sm text-muted-foreground"
+        >
+          <StatusIcon
+            aria-hidden
+            className={checking ? "size-4 animate-spin" : "size-4"}
+          />
+          {statusLabels[status]}
+        </p>
+      </div>
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">
           <label htmlFor="check-for-updates" className="text-sm font-medium">

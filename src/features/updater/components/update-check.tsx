@@ -1,6 +1,12 @@
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check, type Update } from "@tauri-apps/plugin-updater";
-import { DownloadIcon, OctagonXIcon, RefreshCwIcon, XIcon } from "lucide-react";
+import {
+  CircleCheckIcon,
+  DownloadIcon,
+  OctagonXIcon,
+  RefreshCwIcon,
+  XIcon,
+} from "lucide-react";
 import { useCallback, useEffect } from "react";
 import { toast } from "sonner";
 
@@ -13,42 +19,108 @@ export const LATEST_VERSION_KEY = "licht-launcher.latest-version";
 export const LATEST_VERSION_EVENT = "licht-launcher:latest-version";
 export const MANUAL_UPDATE_CHECK_EVENT = "licht-launcher:manual-update-check";
 export const UPDATE_CHECK_STATUS_EVENT = "licht-launcher:update-check-status";
+const UPDATE_CHECK_STATUS_KEY = "licht-launcher.update-check-status";
+
+export type UpdateCheckStatus =
+  | "not-checked"
+  | "checking"
+  | "up-to-date"
+  | "available"
+  | "failed";
+
+export function getUpdateCheckStatus(): UpdateCheckStatus {
+  const status = sessionStorage.getItem(UPDATE_CHECK_STATUS_KEY);
+  switch (status) {
+    case "checking":
+    case "up-to-date":
+    case "available":
+    case "failed":
+      return status;
+    default:
+      return "not-checked";
+  }
+}
+
+function setUpdateCheckStatus(status: UpdateCheckStatus) {
+  sessionStorage.setItem(UPDATE_CHECK_STATUS_KEY, status);
+  window.dispatchEvent(
+    new CustomEvent(UPDATE_CHECK_STATUS_EVENT, {
+      detail: { checking: status === "checking", status },
+    }),
+  );
+}
+
+function showCheckToast(
+  status: "checking" | "up-to-date" | "failed",
+  message?: string,
+) {
+  const Icon =
+    status === "failed"
+      ? OctagonXIcon
+      : status === "checking"
+        ? RefreshCwIcon
+        : CircleCheckIcon;
+  const title =
+    status === "failed"
+      ? "Update check failed"
+      : status === "checking"
+        ? "Checking for updates…"
+        : "Licht Launcher is up to date.";
+  const descriptions = {
+    checking: "Checking for a newer version of Licht Launcher.",
+    "up-to-date": "No newer update is available for this installation.",
+    failed: "Please try again.",
+  };
+  const description = message ?? descriptions[status];
+
+  return toast.custom(
+    (id) => (
+      <div
+        className="group/toast pointer-events-auto relative z-100 flex w-96 max-w-full items-start gap-3 overflow-hidden rounded-xl border border-border bg-popover px-3 py-3.5 pr-12 text-popover-foreground shadow-none"
+        role={status === "failed" ? "alert" : "status"}
+      >
+        <Button
+          type="button"
+          aria-label="Close update notification"
+          variant="ghost"
+          size="icon-sm"
+          className="absolute top-2 right-2 text-muted-foreground"
+          onClick={(event) => {
+            event.stopPropagation();
+            toast.dismiss(id);
+          }}
+        >
+          <XIcon aria-hidden className="size-4" />
+        </Button>
+        <div
+          aria-hidden
+          className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"
+        >
+          <Icon
+            className={status === "checking" ? "size-4 animate-spin" : "size-4"}
+            strokeWidth={2}
+          />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="font-brand text-sm font-medium">{title}</p>
+          <p className="text-sm text-muted-foreground">{description}</p>
+        </div>
+      </div>
+    ),
+    {
+      id: status === "failed" ? "update-check-error" : "manual-update-check",
+      position: "bottom-right",
+      duration:
+        status === "checking" ? Infinity : status === "failed" ? 8000 : 4000,
+      closeButton: false,
+      unstyled: true,
+    },
+  );
+}
 
 export function UpdateCheck() {
   const showUpdateError = useCallback((message: string) => {
-    const toastId = toast.custom(
-      () => (
-        <div
-          className="pointer-events-auto relative z-100 flex w-[min(24rem,calc(100vw-2rem))] items-start gap-3 rounded-xl border border-border bg-popover px-3 py-3.5 pr-10 text-popover-foreground shadow-none"
-          role="alert"
-        >
-          <button
-            type="button"
-            aria-label="Close update error"
-            className="absolute top-2 right-2 inline-flex size-6 cursor-pointer items-center justify-center rounded-md p-1 text-muted-foreground opacity-70 transition-colors hover:bg-muted hover:text-foreground hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            onClick={() => {
-              toast.dismiss(toastId);
-            }}
-          >
-            <XIcon aria-hidden className="size-4" />
-          </button>
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-            <OctagonXIcon className="size-4" strokeWidth={2} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="font-brand text-sm font-medium">
-              Update check failed
-            </p>
-            <p className="text-sm text-muted-foreground">{message}</p>
-          </div>
-        </div>
-      ),
-      {
-        id: "update-check-error",
-        duration: 8000,
-        unstyled: true,
-      },
-    );
+    showCheckToast("failed", message);
   }, []);
 
   const installUpdate = useCallback(
@@ -71,12 +143,25 @@ export function UpdateCheck() {
   const showUpdateToast = useCallback(
     (available: Update) => {
       const toastId = toast.custom(
-        () => (
+        (id) => (
           <div
-            className="pointer-events-auto relative z-100 flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-3 overflow-hidden rounded-xl border border-border bg-popover px-3 pt-3 pb-3.5 text-popover-foreground shadow-none"
+            className="group/toast pointer-events-auto relative z-100 flex w-96 max-w-full flex-col gap-3 overflow-hidden rounded-xl border border-border bg-popover px-3 pt-3 pb-3.5 text-popover-foreground shadow-none"
             role="status"
           >
-            <div className="flex items-start gap-3">
+            <Button
+              type="button"
+              aria-label="Close update notification"
+              variant="ghost"
+              size="icon-sm"
+              className="absolute top-2 right-2 text-muted-foreground"
+              onClick={(event) => {
+                event.stopPropagation();
+                toast.dismiss(id);
+              }}
+            >
+              <XIcon aria-hidden className="size-4" />
+            </Button>
+            <div className="flex items-start gap-3 pr-8">
               <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
                 <RefreshCwIcon className="size-4" strokeWidth={2} />
               </div>
@@ -100,9 +185,10 @@ export function UpdateCheck() {
                 variant="outline"
                 size="sm"
                 className="min-w-0 flex-1 cursor-pointer"
-                onClick={() => {
+                onClick={(event) => {
+                  event.stopPropagation();
                   localStorage.setItem(DEFERRED_UPDATE_KEY, available.version);
-                  toast.dismiss(toastId);
+                  toast.dismiss(id);
                 }}
               >
                 Later
@@ -111,8 +197,9 @@ export function UpdateCheck() {
                 type="button"
                 size="sm"
                 className="min-w-0 flex-1 cursor-pointer"
-                onClick={() => {
-                  toast.dismiss(toastId);
+                onClick={(event) => {
+                  event.stopPropagation();
+                  toast.dismiss(id);
                   void installUpdate(available);
                 }}
               >
@@ -124,7 +211,9 @@ export function UpdateCheck() {
         ),
         {
           id: `update-${available.version}`,
+          position: "bottom-right",
           duration: Infinity,
+          closeButton: false,
           unstyled: true,
         },
       );
@@ -135,13 +224,16 @@ export function UpdateCheck() {
 
   useEffect(() => {
     let cancelled = false;
+    let checking = false;
 
     async function checkForUpdate(manual = false) {
-      window.dispatchEvent(
-        new CustomEvent(UPDATE_CHECK_STATUS_EVENT, {
-          detail: { checking: true },
-        }),
-      );
+      if (checking) {
+        return;
+      }
+      checking = true;
+      let status: UpdateCheckStatus = "not-checked";
+      setUpdateCheckStatus("checking");
+      const toastId = manual ? showCheckToast("checking") : undefined;
       try {
         const snapshot = await getSettings();
         if (!manual && !snapshot.settings.checkForUpdates) {
@@ -152,12 +244,19 @@ export function UpdateCheck() {
           return;
         }
         if (available === null) {
+          status = "up-to-date";
+          localStorage.removeItem(LATEST_VERSION_KEY);
+          window.dispatchEvent(new Event(LATEST_VERSION_EVENT));
           if (manual) {
-            toast.success("Licht Launcher is up to date.");
+            showCheckToast("up-to-date");
           }
           return;
         }
 
+        status = "available";
+        if (toastId !== undefined) {
+          toast.dismiss(toastId);
+        }
         localStorage.setItem(LATEST_VERSION_KEY, available.version);
         window.dispatchEvent(new Event(LATEST_VERSION_EVENT));
         const deferredVersion = localStorage.getItem(DEFERRED_UPDATE_KEY);
@@ -171,6 +270,10 @@ export function UpdateCheck() {
 
         showUpdateToast(available);
       } catch (error) {
+        status = "failed";
+        if (toastId !== undefined) {
+          toast.dismiss(toastId);
+        }
         if (!cancelled) {
           showUpdateError(
             `Could not check for updates: ${
@@ -179,11 +282,11 @@ export function UpdateCheck() {
           );
         }
       } finally {
-        window.dispatchEvent(
-          new CustomEvent(UPDATE_CHECK_STATUS_EVENT, {
-            detail: { checking: false },
-          }),
-        );
+        checking = false;
+        if (cancelled && toastId !== undefined) {
+          toast.dismiss(toastId);
+        }
+        setUpdateCheckStatus(status);
       }
     }
 
