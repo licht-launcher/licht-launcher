@@ -39,8 +39,13 @@ import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 const sidebarOrbWrapClassName =
   "inline-flex transition-transform duration-200 ease-out hover:-translate-y-2";
 
-const sidebarOrbClassName =
-  "size-10 rounded-full shadow-[0_4px_12px_0_rgb(0_0_0/0.28)] transition-shadow duration-200 ease-out hover:shadow-[0_6px_16px_0_rgb(0_0_0/0.38)] disabled:pointer-events-auto disabled:shadow-[0_4px_12px_0_rgb(0_0_0/0.28)] [&_svg:not([class*='size-'])]:size-5";
+const sidebarOrbBaseClassName =
+  "size-10 rounded-full shadow-[0_4px_12px_0_rgb(0_0_0/0.28)] [&_svg:not([class*='size-'])]:size-5";
+
+const sidebarOrbClassName = cn(
+  sidebarOrbBaseClassName,
+  "transition-shadow duration-200 ease-out hover:shadow-[0_6px_16px_0_rgb(0_0_0/0.38)] disabled:pointer-events-auto disabled:shadow-[0_4px_12px_0_rgb(0_0_0/0.28)]",
+);
 
 function SortLabel({
   icon: Icon,
@@ -275,12 +280,12 @@ export function HomeSidebar({
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <span className={sidebarOrbWrapClassName}>
+                  <span className="inline-flex">
                     <Button
                       type="button"
                       variant="secondary"
                       size="icon-lg"
-                      className={sidebarOrbClassName}
+                      className={sidebarOrbBaseClassName}
                       aria-label="Downloads"
                       disabled
                     >
@@ -294,12 +299,12 @@ export function HomeSidebar({
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <span className={sidebarOrbWrapClassName}>
+                  <span className="inline-flex">
                     <Button
                       type="button"
                       variant="secondary"
                       size="icon-lg"
-                      className={sidebarOrbClassName}
+                      className={sidebarOrbBaseClassName}
                       aria-label="Discover"
                       disabled
                     >
