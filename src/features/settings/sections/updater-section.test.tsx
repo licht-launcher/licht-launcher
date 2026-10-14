@@ -1,5 +1,7 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Update } from "@tauri-apps/plugin-updater";
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -14,8 +16,10 @@ import {
   mockSettingsCommands,
   snapshot,
 } from "@/features/settings/fixtures/render-settings";
+import { promptTitleBarRestart } from "@/features/settings/lib/title-bar-restart-toast";
 import { fromSnapshot } from "@/features/settings/model/draft";
 import { UpdaterSection } from "@/features/settings/sections/updater-section";
+import { SettingsDialog } from "@/features/settings/settings-dialog";
 import {
   LATEST_VERSION_KEY,
   UpdateCheck,
@@ -93,6 +97,9 @@ describe("UpdaterSection", () => {
     expect(
       await screen.findByText("Licht Launcher is up to date."),
     ).toBeVisible();
+    expect(
+      screen.getByText("No newer update is available for this installation."),
+    ).toBeVisible();
     expect(check).toHaveBeenCalledTimes(1);
     expect(screen.queryByText("0.1.1")).not.toBeInTheDocument();
   });
@@ -129,6 +136,11 @@ describe("UpdaterSection", () => {
     );
     expect(
       await notifications.findByText("Checking for updates…"),
+    ).toBeVisible();
+    expect(
+      notifications.getByText(
+        "Checking for a newer version of Licht Launcher.",
+      ),
     ).toBeVisible();
 
     completeCheck(null);
@@ -233,5 +245,61 @@ describe("UpdaterSection", () => {
     });
     completeCheck(null);
     expect(await screen.findByText("Up to date")).toBeVisible();
+  });
+
+  it("closes only the updater toast without dismissing settings or another alert", async () => {
+    const onOpenChange = vi.fn();
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <UpdateCheck />
+        <SettingsDialog
+          open
+          onOpenChange={onOpenChange}
+          initialSection="updater"
+        />
+        <Toaster />
+      </QueryClientProvider>,
+    );
+    const button = await screen.findByRole("button", {
+      name: "Check for updates",
+    });
+    await waitFor(() => {
+      expect(button).toBeEnabled();
+    });
+    act(() => {
+      promptTitleBarRestart();
+    });
+    expect(await screen.findByText("Restart required")).toBeVisible();
+    fireEvent.click(button);
+    expect(
+      await screen.findByText("Licht Launcher is up to date."),
+    ).toBeVisible();
+
+    const notification = screen.getByText("Licht Launcher is up to date.");
+    fireEvent.pointerDown(notification, { pointerType: "mouse", button: 0 });
+    fireEvent.click(notification);
+    expect(onOpenChange).not.toHaveBeenCalled();
+
+    const close = screen.getByLabelText("Close update notification");
+    fireEvent.pointerDown(close, { pointerType: "mouse", button: 0 });
+    fireEvent.click(close);
+
+    await waitFor(() => {
+      expect(
+        screen.queryByText("Licht Launcher is up to date."),
+      ).not.toBeInTheDocument();
+    });
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog")).toBeVisible();
+    expect(screen.getByText("Restart required")).toBeVisible();
+
+    fireEvent.pointerDown(document.body, { pointerType: "mouse", button: 0 });
+    fireEvent.click(document.body);
+    await waitFor(() => {
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+    });
   });
 });
