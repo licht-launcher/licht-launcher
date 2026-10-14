@@ -5,12 +5,18 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      skip_tauri_build:
+        description: Skip the unbundled Tauri build when the caller builds installers
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -75,4 +81,5 @@ jobs:
         run: cargo test --workspace --locked
 
       - name: Build Tauri application
+        if: ${{ !inputs.skip_tauri_build }}
         run: pnpm tauri build --ci --no-bundle -- --locked

@@ -53,9 +53,16 @@ jobs:
           ].join("\n"));
           NODE
 
+  quality_checks:
+    name: Release quality checks
+    needs: metadata
+    uses: ./.github/workflows/ci.yml
+    with:
+      skip_tauri_build: true
+
   build:
     name: Build (${{ matrix.os }})
-    needs: metadata
+    needs: [metadata, quality_checks]
     runs-on: ${{ matrix.os }}
     env:
       RELEASE_PREFIX: ${{ needs.metadata.outputs.prefix }}
@@ -168,7 +175,7 @@ jobs:
 
   publish:
     name: Publish GitHub Release
-    needs: [metadata, build]
+    needs: [metadata, quality_checks, build]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
