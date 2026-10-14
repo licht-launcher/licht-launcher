@@ -38,7 +38,7 @@ export function UpdaterSection({
     "not-checked": "Not checked yet",
     checking: "Checking for updates…",
     "up-to-date": "Up to date",
-    available: "Update available",
+    available: "",
     failed: "Update check failed. Try again.",
   };
   const statusIcons = {
@@ -116,26 +116,27 @@ export function UpdaterSection({
           {status === "available" ? (
             <Button
               type="button"
-              size="sm"
               className="cursor-pointer"
               onClick={() => {
                 window.dispatchEvent(new Event(INSTALL_UPDATE_EVENT));
               }}
             >
               <DownloadIcon data-icon="inline-start" aria-hidden />
-              Update and restart
+              Update
             </Button>
           ) : null}
-          <p
-            role="status"
-            className="flex items-center gap-2 text-sm text-muted-foreground"
-          >
-            <StatusIcon
-              aria-hidden
-              className={checking ? "size-4 animate-spin" : "size-4"}
-            />
-            {statusLabels[status]}
-          </p>
+          {status !== "available" ? (
+            <p
+              role="status"
+              className="flex items-center gap-2 text-sm text-muted-foreground"
+            >
+              <StatusIcon
+                aria-hidden
+                className={checking ? "size-4 animate-spin" : "size-4"}
+              />
+              {statusLabels[status]}
+            </p>
+          ) : null}
         </div>
       </div>
       <div className="flex items-center justify-between gap-3">
