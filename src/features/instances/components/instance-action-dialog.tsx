@@ -10,6 +10,7 @@ import {
 import { Input } from "@/components/ui/input";
 
 export type InstanceAction =
+  | { kind: "rename"; folder: string; name: string }
   | { kind: "duplicate"; folder: string; name: string }
   | { kind: "delete"; folder: string; name: string };
 
@@ -20,6 +21,7 @@ export function InstanceActionDialog({
   onOpenChange,
   onDraftNameChange,
   onDuplicate,
+  onRename,
   onDelete,
 }: {
   action: InstanceAction | null;
@@ -28,17 +30,23 @@ export function InstanceActionDialog({
   onOpenChange: (open: boolean) => void;
   onDraftNameChange: (name: string) => void;
   onDuplicate: () => void;
+  onRename: () => void;
   onDelete: () => void;
 }) {
   return (
     <Dialog open={action !== null} onOpenChange={onOpenChange}>
       <DialogContent>
-        {action?.kind === "duplicate" ? (
+        {action?.kind === "duplicate" || action?.kind === "rename" ? (
           <>
             <DialogHeader>
-              <DialogTitle>Duplicate {action.name}</DialogTitle>
+              <DialogTitle>
+                {action.kind === "rename" ? "Rename" : "Duplicate"}{" "}
+                {action.name}
+              </DialogTitle>
               <DialogDescription>
-                Saves are copied into the new instance.
+                {action.kind === "rename"
+                  ? "Change the display name. The folder on disk stays the same."
+                  : "Saves are copied into the new instance."}
               </DialogDescription>
             </DialogHeader>
             <label
@@ -49,6 +57,7 @@ export function InstanceActionDialog({
               <Input
                 id="instance-name"
                 value={draftName}
+                disabled={busy}
                 onChange={(event) => {
                   onDraftNameChange(event.target.value);
                 }}
@@ -56,10 +65,16 @@ export function InstanceActionDialog({
             </label>
             <DialogFooter>
               <Button
-                disabled={busy || draftName.trim() === ""}
-                onClick={onDuplicate}
+                disabled={
+                  busy ||
+                  draftName.trim() === "" ||
+                  (action.kind === "rename" && draftName.trim() === action.name)
+                }
+                onClick={action.kind === "rename" ? onRename : onDuplicate}
               >
-                Duplicate instance
+                {action.kind === "rename"
+                  ? "Rename instance"
+                  : "Duplicate instance"}
               </Button>
             </DialogFooter>
           </>

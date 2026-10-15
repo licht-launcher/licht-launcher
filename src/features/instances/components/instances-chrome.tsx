@@ -215,6 +215,33 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
             busy={busy}
             loading={instances.isPending}
             playPhase={playPhase}
+            isInstalling={isInstalling}
+            playBlocked={playBlocked}
+            onInstanceAction={(action, instance) => {
+              switch (action) {
+                case "play":
+                  void playInstance(instance);
+                  break;
+                case "stop":
+                  void stopInstance(instance.folder);
+                  break;
+                case "configure":
+                  dialogs.openConfigure(instance.folder);
+                  break;
+                case "open-folder":
+                  openFolder.mutate(instance.folder);
+                  break;
+                case "rename":
+                  dialogs.openRename(instance.folder, instance.name);
+                  break;
+                case "duplicate":
+                  dialogs.openDuplicate(instance.folder, instance.name);
+                  break;
+                case "delete":
+                  dialogs.openDelete(instance.folder, instance.name);
+                  break;
+              }
+            }}
             showTitleband={customTitleBar}
             onSelect={(folder) => {
               if (!onWizard && folder === selectedFolder) {

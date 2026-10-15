@@ -28,6 +28,10 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  InstanceContextMenu,
+  type InstanceMenuAction,
+} from "@/features/instances/components/instance-context-menu";
 import { InstanceIcon } from "@/features/instances/components/instance-icon";
 import type { PlayPhase } from "@/features/instances/hooks/use-play-session";
 import {
@@ -110,6 +114,9 @@ export function HomeSidebar({
   busy,
   loading,
   playPhase,
+  isInstalling,
+  playBlocked,
+  onInstanceAction,
   showTitleband,
   onSelect,
   onCreate,
@@ -120,6 +127,12 @@ export function HomeSidebar({
   busy: boolean;
   loading: boolean;
   playPhase: (folder: string) => PlayPhase;
+  isInstalling: (folder: string) => boolean;
+  playBlocked: boolean;
+  onInstanceAction: (
+    action: InstanceMenuAction,
+    instance: InstanceEntry,
+  ) => void;
   showTitleband: boolean;
   onSelect: (folder: string) => void;
   onCreate: () => void;
@@ -202,53 +215,63 @@ export function HomeSidebar({
                     const phase = playPhase(instance.folder);
                     const active = phase === "starting" || phase === "running";
                     return (
-                      <li key={instance.folder} className="min-w-0 max-w-full">
-                        <Button
-                          type="button"
-                          variant={selected ? "secondary" : "ghost"}
-                          className={cn(
-                            "grid w-full min-w-0 max-w-full grid-cols-[auto_minmax(0,1fr)_auto] gap-2 overflow-hidden px-1 text-[0.8rem]",
-                            !selected && "text-muted-foreground/70",
-                          )}
-                          aria-current={selected ? "page" : undefined}
-                          aria-label={
-                            active
-                              ? `${instance.name} (${phase === "starting" ? "starting" : "running"})`
-                              : undefined
-                          }
-                          disabled={busy}
-                          onClick={() => {
-                            onSelect(instance.folder);
-                          }}
-                        >
-                          <InstanceIcon iconPath={instance.iconPath} />
-                          <span
-                            className="min-w-0 overflow-hidden text-left text-ellipsis whitespace-nowrap"
-                            title={instance.name}
+                      <InstanceContextMenu
+                        key={instance.folder}
+                        instance={instance}
+                        phase={phase}
+                        installing={isInstalling(instance.folder)}
+                        busy={busy}
+                        playBlocked={playBlocked}
+                        onAction={onInstanceAction}
+                      >
+                        <li className="min-w-0 max-w-full">
+                          <Button
+                            type="button"
+                            variant={selected ? "secondary" : "ghost"}
+                            className={cn(
+                              "grid w-full min-w-0 max-w-full grid-cols-[auto_minmax(0,1fr)_auto] gap-2 overflow-hidden px-1 text-[0.8rem]",
+                              !selected && "text-muted-foreground/70",
+                            )}
+                            aria-current={selected ? "page" : undefined}
+                            aria-label={
+                              active
+                                ? `${instance.name} (${phase === "starting" ? "starting" : "running"})`
+                                : undefined
+                            }
+                            disabled={busy}
+                            onClick={() => {
+                              onSelect(instance.folder);
+                            }}
                           >
-                            {instance.name}
-                          </span>
-                          {active ? (
+                            <InstanceIcon iconPath={instance.iconPath} />
                             <span
-                              aria-hidden
-                              className="inline-flex min-w-0 items-center gap-1.5 overflow-hidden text-ellipsis whitespace-nowrap text-xs font-medium text-success"
+                              className="min-w-0 overflow-hidden text-left text-ellipsis whitespace-nowrap"
+                              title={instance.name}
                             >
-                              {phase === "starting" ? "Starting" : "Running"}
-                              {phase === "starting" ? (
-                                <Loader2Icon
-                                  className="size-3.5 shrink-0 animate-spin"
-                                  strokeWidth={2}
-                                />
-                              ) : (
-                                <span className="relative flex size-2 shrink-0">
-                                  <span className="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-75" />
-                                  <span className="relative inline-flex size-2 rounded-full bg-success" />
-                                </span>
-                              )}
+                              {instance.name}
                             </span>
-                          ) : null}
-                        </Button>
-                      </li>
+                            {active ? (
+                              <span
+                                aria-hidden
+                                className="inline-flex min-w-0 items-center gap-1.5 overflow-hidden text-ellipsis whitespace-nowrap text-xs font-medium text-success"
+                              >
+                                {phase === "starting" ? "Starting" : "Running"}
+                                {phase === "starting" ? (
+                                  <Loader2Icon
+                                    className="size-3.5 shrink-0 animate-spin"
+                                    strokeWidth={2}
+                                  />
+                                ) : (
+                                  <span className="relative flex size-2 shrink-0">
+                                    <span className="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-75" />
+                                    <span className="relative inline-flex size-2 rounded-full bg-success" />
+                                  </span>
+                                )}
+                              </span>
+                            ) : null}
+                          </Button>
+                        </li>
+                      </InstanceContextMenu>
                     );
                   })}
                 </ul>
