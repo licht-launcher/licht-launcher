@@ -20,6 +20,9 @@
 
 **Unofficial project, not affiliated with Mojang Studios or Microsoft.**
 
+[Terms of Use](TERMS.md) · [Privacy Policy](PRIVACY.md) ·
+[Contributing](CONTRIBUTING.md) · [Code signing policy](#code-signing-policy)
+
 ![Licht Launcher screenshot](.github/screenshot.png)
 
 ## Download
@@ -34,8 +37,73 @@ Download the latest build from the
 | Linux distributions with Debian packages | `.deb` |
 
 Portable binaries are also published for Windows and Linux. The updater uses
-GitHub Releases as its source and currently supports signed Windows NSIS and
-Linux AppImage updates.
+GitHub Releases as its source and verifies Tauri updater signatures for Windows
+NSIS and Linux AppImage updates. See the [Code signing policy](#code-signing-policy)
+for the separate Windows publisher-signing status.
+
+Read the [Terms of Use](TERMS.md) and [Privacy Policy](PRIVACY.md) before using
+the launcher. You need the appropriate Minecraft game rights; the MIT license
+for Licht Launcher does not include a Minecraft license.
+
+### Uninstall
+
+- **Windows installer:** close the launcher and use Windows Settings > Apps to
+  uninstall Licht Launcher.
+- **Linux `.deb`:** remove the installed Licht Launcher package through your
+  distribution's package manager.
+- **AppImage or portable binary:** close the launcher, then remove the
+  executable and any shortcuts you created.
+
+To remove saved accounts and local game/launcher data as well, follow
+[Retention and deletion](PRIVACY.md#retention-and-deletion). Back up worlds and
+other files you want to keep first; executable removal alone may leave data
+and OS keyring credentials behind.
+
+## Code signing policy
+
+**SignPath status: application not yet submitted; SignPath signing is not yet
+integrated.** The project currently publishes Tauri updater signatures. These
+allow the updater to verify update packages and are separate from Windows
+Authenticode signatures identifying a publisher. No SignPath approval or
+certificate sponsorship is claimed for current releases.
+
+Licht Launcher is currently a single-maintainer project:
+
+| Role | Responsible person |
+| --- | --- |
+| Author / committer | [Mateus Neiva (@mateusneiva)](https://github.com/mateusneiva) |
+| Reviewer of external contributions | [Mateus Neiva (@mateusneiva)](https://github.com/mateusneiva) |
+| Release and code-signing approver | [Mateus Neiva (@mateusneiva)](https://github.com/mateusneiva) |
+
+These roles are held by the same person; the project does not currently have
+an independent reviewer. The policy for a future SignPath integration is:
+
+- Repository and signing account access must use multi-factor authentication.
+- External contributions must be reviewed before merging. CI/build scripts,
+  dependencies, and artifact changes are included in that review.
+- Each SignPath signing request must be manually approved by the listed
+  approver after checking the source commit, CI results, artifact provenance,
+  and product/version metadata. The current release workflow does not yet
+  implement that SignPath approval step.
+- Signing is limited to Licht Launcher's own artifacts built from this
+  repository. Downloaded Minecraft files, Java runtimes, mod loaders, and mods
+  must not be submitted as the project's own binaries for signing.
+
+If SignPath accepts the project and signing is integrated, the attribution for
+artifacts signed through that program will be:
+
+> Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
+
+Data handling, automatic network requests, available controls, and third-party
+services are described in [PRIVACY.md](PRIVACY.md).
+SignPath's [conditions](https://signpath.org/terms) also require
+appropriate installation-time privacy disclosure and controls for covered
+data-transfer features; publication of these documents alone does not add those
+installer/application controls.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md#releases-and-signing-responsibilities) for
+review responsibilities and [docs/UPDATES.md](docs/UPDATES.md) for the current
+updater-signature workflow.
 
 ## Project status
 
@@ -148,9 +216,17 @@ the repository and be configured as a GitHub Actions secret.
 
 ## Contributing
 
-Read [AGENTS.md](AGENTS.md) and [docs/ROADMAP.md](docs/ROADMAP.md) before
-starting work. Changes should be focused, tested, and submitted through a pull
-request. Do not commit game files, signing keys, API keys, or other secrets.
+Read [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, contribution
+review, required checks, and release responsibilities. The project is currently
+maintained solely by [Mateus Neiva (@mateusneiva)](https://github.com/mateusneiva).
+
+## Contact and policies
+
+- Project, privacy, and private security reports:
+  [mateus.fneiva@gmail.com](mailto:mateus.fneiva@gmail.com).
+- [Terms of Use](TERMS.md).
+- [Privacy Policy](PRIVACY.md), including third-party connections and deletion.
+- [Contribution guidelines](CONTRIBUTING.md).
 
 ## License
 
