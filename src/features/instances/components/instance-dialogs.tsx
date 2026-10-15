@@ -70,6 +70,15 @@ export function InstanceDialogs({
         busy={busy}
         onOpenChange={onActionOpenChange}
         onDraftNameChange={onDraftNameChange}
+        onRename={() => {
+          if (action?.kind !== "rename") {
+            return;
+          }
+          mutations.rename.mutate({
+            folder: action.folder,
+            name: draftName.trim(),
+          });
+        }}
         onDuplicate={() => {
           if (action?.kind !== "duplicate") {
             return;

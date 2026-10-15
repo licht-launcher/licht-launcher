@@ -5,6 +5,7 @@ import {
   RouterProvider,
 } from "@tanstack/react-router";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -98,6 +99,75 @@ const classicInstance = {
   lastOpenedAt: null as string | null,
   iconPath: null as string | null,
 };
+
+const contextInstance = {
+  ...classicInstance,
+  folder: "next",
+  name: "Next",
+  versionId: "1.20.1",
+};
+
+function mockContextMenuCommands(
+  implement?: (command: string, args?: unknown) => unknown,
+) {
+  let entries = [classicInstance, contextInstance];
+  invoke.mockImplementation((command: string, args?: unknown) => {
+    const custom = implement?.(command, args);
+    if (custom !== undefined) return custom;
+    if (command === "list_instances") return Promise.resolve(entries);
+    if (command === "get_settings") {
+      return Promise.resolve({
+        ...snapshot,
+        settings: { ...snapshot.settings, checkForUpdates: false },
+      });
+    }
+    if (command === "list_running_games") return Promise.resolve([]);
+    if (command === "get_last_played_folder") return Promise.resolve("classic");
+    if (command === "is_version_ready_cmd") return Promise.resolve(true);
+    if (command === "list_versions") {
+      return Promise.resolve([
+        { id: "1.5.2", versionType: "release", installed: true },
+        { id: "1.20.1", versionType: "release", installed: true },
+      ]);
+    }
+    const input = args !== null && typeof args === "object" ? args : {};
+    const folder = "folder" in input ? input.folder : undefined;
+    const name = "name" in input ? input.name : undefined;
+    const entry = entries.find((item) => item.folder === folder);
+    if (command === "touch_last_opened" && entry) {
+      return Promise.resolve({
+        ...entry,
+        lastOpenedAt: "2026-10-15T12:00:00Z",
+      });
+    }
+    if (command === "rename_instance" && entry && typeof name === "string") {
+      const renamed = { ...entry, name };
+      entries = entries.map((item) =>
+        item.folder === folder ? renamed : item,
+      );
+      return Promise.resolve(renamed);
+    }
+    if (command === "duplicate_instance" && entry && typeof name === "string") {
+      const duplicate = { ...entry, folder: "next-copy", name };
+      entries = [...entries, duplicate];
+      return Promise.resolve(duplicate);
+    }
+    if (command === "delete_instance") {
+      entries = entries.filter((item) => item.folder !== folder);
+      return Promise.resolve();
+    }
+    return defaultCommandResponse(command);
+  });
+}
+
+async function openInstanceContextMenu(name = "Next") {
+  const sidebar = await screen.findByRole("navigation", { name: "Instances" });
+  const target = await within(sidebar).findByRole("button", {
+    name: new RegExp(`^${name}(?: \\(|$)`),
+  });
+  fireEvent.contextMenu(target, { clientX: 50, clientY: 60 });
+  return screen.findByRole("menu", { name: `Actions for ${name}` });
+}
 
 describe("InstancesPage", () => {
   beforeEach(() => {
@@ -606,6 +676,18 @@ describe("InstancesPage", () => {
       await screen.findByRole("progressbar", { name: "Install progress" }),
     ).toBeInTheDocument();
 
+    const menu = await openInstanceContextMenu();
+    expect(
+      within(menu).getByRole("menuitem", { name: "Installing…" }),
+    ).toHaveAttribute("aria-disabled", "true");
+    expect(
+      within(menu).getByRole("menuitem", { name: "Duplicate" }),
+    ).toHaveAttribute("aria-disabled", "true");
+    fireEvent.keyDown(menu, { key: "Escape" });
+    await waitFor(() => {
+      expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    });
+
     listeners.get("install-progress")?.({
       payload: {
         versionId: "1.20.1",
@@ -1087,6 +1169,216 @@ describe("InstancesPage", () => {
       within(sidebar).getByRole("button", { name: entry.name }),
     ).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("button", { name: "Back" })).toBeDisabled();
+  });
+
+  describe("instance context menu", () => {
+    beforeEach(() => {
+      mockContextMenuCommands();
+    });
+
+    it("targets the clicked instance without changing selection or opening the global menu", async () => {
+      const { router } = await renderAt("/?instance=classic");
+      const menu = await openInstanceContextMenu();
+      expect(screen.getAllByRole("menu")).toHaveLength(1);
+      expect(within(menu).queryByText("Next")).not.toBeInTheDocument();
+      expect(
+        within(menu).queryByRole("menuitem", { name: "Settings" }),
+      ).not.toBeInTheDocument();
+      expect(router.state.location.search).toMatchObject({
+        instance: "classic",
+      });
+      fireEvent.keyDown(menu, { key: "Escape" });
+      await waitFor(() => {
+        expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+      });
+      expect(screen.getByRole("heading", { name: "Classic" })).toBeVisible();
+    });
+
+    it("opens from the keyboard and restores focus when dismissed", async () => {
+      await renderAt("/?instance=classic");
+      const sidebar = await screen.findByRole("navigation", {
+        name: "Instances",
+      });
+      const target = within(sidebar).getByRole("button", { name: "Next" });
+      target.focus();
+      fireEvent.keyDown(target, { key: "F10", shiftKey: true });
+      const menu = await screen.findByRole("menu", {
+        name: "Actions for Next",
+      });
+      expect(screen.getAllByRole("menu")).toHaveLength(1);
+      fireEvent.keyDown(menu, { key: "Escape" });
+      await waitFor(() => expect(target).toHaveFocus());
+    });
+
+    it("plays and stops the clicked instance and reflects transitional states", async () => {
+      let finishLaunch: (exit: { code: number }) => void = () => {};
+      let finishStop: () => void = () => {};
+      mockContextMenuCommands((command) => {
+        if (command === "launch") {
+          return new Promise<{ code: number }>((resolve) => {
+            finishLaunch = resolve;
+          });
+        }
+        if (command === "stop_game") {
+          return new Promise<void>((resolve) => {
+            finishStop = resolve;
+          });
+        }
+        return undefined;
+      });
+      await renderAt("/?instance=classic");
+      await openInstanceContextMenu();
+      fireEvent.click(screen.getByRole("menuitem", { name: "Play" }));
+      await waitFor(() => {
+        expect(invoke).toHaveBeenCalledWith("launch", {
+          folder: "next",
+          username: "Steve",
+        });
+      });
+      let menu = await openInstanceContextMenu();
+      expect(
+        within(menu).getByRole("menuitem", { name: "Starting…" }),
+      ).toHaveAttribute("aria-disabled", "true");
+      expect(
+        within(menu).getByRole("menuitem", { name: "Delete" }),
+      ).toHaveAttribute("aria-disabled", "true");
+      fireEvent.keyDown(menu, { key: "Escape" });
+      act(() => {
+        listeners.get("game-log")?.({
+          payload: {
+            folder: "next",
+            stream: "stdout",
+            line: "Started",
+          } satisfies GameLogEvent,
+        });
+      });
+      menu = await openInstanceContextMenu();
+      fireEvent.click(within(menu).getByRole("menuitem", { name: "Stop" }));
+      await waitFor(() => {
+        expect(invoke).toHaveBeenCalledWith("stop_game", { folder: "next" });
+      });
+      menu = await openInstanceContextMenu();
+      expect(
+        within(menu).getByRole("menuitem", { name: "Stopping…" }),
+      ).toHaveAttribute("aria-disabled", "true");
+      await act(async () => {
+        finishStop();
+        finishLaunch({ code: 0 });
+      });
+      await waitFor(() => {
+        expect(
+          within(menu).getByRole("menuitem", { name: "Play" }),
+        ).not.toHaveAttribute("aria-disabled", "true");
+      });
+    });
+
+    it("opens the clicked instance folder", async () => {
+      await renderAt("/?instance=classic");
+      await openInstanceContextMenu();
+      fireEvent.click(screen.getByRole("menuitem", { name: "Open folder" }));
+      await waitFor(() => {
+        expect(invoke).toHaveBeenCalledWith("open_instance_folder", {
+          folder: "next",
+        });
+      });
+    });
+
+    it("opens configuration for the clicked instance", async () => {
+      await renderAt("/?instance=classic");
+      await openInstanceContextMenu();
+      fireEvent.click(screen.getByRole("menuitem", { name: "Configure" }));
+      expect(await screen.findByLabelText("Name")).toHaveValue("Next");
+      expect(screen.getByRole("dialog")).toBeVisible();
+      expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    });
+
+    it("renames the clicked instance through the action dialog", async () => {
+      await renderAt("/?instance=classic");
+      await openInstanceContextMenu();
+      fireEvent.click(screen.getByRole("menuitem", { name: "Rename" }));
+      const dialog = await screen.findByRole("dialog", { name: "Rename Next" });
+      const field = within(dialog).getByLabelText("Name");
+      const save = within(dialog).getByRole("button", {
+        name: "Rename instance",
+      });
+      expect(field).toHaveValue("Next");
+      expect(save).toBeDisabled();
+      fireEvent.change(field, { target: { value: "   " } });
+      expect(save).toBeDisabled();
+      fireEvent.change(field, { target: { value: " Renamed " } });
+      fireEvent.click(save);
+      await waitFor(() => {
+        expect(invoke).toHaveBeenCalledWith("rename_instance", {
+          folder: "next",
+          name: "Renamed",
+        });
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      });
+      const sidebar = screen.getByRole("navigation", { name: "Instances" });
+      expect(
+        await within(sidebar).findByRole("button", { name: "Renamed" }),
+      ).toBeVisible();
+    });
+
+    it("duplicates the clicked instance after entering a name", async () => {
+      await renderAt("/?instance=classic");
+      await openInstanceContextMenu();
+      fireEvent.click(screen.getByRole("menuitem", { name: "Duplicate" }));
+      const dialog = await screen.findByRole("dialog", {
+        name: "Duplicate Next",
+      });
+      expect(invoke).not.toHaveBeenCalledWith(
+        "duplicate_instance",
+        expect.anything(),
+      );
+      fireEvent.change(within(dialog).getByLabelText("Name"), {
+        target: { value: "Next copy" },
+      });
+      fireEvent.click(
+        within(dialog).getByRole("button", { name: "Duplicate instance" }),
+      );
+      await waitFor(() => {
+        expect(invoke).toHaveBeenCalledWith("duplicate_instance", {
+          folder: "next",
+          name: "Next copy",
+        });
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      });
+      expect(
+        await screen.findByRole("button", { name: "Next copy" }),
+      ).toBeVisible();
+    });
+
+    it("deletes only the clicked instance after confirmation", async () => {
+      await renderAt("/?instance=classic");
+      await openInstanceContextMenu();
+      fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
+      const dialog = await screen.findByRole("dialog", {
+        name: "Delete Next?",
+      });
+      expect(invoke).not.toHaveBeenCalledWith(
+        "delete_instance",
+        expect.anything(),
+      );
+      fireEvent.click(
+        within(dialog).getByRole("button", { name: "Delete instance" }),
+      );
+      await waitFor(() => {
+        expect(invoke).toHaveBeenCalledWith("delete_instance", {
+          folder: "next",
+        });
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      });
+      const sidebar = screen.getByRole("navigation", { name: "Instances" });
+      await waitFor(() => {
+        expect(
+          within(sidebar).queryByRole("button", { name: "Next" }),
+        ).not.toBeInTheDocument();
+      });
+      expect(
+        within(sidebar).getByRole("button", { name: "Classic" }),
+      ).toBeVisible();
+    });
   });
 
   it("shows a network toast when the list fails", async () => {
