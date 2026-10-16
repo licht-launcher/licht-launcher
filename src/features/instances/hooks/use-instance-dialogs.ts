@@ -40,6 +40,11 @@ export function useInstanceDialogs() {
     setAction({ kind: "duplicate", folder, name });
   }
 
+  function openRename(folder: string, name: string) {
+    setDraftName(name);
+    setAction({ kind: "rename", folder, name });
+  }
+
   function openDelete(folder: string, name: string) {
     setDraftName("");
     setAction({ kind: "delete", folder, name });
@@ -58,6 +63,7 @@ export function useInstanceDialogs() {
     openConfigure,
     openGlobalSettings,
     openDuplicate,
+    openRename,
     openDelete,
   };
 }
