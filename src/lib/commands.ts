@@ -7,6 +7,7 @@ import type {
   PlatformId,
 } from "@/features/new-instance/model/wizard";
 import type { AccountProfile } from "@/lib/generated/AccountProfile";
+import type { DownloadJobSnapshot } from "@/lib/generated/DownloadJobSnapshot";
 import type { GameExit } from "@/lib/generated/GameExit";
 import type { InstanceContentEntry } from "@/lib/generated/InstanceContentEntry";
 import type { InstanceContentKind } from "@/lib/generated/InstanceContentKind";
@@ -22,6 +23,10 @@ import type { VersionSummary } from "@/lib/generated/VersionSummary";
 
 export function listInstances(): Promise<InstanceEntry[]> {
   return invoke("list_instances");
+}
+
+export function listDownloadJobs(): Promise<DownloadJobSnapshot[]> {
+  return invoke("list_download_jobs");
 }
 
 export function createInstance(

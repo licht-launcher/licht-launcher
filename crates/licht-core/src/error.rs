@@ -96,6 +96,18 @@ pub enum CoreError {
     LaunchHost,
     #[error("database operation failed")]
     Database(#[from] rusqlite::Error),
+    #[error("database schema {schema} is not supported")]
+    DatabaseSchema { schema: u32 },
+    #[error("download job data is invalid: {detail}")]
+    DownloadJobInvalid { detail: &'static str },
+    #[error("download job JSON is invalid")]
+    DownloadJobJson(#[source] serde_json::Error),
+    #[error("download job was not found")]
+    DownloadJobMissing,
+    #[error("an unfinished download job already exists for this instance")]
+    DownloadJobExists,
+    #[error("download job state transition is invalid")]
+    DownloadJobTransition,
     #[error("LICHT_MSA_CLIENT_ID is missing or empty")]
     MsaClientIdMissing,
     #[error("Microsoft auth JSON is invalid")]

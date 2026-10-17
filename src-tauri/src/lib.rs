@@ -18,6 +18,8 @@ pub fn run() -> anyhow::Result<()> {
     );
 
     let paths = commands::LauncherPaths::load().context("Failed to resolve Licht folders")?;
+    licht_core::recover_download_jobs(&paths.settings, &paths.game)
+        .context("Failed to recover download jobs")?;
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -39,6 +41,7 @@ pub fn run() -> anyhow::Result<()> {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            commands::downloads::list_download_jobs,
             commands::instances::list_instances,
             commands::instances::create_instance,
             commands::instances::list_loader_versions,

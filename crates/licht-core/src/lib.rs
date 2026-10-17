@@ -104,6 +104,11 @@ pub use settings::{
     set_java_path, settings_snapshot, total_memory_mb, write_concurrency,
 };
 pub use transfer::control::{DownloadControl, DownloadState};
+pub use transfer::jobs::{
+    DownloadComponent, DownloadJobOperation, DownloadJobSnapshot, DownloadJobStatus,
+    DownloadJobUpdate, DownloadPhase, create_download_job, get_download_job, list_download_jobs,
+    recover_download_jobs, update_download_job,
+};
 pub use version::{
     Arch, Argument, ArgumentValue, Artifact, AssetIndex, Download, GameArguments, JavaVersion,
     LaunchEnvironment, Library, LibraryDownloads, LibraryExtract, OsName, OsRule, Rule, RuleAction,

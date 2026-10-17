@@ -2,4 +2,5 @@
 
 mod cache;
 mod db;
+mod download_jobs;
 mod settings;
