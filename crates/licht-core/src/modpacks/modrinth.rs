@@ -10,7 +10,7 @@ use crate::{CoreError, Result};
 
 const SEARCH_URL: &str = "https://api.modrinth.com/v2/search";
 const PROJECT_VERSIONS: &str = "https://api.modrinth.com/v2/project";
-const USER_AGENT: &str = "licht-launcher/0.1.1 (https://github.com/mateusneiva/licht-launcher)";
+const USER_AGENT: &str = "licht-launcher/0.1.1 (https://github.com/licht-launcher/licht-launcher)";
 /// Pack archives can be ~100 MB; the shared API client timeout is too short.
 const PACK_ARCHIVE_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 
