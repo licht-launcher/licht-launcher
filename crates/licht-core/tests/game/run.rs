@@ -3,6 +3,71 @@ use std::path::{Path, PathBuf};
 use licht_core::{CoreError, GameLine, LogCodec, OutputStream, run_game};
 use tokio::sync::{mpsc, oneshot};
 
+#[cfg(windows)]
+#[tokio::test]
+async fn a_windows_game_process_has_no_console_and_preserves_both_streams() {
+    if std::env::var_os("LICHT_TEST_CONSOLE_PARENT").is_none() {
+        use std::os::windows::process::CommandExt;
+
+        // Give the test worker a real console, independent of the test runner's host.
+        const CREATE_NEW_CONSOLE: u32 = 0x0000_0010;
+        let worker = std::process::Command::new(std::env::current_exe().expect("test executable"))
+            .args([
+                "--exact",
+                "run::a_windows_game_process_has_no_console_and_preserves_both_streams",
+                "--nocapture",
+            ])
+            .env("LICHT_TEST_CONSOLE_PARENT", "1")
+            .creation_flags(CREATE_NEW_CONSOLE)
+            .output()
+            .expect("the test worker should start with a console");
+        assert!(
+            worker.status.success(),
+            "console worker failed: {}{}",
+            String::from_utf8_lossy(&worker.stdout),
+            String::from_utf8_lossy(&worker.stderr)
+        );
+        return;
+    }
+
+    let probe = r#"
+        $ErrorActionPreference = 'Stop'
+        Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public static class ConsoleProbe { [DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow(); }'
+        if ([ConsoleProbe]::GetConsoleWindow() -ne [IntPtr]::Zero) {
+            [Console]::Out.WriteLine('external-console')
+            exit 1
+        }
+        [Console]::Out.WriteLine('no-console')
+        [Console]::Error.WriteLine('stderr-still-captured')
+    "#;
+    let command = [
+        "powershell.exe".to_string(),
+        "-NoLogo".to_string(),
+        "-NoProfile".to_string(),
+        "-NonInteractive".to_string(),
+        "-Command".to_string(),
+        probe.to_string(),
+    ];
+    let (output, mut incoming) = mpsc::channel(8);
+    let exit = run_game(&command, None, &[], LogCodec::Utf8, output, None)
+        .await
+        .expect("the console probe should start");
+    let lines = collect(&mut incoming);
+
+    assert!(
+        exit.succeeded(),
+        "unexpected console probe output: {lines:?}"
+    );
+    assert!(lines.contains(&GameLine {
+        stream: OutputStream::Stdout,
+        line: "no-console".to_string(),
+    }));
+    assert!(lines.contains(&GameLine {
+        stream: OutputStream::Stderr,
+        line: "stderr-still-captured".to_string(),
+    }));
+}
+
 #[tokio::test]
 async fn a_finished_process_reports_both_streams_and_success() {
     let directory = temp_dir("streams");
