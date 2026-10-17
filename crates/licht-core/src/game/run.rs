@@ -75,6 +75,12 @@ pub async fn run_game(
     }
 
     let mut process = Command::new(program);
+    #[cfg(windows)]
+    {
+        // The GUI launcher must capture Java's output without opening a console window.
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        process.creation_flags(CREATE_NO_WINDOW);
+    }
     process
         .args(&command[1..])
         .stdin(std::process::Stdio::null())
