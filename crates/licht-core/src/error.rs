@@ -26,6 +26,12 @@ pub enum CoreError {
     Sha512Mismatch { expected: String, actual: String },
     #[error("download needs at least one attempt")]
     DownloadAttempts,
+    #[error("download is paused")]
+    DownloadPaused,
+    #[error("download was cancelled")]
+    DownloadCancelled,
+    #[error("download response is invalid: {detail}")]
+    DownloadResponse { detail: &'static str },
     #[error("download concurrency must be at least 1")]
     DownloadConcurrency,
     #[error("write concurrency must be at least 1")]

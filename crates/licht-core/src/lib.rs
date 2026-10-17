@@ -49,8 +49,9 @@ pub use db::{
     set_last_played_folder, set_meta,
 };
 pub use download::{
-    DEFAULT_CONCURRENCY, DEFAULT_RETRY, DownloadProgress, DownloadTask, InstallProgress, Retry,
-    TransferLimits, download_all, download_file, shared_transfer_limits,
+    DEFAULT_CONCURRENCY, DEFAULT_RETRY, DownloadOptions, DownloadProgress, DownloadTask,
+    InstallProgress, Retry, TransferLimits, download_all, download_all_with_control, download_file,
+    download_file_with_control, shared_transfer_limits,
 };
 pub use error::CoreError;
 pub use install::{
@@ -102,6 +103,7 @@ pub use settings::{
     global_launch, load_settings, memory_slider_max, recommended_max_memory_mb, save_settings,
     set_java_path, settings_snapshot, total_memory_mb, write_concurrency,
 };
+pub use transfer::control::{DownloadControl, DownloadState};
 pub use version::{
     Arch, Argument, ArgumentValue, Artifact, AssetIndex, Download, GameArguments, JavaVersion,
     LaunchEnvironment, Library, LibraryDownloads, LibraryExtract, OsName, OsRule, Rule, RuleAction,

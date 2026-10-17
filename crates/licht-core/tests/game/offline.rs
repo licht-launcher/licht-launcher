@@ -340,7 +340,7 @@ fn library(url: &str, path: &str, sha1: &str) -> Library {
             artifact: Some(Artifact {
                 path: path.to_string(),
                 sha1: sha1.to_string(),
-                size: 1,
+                size: LIBRARY.len() as u64,
                 url: url.to_string(),
             }),
             classifiers: None,
