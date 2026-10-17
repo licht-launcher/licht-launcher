@@ -8,15 +8,14 @@ use futures_util::{StreamExt, TryStreamExt, stream::FuturesUnordered};
 use reqwest::StatusCode;
 use reqwest::header::{ACCEPT_ENCODING, CONTENT_ENCODING, CONTENT_RANGE, RANGE};
 use serde::{Deserialize, Serialize};
-use sha1::{Digest, Sha1};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::{Mutex, Notify, mpsc};
 use tokio_util::io::StreamReader;
 use tracing::warn;
 use ts_rs::TS;
 
-use crate::hashes::{file_matches_sha1, hex_encode};
-use crate::{CoreError, DownloadControl, Result};
+use super::checksum::TransferHasher;
+use crate::{CoreError, DownloadChecksum, DownloadControl, Result};
 
 const CHUNK_SIZE: usize = 64 * 1024;
 
@@ -172,7 +171,7 @@ struct TransferJob<'a> {
     client: &'a reqwest::Client,
     url: &'a str,
     destination: &'a Path,
-    expected_sha1: &'a str,
+    checksum: DownloadChecksum,
     published_size: u64,
     limits: &'a TransferLimits,
     download_concurrency: usize,
@@ -188,6 +187,14 @@ pub struct DownloadOptions {
     pub download_concurrency: usize,
     pub write_concurrency: usize,
     pub retry: Retry,
+}
+
+#[derive(Debug, Clone)]
+pub struct VerifiedDownloadTask {
+    pub url: String,
+    pub destination: PathBuf,
+    pub checksum: DownloadChecksum,
+    pub size: u64,
 }
 
 impl Default for DownloadOptions {
@@ -235,7 +242,7 @@ pub async fn download_file_with_control(
         client,
         url,
         destination,
-        expected_sha1,
+        checksum: DownloadChecksum::legacy_sha1(expected_sha1),
         published_size: 0,
         limits: &shared_transfer_limits(),
         download_concurrency: DEFAULT_CONCURRENCY,
@@ -274,6 +281,25 @@ pub async fn download_all_with_control(
     control: &DownloadControl,
     progress: mpsc::Sender<DownloadProgress>,
 ) -> Result<()> {
+    let verified: Vec<_> = tasks
+        .iter()
+        .map(|task| VerifiedDownloadTask {
+            url: task.url.clone(),
+            destination: task.destination.clone(),
+            checksum: DownloadChecksum::legacy_sha1(&task.sha1),
+            size: task.size,
+        })
+        .collect();
+    download_verified_all(client, &verified, options, control, progress).await
+}
+
+pub async fn download_verified_all(
+    client: &reqwest::Client,
+    tasks: &[VerifiedDownloadTask],
+    options: &DownloadOptions,
+    control: &DownloadControl,
+    progress: mpsc::Sender<DownloadProgress>,
+) -> Result<()> {
     control.ready().await?;
     if tasks.is_empty() {
         return Ok(());
@@ -289,9 +315,11 @@ pub async fn download_all_with_control(
         .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "too many downloads"))?;
     let bytes = ByteProgress {
         done: AtomicU64::new(0),
-        total: tasks
-            .iter()
-            .fold(0, |sum, task| sum.saturating_add(task.size)),
+        total: AtomicU64::new(
+            tasks
+                .iter()
+                .fold(0, |sum, task| sum.saturating_add(task.size)),
+        ),
         files: total,
         sink: progress.clone(),
     };
@@ -302,7 +330,7 @@ pub async fn download_all_with_control(
             client,
             url: &task.url,
             destination: &task.destination,
-            expected_sha1: &task.sha1,
+            checksum: task.checksum.clone(),
             published_size: task.size,
             limits: &options.limits,
             download_concurrency: options.download_concurrency,
@@ -341,6 +369,7 @@ pub async fn download_all_with_control(
 }
 
 async fn download_one(job: TransferJob<'_>) -> Result<()> {
+    job.checksum.validate()?;
     if job.retry.attempts == 0 {
         return Err(CoreError::DownloadAttempts);
     }
@@ -367,9 +396,17 @@ async fn download_one(job: TransferJob<'_>) -> Result<()> {
 
 async fn download_locked(job: &TransferJob<'_>, part: &Path) -> Result<()> {
     job.control.ready().await?;
-    if file_matches_sha1(job.destination, job.expected_sha1)? {
+    if job.checksum.matches_file(job.destination)? {
         if let Some(progress) = job.progress {
-            progress.add(job.published_size);
+            let size = if job.published_size == 0 {
+                std::fs::metadata(job.destination)?.len()
+            } else {
+                job.published_size
+            };
+            if job.published_size == 0 {
+                progress.total.fetch_add(size, Ordering::Relaxed);
+            }
+            progress.add(size);
         }
         return Ok(());
     }
@@ -377,6 +414,7 @@ async fn download_locked(job: &TransferJob<'_>, part: &Path) -> Result<()> {
         progress: job.progress,
         added: 0,
         committed: false,
+        known_total: job.published_size,
     };
     let mut backoff = job.retry.initial_backoff;
     let mut attempt = 1;
@@ -430,9 +468,9 @@ async fn transfer_partial(
 ) -> Result<()> {
     let (mut offset, mut hasher) = read_prefix(job, part).await?;
     credited.set(offset);
-    if offset > 0
-        && hex_encode(hasher.clone().finalize().as_slice()).eq_ignore_ascii_case(job.expected_sha1)
-    {
+    if offset > 0 && job.checksum.matches(&hasher.clone().finish()) {
+        credited.set_total(offset);
+        credited.set(offset);
         return Ok(());
     }
     let _download = tokio::select! {
@@ -440,19 +478,20 @@ async fn transfer_partial(
         error = job.control.interrupted() => return Err(error),
         permit = job.limits.download.acquire(job.download_concurrency) => permit,
     };
+    let _activity = job.control.begin_transfer()?;
     let mut response = request(job, offset).await?;
     if response.status() == StatusCode::RANGE_NOT_SATISFIABLE && offset > 0 {
         drop(response);
         remove_partial(part).await?;
         offset = 0;
-        hasher = Sha1::new();
+        hasher = job.checksum.hasher();
         credited.set(0);
         response = request(job, 0).await?;
     }
     let response = response.error_for_status()?;
     if response.status() == StatusCode::OK {
         offset = 0;
-        hasher = Sha1::new();
+        hasher = job.checksum.hasher();
         credited.set(0);
     }
     let total = match response_total(&response, offset, job.published_size) {
@@ -463,6 +502,10 @@ async fn transfer_partial(
             return Err(error);
         }
     };
+    if let Some(total) = total {
+        credited.set_total(total);
+    }
+    credited.set(offset);
     if let Some(parent) = part.parent() {
         tokio::fs::create_dir_all(parent).await?;
     }
@@ -511,26 +554,23 @@ async fn transfer_partial(
     if total.is_some_and(|total| offset != total) {
         return Err(invalid_response("body is shorter than its declared size"));
     }
-    if job.expected_sha1.is_empty() {
-        warn!("download has no SHA1; content is not verified");
+    if job.checksum.expected().is_none() {
+        warn!("download has no checksum; content is not verified");
     } else {
-        let actual = hex_encode(hasher.finalize().as_slice());
-        if !actual.eq_ignore_ascii_case(job.expected_sha1) {
+        let actual = hasher.finish();
+        if !job.checksum.matches(&actual) {
             remove_partial(part).await?;
             credited.set(0);
-            return Err(CoreError::Sha1Mismatch {
-                expected: job.expected_sha1.to_string(),
-                actual,
-            });
+            return Err(job.checksum.mismatch(actual));
         }
     }
     Ok(())
 }
 
-async fn read_prefix(job: &TransferJob<'_>, part: &Path) -> Result<(u64, Sha1)> {
-    let mut hasher = Sha1::new();
+async fn read_prefix(job: &TransferJob<'_>, part: &Path) -> Result<(u64, TransferHasher)> {
+    let mut hasher = job.checksum.hasher();
     // Without a checksum there is no stable content identity across calls.
-    if job.expected_sha1.is_empty() {
+    if job.checksum.expected().is_none() {
         return Ok((0, hasher));
     }
     let mut file = match tokio::fs::File::open(part).await {
@@ -642,6 +682,14 @@ async fn remove_partial(part: &Path) -> Result<()> {
     }
 }
 
+pub(crate) async fn remove_partial_if_idle(destination: &Path) -> Result<()> {
+    let lock = destination_lock(destination);
+    if let Ok(_guard) = lock.try_lock() {
+        remove_partial(&part_path(destination)?).await?;
+    }
+    Ok(())
+}
+
 fn destination_lock(destination: &Path) -> Arc<Mutex<()>> {
     let mut locks = DESTINATION_LOCKS
         .lock()
@@ -655,7 +703,7 @@ fn destination_lock(destination: &Path) -> Arc<Mutex<()>> {
 
 struct ByteProgress {
     done: AtomicU64,
-    total: u64,
+    total: AtomicU64,
     files: u32,
     sink: mpsc::Sender<DownloadProgress>,
 }
@@ -668,7 +716,7 @@ impl ByteProgress {
             failed: 0,
             total: self.files,
             bytes_done: done,
-            bytes_total: self.total,
+            bytes_total: self.total.load(Ordering::Relaxed),
         });
     }
 
@@ -683,7 +731,7 @@ impl ByteProgress {
             failed: 0,
             total: self.files,
             bytes_done: done,
-            bytes_total: self.total,
+            bytes_total: self.total.load(Ordering::Relaxed),
         });
     }
 
@@ -693,7 +741,7 @@ impl ByteProgress {
             failed,
             total: self.files,
             bytes_done: self.done.load(Ordering::Relaxed),
-            bytes_total: self.total,
+            bytes_total: self.total.load(Ordering::Relaxed),
         }
     }
 }
@@ -703,9 +751,24 @@ struct Attempt<'a> {
     progress: Option<&'a ByteProgress>,
     added: u64,
     committed: bool,
+    known_total: u64,
 }
 
 impl Attempt<'_> {
+    fn set_total(&mut self, total: u64) {
+        if let Some(progress) = self.progress {
+            if total >= self.known_total {
+                progress
+                    .total
+                    .fetch_add(total - self.known_total, Ordering::Relaxed);
+            } else {
+                progress
+                    .total
+                    .fetch_sub(self.known_total - total, Ordering::Relaxed);
+            }
+        }
+        self.known_total = total;
+    }
     fn set(&mut self, bytes: u64) {
         if let Some(progress) = self.progress {
             if bytes >= self.added {

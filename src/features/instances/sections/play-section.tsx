@@ -17,6 +17,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { DownloadControls } from "@/features/downloads/components/download-controls";
 import { InstanceIcon } from "@/features/instances/components/instance-icon";
 import type { PlayPhase } from "@/features/instances/hooks/use-play-session";
 import {
@@ -26,6 +27,7 @@ import {
 } from "@/features/instances/lib/download-progress";
 import { describeInstanceVersion } from "@/features/instances/lib/instance-version";
 import { formatRelativeOpenedAt } from "@/features/instances/lib/relative-time";
+import type { DownloadJobSnapshot } from "@/lib/generated/DownloadJobSnapshot";
 import type { DownloadProgress } from "@/lib/generated/DownloadProgress";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 import { cn } from "@/lib/utils";
@@ -69,6 +71,7 @@ export function PlaySection({
   playDisabled,
   phase,
   installing,
+  downloadJob,
   progress,
   speedBytesPerSecond = 0,
   onPlay,
@@ -80,6 +83,7 @@ export function PlaySection({
   playDisabled: boolean;
   phase: PlayPhase;
   installing: boolean;
+  downloadJob?: DownloadJobSnapshot;
   progress: DownloadProgress | null;
   speedBytesPerSecond?: number;
   onPlay: () => void;
@@ -114,7 +118,7 @@ export function PlaySection({
             <TooltipProvider delayDuration={300}>
               <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
                 <MetaTip label="Game version" icon={BoxIcon}>
-                  <span className="truncate">{gameVersion}</span>
+                  <span className="truncate">{gameVersion ?? "Preparing"}</span>
                 </MetaTip>
                 <span aria-hidden className="text-sm text-muted-foreground">
                   •
@@ -144,6 +148,13 @@ export function PlaySection({
               <SquareIcon data-icon="inline-start" aria-hidden />
               {stopping ? "Stopping…" : "Stop"}
             </Button>
+          ) : downloadJob !== undefined && !starting ? (
+            <DownloadControls
+              key={downloadJob.id}
+              job={downloadJob}
+              title={instance.name}
+              disabled={busy}
+            />
           ) : (
             <Button
               disabled={busy || playDisabled || installing || starting}
@@ -151,7 +162,12 @@ export function PlaySection({
               onClick={onPlay}
             >
               <PlayIcon data-icon="inline-start" aria-hidden />
-              {starting ? "Starting…" : "Play"}
+              {starting
+                ? "Starting…"
+                : instance.installation !== undefined &&
+                    instance.installation.state !== "ready"
+                  ? "Install"
+                  : "Play"}
             </Button>
           )}
           <Button
@@ -166,7 +182,7 @@ export function PlaySection({
           </Button>
         </div>
       </div>
-      {installing ? (
+      {installing || downloadJob !== undefined ? (
         <div className="flex w-full min-w-0 flex-col gap-1">
           <span className="text-xs text-muted-foreground">
             <span className="font-medium">

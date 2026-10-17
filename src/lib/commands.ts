@@ -7,6 +7,7 @@ import type {
   PlatformId,
 } from "@/features/new-instance/model/wizard";
 import type { AccountProfile } from "@/lib/generated/AccountProfile";
+import type { DownloadJobOperation } from "@/lib/generated/DownloadJobOperation";
 import type { DownloadJobSnapshot } from "@/lib/generated/DownloadJobSnapshot";
 import type { GameExit } from "@/lib/generated/GameExit";
 import type { InstanceContentEntry } from "@/lib/generated/InstanceContentEntry";
@@ -27,6 +28,25 @@ export function listInstances(): Promise<InstanceEntry[]> {
 
 export function listDownloadJobs(): Promise<DownloadJobSnapshot[]> {
   return invoke("list_download_jobs");
+}
+
+export function prepareInstanceDownload(
+  folder: string,
+  operation: DownloadJobOperation = "install",
+): Promise<DownloadJobSnapshot> {
+  return invoke("prepare_instance_download", { folder, operation });
+}
+
+export function pauseDownloadJob(jobId: string): Promise<DownloadJobSnapshot> {
+  return invoke("pause_download_job", { jobId });
+}
+
+export function resumeDownloadJob(jobId: string): Promise<DownloadJobSnapshot> {
+  return invoke("resume_download_job", { jobId });
+}
+
+export function cancelDownloadJob(jobId: string): Promise<DownloadJobSnapshot> {
+  return invoke("cancel_download_job", { jobId });
 }
 
 export function createInstance(
@@ -235,7 +255,7 @@ export function detectJavaInstallations(): Promise<JavaDetections> {
   return invoke("detect_java_installations");
 }
 
-export function installRecommendedJava(major: number): Promise<string> {
+export function installRecommendedJava(major: number): Promise<string | null> {
   return invoke("install_recommended_java", { major });
 }
 
@@ -261,7 +281,7 @@ export function installVersion(versionId: string): Promise<string> {
   return invoke("install_version", { versionId });
 }
 
-export function repairInstance(folder: string): Promise<void> {
+export function repairInstance(folder: string): Promise<DownloadJobSnapshot> {
   return invoke("repair_instance", { folder });
 }
 

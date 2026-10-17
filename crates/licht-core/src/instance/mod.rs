@@ -3,8 +3,12 @@
 pub(crate) mod content;
 pub mod icon;
 pub(crate) mod listing;
+mod preparation;
+
+pub use preparation::{InstanceInstallation, InstancePreparationState, InstanceSource};
 
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -15,10 +19,18 @@ use crate::instance::icon::ICON_FILE;
 use crate::settings::GlobalLaunch;
 use crate::{CoreError, Result};
 
-const SCHEMA: u32 = 1;
+const SCHEMA: u32 = 2;
 const DEFAULT_MIN_MEMORY_MB: u32 = 512;
 const DEFAULT_MAX_MEMORY_MB: u32 = 2048;
 const FILE_NAME: &str = "instance.json";
+// Background preparation and UI edits must not overwrite each other's profile changes.
+static PROFILE_MUTATIONS: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn profile_guard() -> Result<std::sync::MutexGuard<'static, ()>> {
+    PROFILE_MUTATIONS
+        .lock()
+        .map_err(|_| CoreError::Io(std::io::Error::other("instance profile lock was poisoned")))
+}
 
 /// Profile stored at `instances/<folder>/instance.json`.
 ///
@@ -29,7 +41,9 @@ const FILE_NAME: &str = "instance.json";
 pub struct Instance {
     pub schema: u32,
     pub name: String,
-    pub version_id: String,
+    pub version_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub installation: Option<InstanceInstallation>,
     pub min_memory_mb: u32,
     pub max_memory_mb: u32,
     pub jvm_arguments: Vec<String>,
@@ -55,12 +69,16 @@ pub struct Instance {
 /// An instance folder and the profile stored in it.
 ///
 /// `folder` is chosen once and does not change when the profile is renamed.
+/// `icon_path` is the absolute path to `icon.png` when present beside `instance.json`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct InstanceEntry {
     pub folder: String,
     pub name: String,
-    pub version_id: String,
+    pub version_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub installation: Option<InstanceInstallation>,
     pub min_memory_mb: u32,
     pub max_memory_mb: u32,
     pub jvm_arguments: Vec<String>,
@@ -73,7 +91,6 @@ pub struct InstanceEntry {
     pub override_jvm_arguments: bool,
     pub java_path: Option<String>,
     pub last_opened_at: Option<String>,
-    /// Absolute path to `icon.png` when present beside `instance.json`.
     pub icon_path: Option<String>,
 }
 
@@ -100,7 +117,7 @@ struct SchemaHeader {
 
 pub fn parse_instance(json: &str) -> Result<Instance> {
     let header: SchemaHeader = serde_json::from_str(json).map_err(CoreError::Instance)?;
-    if header.schema != SCHEMA {
+    if header.schema != 1 && header.schema != SCHEMA {
         return Err(CoreError::InstanceSchema {
             schema: header.schema,
         });
@@ -132,6 +149,7 @@ pub fn load_instance(dir: &Path) -> Result<Instance> {
 
 /// Loads every direct child directory. A missing `instances` directory is an empty list.
 pub fn list_instances(instances_dir: &Path) -> Result<Vec<InstanceEntry>> {
+    let _guard = profile_guard()?;
     if !instances_dir.exists() {
         return Ok(Vec::new());
     }
@@ -159,6 +177,7 @@ pub fn create_instance(
     version_id: &str,
     template: &GlobalLaunch,
 ) -> Result<InstanceEntry> {
+    let _guard = profile_guard()?;
     let name = display_name(name)?;
     single_component(version_id)?;
     let folder = folder_id(&name)?;
@@ -173,7 +192,86 @@ pub fn create_instance(
     Ok(entry_from(&dir, folder, instance))
 }
 
+/// Writes the instance before any metadata or artifact requests begin.
+pub fn create_pending_instance(
+    instances_dir: &Path,
+    name: &str,
+    source: InstanceSource,
+    template: &GlobalLaunch,
+) -> Result<InstanceEntry> {
+    let _guard = profile_guard()?;
+    source.validate()?;
+    let name = display_name(name)?;
+    let folder = folder_id(&name)?;
+    fs::create_dir_all(instances_dir)?;
+    let dir = instances_dir.join(&folder);
+    fs::create_dir(&dir).map_err(|error| {
+        if error.kind() == std::io::ErrorKind::AlreadyExists {
+            CoreError::InstanceExists
+        } else {
+            CoreError::Io(error)
+        }
+    })?;
+    let mut instance = instance_from_template(name, String::new(), template);
+    instance.version_id = source.game_version().map(str::to_string);
+    instance.installation = Some(InstanceInstallation {
+        source,
+        state: InstancePreparationState::Preparing,
+    });
+    write_instance(&dir, &instance)?;
+    Ok(entry_from(&dir, folder, instance))
+}
+
+pub fn complete_instance_preparation(instances_dir: &Path, folder: &str) -> Result<InstanceEntry> {
+    let _guard = profile_guard()?;
+    let dir = instance_dir(instances_dir, folder)?;
+    let mut instance = load_instance(&dir)?;
+    if instance.version_id.is_none() {
+        return Err(CoreError::InstancePreparing);
+    }
+    if let Some(installation) = instance.installation.as_mut() {
+        if installation.state == InstancePreparationState::Preparing {
+            return Err(CoreError::InstancePreparing);
+        }
+        installation.state = InstancePreparationState::Ready;
+    }
+    write_instance(&dir, &instance)?;
+    Ok(entry_from(&dir, folder.to_string(), instance))
+}
+
+pub fn instance_version_for_launch(instance: &Instance) -> Result<&str> {
+    if instance
+        .installation
+        .as_ref()
+        .is_some_and(|installation| installation.state != InstancePreparationState::Ready)
+    {
+        return Err(CoreError::InstancePreparing);
+    }
+    instance
+        .version_id
+        .as_deref()
+        .ok_or(CoreError::InstancePreparing)
+}
+
+pub fn configure_instance_version(
+    instances_dir: &Path,
+    folder: &str,
+    version: &str,
+) -> Result<InstanceEntry> {
+    let _guard = profile_guard()?;
+    single_component(version)?;
+    let dir = instance_dir(instances_dir, folder)?;
+    let mut instance = load_instance(&dir)?;
+    instance.version_id = Some(version.to_string());
+    if let Some(installation) = instance.installation.as_mut() {
+        installation.state = InstancePreparationState::Installing;
+    }
+    write_instance(&dir, &instance)?;
+    Ok(entry_from(&dir, folder.to_string(), instance))
+}
+
 pub fn rename_instance(instances_dir: &Path, folder: &str, name: &str) -> Result<InstanceEntry> {
+    let _guard = profile_guard()?;
     let name = display_name(name)?;
     let dir = instance_dir(instances_dir, folder)?;
     let mut instance = load_instance(&dir)?;
@@ -183,6 +281,7 @@ pub fn rename_instance(instances_dir: &Path, folder: &str, name: &str) -> Result
 }
 
 pub fn duplicate_instance(instances_dir: &Path, folder: &str, name: &str) -> Result<InstanceEntry> {
+    let _guard = profile_guard()?;
     let name = display_name(name)?;
     let source = instance_dir(instances_dir, folder)?;
     let _ = load_instance(&source)?;
@@ -207,6 +306,7 @@ pub fn duplicate_instance(instances_dir: &Path, folder: &str, name: &str) -> Res
 
 /// Records that the instance was opened now (RFC 3339 UTC on the profile).
 pub fn touch_last_opened(instances_dir: &Path, folder: &str) -> Result<InstanceEntry> {
+    let _guard = profile_guard()?;
     let dir = instance_dir(instances_dir, folder)?;
     let mut instance = load_instance(&dir)?;
     instance.last_opened_at = Some(utc_now_rfc3339()?);
@@ -226,6 +326,7 @@ pub fn update_instance(
     folder: &str,
     settings: &InstanceSettings,
 ) -> Result<InstanceEntry> {
+    let _guard = profile_guard()?;
     let dir = instance_dir(instances_dir, folder)?;
     let mut instance = load_instance(&dir)?;
     instance.override_window = settings.override_window;
@@ -249,10 +350,11 @@ pub fn update_instance_version(
     folder: &str,
     version_id: &str,
 ) -> Result<InstanceEntry> {
+    let _guard = profile_guard()?;
     single_component(version_id)?;
     let dir = instance_dir(instances_dir, folder)?;
     let mut instance = load_instance(&dir)?;
-    instance.version_id = version_id.to_string();
+    instance.version_id = Some(version_id.to_string());
     validate(&instance)?;
     write_instance(&dir, &instance)?;
     Ok(entry_from(&dir, folder.to_string(), instance))
@@ -262,7 +364,8 @@ fn default_instance(name: String, version_id: String) -> Instance {
     Instance {
         schema: SCHEMA,
         name,
-        version_id,
+        version_id: Some(version_id),
+        installation: None,
         min_memory_mb: DEFAULT_MIN_MEMORY_MB,
         max_memory_mb: DEFAULT_MAX_MEMORY_MB,
         jvm_arguments: Vec::new(),
@@ -282,7 +385,8 @@ fn instance_from_template(name: String, version_id: String, template: &GlobalLau
     Instance {
         schema: SCHEMA,
         name,
-        version_id,
+        version_id: Some(version_id),
+        installation: None,
         min_memory_mb: DEFAULT_MIN_MEMORY_MB,
         max_memory_mb: template.max_memory_mb,
         jvm_arguments: template.jvm_arguments.clone(),
@@ -365,6 +469,7 @@ fn entry_from(dir: &Path, folder: String, instance: Instance) -> InstanceEntry {
         folder,
         name: instance.name,
         version_id: instance.version_id,
+        installation: instance.installation,
         min_memory_mb: instance.min_memory_mb,
         max_memory_mb: instance.max_memory_mb,
         jvm_arguments: instance.jvm_arguments,
@@ -416,7 +521,12 @@ fn civil_from_days(days_since_epoch: i64) -> (i32, u32, u32) {
 
 fn write_instance(dir: &Path, instance: &Instance) -> Result<()> {
     let body = serde_json::to_string_pretty(instance).map_err(CoreError::Instance)?;
-    fs::write(dir.join(FILE_NAME), body)?;
+    let temporary = dir.join(".instance.json.tmp");
+    let mut file = fs::File::create(&temporary)?;
+    file.write_all(body.as_bytes())?;
+    file.sync_all()?;
+    drop(file);
+    fs::rename(temporary, dir.join(FILE_NAME))?;
     Ok(())
 }
 
@@ -486,7 +596,18 @@ fn normalize_java_path(path: Option<&str>) -> Option<String> {
 
 fn validate(instance: &Instance) -> Result<()> {
     display_name(&instance.name)?;
-    single_component(&instance.version_id)?;
+    if let Some(version) = &instance.version_id {
+        single_component(version)?;
+    } else if !instance
+        .installation
+        .as_ref()
+        .is_some_and(|installation| installation.state == InstancePreparationState::Preparing)
+    {
+        return Err(CoreError::InstancePreparing);
+    }
+    if let Some(installation) = &instance.installation {
+        installation.source.validate()?;
+    }
     if instance.min_memory_mb == 0
         || instance.max_memory_mb == 0
         || instance.min_memory_mb > instance.max_memory_mb

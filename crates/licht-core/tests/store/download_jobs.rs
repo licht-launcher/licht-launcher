@@ -13,8 +13,8 @@ fn a_new_job_round_trips_as_a_queued_snapshot_with_a_string_id() {
     assert!(job.id.parse::<u64>().expect("numeric ID") > 0);
     assert_eq!(job.status, DownloadJobStatus::Queued);
     assert_eq!(job.operation, DownloadJobOperation::Install);
-    assert_eq!(job.instance_folder, "Survival");
-    assert_eq!(job.version_id, "1.21.1");
+    assert_eq!(job.instance_folder.as_deref(), Some("Survival"));
+    assert_eq!(job.version_id.as_deref(), Some("1.21.1"));
     assert_eq!(job.phase, DownloadPhase::Preparing);
     assert_eq!(job.component, None);
     assert_eq!(job.progress, progress(0, 0, 0));
@@ -54,6 +54,7 @@ fn phase_component_progress_and_lifecycle_survive_reopening_the_database() {
             component: Some(DownloadComponent::Fabric),
             phase: DownloadPhase::Extracting,
             progress: progress(1, 11, 11),
+            error: None,
         },
     )
     .expect("next component");
@@ -361,6 +362,7 @@ fn update(status: DownloadJobStatus, progress: DownloadProgress) -> DownloadJobU
         component: Some(DownloadComponent::Java),
         phase: DownloadPhase::Downloading,
         progress,
+        error: None,
     }
 }
 

@@ -20,6 +20,7 @@ export function InstancesPage() {
     playBlocked,
     playPhase,
     isInstalling,
+    downloadJobs,
     progressForVersion,
     speedForVersion,
     logsByFolder,
@@ -55,10 +56,15 @@ export function InstancesPage() {
 
   const phase = selected ? playPhase(selected.folder) : "idle";
   const installing = selected !== null && isInstalling(selected.folder);
+  const job = downloadJobs.find((job) => job.instanceFolder === selectedFolder);
   const progress =
-    installing && selected ? progressForVersion(selected.versionId) : null;
+    (installing || job !== undefined) && selected
+      ? (job?.progress ?? progressForVersion(selected.versionId))
+      : null;
   const speed =
-    installing && selected ? speedForVersion(selected.versionId) : 0;
+    installing && selected && job === undefined
+      ? speedForVersion(selected.versionId)
+      : 0;
 
   return (
     <HomePanel
@@ -67,6 +73,7 @@ export function InstancesPage() {
       playDisabled={playBlocked}
       phase={phase}
       installing={installing}
+      downloadJob={job}
       progress={progress}
       speedBytesPerSecond={speed}
       lines={

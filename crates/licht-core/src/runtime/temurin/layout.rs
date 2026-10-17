@@ -73,7 +73,7 @@ pub(crate) fn find_temurin(
         if folder_middle(&name, major, &platform).is_none() {
             continue;
         }
-        if java_executable(&path, environment.os).is_file() {
+        if java_executable(&path, environment.os).is_file() && !path.join(".installing").exists() {
             found.push((name, path));
         }
     }
@@ -122,5 +122,33 @@ mod tests {
             temurin_folder_name(8, "jdk", "8.0.422", OsName::Linux, Arch::X86).expect("name"),
             "temurin8-jdk8.0.422-linux_x86"
         );
+    }
+
+    #[test]
+    fn an_executable_from_an_interrupted_extraction_is_not_an_installed_runtime() {
+        let root =
+            std::env::temp_dir().join(format!("licht-runtime-incomplete-{}", std::process::id()));
+        let cache = SharedCache::at(&root);
+        let runtime = root.join("runtime").join("temurin21-jre21.0.1-linux_x64");
+        std::fs::create_dir_all(runtime.join("bin")).expect("runtime folder");
+        std::fs::write(runtime.join("bin").join("java"), b"partial extraction")
+            .expect("executable");
+        std::fs::write(runtime.join(".installing"), b"").expect("marker");
+        let environment = LaunchEnvironment {
+            os: OsName::Linux,
+            arch: Arch::X86_64,
+            os_version: String::new(),
+            features: Default::default(),
+        };
+        assert_eq!(
+            find_temurin(&cache, 21, &environment).expect("pending"),
+            None
+        );
+        std::fs::remove_file(runtime.join(".installing")).expect("finish extraction");
+        assert_eq!(
+            find_temurin(&cache, 21, &environment).expect("ready"),
+            Some(runtime)
+        );
+        std::fs::remove_dir_all(root).expect("cleanup");
     }
 }

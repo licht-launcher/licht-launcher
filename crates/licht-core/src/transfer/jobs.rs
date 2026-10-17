@@ -64,8 +64,8 @@ pub enum DownloadPhase {
 #[serde(rename_all = "camelCase")]
 pub struct DownloadJobSnapshot {
     pub id: String,
-    pub instance_folder: String,
-    pub version_id: String,
+    pub instance_folder: Option<String>,
+    pub version_id: Option<String>,
     pub operation: DownloadJobOperation,
     pub status: DownloadJobStatus,
     pub component: Option<DownloadComponent>,
@@ -75,6 +75,12 @@ pub struct DownloadJobSnapshot {
     pub created_at: i64,
     #[ts(type = "number")]
     pub updated_at: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub java_major: Option<u32>,
 }
 
 /// Only core callers update lifecycle state; frontend commands cannot set progress.
@@ -84,6 +90,7 @@ pub struct DownloadJobUpdate {
     pub component: Option<DownloadComponent>,
     pub phase: DownloadPhase,
     pub progress: DownloadProgress,
+    pub error: Option<String>,
 }
 
 pub fn create_download_job(
@@ -91,6 +98,16 @@ pub fn create_download_job(
     game: &SharedCache,
     folder: &str,
     version_id: &str,
+    operation: DownloadJobOperation,
+) -> Result<DownloadJobSnapshot> {
+    create_pending_download_job(settings, game, folder, Some(version_id), operation)
+}
+
+pub fn create_pending_download_job(
+    settings: &SharedCache,
+    game: &SharedCache,
+    folder: &str,
+    version_id: Option<&str>,
     operation: DownloadJobOperation,
 ) -> Result<DownloadJobSnapshot> {
     let directory = validate_context(game, folder, version_id)?;
@@ -135,8 +152,8 @@ pub fn create_download_job(
     transaction.commit()?;
     Ok(DownloadJobSnapshot {
         id,
-        instance_folder: folder.to_string(),
-        version_id: version_id.to_string(),
+        instance_folder: Some(folder.to_string()),
+        version_id: version_id.map(str::to_string),
         operation,
         status: DownloadJobStatus::Queued,
         component: None,
@@ -144,6 +161,8 @@ pub fn create_download_job(
         progress,
         created_at: now,
         updated_at: now,
+        error: None,
+        java_major: None,
     })
 }
 
@@ -197,10 +216,11 @@ pub fn update_download_job(
     job.component = update.component;
     job.phase = update.phase;
     job.progress = update.progress;
+    job.error = update.error;
     job.updated_at = timestamp()?.max(job.updated_at);
     transaction.execute(
         "UPDATE download_jobs SET status = ?1, component = ?2, phase = ?3,
-         progress = ?4, updated_at = ?5 WHERE id = ?6 AND data_directory = ?7",
+         progress = ?4, updated_at = ?5, error = ?8 WHERE id = ?6 AND data_directory = ?7",
         params![
             encode(&job.status)?,
             job.component.as_ref().map(encode).transpose()?,
@@ -208,7 +228,8 @@ pub fn update_download_job(
             encode(&job.progress)?,
             job.updated_at,
             parse_id(id)?,
-            data_directory(game)?
+            data_directory(game)?,
+            job.error
         ],
     )?;
     transaction.commit()?;
@@ -233,12 +254,12 @@ pub fn recover_download_jobs(settings: &SharedCache, game: &SharedCache) -> Resu
 }
 
 const COLUMNS: &str = "id, instance_folder, version_id, operation, status, component,
-                      phase, progress, created_at, updated_at";
+                      phase, progress, created_at, updated_at, error, java_major";
 
 struct StoredJob {
     id: i64,
-    folder: String,
-    version_id: String,
+    folder: Option<String>,
+    version_id: Option<String>,
     operation: String,
     status: String,
     component: Option<String>,
@@ -246,6 +267,8 @@ struct StoredJob {
     progress: String,
     created_at: i64,
     updated_at: i64,
+    error: Option<String>,
+    java_major: Option<u32>,
 }
 
 fn read_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<StoredJob> {
@@ -260,11 +283,23 @@ fn read_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<StoredJob> {
         progress: row.get(7)?,
         created_at: row.get(8)?,
         updated_at: row.get(9)?,
+        error: row.get(10)?,
+        java_major: row.get(11)?,
     })
 }
 
 fn decode_row(row: StoredJob, game: &SharedCache) -> Result<DownloadJobSnapshot> {
-    validate_context(game, &row.folder, &row.version_id)?;
+    if let Some(folder) = &row.folder {
+        validate_context(game, folder, row.version_id.as_deref())?;
+        if row.java_major.is_some() {
+            return Err(invalid("a Java task cannot target an instance"));
+        }
+    } else if !row
+        .java_major
+        .is_some_and(|major| [8, 17, 21, 25].contains(&major))
+    {
+        return Err(invalid("task target is missing or invalid"));
+    }
     if row.id <= 0 || row.created_at < 0 || row.updated_at < row.created_at {
         return Err(invalid("invalid identity or timestamps"));
     }
@@ -279,6 +314,8 @@ fn decode_row(row: StoredJob, game: &SharedCache) -> Result<DownloadJobSnapshot>
         progress: decode(&row.progress)?,
         created_at: row.created_at,
         updated_at: row.updated_at,
+        error: row.error,
+        java_major: row.java_major,
     };
     validate_progress(job.progress)?;
     validate_phase(job.phase, job.component)?;
@@ -307,9 +344,15 @@ fn data_directory(game: &SharedCache) -> Result<&str> {
         .ok_or_else(|| invalid("the data directory must be valid UTF-8"))
 }
 
-fn validate_context<'a>(game: &'a SharedCache, folder: &str, version_id: &str) -> Result<&'a str> {
+fn validate_context<'a>(
+    game: &'a SharedCache,
+    folder: &str,
+    version_id: Option<&str>,
+) -> Result<&'a str> {
     game.instance_dir(folder)?;
-    game.version_json(version_id)?;
+    if let Some(version) = version_id {
+        game.version_json(version)?;
+    }
     data_directory(game)
 }
 
@@ -371,4 +414,145 @@ fn decode<T: DeserializeOwned>(value: &str) -> Result<T> {
 
 fn invalid(detail: &'static str) -> CoreError {
     CoreError::DownloadJobInvalid { detail }
+}
+
+pub(crate) fn set_job_version(
+    settings: &SharedCache,
+    game: &SharedCache,
+    id: &str,
+    version: &str,
+) -> Result<()> {
+    game.version_json(version)?;
+    let connection = open_db(settings)?;
+    load(&connection, game, id)?;
+    connection.execute(
+        "UPDATE download_jobs SET version_id = ?1 WHERE id = ?2 AND data_directory = ?3",
+        params![version, parse_id(id)?, data_directory(game)?],
+    )?;
+    Ok(())
+}
+
+pub(crate) fn register_artifacts(
+    settings: &SharedCache,
+    game: &SharedCache,
+    id: &str,
+    paths: &[std::path::PathBuf],
+) -> Result<()> {
+    let mut connection = open_db(settings)?;
+    let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    let job = load(&transaction, game, id)?;
+    let instance = job
+        .instance_folder
+        .as_deref()
+        .map(|folder| game.instance_dir(folder))
+        .transpose()?;
+    for path in paths {
+        validate_artifact(game, instance.as_deref(), path)?;
+        let path = path.to_str().ok_or(CoreError::CachePath)?;
+        transaction.execute(
+            "INSERT OR IGNORE INTO download_job_artifacts (job_id, path) VALUES (?1, ?2)",
+            params![parse_id(id)?, path],
+        )?;
+    }
+    transaction.commit()?;
+    Ok(())
+}
+
+pub(crate) async fn cleanup_artifacts(
+    settings: &SharedCache,
+    game: &SharedCache,
+    id: &str,
+) -> Result<()> {
+    let (paths, instance) = {
+        let connection = open_db(settings)?;
+        let job = load(&connection, game, id)?;
+        let mut statement = connection.prepare(
+            "SELECT artifact.path FROM download_job_artifacts artifact WHERE artifact.job_id = ?1
+             AND NOT EXISTS (SELECT 1 FROM download_job_artifacts other
+                JOIN download_jobs job ON job.id = other.job_id
+                WHERE other.path = artifact.path AND other.job_id != ?1
+                AND job.status NOT IN (?2, ?3))",
+        )?;
+        let paths = statement
+            .query_map(
+                params![
+                    parse_id(id)?,
+                    encode(&DownloadJobStatus::Completed)?,
+                    encode(&DownloadJobStatus::Cancelled)?
+                ],
+                |row| row.get::<_, String>(0),
+            )?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        (
+            paths,
+            job.instance_folder
+                .as_deref()
+                .map(|folder| game.instance_dir(folder))
+                .transpose()?,
+        )
+    };
+    for path in paths {
+        let path = std::path::Path::new(&path);
+        validate_artifact(game, instance.as_deref(), path)?;
+        super::download::remove_partial_if_idle(path).await?;
+    }
+    Ok(())
+}
+
+fn validate_artifact(
+    game: &SharedCache,
+    instance: Option<&std::path::Path>,
+    path: &std::path::Path,
+) -> Result<()> {
+    if !path.is_absolute()
+        || (!path.starts_with(game.root())
+            && !instance.is_some_and(|instance| path.starts_with(instance)))
+        || path
+            .components()
+            .any(|part| matches!(part, std::path::Component::ParentDir))
+    {
+        return Err(CoreError::CachePath);
+    }
+    Ok(())
+}
+
+pub(crate) fn create_java_job(
+    settings: &SharedCache,
+    game: &SharedCache,
+    major: u32,
+) -> Result<DownloadJobSnapshot> {
+    if ![8, 17, 21, 25].contains(&major) {
+        return Err(invalid("unsupported Java major"));
+    }
+    let directory = data_directory(game)?;
+    let mut connection = open_db(settings)?;
+    let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    let now = timestamp()?;
+    let progress = DownloadProgress {
+        finished: 0,
+        failed: 0,
+        total: 0,
+        bytes_done: 0,
+        bytes_total: 0,
+    };
+    transaction.execute(
+        "INSERT INTO download_jobs (data_directory, instance_folder, version_id, operation,
+         status, component, phase, progress, created_at, updated_at, java_major)
+         VALUES (?1, NULL, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8, ?9)",
+        params![
+            directory,
+            format!("java-{major}"),
+            encode(&DownloadJobOperation::Install)?,
+            encode(&DownloadJobStatus::Queued)?,
+            encode(&DownloadComponent::Java)?,
+            encode(&DownloadPhase::Preparing)?,
+            encode(&progress)?,
+            now,
+            major
+        ],
+    )?;
+    let id = transaction.last_insert_rowid().to_string();
+    let result = load(&transaction, game, &id)?;
+    transaction.commit()?;
+    Ok(result)
 }

@@ -10,6 +10,7 @@ pub(super) struct Manifest {
     pub(super) game_version: String,
     pub(super) files: Vec<ManifestFile>,
     pub(super) overrides_dir: String,
+    pub(super) loader: Option<(crate::LoaderPlatform, String)>,
 }
 
 #[derive(Debug)]
@@ -53,6 +54,31 @@ fn parse_manifest(body: &str) -> Result<Manifest> {
         game_version,
         files,
         overrides_dir,
+        loader: value
+            .pointer("/minecraft/modLoaders")
+            .and_then(Value::as_array)
+            .and_then(|items| {
+                items
+                    .iter()
+                    .find(|item| item.get("primary").and_then(Value::as_bool) == Some(true))
+                    .or_else(|| items.first())
+            })
+            .map(|item| {
+                let id = item
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .ok_or(CoreError::ModpackArchive)?;
+                let (family, version) =
+                    id.split_once('-').ok_or(CoreError::LoaderVersionMissing)?;
+                let platform = crate::LoaderPlatform::parse(family)
+                    .filter(|platform| *platform != crate::LoaderPlatform::Vanilla)
+                    .ok_or(CoreError::LoaderVersionMissing)?;
+                if version.is_empty() {
+                    return Err(CoreError::LoaderVersionMissing);
+                }
+                Ok((platform, version.to_string()))
+            })
+            .transpose()?,
     })
 }
 
@@ -100,5 +126,33 @@ mod tests {
     fn rejects_a_manifest_without_a_minecraft_version() {
         let error = parse_manifest(r#"{"files":[]}"#).unwrap_err();
         assert!(matches!(error, CoreError::ModpackArchive));
+    }
+
+    #[test]
+    fn recognizes_each_supported_primary_loader_without_assuming_vanilla() {
+        for (platform, id) in [
+            (crate::LoaderPlatform::Fabric, "fabric-0.16.10"),
+            (crate::LoaderPlatform::Quilt, "quilt-0.26.0"),
+            (crate::LoaderPlatform::Forge, "forge-51.0.0"),
+            (crate::LoaderPlatform::NeoForge, "neoforge-21.1.80"),
+        ] {
+            let body = serde_json::json!({ "minecraft": { "version": "1.21.1", "modLoaders": [
+                { "id": "forge-unused", "primary": false }, { "id": id, "primary": true }
+            ] } });
+            let manifest = parse_manifest(&body.to_string()).expect("manifest");
+            assert_eq!(
+                manifest.loader.as_ref().map(|(selected, _)| *selected),
+                Some(platform)
+            );
+            assert_eq!(
+                manifest.loader.expect("loader").1,
+                id.split_once('-').expect("build").1
+            );
+        }
+        let invalid = r#"{"minecraft":{"version":"1.21.1","modLoaders":[{"id":"unsupported-1","primary":true}]}}"#;
+        assert!(matches!(
+            parse_manifest(invalid),
+            Err(CoreError::LoaderVersionMissing)
+        ));
     }
 }

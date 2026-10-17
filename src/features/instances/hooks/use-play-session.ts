@@ -1,14 +1,13 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-
+import { useDownloadJobs } from "@/features/downloads/hooks/use-download-jobs";
 import { VERSIONS_QUERY_KEY } from "@/features/instances/lib/versions-query";
 import {
-  installModpackFiles,
-  installVersion,
   isVersionReady,
   launchVersion,
   listRunningGames,
+  prepareInstanceDownload,
   stopGame,
   touchLastOpened,
 } from "@/lib/commands";
@@ -27,9 +26,10 @@ export function usePlaySession({
   clearFolderLog: (folder: string) => void;
 }) {
   const queryClient = useQueryClient();
+  const downloads = useDownloadJobs();
   /** folder → versionId while that instance is installing. */
   const [installingByFolder, setInstallingByFolder] = useState<
-    Record<string, string>
+    Record<string, string | null>
   >({});
   const [startingFolders, setStartingFolders] = useState<Record<string, true>>(
     {},
@@ -43,7 +43,7 @@ export function usePlaySession({
   const sessionRef = useRef(new Set<string>());
   const launchPendingRef = useRef(new Set<string>());
   const startingRef = useRef(new Set<string>());
-  const installingRef = useRef(new Map<string, string>());
+  const installingRef = useRef(new Map<string, string | null>());
   const playBlocked = username.trim() === "";
 
   useEffect(() => {
@@ -70,12 +70,12 @@ export function usePlaySession({
     };
   }, []);
 
-  function beginInstall(folder: string, versionId: string) {
+  function beginInstall(folder: string, versionId: string | null) {
     installingRef.current.set(folder, versionId);
     setInstallingByFolder((current) => ({ ...current, [folder]: versionId }));
   }
 
-  function endInstall(folder: string, versionId: string) {
+  function endInstall(folder: string, versionId: string | null) {
     installingRef.current.delete(folder);
     setInstallingByFolder((current) => {
       const next = { ...current };
@@ -85,7 +85,7 @@ export function usePlaySession({
     const stillUsingVersion = [...installingRef.current.values()].includes(
       versionId,
     );
-    if (!stillUsingVersion) {
+    if (!stillUsingVersion && versionId !== null) {
       clearVersionProgress(versionId);
     }
   }
@@ -146,27 +146,19 @@ export function usePlaySession({
       sessionRef.current.has(instance.folder) ||
       installingRef.current.has(instance.folder)
     ) {
-      return;
-    }
-
-    const ready = await isVersionReady(instance.versionId);
-    if (ready) {
-      beginInstall(instance.folder, instance.versionId);
-      try {
-        await installModpackFiles(instance.folder);
-      } finally {
-        endInstall(instance.folder, instance.versionId);
-      }
-      return;
+      return false;
     }
 
     beginInstall(instance.folder, instance.versionId);
     try {
-      await installVersion(instance.versionId);
-      await queryClient.invalidateQueries({ queryKey: VERSIONS_QUERY_KEY });
-      await installModpackFiles(instance.folder);
+      const job = await prepareInstanceDownload(instance.folder);
+      if (job.status === "failed")
+        throw new Error(job.error ?? "Download failed");
+      return job.status === "completed";
     } finally {
       endInstall(instance.folder, instance.versionId);
+      await queryClient.invalidateQueries({ queryKey: VERSIONS_QUERY_KEY });
+      await queryClient.invalidateQueries({ queryKey: ["instances"] });
     }
   }
 
@@ -181,9 +173,17 @@ export function usePlaySession({
     clearFolderLog(instance.folder);
 
     try {
-      const ready = await isVersionReady(instance.versionId);
-      if (!ready) {
-        await prepareInstance(instance);
+      const pending =
+        instance.installation !== undefined &&
+        instance.installation.state !== "ready";
+      const hasJob =
+        downloads.data?.some((job) => job.instanceFolder === instance.folder) ??
+        false;
+      const ready =
+        instance.versionId !== null &&
+        (await isVersionReady(instance.versionId));
+      if (pending || hasJob || !ready) {
+        if (!(await prepareInstance(instance)) || pending) return;
       }
       markStarting(instance.folder);
       launchPendingRef.current.add(instance.folder);
@@ -238,10 +238,19 @@ export function usePlaySession({
   }
 
   function isInstalling(folder: string) {
-    return folder in installingByFolder;
+    return (
+      folder in installingByFolder ||
+      (downloads.data?.some(
+        (job) =>
+          job.instanceFolder === folder &&
+          (job.status === "running" || job.status === "queued"),
+      ) ??
+        false)
+    );
   }
 
   return {
+    downloadJobs: downloads.data ?? [],
     installingByFolder,
     isInstalling,
     beginInstall,

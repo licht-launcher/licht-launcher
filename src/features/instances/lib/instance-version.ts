@@ -9,8 +9,10 @@ export type InstanceVersionInfo = {
  * `neoforge-<game>-<build>`; legacy Forge-like ids remain supported.
  */
 export function describeInstanceVersion(
-  versionId: string,
+  versionId: string | null,
 ): InstanceVersionInfo {
+  if (versionId === null)
+    return { gameVersion: null, loaderLabel: "Preparing" };
   const fabric = /^fabric-loader-(.+)-(\d+\.\d+(?:\.\d+)?)$/.exec(versionId);
   if (fabric !== null) {
     return {

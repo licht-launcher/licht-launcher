@@ -5,4 +5,4 @@ import type { DownloadJobStatus } from "./DownloadJobStatus";
 import type { DownloadPhase } from "./DownloadPhase";
 import type { DownloadProgress } from "./DownloadProgress";
 
-export type DownloadJobSnapshot = { id: string, instanceFolder: string, versionId: string, operation: DownloadJobOperation, status: DownloadJobStatus, component: DownloadComponent | null, phase: DownloadPhase, progress: DownloadProgress, createdAt: number, updatedAt: number, };
+export type DownloadJobSnapshot = { id: string, instanceFolder: string | null, versionId: string | null, operation: DownloadJobOperation, status: DownloadJobStatus, component: DownloadComponent | null, phase: DownloadPhase, progress: DownloadProgress, createdAt: number, updatedAt: number, error?: string, javaMajor?: number, };

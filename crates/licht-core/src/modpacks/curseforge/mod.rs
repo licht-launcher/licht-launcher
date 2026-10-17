@@ -11,7 +11,8 @@ use url::Url;
 use crate::modpacks::types::{ModpackListItem, ModpackVersionItem};
 use crate::{CoreError, Result};
 
-pub use install::{import_curseforge_pack, install_curseforge_files};
+pub(crate) use install::import_curseforge_into;
+pub use install::install_curseforge_files;
 
 const SEARCH_URL: &str = "https://api.curseforge.com/v1/mods/search";
 const MOD_URL: &str = "https://api.curseforge.com/v1/mods";
@@ -89,27 +90,67 @@ pub async fn list_curseforge_versions(
     api::parse_versions(&body)
 }
 
-pub async fn download_curseforge_pack(
+pub(super) async fn download_curseforge_pack_to(
     client: &Client,
     mod_id: &str,
     file_id: &str,
-) -> Result<(String, Vec<u8>)> {
+    destination: &std::path::Path,
+    context: &crate::InstallationContext,
+) -> Result<()> {
     let key = curseforge_api_key()?;
     let url = format!("{MOD_URL}/{mod_id}/files/{file_id}/download-url");
-    let response = client
-        .get(&url)
-        .header("x-api-key", &key)
-        .header("Accept", "application/json")
-        .send()
+    let download_url = context
+        .metadata(async {
+            let response = client
+                .get(&url)
+                .header("x-api-key", &key)
+                .header("Accept", "application/json")
+                .send()
+                .await?;
+            let status = response.status().as_u16();
+            let body = response.text().await?;
+            if !(200..300).contains(&status) {
+                return Err(download_url_status_error(status, &body));
+            }
+            parse_pack_download_url(&body)
+        })
         .await?;
-    let status = response.status().as_u16();
-    let body = response.text().await?;
-    if !(200..300).contains(&status) {
-        return Err(download_url_status_error(status, &body));
+    let parse = |value: &str| {
+        value.parse::<u64>().map_err(|_| CoreError::ModpackMeta {
+            detail: "invalid modpack identifier".into(),
+        })
+    };
+    let (project, file_id) = (parse(mod_id)?, parse(file_id)?);
+    let files = context
+        .metadata(api::fetch_remote_files(client, &key, &[file_id]))
+        .await?;
+    let file = files
+        .iter()
+        .find(|file| file.file_id == file_id && file.mod_id == project)
+        .ok_or(CoreError::CurseforgeFileMissing { file_id })?;
+    let checksum = match (&file.sha1, &file.md5) {
+        (Some(value), _) => crate::DownloadChecksum::Sha1(value.clone()),
+        (_, Some(value)) => crate::DownloadChecksum::Md5(value.clone()),
+        _ => {
+            return Err(CoreError::ModpackMeta {
+                detail: "modpack archive checksum is missing".into(),
+            });
+        }
+    };
+    let task = crate::VerifiedDownloadTask {
+        url: download_url,
+        destination: destination.to_path_buf(),
+        checksum,
+        size: file.size,
+    };
+    context
+        .verified_queue(&cdn::cdn_client(&key)?, &[task], context.options()?)
+        .await?;
+    context.stage(crate::DownloadPhase::Verifying).await?;
+    if let Some(expected) = &file.md5 {
+        super::file_hashes::ensure_md5(destination, expected)?;
     }
-    let download_url = parse_pack_download_url(&body)?;
-    let bytes = cdn::fetch_cdn_bytes(&key, &download_url).await?;
-    Ok((format!("{file_id}.zip"), bytes))
+    Ok(())
 }
 
 fn download_url_status_error(status: u16, body: &str) -> CoreError {

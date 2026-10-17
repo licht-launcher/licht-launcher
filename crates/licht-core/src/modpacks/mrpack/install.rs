@@ -3,11 +3,10 @@ use std::path::Path;
 
 use reqwest::Client;
 use serde_json::Value;
-use tokio::sync::mpsc;
 
 use super::MODPACK_INDEX_FILE;
 use super::index::{MRPACK_DOWNLOAD_HOSTS, index_files};
-use crate::download::{DEFAULT_RETRY, DownloadProgress, download_all};
+use crate::download::{DEFAULT_RETRY, DownloadProgress};
 use crate::modpacks::file_hashes::{ensure_sha512, prepare_download};
 use crate::modpacks::secure_download::allowlisted_download_client;
 use crate::settings::{download_concurrency, write_concurrency};
@@ -22,12 +21,14 @@ pub async fn install_mrpack_files(
     game: &SharedCache,
     settings: &SharedCache,
     instance_dir: &Path,
-    progress: mpsc::Sender<DownloadProgress>,
+    progress: impl Into<crate::InstallationContext>,
 ) -> Result<()> {
+    let progress = progress.into().component(crate::DownloadComponent::Modpack);
     let index_path = instance_dir.join(MODPACK_INDEX_FILE);
     if !index_path.is_file() {
         return Ok(());
     }
+    progress.stage(crate::DownloadPhase::Verifying).await?;
     let body = fs::read_to_string(&index_path)?;
     let index: Value = serde_json::from_str(&body).map_err(CoreError::LoaderJson)?;
     let files = index_files(&index, instance_dir)?;
@@ -53,23 +54,26 @@ pub async fn install_mrpack_files(
     }
     // The caller's client would follow any redirect. This one checks every hop.
     let client = mrpack_download_client()?;
-    download_all(
-        &client,
-        &pending,
-        shared_transfer_limits(),
-        download_concurrency(game, settings)?,
-        write_concurrency(game, settings)?,
-        DEFAULT_RETRY,
-        progress,
-    )
-    .await?;
+    progress
+        .queue(
+            &client,
+            &pending,
+            crate::DownloadOptions {
+                limits: shared_transfer_limits(),
+                download_concurrency: download_concurrency(game, settings)?,
+                write_concurrency: write_concurrency(game, settings)?,
+                retry: DEFAULT_RETRY,
+            },
+        )
+        .await?;
+    progress.stage(crate::DownloadPhase::Verifying).await?;
     for file in &files {
         ensure_sha512(&file.task.destination, &file.sha512)?;
     }
     Ok(())
 }
 
-fn mrpack_download_client() -> Result<Client> {
+pub(crate) fn mrpack_download_client() -> Result<Client> {
     allowlisted_download_client(
         MRPACK_DOWNLOAD_HOSTS,
         "modpack redirect target is not allowed",

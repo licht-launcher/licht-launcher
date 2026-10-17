@@ -1,8 +1,8 @@
 use licht_core::{
     InstanceContentEntry, InstanceContentKind, InstanceEntry, InstanceFsEntry, InstanceSettings,
-    LoaderChannel, LoaderPlatform, global_launch, load_settings,
-    remove_instance_content as remove_content, set_instance_content_enabled as set_content_enabled,
-    touch_last_opened as touch_instance_opened, update_instance, update_instance_version,
+    LoaderChannel, LoaderPlatform, remove_instance_content as remove_content,
+    set_instance_content_enabled as set_content_enabled,
+    touch_last_opened as touch_instance_opened, update_instance,
 };
 use tauri::{AppHandle, State};
 use tauri_plugin_opener::OpenerExt;
@@ -16,14 +16,20 @@ pub fn list_instances(paths: State<'_, LauncherPaths>) -> Result<Vec<InstanceEnt
 }
 
 #[tauri::command]
-pub fn create_instance(
-    paths: State<'_, LauncherPaths>,
+pub async fn create_instance(
+    downloads: State<'_, std::sync::Arc<licht_core::DownloadManager>>,
     name: String,
     version_id: String,
 ) -> Result<InstanceEntry, String> {
-    let root = instances_root(&paths).map_err(failure)?;
-    let settings = load_settings(&paths.settings).map_err(failure)?;
-    licht_core::create_instance(&root, &name, &version_id, &global_launch(&settings))
+    downloads
+        .inner()
+        .create(
+            &name,
+            licht_core::InstanceSource::Vanilla {
+                game_version: version_id,
+            },
+        )
+        .await
         .map_err(failure)
 }
 
@@ -44,7 +50,7 @@ pub async fn list_loader_versions(
 
 #[tauri::command]
 pub async fn create_instance_with_platform(
-    paths: State<'_, LauncherPaths>,
+    downloads: State<'_, std::sync::Arc<licht_core::DownloadManager>>,
     name: String,
     platform: String,
     game_version: String,
@@ -55,22 +61,21 @@ pub async fn create_instance_with_platform(
         LoaderPlatform::parse(&platform).ok_or_else(|| "unknown platform".to_string())?;
     let channel =
         LoaderChannel::parse(&loader_channel).ok_or_else(|| "unknown channel".to_string())?;
-    let root = instances_root(&paths).map_err(failure)?;
-    let settings = load_settings(&paths.settings).map_err(failure)?;
-    let client = http_client().map_err(failure)?;
-    licht_core::create_instance_with_platform(
-        &client,
-        &paths.game,
-        &root,
-        &name,
-        platform,
-        &game_version,
-        channel,
-        loader_version.as_deref(),
-        &global_launch(&settings),
-    )
-    .await
-    .map_err(failure)
+    let source = if platform == LoaderPlatform::Vanilla {
+        licht_core::InstanceSource::Vanilla { game_version }
+    } else {
+        licht_core::InstanceSource::Loader {
+            platform,
+            game_version,
+            channel,
+            loader_version,
+        }
+    };
+    downloads
+        .inner()
+        .create(&name, source)
+        .await
+        .map_err(failure)
 }
 
 #[tauri::command]
@@ -94,7 +99,12 @@ pub fn duplicate_instance(
 }
 
 #[tauri::command]
-pub fn delete_instance(paths: State<'_, LauncherPaths>, folder: String) -> Result<(), String> {
+pub async fn delete_instance(
+    paths: State<'_, LauncherPaths>,
+    downloads: State<'_, std::sync::Arc<licht_core::DownloadManager>>,
+    folder: String,
+) -> Result<(), String> {
+    downloads.cancel_instance(&folder).await.map_err(failure)?;
     let root = instances_root(&paths).map_err(failure)?;
     licht_core::delete_instance(&root, &folder).map_err(failure)
 }
@@ -111,12 +121,13 @@ pub fn save_instance(
 
 #[tauri::command]
 pub fn set_instance_version(
-    paths: State<'_, LauncherPaths>,
+    downloads: State<'_, std::sync::Arc<licht_core::DownloadManager>>,
     folder: String,
     version_id: String,
 ) -> Result<InstanceEntry, String> {
-    let root = instances_root(&paths).map_err(failure)?;
-    update_instance_version(&root, &folder, &version_id).map_err(failure)
+    downloads
+        .change_version(&folder, &version_id)
+        .map_err(failure)
 }
 
 #[tauri::command]

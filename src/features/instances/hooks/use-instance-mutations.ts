@@ -5,8 +5,8 @@ import { VERSIONS_QUERY_KEY } from "@/features/instances/lib/versions-query";
 import {
   deleteInstance,
   duplicateInstance,
-  installVersion,
   openInstanceFolder,
+  prepareInstanceDownload,
   renameInstance,
   setInstanceVersion,
 } from "@/lib/commands";
@@ -72,15 +72,18 @@ export function useInstanceMutations({
       versionId: string;
       installed: boolean;
     }) => {
+      const entry = await setInstanceVersion(input.folder, input.versionId);
       if (!input.installed) {
         beginInstall(input.folder, input.versionId);
         try {
-          await installVersion(input.versionId);
+          const job = await prepareInstanceDownload(input.folder);
+          if (job.status === "failed")
+            throw new Error(job.error ?? "Download failed");
         } finally {
           endInstall(input.folder, input.versionId);
         }
       }
-      return setInstanceVersion(input.folder, input.versionId);
+      return entry;
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["instances"] });

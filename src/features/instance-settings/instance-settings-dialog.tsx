@@ -70,6 +70,10 @@ export function InstanceSettingsDialog({
             instanceName={entry.name}
             folder={entry.folder}
             versionId={entry.versionId}
+            preparing={
+              entry.installation !== undefined &&
+              entry.installation.state !== "ready"
+            }
             busy={busy}
             versionBusy={versionBusy}
             onChange={update}

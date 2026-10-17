@@ -1,14 +1,13 @@
 use std::path::{Path, PathBuf};
 
 use licht_core::{
-    ADOPTIUM_API, CoreError, JavaDetections, JavaPaths, JavaStatus, Settings, SettingsSnapshot,
-    browse_start_directory, detect_known_javas, install_temurin, runtime_java_paths, set_java_path,
-    settings_snapshot,
+    JavaDetections, JavaPaths, JavaStatus, Settings, SettingsSnapshot, browse_start_directory,
+    detect_known_javas, runtime_java_paths, settings_snapshot,
 };
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::{DialogExt, FileDialogBuilder};
 
-use super::{LauncherPaths, failure, host_environment, http_client};
+use super::{LauncherPaths, failure, host_environment};
 
 #[tauri::command]
 pub fn get_settings(paths: State<'_, LauncherPaths>) -> Result<SettingsSnapshot, String> {
@@ -51,27 +50,10 @@ pub async fn detect_java_installations(
 
 #[tauri::command]
 pub async fn install_recommended_java(
-    paths: State<'_, LauncherPaths>,
+    downloads: State<'_, std::sync::Arc<licht_core::DownloadManager>>,
     major: u32,
-) -> Result<String, String> {
-    if !matches!(major, 25 | 21 | 17 | 8) {
-        return Err(CoreError::SettingsJava.to_string());
-    }
-    let game = paths.game.clone();
-    let settings = paths.settings.clone();
-    let environment = host_environment().map_err(failure)?;
-    let executable = install_temurin(
-        &http_client().map_err(failure)?,
-        &game,
-        major,
-        &environment,
-        ADOPTIUM_API,
-        tokio::sync::mpsc::channel(8).0,
-    )
-    .await
-    .map_err(failure)?;
-    set_java_path(&settings, major, &executable).map_err(failure)?;
-    Ok(executable.display().to_string())
+) -> Result<Option<String>, String> {
+    downloads.inner().install_java(major).await.map_err(failure)
 }
 
 fn picked_path(file: Option<tauri_plugin_dialog::FilePath>) -> Result<Option<String>, String> {

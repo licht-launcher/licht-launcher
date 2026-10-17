@@ -6,43 +6,35 @@ use zip::ZipArchive;
 
 use super::MODPACK_INDEX_FILE;
 use super::overrides::{extract_prefixed, read_index};
-use crate::instance::{InstanceEntry, create_instance};
-use crate::settings::GlobalLaunch;
+use crate::instance::InstanceEntry;
 use crate::{CoreError, Result};
 
-/// Extracts a Modrinth `.mrpack` (zip) into a new instance folder.
-///
-/// Applies `overrides/` and `client-overrides/` into the instance root and
-/// records the full index in [`MODPACK_INDEX_FILE`] for the download pass.
-pub fn import_mrpack_bytes(
+pub(crate) fn import_mrpack_into(
     instances_dir: &Path,
-    name: &str,
+    entry: &InstanceEntry,
     bytes: &[u8],
-    template: &GlobalLaunch,
 ) -> Result<InstanceEntry> {
-    let cursor = Cursor::new(bytes);
-    let mut archive = ZipArchive::new(cursor).map_err(|_| CoreError::ModpackArchive)?;
+    let mut archive = ZipArchive::new(Cursor::new(bytes)).map_err(|_| CoreError::ModpackArchive)?;
     let index = read_index(&mut archive)?;
-    let game_version = index
+    let version = index
         .pointer("/dependencies/minecraft")
         .and_then(serde_json::Value::as_str)
-        .unwrap_or("unknown")
-        .to_string();
-    let entry = create_instance(instances_dir, name, &game_version, template)?;
-    let instance_dir = instances_dir.join(&entry.folder);
-    extract_prefixed(&mut archive, &instance_dir, "overrides/")?;
-    extract_prefixed(&mut archive, &instance_dir, "client-overrides/")?;
-    let meta_path = instance_dir.join(MODPACK_INDEX_FILE);
+        .ok_or(CoreError::ModpackArchive)?;
+    let updated = crate::update_instance_version(instances_dir, &entry.folder, version)?;
+    let dir = instances_dir.join(&entry.folder);
+    extract_prefixed(&mut archive, &dir, "overrides/")?;
+    extract_prefixed(&mut archive, &dir, "client-overrides/")?;
     fs::write(
-        meta_path,
-        serde_json::to_string_pretty(&index).map_err(CoreError::LoaderJson)?,
+        dir.join(MODPACK_INDEX_FILE),
+        serde_json::to_vec_pretty(&index).map_err(CoreError::LoaderJson)?,
     )?;
-    Ok(entry)
+    Ok(updated)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{GlobalLaunch, InstanceSource, ModpackSource, create_pending_instance};
     use std::io::{Cursor, Write};
     use std::path::PathBuf;
     use zip::CompressionMethod;
@@ -70,9 +62,10 @@ mod tests {
         let _ = fs::remove_dir_all(&root);
         let instances = root.join("instances");
         fs::create_dir_all(&instances).unwrap();
-        let entry =
-            import_mrpack_bytes(&instances, "Cobble", &bytes, &launch_template()).expect("import");
-        assert_eq!(entry.version_id, "1.20.1");
+        let pending = pending(&instances);
+        let entry = import_mrpack_into(&instances, &pending, &bytes).expect("import");
+        assert_eq!(entry.folder, pending.folder);
+        assert_eq!(entry.version_id.as_deref(), Some("1.20.1"));
         assert_eq!(
             fs::read_to_string(instances.join(&entry.folder).join("options.txt")).unwrap(),
             "fov:90"
@@ -105,8 +98,8 @@ mod tests {
             let root = temp_dir("override");
             let instances = root.join("instances");
             fs::create_dir_all(&instances).unwrap();
-            let error = import_mrpack_bytes(&instances, "Cobble", &bytes, &launch_template())
-                .expect_err(name);
+            let pending = pending(&instances);
+            let error = import_mrpack_into(&instances, &pending, &bytes).expect_err(name);
             assert!(matches!(error, CoreError::ModpackArchive), "{name}");
             let instance_dir = fs::read_dir(&instances)
                 .unwrap()
@@ -130,6 +123,21 @@ mod tests {
             width: None,
             height: None,
         }
+    }
+
+    fn pending(instances: &Path) -> InstanceEntry {
+        create_pending_instance(
+            instances,
+            "Cobble",
+            InstanceSource::Modpack {
+                source: ModpackSource::Modrinth,
+                project_id: "project".into(),
+                version_id: "version".into(),
+                icon_url: None,
+            },
+            &launch_template(),
+        )
+        .expect("pending instance")
     }
 
     fn temp_dir(label: &str) -> PathBuf {

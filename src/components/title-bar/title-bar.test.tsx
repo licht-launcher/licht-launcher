@@ -3,12 +3,15 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TitleBar } from "@/components/title-bar/title-bar";
+import {
+  completedDownload,
+  downloadJob,
+} from "@/features/downloads/fixtures/job";
 import { snapshot } from "@/features/settings/fixtures/snapshot";
 import {
   INSTALL_UPDATE_EVENT,
   UPDATE_CHECK_STATUS_EVENT,
 } from "@/features/updater/components/update-check";
-import type { InstallProgress } from "@/lib/generated/InstallProgress";
 import * as nativeCaption from "@/lib/native-caption";
 import { OPEN_SETTINGS_EVENT } from "@/lib/shell-events";
 
@@ -69,6 +72,8 @@ describe("TitleBar", () => {
           settings: { ...snapshot.settings, username: "Alex" },
         };
       }
+      if (command === "list_download_jobs" || command === "list_instances")
+        return [];
       throw new Error(`unexpected command: ${command}`);
     });
   });
@@ -86,7 +91,7 @@ describe("TitleBar", () => {
       await screen.findByRole("button", { name: "Account: Alex" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Downloads: Idle" }),
+      await screen.findByRole("button", { name: "Downloads: Idle" }),
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Minimize" }));
@@ -158,19 +163,10 @@ describe("TitleBar", () => {
     await screen.findByRole("button", { name: "Downloads: Idle" });
 
     await waitFor(() => {
-      expect(listeners.has("install-progress")).toBe(true);
+      expect(listeners.has("download-job-updated")).toBe(true);
     });
 
-    listeners.get("install-progress")?.({
-      payload: {
-        versionId: "1.20.1",
-        finished: 1,
-        failed: 0,
-        total: 4,
-        bytesDone: 100_000,
-        bytesTotal: 400_000,
-      } satisfies InstallProgress,
-    });
+    listeners.get("download-job-updated")?.({ payload: downloadJob() });
 
     expect(
       await screen.findByRole("button", { name: "Downloads: 25%" }),
@@ -179,16 +175,7 @@ describe("TitleBar", () => {
     fireEvent.click(screen.getByRole("button", { name: "Downloads: 25%" }));
     expect(await screen.findByText(/25\.0%/)).toBeInTheDocument();
 
-    listeners.get("install-progress")?.({
-      payload: {
-        versionId: "1.20.1",
-        finished: 4,
-        failed: 0,
-        total: 4,
-        bytesDone: 400_000,
-        bytesTotal: 400_000,
-      } satisfies InstallProgress,
-    });
+    listeners.get("download-job-updated")?.({ payload: completedDownload() });
 
     await waitFor(() => {
       expect(
@@ -207,59 +194,53 @@ describe("TitleBar", () => {
     ).toBeInTheDocument();
   });
 
-  it("stays Idle on a zero-total preparing pulse", async () => {
+  it("shows a persisted preparing job before download totals are known", async () => {
     renderTitleBar();
     await waitFor(() => {
-      expect(listeners.has("install-progress")).toBe(true);
+      expect(listeners.has("download-job-updated")).toBe(true);
     });
 
-    listeners.get("install-progress")?.({
-      payload: {
-        versionId: "fabric-loader-0.16.0-1.20.1",
-        finished: 0,
-        failed: 0,
-        total: 0,
-        bytesDone: 0,
-        bytesTotal: 0,
-      } satisfies InstallProgress,
+    listeners.get("download-job-updated")?.({
+      payload: downloadJob({
+        component: "fabric",
+        phase: "preparing",
+        progress: {
+          finished: 0,
+          failed: 0,
+          total: 0,
+          bytesDone: 0,
+          bytesTotal: 0,
+        },
+      }),
     });
 
     expect(
-      screen.getByRole("button", { name: "Downloads: Idle" }),
+      await screen.findByRole("button", { name: "Downloads: Preparing" }),
     ).toBeInTheDocument();
   });
 
   it("aggregates multiple installs on the downloads chip", async () => {
     renderTitleBar();
     await waitFor(() => {
-      expect(listeners.has("install-progress")).toBe(true);
+      expect(listeners.has("download-job-updated")).toBe(true);
     });
 
-    listeners.get("install-progress")?.({
-      payload: {
-        versionId: "1.20.1",
-        finished: 1,
-        failed: 0,
-        total: 4,
-        bytesDone: 100_000,
-        bytesTotal: 400_000,
-      } satisfies InstallProgress,
+    listeners.get("download-job-updated")?.({
+      payload: downloadJob({ instanceFolder: "First" }),
     });
-    listeners.get("install-progress")?.({
-      payload: {
-        versionId: "1.21.1",
-        finished: 0,
-        failed: 0,
-        total: 2,
-        bytesDone: 0,
-        bytesTotal: 200_000,
-      } satisfies InstallProgress,
+    listeners.get("download-job-updated")?.({
+      payload: downloadJob({ id: "2", instanceFolder: "Second" }),
     });
 
     expect(
       await screen.findByRole("button", { name: "Downloads: 2" }),
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Downloads: 2" }));
-    expect(await screen.findByText("2 installing")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("region", { name: "Download for First" }),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByRole("region", { name: "Download for Second" }),
+    ).toBeInTheDocument();
   });
 });

@@ -8,13 +8,15 @@ pub(crate) use layout::{find_temurin, temurin_folder_name};
 
 use std::path::PathBuf;
 
-use tokio::sync::mpsc;
-
 use super::archive::{extract_java_archive, java_executable, mark_executable};
 use super::require::required_java_major;
-use crate::{CoreError, DownloadProgress, LaunchEnvironment, Result, SharedCache, Version};
+use crate::{
+    CoreError, DownloadComponent, DownloadPhase, DownloadProgress, InstallationContext,
+    LaunchEnvironment, Result, SharedCache, Version,
+};
 
 pub const ADOPTIUM_API: &str = "https://api.adoptium.net";
+static JAVA_INSTALL_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 pub fn installed_java(
     cache: &SharedCache,
@@ -35,14 +37,28 @@ pub async fn install_temurin(
     major: u32,
     environment: &LaunchEnvironment,
     api_base: &str,
-    progress: mpsc::Sender<DownloadProgress>,
+    progress: impl Into<InstallationContext>,
 ) -> Result<PathBuf> {
+    let progress = progress.into().component(DownloadComponent::Java);
+    progress.checkpoint().await?;
+    progress.stage(DownloadPhase::Preparing).await?;
+    let _guard = progress
+        .metadata(async { Ok(JAVA_INSTALL_LOCK.lock().await) })
+        .await?;
     if let Some(root) = find_temurin(cache, major, environment)? {
         return Ok(java_executable(&root, environment.os));
     }
 
-    let release =
-        api::temurin_package(client, api_base, major, environment.os, environment.arch).await?;
+    progress.stage(DownloadPhase::Preparing).await?;
+    let release = progress
+        .metadata(api::temurin_package(
+            client,
+            api_base,
+            major,
+            environment.os,
+            environment.arch,
+        ))
+        .await?;
     let root = layout::runtime_folder(
         cache,
         &temurin_folder_name(
@@ -55,6 +71,7 @@ pub async fn install_temurin(
     )?;
     let executable = java_executable(&root, environment.os);
     std::fs::create_dir_all(&root)?;
+    std::fs::write(root.join(".installing"), b"")?;
 
     let package = &release.package;
     let name = download::archive_name(&package.name)?;
@@ -68,13 +85,16 @@ pub async fn install_temurin(
         &progress,
     )
     .await?;
+    progress.stage(DownloadPhase::Extracting).await?;
     let extracted = extract_java_archive(&archive, &root);
-    let _ = std::fs::remove_file(&archive);
     extracted?;
     if !executable.is_file() {
         return Err(CoreError::JavaRuntimeMissing);
     }
     mark_executable(&executable)?;
+    progress.checkpoint().await?;
+    std::fs::remove_file(&archive)?;
+    std::fs::remove_file(root.join(".installing"))?;
     let _ = progress.try_send(DownloadProgress {
         finished: 1,
         failed: 0,

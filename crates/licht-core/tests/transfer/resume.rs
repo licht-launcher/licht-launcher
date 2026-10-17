@@ -3,8 +3,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use licht_core::{
-    CoreError, DownloadControl, DownloadOptions, DownloadProgress, DownloadState, DownloadTask,
-    Retry, TransferLimits, download_all_with_control, download_file, download_file_with_control,
+    CoreError, DownloadChecksum, DownloadControl, DownloadOptions, DownloadProgress, DownloadState,
+    DownloadTask, Retry, TransferLimits, VerifiedDownloadTask, download_all_with_control,
+    download_file, download_file_with_control, download_verified_all,
 };
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
@@ -12,6 +13,75 @@ use tokio::sync::{mpsc, oneshot};
 
 const BODY: &[u8] = b"hello world";
 const SHA1: &str = "2aae6c35c94fcfb415dbe95f408b9ce91ee846ed";
+
+#[tokio::test]
+async fn every_published_checksum_can_resume_and_report_a_previously_unknown_size() {
+    for (index, checksum) in [
+        DownloadChecksum::Sha1(SHA1.into()),
+        DownloadChecksum::Sha256("b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9".into()),
+        DownloadChecksum::Sha512("309ecc489c12d6eb4cc40f50c902f2b4d0ed77ee511a7c7a9bcd3ca86d4cd86f989dd35bc5ff499670da34255b45b0cfd830e81f605dcf7dc5542e93ae9cd76f".into()),
+        DownloadChecksum::Md5("5eb63bbbe01eeed093cb22bb8f5acdc3".into()),
+    ].into_iter().enumerate() {
+        let mut server = Server::start().await;
+        let destination = Destination::new(&format!("checksum-{index}"));
+        std::fs::write(destination.part(), b"hello").expect("partial");
+        let task = VerifiedDownloadTask { url: server.url.clone(), destination: destination.path.clone(), checksum, size: 0 };
+        let (progress, mut incoming) = mpsc::channel(64);
+        let running = tokio::spawn(async move {
+            download_verified_all(&reqwest::Client::new(), &[task], &options(), &DownloadControl::new(), progress).await
+        });
+        let request = server.request().await;
+        assert_range(&request, 5);
+        request.respond(Reply::suffix());
+        finish(running).await.expect("verified suffix");
+        let progress = last_progress(&mut incoming).await;
+        assert_eq!((progress.bytes_done, progress.bytes_total, progress.finished), (11, 11, 1));
+        assert_eq!(std::fs::read(&destination.path).expect("file"), BODY);
+        assert!(!destination.part().exists());
+    }
+}
+
+#[tokio::test]
+async fn checksum_failures_keep_their_algorithm_and_never_publish_the_file() {
+    for (index, checksum) in [
+        DownloadChecksum::Sha256("0".repeat(64)),
+        DownloadChecksum::Sha512("0".repeat(128)),
+        DownloadChecksum::Md5("0".repeat(32)),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let mut server = Server::start().await;
+        let destination = Destination::new(&format!("bad-checksum-{index}"));
+        let task = VerifiedDownloadTask {
+            url: server.url.clone(),
+            destination: destination.path.clone(),
+            checksum: checksum.clone(),
+            size: 11,
+        };
+        let (progress, _) = mpsc::channel(64);
+        let running = tokio::spawn(async move {
+            download_verified_all(
+                &reqwest::Client::new(),
+                &[task],
+                &options(),
+                &DownloadControl::new(),
+                progress,
+            )
+            .await
+        });
+        server.request().await.respond(Reply::full());
+        let error = finish(running).await.expect_err("checksum mismatch");
+        assert!(match checksum {
+            DownloadChecksum::Sha256(_) => matches!(error, CoreError::Sha256Mismatch { .. }),
+            DownloadChecksum::Sha512(_) => matches!(error, CoreError::Sha512Mismatch { .. }),
+            DownloadChecksum::Md5(_) => matches!(error, CoreError::Md5Mismatch { .. }),
+            _ => false,
+        });
+        assert!(!destination.path.exists());
+        assert!(!destination.part().exists());
+    }
+}
 
 #[tokio::test]
 async fn an_interrupted_transfer_keeps_bytes_and_a_new_call_resumes_them() {
