@@ -16,7 +16,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/github/license/mateusneiva/licht-launcher" alt="MIT license"></a>
 </p>
 
-**Current release: `0.2.2 · Iris`**
+**Current release: `0.2.3 · Iris`**
 
 **Unofficial project, not affiliated with Mojang Studios or Microsoft.**
 
