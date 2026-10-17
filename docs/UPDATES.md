@@ -3,6 +3,19 @@
 Licht Launcher uses the Tauri updater with GitHub Releases as its update
 source.
 
+## 0.2.3 · Iris
+
+The `0.2.3` release improves Windows launch behavior and project navigation:
+
+- game processes on Windows start without an external console window while
+  stdout and stderr remain available in the launcher's game console;
+- a global context menu provides history navigation, Settings, update checks,
+  and a link to the project repository, with keyboard support;
+- public Terms of Use, Privacy Policy, contribution guidance, and code-signing
+  documentation are available from the README;
+- GitHub Actions caches Rust dependencies across compatible CI and release
+  builds, with cache writes limited to the `main` branch.
+
 ## 0.2.2 · Iris
 
 The `0.2.2` release adds the first complete update interaction surface:
