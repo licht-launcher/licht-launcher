@@ -20,6 +20,7 @@ pub enum DownloadJobStatus {
     Running,
     Paused,
     Interrupted,
+    Cancelling,
     Completed,
     Cancelled,
     Failed,
@@ -31,9 +32,18 @@ impl DownloadJobStatus {
         match self {
             Completed | Cancelled => false,
             _ if self == next => true,
-            Queued => matches!(next, Running | Paused | Interrupted | Cancelled | Failed),
-            Running => matches!(next, Paused | Interrupted | Completed | Cancelled | Failed),
-            Paused | Interrupted | Failed => matches!(next, Queued | Running | Cancelled),
+            Queued => matches!(
+                next,
+                Running | Paused | Interrupted | Cancelling | Cancelled | Failed
+            ),
+            Running => matches!(
+                next,
+                Paused | Interrupted | Cancelling | Completed | Cancelled | Failed
+            ),
+            Paused | Interrupted | Failed => {
+                matches!(next, Queued | Running | Cancelling | Cancelled)
+            }
+            Cancelling => matches!(next, Cancelled),
         }
     }
 }
@@ -209,6 +219,7 @@ pub fn update_download_job(
     let mut connection = open_db(settings)?;
     let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
     let mut job = load(&transaction, game, id)?;
+    validate_cancellation_target(&job, update.status)?;
     if !job.status.can_transition_to(update.status) {
         return Err(CoreError::DownloadJobTransition);
     }
@@ -318,6 +329,7 @@ fn decode_row(row: StoredJob, game: &SharedCache) -> Result<DownloadJobSnapshot>
         java_major: row.java_major,
     };
     validate_progress(job.progress)?;
+    validate_cancellation_target(&job, job.status)?;
     validate_phase(job.phase, job.component)?;
     validate_completion(job.status, job.progress)?;
     Ok(job)
@@ -371,6 +383,20 @@ fn validate_progress(progress: DownloadProgress) -> Result<()> {
 fn validate_phase(phase: DownloadPhase, component: Option<DownloadComponent>) -> Result<()> {
     if phase != DownloadPhase::Preparing && component.is_none() {
         return Err(invalid("an active phase requires a component"));
+    }
+    Ok(())
+}
+
+fn validate_cancellation_target(
+    job: &DownloadJobSnapshot,
+    status: DownloadJobStatus,
+) -> Result<()> {
+    if status == DownloadJobStatus::Cancelling
+        && (job.operation != DownloadJobOperation::Install || job.instance_folder.is_none())
+    {
+        return Err(invalid(
+            "pending instance removal requires an instance installation",
+        ));
     }
     Ok(())
 }

@@ -32,6 +32,7 @@ struct ActiveJob {
     control: DownloadControl,
     snapshot: Mutex<DownloadJobSnapshot>,
     completion: watch::Sender<Option<Outcome>>,
+    stopped: watch::Sender<bool>,
     worker: Mutex<Option<tokio::task::AbortHandle>>,
     suspending: AtomicBool,
     dirty: AtomicBool,
@@ -129,10 +130,12 @@ impl DownloadManager {
 
     async fn spawn(self: &Arc<Self>, snapshot: DownloadJobSnapshot) {
         let (completion, _) = watch::channel(None);
+        let (stopped, _) = watch::channel(false);
         let slot = Arc::new(ActiveJob {
             control: DownloadControl::new(),
             snapshot: Mutex::new(snapshot.clone()),
             completion,
+            stopped,
             worker: Mutex::new(None),
             suspending: AtomicBool::new(false),
             dirty: AtomicBool::new(false),
@@ -153,7 +156,10 @@ impl DownloadManager {
         let manager = Arc::clone(self);
         tokio::spawn(async move {
             let failure = match worker.await {
-                Ok(Ok(())) => return,
+                Ok(Ok(())) => {
+                    slot.stopped.send_replace(true);
+                    return;
+                }
                 Ok(Err(error)) => error.to_string(),
                 Err(_) => "download worker stopped unexpectedly".to_string(),
             };
@@ -162,9 +168,11 @@ impl DownloadManager {
                 slot.completion
                     .send_replace(Some(Err("download suspended for shutdown".to_string())));
                 manager.active.lock().await.remove(&id);
+                slot.stopped.send_replace(true);
                 return;
             }
-            manager.fail(slot, failure).await;
+            manager.fail(Arc::clone(&slot), failure).await;
+            slot.stopped.send_replace(true);
         });
     }
 
@@ -212,6 +220,11 @@ impl DownloadManager {
         }
         snapshot.status = match &result {
             Ok(()) => DownloadJobStatus::Completed,
+            Err(CoreError::DownloadCancelled)
+                if snapshot.status == DownloadJobStatus::Cancelling =>
+            {
+                DownloadJobStatus::Cancelling
+            }
             Err(CoreError::DownloadCancelled) => DownloadJobStatus::Cancelled,
             Err(_) => DownloadJobStatus::Failed,
         };
@@ -221,6 +234,10 @@ impl DownloadManager {
             .map(|error| error.to_string());
         self.persist(&mut snapshot)?;
         self.emit(snapshot.clone());
+        if snapshot.status == DownloadJobStatus::Cancelling {
+            // The cancel command still needs to remove the instance directory.
+            return Ok(());
+        }
         slot.completion.send_replace(Some(Ok(snapshot.clone())));
         drop(snapshot);
         self.active.lock().await.remove(&id);
@@ -367,32 +384,112 @@ impl DownloadManager {
 
     pub async fn cancel(&self, id: &str) -> Result<DownloadJobSnapshot> {
         let _starts = self.starts.lock().await;
-        let job = get_download_job(&self.runtime.settings, &self.runtime.game, id)?;
+        let job = if let Some(slot) = self.active_job(id).await {
+            let mut snapshot = slot.snapshot.lock().await;
+            let next = self.prepare_cancellation(snapshot.clone())?;
+            *snapshot = next;
+            if snapshot.status == DownloadJobStatus::Cancelling {
+                slot.control.cancel();
+            }
+            snapshot.clone()
+        } else {
+            self.prepare_cancellation(get_download_job(
+                &self.runtime.settings,
+                &self.runtime.game,
+                id,
+            )?)?
+        };
         if matches!(
             job.status,
             DownloadJobStatus::Completed | DownloadJobStatus::Cancelled
         ) {
             return Ok(job);
         }
-        let remove_folder = match &job.instance_folder {
-            Some(folder) if job.operation == DownloadJobOperation::Install => {
-                let profile = load_instance(&self.runtime.game.instance_dir(folder)?)?;
-                profile
-                    .installation
-                    .is_some_and(|installation| {
-                        installation.state != crate::InstancePreparationState::Ready
-                    })
-                    .then(|| folder.clone())
-            }
-            _ => None,
-        };
-        let outcome = self.cancel_job(id).await?;
-        if outcome.status == DownloadJobStatus::Cancelled
-            && let Some(folder) = remove_folder
-        {
-            crate::delete_instance(&self.runtime.game.instances_dir()?, &folder)?;
+        let result = async {
+            let stopped = self.cancel_job(id).await?;
+            self.finish_cancellation(stopped).await
         }
-        Ok(outcome)
+        .await;
+        let result = match result {
+            Err(error) => match self.record_cancellation_failure(id, &error) {
+                Ok(()) => Err(error),
+                Err(record_error) => Err(CoreError::DownloadJobExecution {
+                    detail: format!("{error}; failed to record cancellation error: {record_error}"),
+                }),
+            },
+            success => success,
+        };
+        self.complete_cancellation(id, &result).await;
+        result
+    }
+
+    async fn complete_cancellation(&self, id: &str, result: &Result<DownloadJobSnapshot>) {
+        if let Some(slot) = self.active_job(id).await {
+            slot.completion
+                .send_replace(Some(result.as_ref().cloned().map_err(ToString::to_string)));
+            self.active.lock().await.remove(id);
+        }
+    }
+
+    fn prepare_cancellation(&self, mut job: DownloadJobSnapshot) -> Result<DownloadJobSnapshot> {
+        if matches!(
+            job.status,
+            DownloadJobStatus::Completed
+                | DownloadJobStatus::Cancelled
+                | DownloadJobStatus::Cancelling
+        ) {
+            return Ok(job);
+        }
+        if job.operation == DownloadJobOperation::Install
+            && let Some(folder) = &job.instance_folder
+        {
+            let profile = load_instance(&self.runtime.game.instance_dir(folder)?)?;
+            if profile.installation.is_some_and(|installation| {
+                installation.state != crate::InstancePreparationState::Ready
+            }) {
+                // Persist removal intent before a partial deletion can remove instance.json.
+                job.status = DownloadJobStatus::Cancelling;
+                job.error = None;
+                self.persist(&mut job)?;
+                self.emit(job.clone());
+            }
+        }
+        Ok(job)
+    }
+
+    async fn finish_cancellation(
+        &self,
+        mut job: DownloadJobSnapshot,
+    ) -> Result<DownloadJobSnapshot> {
+        if job.status != DownloadJobStatus::Cancelling {
+            return Ok(job);
+        }
+        let folder = job
+            .instance_folder
+            .as_deref()
+            .ok_or(CoreError::InstancePreparing)?;
+        let directory = self.runtime.game.instance_dir(folder)?;
+        if let Err(error) = tokio::fs::remove_dir_all(&directory).await
+            && (error.kind() != std::io::ErrorKind::NotFound
+                || tokio::fs::try_exists(&directory).await?)
+        {
+            return Err(error.into());
+        }
+        job.status = DownloadJobStatus::Cancelled;
+        job.error = None;
+        self.persist(&mut job)?;
+        self.emit(job.clone());
+        Ok(job)
+    }
+
+    fn record_cancellation_failure(&self, id: &str, error: &CoreError) -> Result<()> {
+        let mut job = get_download_job(&self.runtime.settings, &self.runtime.game, id)?;
+        if job.status == DownloadJobStatus::Cancelling {
+            job.error = Some(error.to_string());
+            self.persist(&mut job)?;
+            self.emit(job);
+        }
+        Ok(())
     }
 
     async fn cancel_job(&self, id: &str) -> Result<DownloadJobSnapshot> {
@@ -406,7 +503,23 @@ impl DownloadManager {
             }
             slot.control.cancel();
             drop(snapshot);
-            let outcome = Self::wait_slot(&slot).await?;
+            let mut stopped = slot.stopped.subscribe();
+            stopped.wait_for(|stopped| *stopped).await.map_err(|_| {
+                CoreError::DownloadJobExecution {
+                    detail: "download worker stopped without notification".into(),
+                }
+            })?;
+            if let Some(Err(detail)) = slot.completion.borrow().as_ref() {
+                return Err(CoreError::DownloadJobExecution {
+                    detail: detail.clone(),
+                });
+            }
+            let outcome = slot.snapshot.lock().await.clone();
+            if outcome.status == DownloadJobStatus::Cancelling
+                && let Some(detail) = outcome.error
+            {
+                return Err(CoreError::DownloadJobExecution { detail });
+            }
             if outcome.status != DownloadJobStatus::Failed {
                 return Ok(outcome);
             }
@@ -419,7 +532,9 @@ impl DownloadManager {
             return Ok(snapshot);
         }
         super::jobs::cleanup_artifacts(&self.runtime.settings, &self.runtime.game, id).await?;
-        snapshot.status = DownloadJobStatus::Cancelled;
+        if snapshot.status != DownloadJobStatus::Cancelling {
+            snapshot.status = DownloadJobStatus::Cancelled;
+        }
         snapshot.error = None;
         self.persist(&mut snapshot)?;
         self.emit(snapshot.clone());
@@ -427,12 +542,20 @@ impl DownloadManager {
     }
 
     pub async fn cancel_instance(&self, folder: &str) -> Result<()> {
+        let _starts = self.starts.lock().await;
         let jobs = list_download_jobs(&self.runtime.settings, &self.runtime.game)?;
         for job in jobs
             .into_iter()
             .filter(|job| job.instance_folder.as_deref() == Some(folder))
         {
-            self.cancel_job(&job.id).await?;
+            let mut stopped = self.cancel_job(&job.id).await?;
+            if stopped.status == DownloadJobStatus::Cancelling {
+                // The explicit instance-delete command owns directory removal.
+                stopped.status = DownloadJobStatus::Cancelled;
+                self.persist(&mut stopped)?;
+                self.emit(stopped.clone());
+                self.complete_cancellation(&job.id, &Ok(stopped)).await;
+            }
         }
         Ok(())
     }
@@ -476,12 +599,18 @@ impl DownloadManager {
     async fn fail(&self, slot: Arc<ActiveJob>, detail: String) {
         slot.control.cancel();
         let mut snapshot = slot.snapshot.lock().await;
-        snapshot.status = DownloadJobStatus::Failed;
+        if snapshot.status != DownloadJobStatus::Cancelling {
+            snapshot.status = DownloadJobStatus::Failed;
+        }
         snapshot.error = Some(detail.clone());
         let outcome = match self.persist(&mut snapshot) {
             Ok(()) => {
                 self.emit(snapshot.clone());
-                Ok(snapshot.clone())
+                if snapshot.status == DownloadJobStatus::Cancelling {
+                    Err(detail.clone())
+                } else {
+                    Ok(snapshot.clone())
+                }
             }
             Err(error) => Err(error.to_string()),
         };
@@ -595,11 +724,20 @@ impl DownloadManager {
             waiting.push(slot);
         }
         for slot in waiting {
-            let mut completion = slot.completion.subscribe();
-            completion
-                .wait_for(Option::is_some)
+            let mut stopped = slot.stopped.subscribe();
+            stopped
+                .wait_for(|stopped| *stopped)
                 .await
                 .map_err(|_| CoreError::Io(std::io::Error::other("shutdown worker closed")))?;
+            slot.completion.send_if_modified(|outcome| {
+                if outcome.is_some() {
+                    return false;
+                }
+                *outcome = Some(Err("download suspended for shutdown".into()));
+                true
+            });
+            let id = slot.snapshot.lock().await.id.clone();
+            self.active.lock().await.remove(&id);
         }
         match failure {
             Some(error) => Err(error),

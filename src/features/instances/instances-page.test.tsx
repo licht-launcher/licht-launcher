@@ -275,6 +275,68 @@ describe("InstancesPage", () => {
     ).toBe(false);
   });
 
+  it("retries persisted cancellation from the instance page without resuming installation", async () => {
+    let jobs = [
+      downloadJob({
+        instanceFolder: "classic",
+        status: "cancelling",
+        error: "Instance file is locked",
+      }),
+    ];
+    let entries: InstanceEntry[] = [
+      {
+        ...classicInstance,
+        installation: {
+          source: { type: "vanilla", gameVersion: "1.5.2" },
+          state: "installing",
+        },
+      },
+      contextInstance,
+    ];
+    mockContextMenuCommands((command) => {
+      if (command === "list_instances") return Promise.resolve(entries);
+      if (command === "list_download_jobs") return Promise.resolve(jobs);
+      if (command === "cancel_download_job") {
+        const job = jobs[0];
+        jobs = [];
+        entries = entries.filter((entry) => entry.folder !== "classic");
+        return Promise.resolve({
+          ...job,
+          status: "cancelled",
+          error: undefined,
+        });
+      }
+    });
+    await renderAt("/?instance=classic");
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Retry cancellation for Classic",
+      }),
+    );
+    const dialog = await screen.findByRole("dialog", {
+      name: "Retry cancellation for Classic?",
+    });
+    expect(within(dialog).getByRole("alert")).toHaveTextContent(
+      "Instance file is locked",
+    );
+    expect(
+      screen.queryByRole("button", { name: "Resume download for Classic" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Retry cancellation" }),
+    );
+    await screen.findByRole("heading", { name: "Next" });
+    expect(invoke).toHaveBeenCalledWith("cancel_download_job", { jobId: "1" });
+    expect(
+      invoke.mock.calls.some(
+        ([command]) =>
+          command === "resume_download_job" ||
+          command === "prepare_instance_download" ||
+          command === "launch",
+      ),
+    ).toBe(false);
+  });
+
   it.each(["instance page", "downloads popover"])(
     "removes a new instance only after confirming cancellation from the %s",
     async (location) => {

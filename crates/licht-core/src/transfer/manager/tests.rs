@@ -286,6 +286,145 @@ async fn cancelling_repairs_and_updates_preserves_existing_instances_and_saves()
     }
 }
 
+#[cfg(windows)]
+#[tokio::test]
+async fn failed_instance_removal_can_retry_after_restart_without_the_profile() {
+    use std::os::windows::fs::OpenOptionsExt;
+
+    let mut server = Server::new().await;
+    let fixture = Fixture::new(&server.url);
+    let entry = fixture.instance("Locked cancellation");
+    let dir = fixture.game.instance_dir(&entry.folder).expect("folder");
+    let locked = std::fs::OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .share_mode(0)
+        .open(dir.join("locked.bin"))
+        .expect("locked instance file");
+    let manager = fixture.manager();
+    let job = manager
+        .start(&entry.folder, DownloadJobOperation::Install)
+        .await
+        .expect("start");
+    let tail = server.request().await.hold();
+    assert!(
+        finish(manager.cancel(&job.id)).await.is_err(),
+        "locked file must prevent removal"
+    );
+    assert!(
+        list_download_jobs(&fixture.settings, &fixture.game)
+            .expect("unfinished jobs")
+            .iter()
+            .any(|unfinished| unfinished.id == job.id),
+        "failed cleanup must remain available for retry"
+    );
+    drop(locked);
+    if dir.join("instance.json").exists() {
+        std::fs::remove_file(dir.join("instance.json")).expect("partially removed profile");
+    }
+    drop(manager);
+    crate::recover_download_jobs(&fixture.settings, &fixture.game).expect("restart recovery");
+    let restarted = fixture.manager();
+    let outcome = finish(restarted.cancel(&job.id))
+        .await
+        .expect("retry cleanup");
+    assert_eq!(outcome.status, DownloadJobStatus::Cancelled);
+    assert!(!dir.exists());
+    assert!(
+        server.requests.is_empty(),
+        "retry must not reinstall the instance"
+    );
+    drop(tail);
+}
+
+#[tokio::test]
+async fn pending_cancellation_recovers_after_cleanup_failure_with_missing_instance_files() {
+    for remove_directory in [false, true] {
+        let mut server = Server::new().await;
+        let fixture = Fixture::new(&server.url);
+        let entry = fixture.instance("Pending cancellation");
+        let dir = fixture.game.instance_dir(&entry.folder).expect("folder");
+        let manager = fixture.manager();
+        let job = manager
+            .start(&entry.folder, DownloadJobOperation::Install)
+            .await
+            .expect("start");
+        let tail = server.request().await.hold();
+        let slot = manager.active_job(&job.id).await.expect("worker");
+        let destination = fixture.game.root().join("blocked.bin");
+        let obstruction = fixture.game.root().join("blocked.bin.part");
+        super::super::jobs::register_artifacts(
+            &fixture.settings,
+            &fixture.game,
+            &job.id,
+            &[destination],
+        )
+        .expect("artifact");
+        // A directory at the partial-file path makes cleanup fail on both supported OSes.
+        std::fs::create_dir_all(&obstruction).expect("cleanup obstruction");
+        assert!(manager.cancel(&job.id).await.is_err());
+        assert!(
+            finish(DownloadManager::wait_slot(&slot)).await.is_err(),
+            "installation waiters must receive the cleanup failure"
+        );
+        let pending =
+            get_download_job(&fixture.settings, &fixture.game, &job.id).expect("pending cleanup");
+        assert_eq!(pending.status, DownloadJobStatus::Cancelling);
+        assert!(pending.error.is_some());
+        assert_eq!(
+            list_download_jobs(&fixture.settings, &fixture.game).expect("visible job"),
+            vec![pending.clone()]
+        );
+        assert!(
+            manager.resume(&job.id).await.is_err(),
+            "cleanup must not restart installation"
+        );
+        assert!(manager.ensure_launchable(&entry.folder).is_err());
+        assert!(
+            dir.join("instance.json").exists(),
+            "artifact cleanup must finish before directory removal"
+        );
+        if remove_directory {
+            std::fs::remove_dir_all(&dir).expect("directory already removed");
+        } else {
+            std::fs::remove_file(dir.join("instance.json")).expect("partially removed profile");
+        }
+        drop(manager);
+        assert_eq!(
+            crate::recover_download_jobs(&fixture.settings, &fixture.game).expect("recovery"),
+            0
+        );
+        assert_eq!(
+            get_download_job(&fixture.settings, &fixture.game, &job.id).expect("retained intent"),
+            pending
+        );
+        let restarted = fixture.manager();
+        assert!(
+            restarted.cancel(&job.id).await.is_err(),
+            "a failed retry must remain pending"
+        );
+        assert_eq!(
+            get_download_job(&fixture.settings, &fixture.game, &job.id)
+                .expect("still pending")
+                .status,
+            DownloadJobStatus::Cancelling
+        );
+        std::fs::remove_dir(&obstruction).expect("remove obstruction");
+        assert_eq!(
+            restarted.cancel(&job.id).await.expect("retry").status,
+            DownloadJobStatus::Cancelled
+        );
+        assert!(!dir.exists());
+        assert!(
+            list_download_jobs(&fixture.settings, &fixture.game)
+                .expect("finished cleanup")
+                .is_empty()
+        );
+        assert!(server.requests.is_empty());
+        drop(tail);
+    }
+}
+
 #[tokio::test]
 async fn cancelling_a_recovered_new_installation_removes_it_without_starting_network_requests() {
     let server = Server::new().await;
@@ -313,6 +452,64 @@ async fn cancelling_a_recovered_new_installation_removes_it_without_starting_net
             .exists()
     );
     assert!(server.requests.is_empty());
+}
+
+#[tokio::test]
+async fn shutdown_preserves_pending_removal_when_the_cancel_caller_does_not_finish() {
+    let mut server = Server::new().await;
+    let fixture = Fixture::new(&server.url);
+    let entry = fixture.instance("Pending shutdown");
+    let manager = fixture.manager();
+    let job = manager
+        .start(&entry.folder, DownloadJobOperation::Install)
+        .await
+        .expect("start");
+    let tail = server.request().await.hold();
+    let slot = manager.active_job(&job.id).await.expect("worker");
+    {
+        let mut snapshot = slot.snapshot.lock().await;
+        *snapshot = manager
+            .prepare_cancellation(snapshot.clone())
+            .expect("removal intent");
+        slot.control.cancel();
+    }
+    // Model a cancel caller disappearing after the worker stops but before directory removal.
+    assert_eq!(
+        manager
+            .cancel_job(&job.id)
+            .await
+            .expect("worker stopped")
+            .status,
+        DownloadJobStatus::Cancelling
+    );
+    finish(manager.suspend_all())
+        .await
+        .expect("shutdown must not wait for the missing caller");
+    assert!(manager.active.lock().await.is_empty());
+    assert_eq!(
+        get_download_job(&fixture.settings, &fixture.game, &job.id)
+            .expect("preserved intent")
+            .status,
+        DownloadJobStatus::Cancelling
+    );
+    assert!(DownloadManager::wait_slot(&slot).await.is_err());
+    let restarted = fixture.manager();
+    assert_eq!(
+        restarted
+            .cancel(&job.id)
+            .await
+            .expect("retry after restart")
+            .status,
+        DownloadJobStatus::Cancelled
+    );
+    assert!(
+        !fixture
+            .game
+            .instance_dir(&entry.folder)
+            .expect("folder")
+            .exists()
+    );
+    drop(tail);
 }
 
 #[tokio::test]
@@ -351,28 +548,45 @@ async fn cancelling_an_existing_legacy_instance_update_keeps_its_files() {
 
 #[tokio::test]
 async fn explicit_instance_deletion_cancels_downloads_without_deleting_the_folder_twice() {
-    let mut server = Server::new().await;
-    let fixture = Fixture::new(&server.url);
-    let entry = fixture.instance("Delete");
-    let manager = fixture.manager();
-    manager
-        .start(&entry.folder, DownloadJobOperation::Install)
-        .await
-        .expect("start");
-    let tail = server.request().await.hold();
-    finish(manager.cancel_instance(&entry.folder))
-        .await
-        .expect("stop downloads");
-    crate::delete_instance(&fixture.game.instances_dir().expect("root"), &entry.folder)
-        .expect("delete once");
-    assert!(
-        !fixture
-            .game
-            .instance_dir(&entry.folder)
-            .expect("folder")
-            .exists()
-    );
-    drop(tail);
+    for pending_removal in [false, true] {
+        let mut server = Server::new().await;
+        let fixture = Fixture::new(&server.url);
+        let entry = fixture.instance("Delete");
+        let manager = fixture.manager();
+        let job = manager
+            .start(&entry.folder, DownloadJobOperation::Install)
+            .await
+            .expect("start");
+        let tail = server.request().await.hold();
+        let slot = manager.active_job(&job.id).await.expect("worker");
+        if pending_removal {
+            let mut snapshot = slot.snapshot.lock().await;
+            *snapshot = manager
+                .prepare_cancellation(snapshot.clone())
+                .expect("pending removal");
+            slot.control.cancel();
+        }
+        finish(manager.cancel_instance(&entry.folder))
+            .await
+            .expect("stop downloads");
+        assert_eq!(
+            DownloadManager::wait_slot(&slot)
+                .await
+                .expect("cancellation outcome")
+                .status,
+            DownloadJobStatus::Cancelled
+        );
+        crate::delete_instance(&fixture.game.instances_dir().expect("root"), &entry.folder)
+            .expect("delete once");
+        assert!(
+            !fixture
+                .game
+                .instance_dir(&entry.folder)
+                .expect("folder")
+                .exists()
+        );
+        drop(tail);
+    }
 }
 
 #[tokio::test]

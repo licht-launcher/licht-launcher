@@ -161,6 +161,41 @@ fn completed_and_cancelled_jobs_cannot_restart() {
 }
 
 #[test]
+fn pending_cancellation_survives_recovery_and_cannot_restart_installation() {
+    let fixture = Fixture::new("pending-cancellation");
+    let job = fixture.create("Pending removal");
+    let mut pending = update(DownloadJobStatus::Cancelling, progress(0, 0, 0));
+    pending.error = Some("Instance file is locked".into());
+    let stored = update_download_job(&fixture.settings, &fixture.game, &job.id, pending)
+        .expect("cleanup pending");
+    assert_eq!(
+        recover_download_jobs(&fixture.settings, &fixture.game).expect("recovery"),
+        0
+    );
+    assert_eq!(fixture.list(), vec![stored.clone()]);
+    for next in [
+        DownloadJobStatus::Queued,
+        DownloadJobStatus::Running,
+        DownloadJobStatus::Failed,
+        DownloadJobStatus::Completed,
+    ] {
+        assert!(matches!(
+            update_download_job(
+                &fixture.settings,
+                &fixture.game,
+                &job.id,
+                update(next, progress(0, 0, 0))
+            ),
+            Err(CoreError::DownloadJobTransition)
+        ));
+        assert_eq!(fixture.get(&job.id), stored);
+    }
+    let cancelled = fixture.update(&job.id, DownloadJobStatus::Cancelled, progress(0, 0, 0));
+    assert_eq!(cancelled.error, None);
+    assert!(fixture.list().is_empty());
+}
+
+#[test]
 fn one_unfinished_job_per_instance_is_allowed_and_new_jobs_get_fresh_ids() {
     let fixture = Fixture::new("duplicate");
     let job = fixture.create("Survival");
@@ -185,6 +220,50 @@ fn one_unfinished_job_per_instance_is_allowed_and_new_jobs_get_fresh_ids() {
     assert_ne!(job.id, repair.id);
     assert_eq!(repair.operation, DownloadJobOperation::Repair);
     assert_eq!(fixture.list(), vec![repair]);
+}
+
+#[test]
+fn pending_instance_removal_rejects_repairs_and_standalone_java_tasks() {
+    let fixture = Fixture::new("pending-removal-targets");
+    let repair = create_download_job(
+        &fixture.settings,
+        &fixture.game,
+        "Repair",
+        "1.21.1",
+        DownloadJobOperation::Repair,
+    )
+    .expect("repair");
+    let java = fixture.create("Java target");
+    let connection = open_db(&fixture.settings).expect("database");
+    connection
+        .execute(
+            "UPDATE download_jobs SET instance_folder = NULL, java_major = 21 WHERE id = ?1",
+            [&java.id],
+        )
+        .expect("standalone Java target");
+    for id in [&repair.id, &java.id] {
+        let before = fixture.get(id);
+        assert!(matches!(
+            update_download_job(
+                &fixture.settings,
+                &fixture.game,
+                id,
+                update(DownloadJobStatus::Cancelling, progress(0, 0, 0))
+            ),
+            Err(CoreError::DownloadJobInvalid { .. })
+        ));
+        assert_eq!(fixture.get(id), before);
+    }
+    connection
+        .execute(
+            "UPDATE download_jobs SET status = ?1 WHERE id = ?2",
+            rusqlite::params!["\"cancelling\"", repair.id],
+        )
+        .expect("invalid persisted removal");
+    assert!(matches!(
+        list_download_jobs(&fixture.settings, &fixture.game),
+        Err(CoreError::DownloadJobInvalid { .. })
+    ));
 }
 
 #[test]
