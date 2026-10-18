@@ -7,6 +7,7 @@ use tokio::net::TcpListener;
 use tokio::sync::oneshot;
 
 use super::*;
+mod pipeline;
 use crate::{
     Arch, DownloadChecksum, DownloadComponent, InstancePreparationState, OsName,
     VerifiedDownloadTask,
@@ -917,6 +918,10 @@ impl Fixture {
     }
 
     fn manager(&self) -> Arc<DownloadManager> {
+        self.manager_with(fixture_executor, reqwest::Client::new())
+    }
+
+    fn manager_with(&self, executor: Executor, client: reqwest::Client) -> Arc<DownloadManager> {
         let mut manager = DownloadManager::new(
             self.settings.clone(),
             self.game.clone(),
@@ -926,9 +931,9 @@ impl Fixture {
                 os_version: String::new(),
                 features: BTreeMap::new(),
             },
-            reqwest::Client::new(),
+            client,
         );
-        manager.executor = fixture_executor;
+        manager.executor = executor;
         Arc::new(manager)
     }
 
