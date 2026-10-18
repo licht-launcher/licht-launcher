@@ -79,22 +79,39 @@ async fn pause_resume_and_completion_use_the_persisted_job_and_block_early_launc
         .start(&entry.folder, DownloadJobOperation::Install)
         .await
         .expect("start");
-    let tail = server.request().await.hold();
+    let tail = tokio::time::timeout(Duration::from_secs(10), server.requests.recv())
+        .await
+        .expect("initial download request timeout")
+        .expect("initial request")
+        .hold();
     fixture.partial(5).await;
-    let paused = manager.pause(&job.id).await.expect("pause");
+    let paused = tokio::time::timeout(Duration::from_secs(10), manager.pause(&job.id))
+        .await
+        .expect("pause did not acknowledge idle transfers")
+        .expect("pause");
     assert_eq!(paused.status, DownloadJobStatus::Paused);
     assert!(matches!(
         manager.ensure_launchable(&entry.folder),
         Err(CoreError::InstancePreparing)
     ));
-    wait_until(|| {
-        get_download_job(&fixture.settings, &fixture.game, &job.id)
-            .is_ok_and(|job| job.progress.bytes_done == 5)
+    tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            if get_download_job(&fixture.settings, &fixture.game, &job.id)
+                .is_ok_and(|job| job.progress.bytes_done == 5)
+            {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
     })
-    .await;
+    .await
+    .expect("paused byte progress was not persisted");
     assert_eq!(std::fs::read(fixture.part()).expect("partial"), b"hello");
     assert!(server.requests.is_empty());
-    let resumed = manager.resume(&job.id).await.expect("resume");
+    let resumed = tokio::time::timeout(Duration::from_secs(10), manager.resume(&job.id))
+        .await
+        .expect("resume did not acknowledge idle transfers")
+        .expect("resume");
     assert_eq!(resumed.status, DownloadJobStatus::Running, "{resumed:?}");
     assert_eq!(
         manager
@@ -105,10 +122,10 @@ async fn pause_resume_and_completion_use_the_persisted_job_and_block_early_launc
             .state(),
         DownloadState::Running
     );
-    let request = tokio::select! {
-        request = server.request() => request,
+    let request = tokio::time::timeout(Duration::from_secs(10), async { tokio::select! {
+        request = server.requests.recv() => request.expect("resume request"),
         outcome = manager.wait(&job.id) => panic!("job ended before issuing its resume request: {outcome:?}"),
-    };
+    }}).await.expect("resumed transfer did not issue its Range request");
     assert!(
         request
             .headers
@@ -116,7 +133,10 @@ async fn pause_resume_and_completion_use_the_persisted_job_and_block_early_launc
             .contains("range: bytes=5-")
     );
     request.reply(206, "Content-Range: bytes 5-10/11\r\n", b" world", 6);
-    let completed = finish(manager.wait(&job.id)).await.expect("complete");
+    let completed = tokio::time::timeout(Duration::from_secs(10), manager.wait(&job.id))
+        .await
+        .expect("installation did not finish after the resumed response")
+        .expect("complete");
     assert_eq!(completed.status, DownloadJobStatus::Completed);
     manager
         .ensure_launchable(&entry.folder)

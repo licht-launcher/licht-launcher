@@ -412,8 +412,9 @@ async fn cancelling_a_queue_stops_waiting_files_without_counting_them_as_failure
     std::fs::write(&cached.path, BODY).expect("cached file");
     let tasks: Vec<_> = [&destination, &waiting, &cached]
         .into_iter()
-        .map(|destination| DownloadTask {
-            url: server.url.clone(),
+        .enumerate()
+        .map(|(index, destination)| DownloadTask {
+            url: format!("{}?target={index}", server.url),
             destination: destination.path.clone(),
             sha1: SHA1.to_string(),
             size: 11,
@@ -435,14 +436,27 @@ async fn cancelling_a_queue_stops_waiting_files_without_counting_them_as_failure
     let (tail, incoming_tail) = oneshot::channel();
     let mut reply = Reply::new(200, "", b"hello", 11);
     reply.tail = Some(incoming_tail);
-    server.request().await.respond(reply);
-    destination.wait_for_partial(5).await;
+    let request = server.request().await;
+    let (active, queued) = if request.headers.starts_with("GET /file?target=0 ") {
+        (&destination, &waiting)
+    } else {
+        assert!(
+            request.headers.starts_with("GET /file?target=1 "),
+            "cached files must not be requested: {}",
+            request.headers
+        );
+        (&waiting, &destination)
+    };
+    request.respond(reply);
+    active.wait_for_partial(5).await;
+    assert!(!queued.part().exists());
     control.cancel();
     assert!(matches!(
         finish(running).await,
         Err(CoreError::DownloadCancelled)
     ));
     assert!(!destination.part().exists());
+    assert!(!destination.path.exists());
     assert!(!waiting.path.exists());
     assert!(!waiting.part().exists());
     assert_eq!(std::fs::read(&cached.path).expect("cached file"), BODY);
