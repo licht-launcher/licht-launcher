@@ -5,231 +5,97 @@
 </p>
 
 <p align="center">
-  <strong>A light, cross-platform launcher for Minecraft: Java Edition.</strong><br>
-  Built with Tauri v2, React, TypeScript, and Rust for Windows and Linux.
+  <strong>A simple home for Minecraft: Java Edition.</strong><br>
+  Your game versions, modpacks, and profiles in one place. Available for Windows and Linux.
 </p>
 
 <p align="center">
-  <a href="https://github.com/mateusneiva/licht-launcher/actions/workflows/ci.yml"><img src="https://github.com/mateusneiva/licht-launcher/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
-  <a href="https://github.com/mateusneiva/licht-launcher/releases/latest"><img src="https://img.shields.io/github/v/release/mateusneiva/licht-launcher?label=latest%20release" alt="Latest release"></a>
-  <a href="https://github.com/mateusneiva/licht-launcher/releases"><img src="https://img.shields.io/github/downloads/mateusneiva/licht-launcher/total?label=downloads" alt="Downloads"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/mateusneiva/licht-launcher" alt="MIT license"></a>
+  <a href="#download"><img src="https://img.shields.io/badge/status-Early_Release-orange" alt="Early Release"></a>
+  <a href="https://github.com/licht-launcher/licht-launcher/actions/workflows/ci.yml"><img src="https://github.com/licht-launcher/licht-launcher/actions/workflows/ci.yml/badge.svg?branch=main" alt="Build status"></a>
+  <a href="https://github.com/licht-launcher/licht-launcher/releases/latest"><img src="https://img.shields.io/github/v/release/licht-launcher/licht-launcher?label=latest%20release" alt="Latest release"></a>
+  <a href="https://github.com/licht-launcher/licht-launcher/releases"><img src="https://img.shields.io/github/downloads/licht-launcher/licht-launcher/total?label=downloads" alt="Downloads"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license"></a>
 </p>
 
-**Current release: `0.2.3 · Iris`**
+<p align="center">
+  <a href="https://licht-launcher.github.io/">Website</a> ·
+  <a href="https://github.com/licht-launcher/licht-launcher/releases/latest">Download</a> ·
+  <a href="https://github.com/licht-launcher/licht-launcher/issues">Report an issue</a>
+</p>
 
-**Unofficial project, not affiliated with Mojang Studios or Microsoft.**
+> **Early Release** — Licht Launcher is in active development. Features and compatibility are still being refined, and you may encounter bugs. Your feedback helps shape the launcher.
 
-[Terms of Use](TERMS.md) · [Privacy Policy](PRIVACY.md) ·
-[Contributing](CONTRIBUTING.md) · [Code signing policy](#code-signing-policy)
+<p align="center">
+  <strong>Download 0.2.3 · Iris</strong><br>
+  <a href="https://github.com/licht-launcher/licht-launcher/releases/download/v0.2.3/Licht-Launcher-0.2.3-Iris-windows-x64-setup.exe"><img src="https://img.shields.io/badge/Windows_x64-Download-blue?style=for-the-badge" alt="Download Licht Launcher 0.2.3 for Windows x64"></a>
+  <a href="https://github.com/licht-launcher/licht-launcher/releases/download/v0.2.3/Licht-Launcher-0.2.3-Iris-linux-x64.AppImage"><img src="https://img.shields.io/badge/Linux_x64-Download_AppImage-orange?style=for-the-badge" alt="Download Licht Launcher 0.2.3 for Linux x64 (AppImage)"></a>
+</p>
 
 ![Licht Launcher screenshot](.github/screenshot.png)
 
+## Why Licht?
+
+Licht is for players who want vanilla and modded Minecraft organized in a clean, focused interface. It adds built-in mod-loader selection and modpack discovery to the familiar install-and-play experience of the official launcher, with separate profiles and automatic Java setup in the same flow. Prism is a more established option with a broader toolkit; choose Licht if its straightforward Windows and Linux experience fits the way you play and you would like to help shape an Early Release.
+
+## Make room for the way you play
+
+- **Separate profiles:** keep different game versions and modpacks organized in their own folders.
+- **Vanilla or modded:** choose Fabric, Quilt, Forge, or NeoForge when creating a profile.
+- **Modpacks:** browse and import packs from Modrinth and CurseForge. [CurseForge requires additional setup](docs/modpacks/CURSEFORGE.md).
+- **Java handled for you:** the launcher downloads the Java version your game needs.
+- **Your account:** sign in with Microsoft or use a local offline profile.
+- **Built-in controls:** adjust game settings, manage installed content, and view game logs without leaving the launcher.
+- **Updates:** check for new launcher versions from Settings and choose whether to enable automatic checks.
+
 ## Download
 
-Download the latest build from the
-[GitHub Releases page](https://github.com/mateusneiva/licht-launcher/releases/latest).
+The buttons above download **0.2.3 · Iris** directly. You can also choose a package below or find the latest version and release notes on [GitHub Releases](https://github.com/licht-launcher/licht-launcher/releases/latest).
 
-| Platform | Recommended download |
+| Your system | Choose |
 | --- | --- |
-| Windows x64 | NSIS installer (`.exe`) |
-| Linux x64 | AppImage |
-| Linux distributions with Debian packages | `.deb` |
+| Windows (64-bit) | [Download the `.exe` installer](https://github.com/licht-launcher/licht-launcher/releases/download/v0.2.3/Licht-Launcher-0.2.3-Iris-windows-x64-setup.exe) |
+| Linux (64-bit) | [Download the `.AppImage`](https://github.com/licht-launcher/licht-launcher/releases/download/v0.2.3/Licht-Launcher-0.2.3-Iris-linux-x64.AppImage) |
+| Debian, Ubuntu, and compatible Linux distributions | [Download the `.deb` package](https://github.com/licht-launcher/licht-launcher/releases/download/v0.2.3/Licht-Launcher-0.2.3-Iris-linux-x64.deb) |
 
-Portable binaries are also published for Windows and Linux. The updater uses
-GitHub Releases as its source and verifies Tauri updater signatures for Windows
-NSIS and Linux AppImage updates. See the [Code signing policy](#code-signing-policy)
-for the separate Windows publisher-signing status.
+Portable downloads are also available for Windows and Linux.
 
-Read the [Terms of Use](TERMS.md) and [Privacy Policy](PRIVACY.md) before using
-the launcher. You need the appropriate Minecraft game rights; the MIT license
-for Licht Launcher does not include a Minecraft license.
+### Get started
 
-### Uninstall
+1. Download and install Licht Launcher for your system.
+2. Open Settings to sign in with Microsoft or choose an offline username.
+3. Create a profile and choose a game version or modpack.
+4. Let the launcher prepare the game files, then select **Play**.
 
-- **Windows installer:** close the launcher and use Windows Settings > Apps to
-  uninstall Licht Launcher.
-- **Linux `.deb`:** remove the installed Licht Launcher package through your
-  distribution's package manager.
-- **AppImage or portable binary:** close the launcher, then remove the
-  executable and any shortcuts you created.
+Licht Launcher is free and open source. It does not include a Minecraft license; you need the appropriate game rights to play.
 
-To remove saved accounts and local game/launcher data as well, follow
-[Retention and deletion](PRIVACY.md#retention-and-deletion). Back up worlds and
-other files you want to keep first; executable removal alone may leave data
-and OS keyring credentials behind.
+## Help and feedback
 
-## Code signing policy
+Found a problem or have an idea? [Open an issue](https://github.com/licht-launcher/licht-launcher/issues) with your launcher version, operating system, and what happened. Please remove private information from screenshots and logs before sharing them.
 
-**SignPath status: application not yet submitted; SignPath signing is not yet
-integrated.** The project currently publishes Tauri updater signatures. These
-allow the updater to verify update packages and are separate from Windows
-Authenticode signatures identifying a publisher. No SignPath approval or
-certificate sponsorship is claimed for current releases.
+For private security reports, privacy questions, or other private enquiries, email [mateus.fneiva@gmail.com](mailto:mateus.fneiva@gmail.com).
 
-Licht Launcher is currently a single-maintainer project:
+## Privacy and trust
 
-| Role | Responsible person |
-| --- | --- |
-| Author / committer | [Mateus Neiva (@mateusneiva)](https://github.com/mateusneiva) |
-| Reviewer of external contributions | [Mateus Neiva (@mateusneiva)](https://github.com/mateusneiva) |
-| Release and code-signing approver | [Mateus Neiva (@mateusneiva)](https://github.com/mateusneiva) |
+Microsoft sign-in opens in your browser. Licht Launcher does not ask for your Microsoft password or automatically upload game logs or crash reports.
 
-These roles are held by the same person; the project does not currently have
-an independent reviewer. The policy for a future SignPath integration is:
+Update downloads are verified with the launcher's signing key. Windows publisher signing is not yet available; see the [code signing policy](docs/CODE_SIGNING.md) for details.
 
-- Repository and signing account access must use multi-factor authentication.
-- External contributions must be reviewed before merging. CI/build scripts,
-  dependencies, and artifact changes are included in that review.
-- Each SignPath signing request must be manually approved by the listed
-  approver after checking the source commit, CI results, artifact provenance,
-  and product/version metadata. The current release workflow does not yet
-  implement that SignPath approval step.
-- Signing is limited to Licht Launcher's own artifacts built from this
-  repository. Downloaded Minecraft files, Java runtimes, mod loaders, and mods
-  must not be submitted as the project's own binaries for signing.
+Read the [Terms of Use](TERMS.md) and [Privacy Policy](PRIVACY.md) for information about accounts, downloads, and local data.
 
-If SignPath accepts the project and signing is integrated, the attribution for
-artifacts signed through that program will be:
+## Uninstall
 
-> Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
+- **Windows:** close the launcher and remove it through Windows Settings > Apps.
+- **Linux `.deb`:** remove the package through your system's package manager.
+- **AppImage or portable:** close the launcher and remove the executable and any shortcuts you created.
 
-Data handling, automatic network requests, available controls, and third-party
-services are described in [PRIVACY.md](PRIVACY.md).
-SignPath's [conditions](https://signpath.org/terms) also require
-appropriate installation-time privacy disclosure and controls for covered
-data-transfer features; publication of these documents alone does not add those
-installer/application controls.
+Uninstalling may leave your profiles, worlds, and saved accounts on the computer. See [how to remove local data](PRIVACY.md#retention-and-deletion) if you want to remove those too.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md#releases-and-signing-responsibilities) for
-review responsibilities and [docs/UPDATES.md](docs/UPDATES.md) for the current
-updater-signature workflow.
+## For contributors
 
-## Project status
+Want to help build Licht Launcher? Start with the [contribution guide](CONTRIBUTING.md) for development setup and testing. The [roadmap](docs/ROADMAP.md), [architecture](docs/ARCHITECTURE.md), and [compatibility notes](docs/COMPATIBILITY.md) describe the technical details and planned work.
 
-The window installs and launches. From the instances screen you can install a
-version, play or stop it, and read the game log. Sign-in is a Microsoft
-account (tokens stay in the OS keyring) or an offline name. Each instance has
-its own folder, memory, and Java settings. Fabric, Quilt, Forge, and NeoForge
-can be chosen when creating an instance. Modrinth and CurseForge modpacks can
-be imported; CurseForge search needs `LICHT_CURSEFORGE_API_KEY`.
+## License and credits
 
-Forge/NeoForge use official installer profiles and run client processors during
-Install/Repair. Generated libraries are verified before launch; existing
-provisional loader profiles are upgraded without changing the instance folder.
+Licensed under the [MIT License](LICENSE). Created and maintained by Mateus Neiva.
 
-`licht` lists Mojang's manifest, installs a version, and launches it with an
-offline name. The desktop application also supports Microsoft account flows,
-instances, mod loaders, modpack imports, live logs, and update checks. See the
-[roadmap](docs/ROADMAP.md) for completed work and remaining scope.
-
-What a launch does today:
-
-- Game files come from Mojang and stay in Licht's data directory, not in the
-  official `.minecraft` folder. The default Java is Eclipse Temurin. `--java`
-  uses another executable. A Java already on the machine is not picked by itself.
-- Each instance gets its own folder under `instances/`. LaunchWrapper versions
-  (through 1.5.2) keep the game in that folder's `.minecraft` directory.
-- Natives are extracted once per version into `natives/<id>`.
-- Versions through 1.7.2 get their sounds copied to the names those clients
-  open. Newer versions read the hashed asset objects directly.
-- The game log is read as UTF-8 on Java 18 and newer, and as the system code
-  page on older Java. A bad byte does not kill the process.
-
-Still open: `${auth_session}` is left literal on versions that include it
-(through 1.5.2). The live launch checks so far were on Windows.
-
-```sh
-cargo run -p licht-core --features cli --bin licht -- versions
-cargo run -p licht-core --features cli --bin licht -- install --version 1.20.1
-cargo run -p licht-core --features cli --bin licht -- launch --version 1.20.1 --username Player
-```
-
-`launch` does not download. `install` does. `--game-dir` replaces the instance
-root. `--cache` replaces the data directory. `--java` skips Temurin.
-
-## Prerequisites
-
-- Node.js 24, version 24.15.0 or newer within that major version.
-- pnpm 10.33.0, as specified in `package.json`.
-- Rust installed through rustup, with `cargo`, `rustc`, and `rustup` on PATH.
-  The repository selects Rust 1.99.0, rustfmt, and Clippy through
-  `rust-toolchain.toml`.
-- [Tauri v2 system prerequisites](https://v2.tauri.app/start/prerequisites/):
-  C++ build tools, Windows SDK, and WebView2 on Windows; the required development
-  libraries, including WebKitGTK 4.1, on Linux.
-
-## Development
-
-From the repository root:
-
-```sh
-pnpm install --frozen-lockfile
-pnpm tauri dev
-```
-
-The frontend development server is started automatically by the Tauri command.
-
-For a frontend-only development server:
-
-```sh
-pnpm dev
-```
-
-To build the release executable without an installer:
-
-```sh
-pnpm tauri build --ci --no-bundle -- --locked
-```
-
-## Quality checks
-
-```sh
-pnpm lint
-pnpm typecheck
-pnpm test
-cargo fmt --all --check
-cargo clippy --workspace --all-targets --locked -- -D warnings
-cargo test --workspace --locked
-```
-
-The same checks and the Tauri release build run in GitHub Actions on Windows and
-Ubuntu. `pnpm lint` checks formatting and imports as well as lint rules.
-
-Release signing and the automatic update flow are documented in
-[docs/UPDATES.md](docs/UPDATES.md). The update private key must remain outside
-the repository and be configured as a GitHub Actions secret.
-
-## Documentation
-
-- [Architecture](docs/ARCHITECTURE.md): layer responsibilities and project boundaries.
-- [Roadmap](docs/ROADMAP.md): implementation stages and decisions requiring approval.
-- [Compatibility](docs/COMPATIBILITY.md): version differences the launcher has to cover.
-- [Versions](docs/core/VERSIONS.md): the Mojang manifest, the four types, and where each version JSON is stored.
-- [LaunchWrapper](docs/core/LAUNCHWRAPPER.md): why versions through 1.5.2 use a `.minecraft` folder.
-- [Legacy assets](docs/core/LEGACY-ASSETS.md): why versions through 1.7.2 need a sound copy at launch.
-- [Runtime](docs/core/RUNTIME.md): Eclipse Temurin, the major each version asks for, and `--java`.
-- [Natives](docs/core/NATIVES.md): which native jar is downloaded, and where the binaries are extracted.
-- [Forge/NeoForge](docs/core/FORGE.md): official profiles, client processors, readiness, and repair.
-- [Log](docs/core/LOG.md): why old versions were failing on a Windows-1252 line, and how the log is decoded.
-- [Project rules](AGENTS.md): development conventions.
-
-## Contributing
-
-Read [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, contribution
-review, required checks, and release responsibilities. The project is currently
-maintained solely by [Mateus Neiva (@mateusneiva)](https://github.com/mateusneiva).
-
-## Contact and policies
-
-- Project, privacy, and private security reports:
-  [mateus.fneiva@gmail.com](mailto:mateus.fneiva@gmail.com).
-- [Terms of Use](TERMS.md).
-- [Privacy Policy](PRIVACY.md), including third-party connections and deletion.
-- [Contribution guidelines](CONTRIBUTING.md).
-
-## License
-
-Licensed under the [MIT License](LICENSE).
-
-Copyright (c) 2026 Mateus Neiva.
+**Unofficial project, not affiliated with Mojang Studios or Microsoft.**

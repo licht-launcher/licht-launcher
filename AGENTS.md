@@ -63,10 +63,10 @@
 - Verify the **SHA1** of everything that is downloaded.
 - No tokens/secrets in the repository or in the logs. Tokens stay in the **OS keyring**.
 - Paths and separators must work on Windows and Linux (use `std::path` and the `directories` crate; never concatenate strings).
-- The project is **not official**: keep the notice "not affiliated with Mojang Studios or Microsoft" in the README and on the About screen. Do not use "Minecraft" or "Mojang" in the project, package, or binary name, and do not use official logos or art.
+- The project is **not official**: keep the notice "not affiliated with Mojang Studios or Microsoft" in the README. Do not use "Minecraft" or "Mojang" in the project, package, or binary name, and do not use official logos or art.
 
 ## Release conventions
-- Each `0.x` release gets a **German flower codename**, according to the table in `docs/ROADMAP.md` (0.1 Lilie, 0.2 Iris, 0.3 Rose...). The codename goes on the About screen, in the release title, and in the installer name.
+- Each `0.x` release gets a **German flower codename**, according to the table in `docs/ROADMAP.md` (0.1 Lilie, 0.2 Iris, 0.3 Rose...). The codename goes in the release title and in the installer name.
 
 ## Useful references
 - Manifest: `https://piston-meta.mojang.com/mc/game/version_manifest_v2.json`

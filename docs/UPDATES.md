@@ -37,7 +37,7 @@ AppImage artifacts for Linux. It publishes `latest.json` alongside the
 installers. The updater reads that manifest from:
 
 ```text
-https://github.com/mateusneiva/licht-launcher/releases/latest/download/latest.json
+https://github.com/licht-launcher/licht-launcher/releases/latest/download/latest.json
 ```
 
 Only the public signing key is committed in
