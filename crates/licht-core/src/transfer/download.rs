@@ -721,7 +721,7 @@ pub(crate) async fn remove_partial_if_idle(destination: &Path) -> Result<()> {
     Ok(())
 }
 
-fn destination_lock(destination: &Path) -> Arc<Mutex<()>> {
+pub(crate) fn destination_lock(destination: &Path) -> Arc<Mutex<()>> {
     let mut locks = DESTINATION_LOCKS
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
