@@ -167,6 +167,13 @@ impl InstallProgress {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CancellationCleanup {
+    RemovePartial,
+    // The job store decides whether another unfinished job still needs these bytes.
+    DeferToJob,
+}
+
 struct TransferJob<'a> {
     client: &'a reqwest::Client,
     url: &'a str,
@@ -179,6 +186,7 @@ struct TransferJob<'a> {
     retry: Retry,
     progress: Option<&'a ByteProgress>,
     control: &'a DownloadControl,
+    cancellation_cleanup: CancellationCleanup,
 }
 
 #[derive(Debug, Clone)]
@@ -250,6 +258,7 @@ pub async fn download_file_with_control(
         retry,
         progress: None,
         control,
+        cancellation_cleanup: CancellationCleanup::RemovePartial,
     })
     .await
 }
@@ -300,6 +309,25 @@ pub async fn download_verified_all(
     control: &DownloadControl,
     progress: mpsc::Sender<DownloadProgress>,
 ) -> Result<()> {
+    download_verified_all_with_cleanup(
+        client,
+        tasks,
+        options,
+        control,
+        progress,
+        CancellationCleanup::RemovePartial,
+    )
+    .await
+}
+
+pub(crate) async fn download_verified_all_with_cleanup(
+    client: &reqwest::Client,
+    tasks: &[VerifiedDownloadTask],
+    options: &DownloadOptions,
+    control: &DownloadControl,
+    progress: mpsc::Sender<DownloadProgress>,
+    cancellation_cleanup: CancellationCleanup,
+) -> Result<()> {
     control.ready().await?;
     if tasks.is_empty() {
         return Ok(());
@@ -338,6 +366,7 @@ pub async fn download_verified_all(
             retry: options.retry,
             progress: Some(&bytes),
             control,
+            cancellation_cleanup,
         }));
     }
 
@@ -387,7 +416,9 @@ async fn download_one(job: TransferJob<'_>) -> Result<()> {
     };
     let part = part_path(job.destination)?;
     let result = download_locked(&job, &part).await;
-    if matches!(result, Err(CoreError::DownloadCancelled)) {
+    if matches!(result, Err(CoreError::DownloadCancelled))
+        && job.cancellation_cleanup == CancellationCleanup::RemovePartial
+    {
         // Only the owner of this destination lock may remove its partial.
         remove_partial(&part).await?;
     }

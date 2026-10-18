@@ -697,6 +697,114 @@ async fn recovered_cancellation_keeps_partials_referenced_by_another_unfinished_
 }
 
 #[tokio::test]
+async fn cancelling_an_active_job_preserves_shared_cache_bytes_until_the_last_job_finishes() {
+    for cancel_remaining in [false, true] {
+        let mut server = Server::new().await;
+        let fixture = Fixture::new(&server.url);
+        let first_instance = fixture.instance("First shared library consumer");
+        let second_instance = fixture.instance("Second shared library consumer");
+        let manager = fixture.manager();
+        let first = manager
+            .start(&first_instance.folder, DownloadJobOperation::Install)
+            .await
+            .expect("first install");
+        let tail = server.request().await.hold();
+        fixture.partial(5).await;
+        let second = manager
+            .start(&second_instance.folder, DownloadJobOperation::Install)
+            .await
+            .expect("second install");
+        wait_until(|| {
+            let connection = crate::open_db(&fixture.settings).expect("database");
+            connection
+                .query_row(
+                    "SELECT EXISTS(SELECT 1 FROM download_job_artifacts WHERE job_id = ?1)",
+                    [&second.id],
+                    |row| row.get::<_, bool>(0),
+                )
+                .expect("second job artifact registered")
+        })
+        .await;
+        manager
+            .pause(&second.id)
+            .await
+            .expect("pause the waiting install");
+        assert!(
+            server.requests.is_empty(),
+            "the second install must wait for the shared destination lock"
+        );
+        assert_eq!(
+            finish(manager.cancel(&first.id))
+                .await
+                .expect("cancel first install")
+                .status,
+            DownloadJobStatus::Cancelled
+        );
+        assert_eq!(
+            std::fs::read(fixture.part()).expect("shared cache partial must survive"),
+            b"hello"
+        );
+        assert!(
+            !fixture
+                .game
+                .instance_dir(&first_instance.folder)
+                .expect("first folder")
+                .exists()
+        );
+        assert!(
+            fixture
+                .game
+                .instance_dir(&second_instance.folder)
+                .expect("second folder")
+                .exists()
+        );
+        if cancel_remaining {
+            assert_eq!(
+                finish(manager.cancel(&second.id))
+                    .await
+                    .expect("cancel last consumer")
+                    .status,
+                DownloadJobStatus::Cancelled
+            );
+            assert!(
+                !fixture.part().exists(),
+                "an unreferenced partial must be removed"
+            );
+            assert!(!fixture.game.root().join("payload.bin").exists());
+        } else {
+            manager
+                .resume(&second.id)
+                .await
+                .expect("resume second install");
+            let request = server.request().await;
+            assert!(
+                request
+                    .headers
+                    .to_ascii_lowercase()
+                    .contains("range: bytes=5-"),
+                "the surviving install must request only the remaining bytes"
+            );
+            request.reply(206, "Content-Range: bytes 5-10/11\r\n", b" world", 6);
+            assert_eq!(
+                finish(manager.wait(&second.id))
+                    .await
+                    .expect("complete second install")
+                    .status,
+                DownloadJobStatus::Completed
+            );
+            assert_eq!(
+                std::fs::read(fixture.game.root().join("payload.bin"))
+                    .expect("verified shared file"),
+                BODY
+            );
+            assert!(!fixture.part().exists());
+        }
+        assert!(server.requests.is_empty());
+        drop(tail);
+    }
+}
+
+#[tokio::test]
 async fn accepted_cancellation_wins_even_if_an_executor_finishes_successfully() {
     let mut server = Server::new().await;
     let fixture = Fixture::new(&server.url);

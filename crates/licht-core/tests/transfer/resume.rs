@@ -338,6 +338,46 @@ async fn a_paused_control_does_not_start_network_requests_until_resumed() {
 }
 
 #[tokio::test]
+async fn cancelling_the_public_verified_queue_removes_its_unshared_partial() {
+    let mut server = Server::start().await;
+    let destination = Destination::new("cancel-verified-queue");
+    let control = DownloadControl::new();
+    let worker_control = control.clone();
+    let task = VerifiedDownloadTask {
+        url: server.url.clone(),
+        destination: destination.path.clone(),
+        checksum: DownloadChecksum::Sha256(
+            "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9".into(),
+        ),
+        size: 11,
+    };
+    let (progress, _) = mpsc::channel(64);
+    let running = tokio::spawn(async move {
+        download_verified_all(
+            &reqwest::Client::new(),
+            &[task],
+            &options(),
+            &worker_control,
+            progress,
+        )
+        .await
+    });
+    let (tail, incoming_tail) = oneshot::channel();
+    let mut reply = Reply::new(200, "", b"hello", 11);
+    reply.tail = Some(incoming_tail);
+    server.request().await.respond(reply);
+    destination.wait_for_partial(5).await;
+    control.cancel();
+    assert!(matches!(
+        finish(running).await,
+        Err(CoreError::DownloadCancelled)
+    ));
+    assert!(!destination.part().exists());
+    assert!(!destination.path.exists());
+    drop(tail);
+}
+
+#[tokio::test]
 async fn cancelling_a_waiter_does_not_remove_another_transfers_partial() {
     let mut server = Server::start().await;
     let destination = Destination::new("shared-cancel");
