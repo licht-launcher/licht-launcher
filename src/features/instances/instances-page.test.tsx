@@ -80,7 +80,10 @@ function defaultCommandResponse(command: string): Promise<unknown> {
       return Promise.resolve(true);
     case "list_instance_content":
     case "list_download_jobs":
+    case "list_microsoft_accounts":
       return Promise.resolve([]);
+    case "active_microsoft_account":
+      return Promise.resolve(null);
     case "prepare_instance_download":
       return Promise.resolve(completedDownload());
     case "get_last_played_folder":
