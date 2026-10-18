@@ -327,6 +327,12 @@ mod tests {
 
     #[tokio::test]
     async fn cancelling_a_processor_waits_until_its_process_has_exited() {
+        const CHILD_MARKER: &str = "licht-processor-cancellation-child";
+        if std::env::args().any(|argument| argument == CHILD_MARKER) {
+            fs::write("pid.txt", std::process::id().to_string()).expect("child PID");
+            tokio::time::sleep(Duration::from_secs(60)).await;
+            return;
+        }
         let root = std::env::temp_dir().join(format!(
             "licht-processor-cancellation-{}",
             std::process::id()
@@ -336,29 +342,17 @@ mod tests {
         if marker.exists() {
             fs::remove_file(&marker).expect("previous marker");
         }
-        #[cfg(windows)]
-        let quoted = marker.to_str().expect("fixture path").replace('\'', "''");
-        #[cfg(windows)]
+        let module = module_path!().split_once("::").expect("test module").1;
         let arguments = vec![
-            "powershell.exe".to_string(),
-            "-NoProfile".into(),
-            "-NonInteractive".into(),
-            "-Command".into(),
-            format!(
-                "[IO.File]::WriteAllText('{quoted}', $PID.ToString()); Start-Sleep -Seconds 60"
-            ),
-        ];
-        #[cfg(not(windows))]
-        let arguments = vec![
-            "/bin/sh".to_string(),
-            "-c".into(),
-            format!(
-                "echo $$ > '{}'; exec sleep 60",
-                marker
-                    .to_str()
-                    .expect("fixture path")
-                    .replace('\'', "'\\''")
-            ),
+            std::env::current_exe()
+                .expect("test executable")
+                .display()
+                .to_string(),
+            "--exact".into(),
+            format!("{module}::cancelling_a_processor_waits_until_its_process_has_exited"),
+            // libtest accepts a skip filter as an isolated child marker; it matches no test.
+            "--skip".into(),
+            CHILD_MARKER.into(),
         ];
         let context = InstallationContext::default();
         let control = context.control.clone();
