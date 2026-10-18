@@ -1,9 +1,10 @@
 use std::sync::{Arc, Barrier};
 
 use licht_core::{
-    CoreError, DownloadComponent, DownloadJobOperation, DownloadJobSnapshot, DownloadJobStatus,
-    DownloadJobUpdate, DownloadPhase, DownloadProgress, SharedCache, create_download_job,
-    get_download_job, list_download_jobs, open_db, recover_download_jobs, update_download_job,
+    Arch, CoreError, DownloadComponent, DownloadJobOperation, DownloadJobSnapshot,
+    DownloadJobStatus, DownloadJobUpdate, DownloadManager, DownloadPhase, DownloadProgress,
+    LaunchEnvironment, OsName, SharedCache, create_download_job, get_download_job,
+    list_download_jobs, open_db, recover_download_jobs, update_download_job,
 };
 
 #[test]
@@ -344,6 +345,88 @@ fn invalid_database_payloads_fail_explicitly_instead_of_disappearing_from_the_li
         list_download_jobs(&fixture.settings, &fixture.game),
         Err(CoreError::DownloadJobInvalid { .. })
     ));
+}
+
+#[tokio::test]
+async fn indexed_cleanup_preserves_active_shared_partials_and_complete_files() {
+    let fixture = Fixture::new("indexed-cleanup");
+    let cancelled = create_download_job(
+        &fixture.settings,
+        &fixture.game,
+        "Cancelled repair",
+        "1.21.1",
+        DownloadJobOperation::Repair,
+    )
+    .expect("repair job");
+    let paused = fixture.create("Paused");
+    fixture.update(&paused.id, DownloadJobStatus::Paused, progress(0, 5, 11));
+    let completed = fixture.create("Completed");
+    fixture.update(
+        &completed.id,
+        DownloadJobStatus::Running,
+        progress(1, 11, 11),
+    );
+    fixture.update(
+        &completed.id,
+        DownloadJobStatus::Completed,
+        progress(1, 11, 11),
+    );
+    let connection = open_db(&fixture.settings).expect("database");
+    for (id, name) in [
+        (&cancelled.id, "exclusive.jar"),
+        (&cancelled.id, "shared.jar"),
+        (&cancelled.id, "completed.jar"),
+        (&cancelled.id, "complete.jar"),
+        (&paused.id, "shared.jar"),
+        (&completed.id, "completed.jar"),
+    ] {
+        let path = fixture.game.root().join(name);
+        connection
+            .execute(
+                "INSERT INTO download_job_artifacts (job_id, path) VALUES (?1, ?2)",
+                rusqlite::params![id, path.to_str().expect("artifact path")],
+            )
+            .expect("artifact association");
+    }
+    drop(connection);
+    std::fs::create_dir_all(fixture.game.root()).expect("game directory");
+    for name in [
+        "exclusive.jar.part",
+        "shared.jar.part",
+        "completed.jar.part",
+    ] {
+        std::fs::write(fixture.game.root().join(name), b"partial bytes").expect("partial");
+    }
+    let complete_file = fixture.game.root().join("complete.jar");
+    std::fs::write(&complete_file, b"complete bytes").expect("complete file");
+    let manager = DownloadManager::new(
+        fixture.settings.clone(),
+        fixture.game.clone(),
+        LaunchEnvironment {
+            os: OsName::Linux,
+            arch: Arch::X86_64,
+            os_version: String::new(),
+            features: Default::default(),
+        },
+        reqwest::Client::new(),
+    );
+    let outcome = manager.cancel(&cancelled.id).await.expect("cancel repair");
+    assert_eq!(outcome.status, DownloadJobStatus::Cancelled);
+    assert!(!fixture.game.root().join("exclusive.jar.part").exists());
+    assert!(!fixture.game.root().join("completed.jar.part").exists());
+    assert_eq!(
+        std::fs::read(fixture.game.root().join("shared.jar.part")).expect("active shared partial"),
+        b"partial bytes"
+    );
+    assert_eq!(
+        std::fs::read(complete_file).expect("complete file preserved"),
+        b"complete bytes"
+    );
+    assert_eq!(fixture.get(&paused.id).status, DownloadJobStatus::Paused);
+    assert_eq!(
+        fixture.get(&completed.id).status,
+        DownloadJobStatus::Completed
+    );
 }
 
 fn progress(finished: u32, bytes_done: u64, bytes_total: u64) -> DownloadProgress {
