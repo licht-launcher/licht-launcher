@@ -2,10 +2,10 @@ use std::future::Future;
 
 use tokio::sync::mpsc;
 
+use super::download::{CancellationCleanup, download_verified_all_with_cleanup};
 use crate::{
     CoreError, DownloadComponent, DownloadControl, DownloadOptions, DownloadPhase,
     DownloadProgress, DownloadTask, Result, SharedCache, VerifiedDownloadTask,
-    download_verified_all,
 };
 
 #[derive(Debug)]
@@ -171,7 +171,19 @@ impl InstallationContext {
             super::jobs::register_artifacts(settings, game, id, &paths)?;
         }
         let (progress, mut incoming) = mpsc::channel(4096);
-        let download = download_verified_all(client, tasks, &options, &self.control, progress);
+        let cleanup = if self.job.is_some() {
+            CancellationCleanup::DeferToJob
+        } else {
+            CancellationCleanup::RemovePartial
+        };
+        let download = download_verified_all_with_cleanup(
+            client,
+            tasks,
+            &options,
+            &self.control,
+            progress,
+            cleanup,
+        );
         tokio::pin!(download);
         let mut observing = true;
         loop {

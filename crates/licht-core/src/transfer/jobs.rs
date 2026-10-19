@@ -1,107 +1,18 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use ts_rs::TS;
+use serde::{Serialize, de::DeserializeOwned};
+
+mod artifacts;
+mod model;
+pub(crate) use artifacts::{cleanup_artifacts, register_artifacts};
+pub use model::{
+    DownloadComponent, DownloadJobOperation, DownloadJobSnapshot, DownloadJobStatus,
+    DownloadJobUpdate, DownloadPhase,
+};
+use model::{validate_cancellation_target, validate_completion, validate_phase, validate_progress};
 
 use crate::{CoreError, DownloadProgress, Result, SharedCache, open_db};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[serde(rename_all = "lowercase")]
-pub enum DownloadJobOperation {
-    Install,
-    Repair,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[serde(rename_all = "lowercase")]
-pub enum DownloadJobStatus {
-    Queued,
-    Running,
-    Paused,
-    Interrupted,
-    Cancelling,
-    Completed,
-    Cancelled,
-    Failed,
-}
-
-impl DownloadJobStatus {
-    fn can_transition_to(self, next: Self) -> bool {
-        use DownloadJobStatus::*;
-        match self {
-            Completed | Cancelled => false,
-            _ if self == next => true,
-            Queued => matches!(
-                next,
-                Running | Paused | Interrupted | Cancelling | Cancelled | Failed
-            ),
-            Running => matches!(
-                next,
-                Paused | Interrupted | Cancelling | Completed | Cancelled | Failed
-            ),
-            Paused | Interrupted | Failed => {
-                matches!(next, Queued | Running | Cancelling | Cancelled)
-            }
-            Cancelling => matches!(next, Cancelled),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[serde(rename_all = "lowercase")]
-pub enum DownloadComponent {
-    Minecraft,
-    Java,
-    Fabric,
-    Quilt,
-    Forge,
-    NeoForge,
-    Modpack,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[serde(rename_all = "lowercase")]
-pub enum DownloadPhase {
-    Preparing,
-    Downloading,
-    Verifying,
-    Extracting,
-    Installing,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct DownloadJobSnapshot {
-    pub id: String,
-    pub instance_folder: Option<String>,
-    pub version_id: Option<String>,
-    pub operation: DownloadJobOperation,
-    pub status: DownloadJobStatus,
-    pub component: Option<DownloadComponent>,
-    pub phase: DownloadPhase,
-    pub progress: DownloadProgress,
-    #[ts(type = "number")]
-    pub created_at: i64,
-    #[ts(type = "number")]
-    pub updated_at: i64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
-    pub error: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
-    pub java_major: Option<u32>,
-}
-
-/// Only core callers update lifecycle state; frontend commands cannot set progress.
-#[derive(Debug, Clone)]
-pub struct DownloadJobUpdate {
-    pub status: DownloadJobStatus,
-    pub component: Option<DownloadComponent>,
-    pub phase: DownloadPhase,
-    pub progress: DownloadProgress,
-    pub error: Option<String>,
-}
 
 pub fn create_download_job(
     settings: &SharedCache,
@@ -368,50 +279,6 @@ fn validate_context<'a>(
     data_directory(game)
 }
 
-fn validate_progress(progress: DownloadProgress) -> Result<()> {
-    if progress
-        .finished
-        .checked_add(progress.failed)
-        .is_none_or(|count| count > progress.total)
-        || (progress.bytes_total > 0 && progress.bytes_done > progress.bytes_total)
-    {
-        return Err(invalid("progress exceeds its totals"));
-    }
-    Ok(())
-}
-
-fn validate_phase(phase: DownloadPhase, component: Option<DownloadComponent>) -> Result<()> {
-    if phase != DownloadPhase::Preparing && component.is_none() {
-        return Err(invalid("an active phase requires a component"));
-    }
-    Ok(())
-}
-
-fn validate_cancellation_target(
-    job: &DownloadJobSnapshot,
-    status: DownloadJobStatus,
-) -> Result<()> {
-    if status == DownloadJobStatus::Cancelling
-        && (job.operation != DownloadJobOperation::Install || job.instance_folder.is_none())
-    {
-        return Err(invalid(
-            "pending instance removal requires an instance installation",
-        ));
-    }
-    Ok(())
-}
-
-fn validate_completion(status: DownloadJobStatus, progress: DownloadProgress) -> Result<()> {
-    if status == DownloadJobStatus::Completed
-        && (progress.failed != 0 || progress.finished != progress.total)
-    {
-        return Err(invalid(
-            "a completed job must have no unfinished or failed files",
-        ));
-    }
-    Ok(())
-}
-
 fn parse_id(id: &str) -> Result<i64> {
     if id.is_empty() || !id.bytes().all(|byte| byte.is_ascii_digit()) {
         return Err(invalid("invalid job ID"));
@@ -455,90 +322,6 @@ pub(crate) fn set_job_version(
         "UPDATE download_jobs SET version_id = ?1 WHERE id = ?2 AND data_directory = ?3",
         params![version, parse_id(id)?, data_directory(game)?],
     )?;
-    Ok(())
-}
-
-pub(crate) fn register_artifacts(
-    settings: &SharedCache,
-    game: &SharedCache,
-    id: &str,
-    paths: &[std::path::PathBuf],
-) -> Result<()> {
-    let mut connection = open_db(settings)?;
-    let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
-    let job = load(&transaction, game, id)?;
-    let instance = job
-        .instance_folder
-        .as_deref()
-        .map(|folder| game.instance_dir(folder))
-        .transpose()?;
-    for path in paths {
-        validate_artifact(game, instance.as_deref(), path)?;
-        let path = path.to_str().ok_or(CoreError::CachePath)?;
-        transaction.execute(
-            "INSERT OR IGNORE INTO download_job_artifacts (job_id, path) VALUES (?1, ?2)",
-            params![parse_id(id)?, path],
-        )?;
-    }
-    transaction.commit()?;
-    Ok(())
-}
-
-pub(crate) async fn cleanup_artifacts(
-    settings: &SharedCache,
-    game: &SharedCache,
-    id: &str,
-) -> Result<()> {
-    let (paths, instance) = {
-        let connection = open_db(settings)?;
-        let job = load(&connection, game, id)?;
-        let mut statement = connection.prepare(
-            "SELECT artifact.path FROM download_job_artifacts artifact WHERE artifact.job_id = ?1
-             AND NOT EXISTS (SELECT 1 FROM download_job_artifacts other
-                JOIN download_jobs job ON job.id = other.job_id
-                WHERE other.path = artifact.path AND other.job_id != ?1
-                AND job.status NOT IN (?2, ?3))",
-        )?;
-        let paths = statement
-            .query_map(
-                params![
-                    parse_id(id)?,
-                    encode(&DownloadJobStatus::Completed)?,
-                    encode(&DownloadJobStatus::Cancelled)?
-                ],
-                |row| row.get::<_, String>(0),
-            )?
-            .collect::<std::result::Result<Vec<_>, _>>()?;
-        (
-            paths,
-            job.instance_folder
-                .as_deref()
-                .map(|folder| game.instance_dir(folder))
-                .transpose()?,
-        )
-    };
-    for path in paths {
-        let path = std::path::Path::new(&path);
-        validate_artifact(game, instance.as_deref(), path)?;
-        super::download::remove_partial_if_idle(path).await?;
-    }
-    Ok(())
-}
-
-fn validate_artifact(
-    game: &SharedCache,
-    instance: Option<&std::path::Path>,
-    path: &std::path::Path,
-) -> Result<()> {
-    if !path.is_absolute()
-        || (!path.starts_with(game.root())
-            && !instance.is_some_and(|instance| path.starts_with(instance)))
-        || path
-            .components()
-            .any(|part| matches!(part, std::path::Component::ParentDir))
-    {
-        return Err(CoreError::CachePath);
-    }
     Ok(())
 }
 
