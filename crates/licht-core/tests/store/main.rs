@@ -3,4 +3,5 @@
 mod cache;
 mod db;
 mod download_jobs;
+mod service;
 mod settings;

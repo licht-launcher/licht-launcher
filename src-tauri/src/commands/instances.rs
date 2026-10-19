@@ -1,6 +1,6 @@
 use licht_core::{
-    InstanceContentEntry, InstanceContentKind, InstanceEntry, InstanceFsEntry, InstanceSettings,
-    LoaderChannel, LoaderPlatform, remove_instance_content as remove_content,
+    DatabaseClient, InstanceContentEntry, InstanceContentKind, InstanceEntry, InstanceFsEntry,
+    InstanceSettings, LoaderChannel, LoaderPlatform, remove_instance_content as remove_content,
     set_instance_content_enabled as set_content_enabled,
     touch_last_opened as touch_instance_opened, update_instance,
 };
@@ -189,31 +189,45 @@ pub fn remove_instance_content(
 }
 
 #[tauri::command]
-pub fn get_last_played_folder(paths: State<'_, LauncherPaths>) -> Result<Option<String>, String> {
-    licht_core::last_played_folder(&paths.settings).map_err(failure)
+pub async fn get_last_played_folder(
+    database: State<'_, DatabaseClient>,
+) -> Result<Option<String>, String> {
+    database.last_played_folder().await.map_err(failure)
 }
 
 #[tauri::command]
-pub fn set_last_played_folder(
-    paths: State<'_, LauncherPaths>,
+pub async fn set_last_played_folder(
+    database: State<'_, DatabaseClient>,
     folder: String,
 ) -> Result<(), String> {
-    licht_core::set_last_played_folder(&paths.settings, &folder).map_err(failure)
+    database
+        .set_last_played_folder(&folder)
+        .await
+        .map_err(failure)
 }
 
 /// Marks the instance as opened now and updates the global last-played folder.
 #[tauri::command]
-pub fn touch_last_opened(
+pub async fn touch_last_opened(
     paths: State<'_, LauncherPaths>,
+    database: State<'_, DatabaseClient>,
     folder: String,
 ) -> Result<InstanceEntry, String> {
     let root = instances_root(&paths).map_err(failure)?;
-    let entry = touch_instance_opened(&root, &folder).map_err(failure)?;
-    licht_core::set_last_played_folder(&paths.settings, &folder).map_err(failure)?;
+    let profile_folder = folder.clone();
+    let entry =
+        tauri::async_runtime::spawn_blocking(move || touch_instance_opened(&root, &profile_folder))
+            .await
+            .map_err(|_| "instance timestamp task failed".to_string())?
+            .map_err(failure)?;
+    database
+        .set_last_played_folder(&folder)
+        .await
+        .map_err(failure)?;
     Ok(entry)
 }
 
 #[tauri::command]
-pub fn clear_last_played_folder(paths: State<'_, LauncherPaths>) -> Result<(), String> {
-    licht_core::clear_last_played_folder(&paths.settings).map_err(failure)
+pub async fn clear_last_played_folder(database: State<'_, DatabaseClient>) -> Result<(), String> {
+    database.clear_last_played_folder().await.map_err(failure)
 }

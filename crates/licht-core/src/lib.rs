@@ -106,6 +106,7 @@ pub use settings::{
     global_launch, load_settings, memory_slider_max, recommended_max_memory_mb, save_settings,
     set_java_path, settings_snapshot, total_memory_mb, write_concurrency,
 };
+pub use store::service::{DatabaseClient, DatabaseService};
 pub use transfer::checksum::DownloadChecksum;
 pub use transfer::control::{DownloadControl, DownloadState};
 pub use transfer::installation::InstallationContext;

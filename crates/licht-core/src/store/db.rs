@@ -7,7 +7,7 @@ use crate::{CoreError, Result, SharedCache};
 
 const DB_FILE: &str = "licht.sqlite";
 const SCHEMA_VERSION: u32 = 4;
-const META_LAST_PLAYED: &str = "last_played_folder";
+pub(super) const META_LAST_PLAYED: &str = "last_played_folder";
 
 pub fn db_path(cache: &SharedCache) -> PathBuf {
     cache.root().join(DB_FILE)
@@ -122,12 +122,17 @@ pub fn last_played_folder(cache: &SharedCache) -> Result<Option<String>> {
 }
 
 pub fn set_last_played_folder(cache: &SharedCache, folder: &str) -> Result<()> {
+    let folder = validate_last_played_folder(folder)?;
+    let connection = open_db(cache)?;
+    set_meta(&connection, META_LAST_PLAYED, folder)
+}
+
+pub(super) fn validate_last_played_folder(folder: &str) -> Result<&str> {
     let folder = folder.trim();
     if folder.is_empty() {
         return Err(CoreError::InstanceName);
     }
-    let connection = open_db(cache)?;
-    set_meta(&connection, META_LAST_PLAYED, folder)
+    Ok(folder)
 }
 
 pub fn clear_last_played_folder(cache: &SharedCache) -> Result<()> {

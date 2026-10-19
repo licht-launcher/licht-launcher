@@ -82,6 +82,33 @@ is created when a `virtual` index is launched. `--cache` replaces this root.
 
 `instances/<id>` is the sibling of the data directory, not a folder inside it.
 
+### Dedicated SQLite service
+
+`store/service.rs` owns a dedicated thread and a persistent SQLite connection.
+Startup opens and migrates the database on that thread before returning a service
+owner. Cloneable `DatabaseClient` handles submit typed requests over a FIFO queue
+with capacity for 64 pending operations and await individual replies. A full queue
+applies asynchronous backpressure rather than blocking a Tokio executor thread.
+
+The first integration routes last-played metadata through this service, including
+the metadata update in `touch_last_opened`. Its instance-profile file write runs
+separately on a blocking worker. The frontend command names, inputs, and responses
+remain the same.
+
+An accepted request runs even if its caller stops awaiting its reply. SQL failures
+are returned to the caller; failures without a remaining caller are logged without
+query parameters or stored values. During shutdown the adapter first suspends
+downloads, then stops database admission, drains accepted requests, and joins the
+database thread after closing the connection. Dropping the service owner also
+signals the worker to stop and drain, but explicit shutdown is required to await
+thread completion and receive close errors.
+
+This is an incremental migration: download jobs, artifact associations, and
+remembered account UUIDs still use the existing database functions. Subsequent
+changes will route those operations through the same service. Account tokens
+remain in the OS keyring. The service uses the existing database schema, journal
+mode, and busy timeout.
+
 ## Game directory
 
 Each version keeps its saves next to the data directory, in `instances/<id>`.

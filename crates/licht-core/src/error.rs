@@ -100,6 +100,8 @@ pub enum CoreError {
     Database(#[from] rusqlite::Error),
     #[error("database schema {schema} is not supported")]
     DatabaseSchema { schema: u32 },
+    #[error("database service failed: {detail}")]
+    DatabaseService { detail: &'static str },
     #[error("download job data is invalid: {detail}")]
     DownloadJobInvalid { detail: &'static str },
     #[error("download job JSON is invalid")]
