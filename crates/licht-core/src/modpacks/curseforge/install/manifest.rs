@@ -1,8 +1,9 @@
-use std::io::{Cursor, Read};
+use std::io::Cursor;
 
 use serde_json::Value;
 use zip::ZipArchive;
 
+use crate::modpacks::archive::read_metadata;
 use crate::{CoreError, Result};
 
 #[derive(Debug)]
@@ -22,12 +23,10 @@ pub(super) struct ManifestFile {
 
 pub(super) fn manifest_from_zip(bytes: &[u8]) -> Result<Manifest> {
     let mut archive = ZipArchive::new(Cursor::new(bytes)).map_err(|_| CoreError::ModpackArchive)?;
-    let mut file = archive
+    let file = archive
         .by_name("manifest.json")
         .map_err(|_| CoreError::ModpackArchive)?;
-    let mut body = String::new();
-    file.read_to_string(&mut body)
-        .map_err(|_| CoreError::ModpackArchive)?;
+    let body = read_metadata(file)?;
     parse_manifest(&body)
 }
 
@@ -109,6 +108,37 @@ fn parse_file_entries(items: &[Value]) -> Result<Vec<ManifestFile>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::modpacks::archive::metadata_zip;
+
+    #[test]
+    fn accepts_compressed_manifest_below_and_at_size_limit() {
+        for size in [64 * 1024 * 1024 - 1, 64 * 1024 * 1024] {
+            let bytes = metadata_zip(
+                "manifest.json",
+                r#"{"minecraft":{"version":"1.20.1"},"files":[]}"#,
+                size,
+            );
+
+            let manifest = manifest_from_zip(&bytes).expect("manifest within the size limit");
+            assert_eq!(manifest.game_version, "1.20.1");
+            assert!(manifest.files.is_empty());
+        }
+    }
+
+    #[test]
+    fn rejects_compressed_manifest_above_size_limit() {
+        let bytes = metadata_zip(
+            "manifest.json",
+            r#"{"minecraft":{"version":"1.20.1"},"files":[]}"#,
+            64 * 1024 * 1024 + 1,
+        );
+        assert!(bytes.len() < 128 * 1024, "fixture should remain small");
+
+        assert!(matches!(
+            manifest_from_zip(&bytes),
+            Err(CoreError::ModpackArchive)
+        ));
+    }
 
     #[test]
     fn parses_manifest_files_and_defaults_required() {
