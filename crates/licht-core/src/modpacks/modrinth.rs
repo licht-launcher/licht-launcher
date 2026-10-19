@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::Value;
@@ -11,8 +9,6 @@ use crate::{CoreError, Result};
 const SEARCH_URL: &str = "https://api.modrinth.com/v2/search";
 const PROJECT_VERSIONS: &str = "https://api.modrinth.com/v2/project";
 const USER_AGENT: &str = "licht-launcher/0.1.1 (https://github.com/licht-launcher/licht-launcher)";
-/// Pack archives can be ~100 MB; the shared API client timeout is too short.
-const PACK_ARCHIVE_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 
 #[derive(Debug, Deserialize)]
 struct SearchResponse {
@@ -138,31 +134,39 @@ pub fn parse_versions(body: &str) -> Result<Vec<ModpackVersionItem>> {
         .collect())
 }
 
-pub async fn download_modrinth_mrpack(
+pub(super) async fn download_modrinth_mrpack_to(
     client: &Client,
     project_id: &str,
     version_id: &str,
-) -> Result<(String, Vec<u8>)> {
-    let versions = list_modrinth_versions(client, project_id).await?;
+    destination: &std::path::Path,
+    context: &crate::InstallationContext,
+) -> Result<()> {
+    let versions = context
+        .metadata(list_modrinth_versions(client, project_id))
+        .await?;
     if !versions.iter().any(|version| version.id == version_id) {
         return Err(CoreError::ModpackMeta {
             detail: "version_not_in_project".into(),
         });
     }
     let url = format!("{PROJECT_VERSIONS}/{project_id}/version/{version_id}");
-    let response = client
-        .get(&url)
-        .header("User-Agent", USER_AGENT)
-        .send()
+    let parsed = context
+        .metadata(async {
+            let response = client
+                .get(&url)
+                .header("User-Agent", USER_AGENT)
+                .send()
+                .await?;
+            let status = response.status().as_u16();
+            let body = response.text().await?;
+            if !(200..300).contains(&status) {
+                return Err(CoreError::ModpackMeta {
+                    detail: format!("modrinth_version_http_{status}"),
+                });
+            }
+            serde_json::from_str::<Value>(&body).map_err(CoreError::LoaderJson)
+        })
         .await?;
-    let status = response.status().as_u16();
-    let body = response.text().await?;
-    if !(200..300).contains(&status) {
-        return Err(CoreError::ModpackMeta {
-            detail: format!("modrinth_version_http_{status}"),
-        });
-    }
-    let parsed: Value = serde_json::from_str(&body).map_err(CoreError::LoaderJson)?;
     let file = parsed
         .get("files")
         .and_then(Value::as_array)
@@ -181,27 +185,38 @@ pub async fn download_modrinth_mrpack(
         .ok_or(CoreError::ModpackMeta {
             detail: "mrpack_url_missing".into(),
         })?;
-    let file_name = file
-        .get("filename")
-        .and_then(Value::as_str)
-        .unwrap_or("pack.mrpack")
-        .to_string();
-    // Use a dedicated client: the shared one times out after 30s (API metadata).
-    let pack_client = Client::builder()
-        .timeout(PACK_ARCHIVE_TIMEOUT)
-        .build()
-        .map_err(CoreError::from)?;
-    let bytes = pack_client
-        .get(download_url)
-        .header("User-Agent", USER_AGENT)
-        .send()
-        .await?
-        .error_for_status()
-        .map_err(CoreError::from)?
-        .bytes()
-        .await?
-        .to_vec();
-    Ok((file_name, bytes))
+    if !super::secure_download::download_url_allowed(download_url, &["cdn.modrinth.com"]) {
+        return Err(CoreError::ModpackMeta {
+            detail: "modpack download host is not allowed".into(),
+        });
+    }
+    let checksum = if let Some(value) = file.pointer("/hashes/sha1").and_then(Value::as_str) {
+        crate::DownloadChecksum::Sha1(value.to_string())
+    } else if let Some(value) = file.pointer("/hashes/sha512").and_then(Value::as_str) {
+        crate::DownloadChecksum::Sha512(value.to_string())
+    } else {
+        return Err(CoreError::ModpackMeta {
+            detail: "modpack archive checksum is missing".into(),
+        });
+    };
+    let task = crate::VerifiedDownloadTask {
+        url: download_url.to_string(),
+        destination: destination.to_path_buf(),
+        checksum,
+        size: file.get("size").and_then(Value::as_u64).unwrap_or(0),
+    };
+    context
+        .verified_queue(
+            &super::mrpack::mrpack_download_client()?,
+            &[task],
+            context.options()?,
+        )
+        .await?;
+    context.stage(crate::DownloadPhase::Verifying).await?;
+    if let Some(expected) = file.pointer("/hashes/sha512").and_then(Value::as_str) {
+        super::file_hashes::ensure_sha512(destination, expected)?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]

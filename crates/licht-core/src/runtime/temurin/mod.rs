@@ -8,11 +8,12 @@ pub(crate) use layout::{find_temurin, temurin_folder_name};
 
 use std::path::PathBuf;
 
-use tokio::sync::mpsc;
-
 use super::archive::{extract_java_archive, java_executable, mark_executable};
 use super::require::required_java_major;
-use crate::{CoreError, DownloadProgress, LaunchEnvironment, Result, SharedCache, Version};
+use crate::{
+    CoreError, DownloadComponent, DownloadPhase, DownloadProgress, InstallationContext,
+    LaunchEnvironment, Result, SharedCache, Version,
+};
 
 pub const ADOPTIUM_API: &str = "https://api.adoptium.net";
 
@@ -35,14 +36,25 @@ pub async fn install_temurin(
     major: u32,
     environment: &LaunchEnvironment,
     api_base: &str,
-    progress: mpsc::Sender<DownloadProgress>,
+    progress: impl Into<InstallationContext>,
 ) -> Result<PathBuf> {
+    let progress = progress.into().component(DownloadComponent::Java);
+    progress.checkpoint().await?;
+    progress.stage(DownloadPhase::Preparing).await?;
     if let Some(root) = find_temurin(cache, major, environment)? {
         return Ok(java_executable(&root, environment.os));
     }
 
-    let release =
-        api::temurin_package(client, api_base, major, environment.os, environment.arch).await?;
+    progress.stage(DownloadPhase::Preparing).await?;
+    let release = progress
+        .metadata(api::temurin_package(
+            client,
+            api_base,
+            major,
+            environment.os,
+            environment.arch,
+        ))
+        .await?;
     let root = layout::runtime_folder(
         cache,
         &temurin_folder_name(
@@ -53,8 +65,14 @@ pub async fn install_temurin(
             environment.arch,
         )?,
     )?;
+    let lock = crate::transfer::download::destination_lock(&root);
+    let _guard = progress.metadata(async { Ok(lock.lock().await) }).await?;
+    if let Some(installed) = find_temurin(cache, major, environment)? {
+        return Ok(java_executable(&installed, environment.os));
+    }
     let executable = java_executable(&root, environment.os);
     std::fs::create_dir_all(&root)?;
+    std::fs::write(root.join(".installing"), b"")?;
 
     let package = &release.package;
     let name = download::archive_name(&package.name)?;
@@ -68,13 +86,16 @@ pub async fn install_temurin(
         &progress,
     )
     .await?;
+    progress.stage(DownloadPhase::Extracting).await?;
     let extracted = extract_java_archive(&archive, &root);
-    let _ = std::fs::remove_file(&archive);
     extracted?;
     if !executable.is_file() {
         return Err(CoreError::JavaRuntimeMissing);
     }
     mark_executable(&executable)?;
+    progress.checkpoint().await?;
+    std::fs::remove_file(&archive)?;
+    std::fs::remove_file(root.join(".installing"))?;
     let _ = progress.try_send(DownloadProgress {
         finished: 1,
         failed: 0,
@@ -95,7 +116,110 @@ mod tests {
     use super::install_temurin;
     use super::layout::platform_label;
     use crate::hashes::hex_encode;
-    use crate::{Arch, CoreError, DownloadProgress, LaunchEnvironment, OsName, SharedCache};
+    use crate::{
+        Arch, CoreError, DownloadControl, DownloadProgress, InstallationContext, LaunchEnvironment,
+        OsName, SharedCache,
+    };
+
+    #[tokio::test]
+    async fn a_paused_java_installation_does_not_block_other_runtime_directories() {
+        let _guard = crate::test_http::lock_local_http().await;
+        for already_installed in [false, true] {
+            let directory = std::env::temp_dir().join(format!(
+                "licht-temurin-independent-{}-{already_installed}",
+                std::process::id()
+            ));
+            let cache = SharedCache::at(directory.join("data"));
+            let settings = SharedCache::at(directory.join("settings"));
+            let zip = sample_zip();
+            let checksum = hex_encode(Sha256::digest(&zip).as_slice());
+            let first_api = serve(zip.clone(), &checksum, false, "8.0.4+7").await;
+            let second_api = serve(zip, &checksum, false, "21.0.4+7").await;
+            let expected_root = super::layout::runtime_folder(
+                &cache,
+                &super::temurin_folder_name(
+                    21,
+                    "jre",
+                    "21.0.4",
+                    environment().os,
+                    environment().arch,
+                )
+                .expect("runtime name"),
+            )
+            .expect("runtime path");
+            let expected =
+                crate::runtime::archive::java_executable(&expected_root, environment().os);
+            if already_installed {
+                std::fs::create_dir_all(expected.parent().expect("bin"))
+                    .expect("runtime directory");
+                std::fs::write(&expected, b"temurin").expect("installed Java");
+            }
+            let job =
+                crate::transfer::jobs::create_java_job(&settings, &cache, 8).expect("Java job");
+            let control = DownloadControl::new();
+            let (sender, mut events) = tokio::sync::mpsc::channel(64);
+            let context = InstallationContext::for_job(
+                settings,
+                cache.clone(),
+                job.id,
+                control.clone(),
+                sender,
+            );
+            let first_cache = cache.clone();
+            let running = tokio::spawn(async move {
+                install_temurin(
+                    &reqwest::Client::new(),
+                    &first_cache,
+                    8,
+                    &environment(),
+                    &first_api,
+                    context,
+                )
+                .await
+            });
+            tokio::time::timeout(std::time::Duration::from_secs(10), async {
+                loop {
+                    if matches!(
+                        events.recv().await.expect("installation event"),
+                        crate::transfer::installation::InstallationEvent::Stage(
+                            _,
+                            crate::DownloadPhase::Downloading
+                        )
+                    ) {
+                        control.pause();
+                        break;
+                    }
+                }
+            })
+            .await
+            .expect("first runtime reached its download phase");
+            let independent = tokio::time::timeout(
+                std::time::Duration::from_secs(5),
+                install_temurin(
+                    &reqwest::Client::new(),
+                    &cache,
+                    21,
+                    &environment(),
+                    &second_api,
+                    InstallationContext::default(),
+                ),
+            )
+            .await;
+            control.cancel();
+            assert!(matches!(
+                running.await.expect("first worker"),
+                Err(CoreError::DownloadCancelled)
+            ));
+            assert_eq!(
+                independent
+                    .expect("another runtime must progress while Java 8 is paused")
+                    .expect("independent Java"),
+                expected
+            );
+            assert_eq!(std::fs::read(expected).expect("Java bytes"), b"temurin");
+            std::fs::remove_dir_all(directory).expect("cleanup");
+        }
+    }
 
     #[tokio::test]
     async fn temurin_is_stored_under_its_major_version() {
@@ -142,6 +266,42 @@ mod tests {
                 .exists()
         );
         let _ = std::fs::remove_dir_all(directory);
+    }
+
+    #[tokio::test]
+    async fn concurrent_installations_of_the_same_runtime_download_only_once() {
+        let _guard = crate::test_http::lock_local_http().await;
+        let directory =
+            std::env::temp_dir().join(format!("licht-temurin-shared-{}", std::process::id()));
+        let cache = SharedCache::at(&directory);
+        let zip = sample_zip();
+        let checksum = hex_encode(Sha256::digest(&zip).as_slice());
+        let (server, downloads) = serve_counted(zip, &checksum, false, "21.0.4+7").await;
+        let client = reqwest::Client::new();
+        let env = environment();
+        let (first, second) = tokio::join!(
+            install_temurin(
+                &client,
+                &cache,
+                21,
+                &env,
+                &server,
+                InstallationContext::default()
+            ),
+            install_temurin(
+                &client,
+                &cache,
+                21,
+                &env,
+                &server,
+                InstallationContext::default()
+            ),
+        );
+        let first = first.expect("first install");
+        assert_eq!(second.expect("second install"), first);
+        assert_eq!(downloads.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert_eq!(std::fs::read(first).expect("Java"), b"temurin");
+        std::fs::remove_dir_all(directory).expect("cleanup");
     }
 
     #[tokio::test]
@@ -229,6 +389,17 @@ mod tests {
     }
 
     async fn serve(zip: Vec<u8>, checksum: &str, jre_missing: bool, semver: &str) -> String {
+        serve_counted(zip, checksum, jre_missing, semver).await.0
+    }
+
+    async fn serve_counted(
+        zip: Vec<u8>,
+        checksum: &str,
+        jre_missing: bool,
+        semver: &str,
+    ) -> (String, std::sync::Arc<std::sync::atomic::AtomicUsize>) {
+        let downloads = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counted = std::sync::Arc::clone(&downloads);
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
             .await
             .expect("bind");
@@ -248,6 +419,7 @@ mod tests {
                 let checksum = std::sync::Arc::clone(&checksum);
                 let semver = std::sync::Arc::clone(&semver);
                 let base = std::sync::Arc::clone(&shared_base);
+                let downloads = std::sync::Arc::clone(&counted);
                 tokio::spawn(async move {
                     let mut incoming = Vec::new();
                     let mut buffer = [0_u8; 1024];
@@ -284,6 +456,7 @@ mod tests {
                     } else if path.contains("image_type=") {
                         package.into_bytes()
                     } else {
+                        downloads.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                         zip.as_ref().clone()
                     };
                     let header = format!(
@@ -297,6 +470,6 @@ mod tests {
                 });
             }
         });
-        base
+        (base, downloads)
     }
 }

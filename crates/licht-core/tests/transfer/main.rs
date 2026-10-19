@@ -2,3 +2,4 @@
 
 mod download;
 mod download_queue;
+mod resume;

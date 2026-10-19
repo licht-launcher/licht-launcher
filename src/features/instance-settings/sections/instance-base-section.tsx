@@ -13,11 +13,12 @@ import type { VersionSummary } from "@/lib/generated/VersionSummary";
 
 function versionsForPicker(
   versions: VersionSummary[] | undefined,
-  versionId: string,
+  versionId: string | null,
 ): VersionSummary[] {
   if (versions !== undefined && versions.length > 0) {
     return versions;
   }
+  if (versionId === null) return [];
   return [
     {
       id: versionId,
@@ -32,10 +33,12 @@ export function InstanceBaseSection({
   versionId,
   busy,
   versionBusy,
+  preparing = false,
   onChangeVersion,
 }: {
   folder: string;
-  versionId: string;
+  versionId: string | null;
+  preparing?: boolean;
   busy: boolean;
   versionBusy: boolean;
   onChangeVersion: (versionId: string, installed: boolean) => void;
@@ -47,8 +50,11 @@ export function InstanceBaseSection({
   });
   const repair = useMutation({
     mutationFn: () => repairInstance(folder),
-    onSuccess: () => {
-      toast.success("Instance files were repaired.");
+    onSuccess: (job) => {
+      if (job.status === "completed")
+        toast.success("Instance files were repaired.");
+      else if (job.status === "failed")
+        toast.error(job.error ?? "Repair failed.");
     },
     onError: (error: unknown) => {
       toast.error(friendlyError(messageOf(error)));
@@ -83,7 +89,7 @@ export function InstanceBaseSection({
                 Updating…
               </span>
             ) : (
-              <span className="truncate">{versionId}</span>
+              <span className="truncate">{versionId ?? "Preparing"}</span>
             )}
           </div>
         </div>
@@ -100,7 +106,7 @@ export function InstanceBaseSection({
           type="button"
           variant="warning"
           className="self-start"
-          disabled={busy || versionBusy}
+          disabled={busy || versionBusy || preparing || versionId === null}
           onClick={() => {
             setEditOpen(true);
           }}
@@ -140,19 +146,21 @@ export function InstanceBaseSection({
         </Button>
       </div>
 
-      <EditInstanceVersionDialog
-        open={editOpen}
-        versionId={versionId}
-        versions={pickerVersions}
-        versionsPending={versionsLoading}
-        versionsError={versionsFailed}
-        onRetryVersions={() => {
-          void versions.refetch();
-        }}
-        busy={busy || versionBusy}
-        onOpenChange={setEditOpen}
-        onSave={onChangeVersion}
-      />
+      {versionId !== null && (
+        <EditInstanceVersionDialog
+          open={editOpen}
+          versionId={versionId}
+          versions={pickerVersions}
+          versionsPending={versionsLoading}
+          versionsError={versionsFailed}
+          onRetryVersions={() => {
+            void versions.refetch();
+          }}
+          busy={busy || versionBusy}
+          onOpenChange={setEditOpen}
+          onSave={onChangeVersion}
+        />
+      )}
     </div>
   );
 }

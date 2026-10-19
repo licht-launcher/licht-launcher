@@ -299,6 +299,7 @@ fn native_jar(name: &str, path: &str, os_name: &str, base: &str) -> Library {
         &format!("{base}/library"),
         path,
         &sha1_hex(LIBRARY),
+        LIBRARY.len() as u64,
         Some(vec![Rule {
             action: RuleAction::Allow,
             os: Some(OsRule {
@@ -388,6 +389,7 @@ fn version(base: &str, index_sha1: &str) -> Version {
                 &format!("{base}/library"),
                 "com/example/demo/1.0/demo-1.0.jar",
                 &sha1_hex(LIBRARY),
+                LIBRARY.len() as u64,
                 None,
             ),
             library(
@@ -395,6 +397,7 @@ fn version(base: &str, index_sha1: &str) -> Version {
                 &format!("{base}/windows"),
                 "com/example/windows/1.0/windows-1.0.jar",
                 &sha1_hex(b"windows"),
+                b"windows".len() as u64,
                 Some(vec![Rule {
                     action: RuleAction::Allow,
                     os: Some(OsRule {
@@ -426,14 +429,21 @@ fn version(base: &str, index_sha1: &str) -> Version {
     }
 }
 
-fn library(name: &str, url: &str, path: &str, sha1: &str, rules: Option<Vec<Rule>>) -> Library {
+fn library(
+    name: &str,
+    url: &str,
+    path: &str,
+    sha1: &str,
+    size: u64,
+    rules: Option<Vec<Rule>>,
+) -> Library {
     Library {
         name: name.to_string(),
         downloads: Some(LibraryDownloads {
             artifact: Some(Artifact {
                 path: path.to_string(),
                 sha1: sha1.to_string(),
-                size: 1,
+                size,
                 url: url.to_string(),
             }),
             classifiers: None,

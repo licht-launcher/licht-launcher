@@ -31,15 +31,15 @@ fn write(dir: &Path, name: &str, body: &str) {
 }
 
 #[test]
-fn a_folder_without_a_file_gains_schema_one() {
+fn a_folder_without_a_file_gains_schema_two() {
     let root = scratch("migrate");
     let dir = root.join("instances").join("1.20.1");
     fs::create_dir_all(&dir).expect("instance folder");
 
     let instance = load_instance(&dir).expect("migration");
-    assert_eq!(instance.schema, 1);
+    assert_eq!(instance.schema, 2);
     assert_eq!(instance.name, "1.20.1");
-    assert_eq!(instance.version_id, "1.20.1");
+    assert_eq!(instance.version_id.as_deref(), Some("1.20.1"));
     assert_eq!(instance.min_memory_mb, 512);
     assert_eq!(instance.max_memory_mb, 2048);
     assert!(instance.jvm_arguments.is_empty());
@@ -83,7 +83,7 @@ fn schema_one_is_read_back_unchanged() {
     let before = fs::read_to_string(dir.join("instance.json")).expect("original");
     let instance = load_instance(&dir).expect("read");
     assert_eq!(instance.name, "Survival");
-    assert_eq!(instance.version_id, "1.20.1");
+    assert_eq!(instance.version_id.as_deref(), Some("1.20.1"));
     assert_eq!(instance.min_memory_mb, 1024);
     assert_eq!(instance.max_memory_mb, 4096);
     assert_eq!(instance.jvm_arguments, vec!["-XX:+UseG1GC".to_string()]);
@@ -116,12 +116,12 @@ fn a_broken_file_and_a_newer_schema_are_left_in_place() {
     write(
         &future,
         "instance.json",
-        r#"{"schema": 2, "name": "Later"}"#,
+        r#"{"schema": 3, "name": "Later"}"#,
     );
     let future_body = fs::read_to_string(future.join("instance.json")).expect("future");
     assert!(matches!(
         load_instance(&future),
-        Err(CoreError::InstanceSchema { schema: 2 })
+        Err(CoreError::InstanceSchema { schema: 3 })
     ));
     assert_eq!(
         fs::read_to_string(future.join("instance.json")).expect("still future"),
@@ -181,7 +181,7 @@ fn create_rename_duplicate_and_delete_keep_the_folder_stable() {
         create_instance(&instances, " My World ", "1.20.1", &plain_template()).expect("create");
     assert_eq!(created.folder, "My-World");
     assert_eq!(created.name, "My World");
-    assert_eq!(created.version_id, "1.20.1");
+    assert_eq!(created.version_id.as_deref(), Some("1.20.1"));
     assert!(created.icon_path.is_none());
     assert!(instances.join("My-World").join("instance.json").is_file());
     fs::write(instances.join("My-World").join("icon.png"), [0u8, 1, 2, 3]).expect("icon");
@@ -225,7 +225,7 @@ fn create_rename_duplicate_and_delete_keep_the_folder_stable() {
     let copy = duplicate_instance(&instances, "My-World", "Survival copy").expect("duplicate");
     assert_eq!(copy.folder, "Survival-copy");
     assert_eq!(copy.name, "Survival copy");
-    assert_eq!(copy.version_id, "1.20.1");
+    assert_eq!(copy.version_id.as_deref(), Some("1.20.1"));
     assert_eq!(
         fs::read_to_string(
             instances
@@ -404,7 +404,7 @@ fn update_instance_persists_overrides_and_keeps_name() {
     .expect("update");
     assert_eq!(updated.folder, "My-World");
     assert_eq!(updated.name, "My World");
-    assert_eq!(updated.version_id, "1.20.1");
+    assert_eq!(updated.version_id.as_deref(), Some("1.20.1"));
     assert!(updated.override_window);
     assert!(updated.override_memory);
     assert!(updated.override_java);
@@ -427,7 +427,7 @@ fn update_instance_version_changes_only_the_game_version() {
     let updated = update_instance_version(&instances, &created.folder, "1.21.1").expect("version");
     assert_eq!(updated.folder, "My-World");
     assert_eq!(updated.name, "My World");
-    assert_eq!(updated.version_id, "1.21.1");
+    assert_eq!(updated.version_id.as_deref(), Some("1.21.1"));
     assert_eq!(updated.max_memory_mb, created.max_memory_mb);
     let _ = fs::remove_dir_all(root);
 }
@@ -474,3 +474,4 @@ fn missing_last_opened_at_defaults_to_none() {
     assert_eq!(instance.last_opened_at, None);
     let _ = fs::remove_dir_all(root);
 }
+mod preparation;

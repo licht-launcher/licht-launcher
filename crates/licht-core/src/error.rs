@@ -26,6 +26,12 @@ pub enum CoreError {
     Sha512Mismatch { expected: String, actual: String },
     #[error("download needs at least one attempt")]
     DownloadAttempts,
+    #[error("download is paused")]
+    DownloadPaused,
+    #[error("download was cancelled")]
+    DownloadCancelled,
+    #[error("download response is invalid: {detail}")]
+    DownloadResponse { detail: &'static str },
     #[error("download concurrency must be at least 1")]
     DownloadConcurrency,
     #[error("write concurrency must be at least 1")]
@@ -62,6 +68,8 @@ pub enum CoreError {
     InstanceName,
     #[error("an instance folder already exists")]
     InstanceExists,
+    #[error("instance preparation is incomplete")]
+    InstancePreparing,
     #[error("Java runtime index JSON is invalid")]
     JavaRuntime(#[source] serde_json::Error),
     #[error("Java runtime was not found for this system")]
@@ -90,6 +98,20 @@ pub enum CoreError {
     LaunchHost,
     #[error("database operation failed")]
     Database(#[from] rusqlite::Error),
+    #[error("database schema {schema} is not supported")]
+    DatabaseSchema { schema: u32 },
+    #[error("download job data is invalid: {detail}")]
+    DownloadJobInvalid { detail: &'static str },
+    #[error("download job JSON is invalid")]
+    DownloadJobJson(#[source] serde_json::Error),
+    #[error("download job was not found")]
+    DownloadJobMissing,
+    #[error("an unfinished download job already exists for this instance")]
+    DownloadJobExists,
+    #[error("download job state transition is invalid")]
+    DownloadJobTransition,
+    #[error("{detail}")]
+    DownloadJobExecution { detail: String },
     #[error("LICHT_MSA_CLIENT_ID is missing or empty")]
     MsaClientIdMissing,
     #[error("Microsoft auth JSON is invalid")]

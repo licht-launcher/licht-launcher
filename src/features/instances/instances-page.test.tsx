@@ -16,9 +16,15 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Toaster } from "@/components/ui/sonner";
+import {
+  completedDownload,
+  downloadJob,
+} from "@/features/downloads/fixtures/job";
 import { snapshot } from "@/features/settings/fixtures/snapshot";
+import type { DownloadJobSnapshot } from "@/lib/generated/DownloadJobSnapshot";
 import type { GameLogEvent } from "@/lib/generated/GameLogEvent";
 import type { InstallProgress } from "@/lib/generated/InstallProgress";
+import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 import { routeTree } from "@/routeTree.gen";
 
 const { invoke, listeners } = vi.hoisted(() => ({
@@ -73,7 +79,13 @@ function defaultCommandResponse(command: string): Promise<unknown> {
     case "custom_title_bar_active":
       return Promise.resolve(true);
     case "list_instance_content":
+    case "list_download_jobs":
+    case "list_microsoft_accounts":
       return Promise.resolve([]);
+    case "active_microsoft_account":
+      return Promise.resolve(null);
+    case "prepare_instance_download":
+      return Promise.resolve(completedDownload());
     case "get_last_played_folder":
       return Promise.resolve(null);
     default:
@@ -190,6 +202,213 @@ describe("InstancesPage", () => {
     vi.mocked(console.error).mockRestore();
     expect(errors).toEqual([]);
   });
+
+  it.each(["paused", "interrupted", "failed"] as const)(
+    "offers an explicit warning-colored resume for a %s download",
+    async (status) => {
+      let job = downloadJob({ instanceFolder: "classic", status });
+      mockContextMenuCommands((command) => {
+        if (command === "list_download_jobs") return Promise.resolve([job]);
+        if (command === "resume_download_job") {
+          job = { ...job, status: "running" };
+          return Promise.resolve(job);
+        }
+      });
+      await renderAt("/?instance=classic");
+      const resume = await screen.findByRole("button", {
+        name: "Resume download for Classic",
+      });
+      expect(resume).toHaveAttribute("data-variant", "warning");
+      expect(invoke).not.toHaveBeenCalledWith("resume_download_job", {
+        jobId: "1",
+      });
+      fireEvent.click(resume);
+      await screen.findByRole("button", { name: "Pause download for Classic" });
+      expect(invoke).toHaveBeenCalledWith("resume_download_job", {
+        jobId: "1",
+      });
+      expect(invoke.mock.calls.some(([command]) => command === "launch")).toBe(
+        false,
+      );
+    },
+  );
+
+  it("pauses a download on the instance page and preserves a repair after confirmed cancellation", async () => {
+    let job = downloadJob({ instanceFolder: "classic", operation: "repair" });
+    let cancelled = false;
+    mockContextMenuCommands((command) => {
+      if (command === "list_download_jobs")
+        return Promise.resolve(cancelled ? [] : [job]);
+      if (command === "pause_download_job") {
+        job = { ...job, status: "paused" };
+        return Promise.resolve(job);
+      }
+      if (command === "cancel_download_job") {
+        cancelled = true;
+        return Promise.resolve({ ...job, status: "cancelled" });
+      }
+    });
+    await renderAt("/?instance=classic");
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Pause download for Classic" }),
+    );
+    await screen.findByRole("button", { name: "Resume download for Classic" });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Cancel download for Classic" }),
+    );
+    const dialog = await screen.findByRole("dialog", {
+      name: "Cancel download for Classic?",
+    });
+    expect(dialog).toHaveTextContent(
+      "Existing instances and their files will be kept.",
+    );
+    expect(invoke).not.toHaveBeenCalledWith("cancel_download_job", {
+      jobId: "1",
+    });
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Cancel download" }),
+    );
+    await screen.findByRole("button", { name: "Play" });
+    const sidebar = screen.getByRole("navigation", { name: "Instances" });
+    expect(
+      within(sidebar).getByRole("button", { name: /^Classic/ }),
+    ).toBeVisible();
+    expect(
+      invoke.mock.calls.some(([command]) => command === "delete_instance"),
+    ).toBe(false);
+  });
+
+  it("retries persisted cancellation from the instance page without resuming installation", async () => {
+    let jobs = [
+      downloadJob({
+        instanceFolder: "classic",
+        status: "cancelling",
+        error: "Instance file is locked",
+      }),
+    ];
+    let entries: InstanceEntry[] = [
+      {
+        ...classicInstance,
+        installation: {
+          source: { type: "vanilla", gameVersion: "1.5.2" },
+          state: "installing",
+        },
+      },
+      contextInstance,
+    ];
+    mockContextMenuCommands((command) => {
+      if (command === "list_instances") return Promise.resolve(entries);
+      if (command === "list_download_jobs") return Promise.resolve(jobs);
+      if (command === "cancel_download_job") {
+        const job = jobs[0];
+        jobs = [];
+        entries = entries.filter((entry) => entry.folder !== "classic");
+        return Promise.resolve({
+          ...job,
+          status: "cancelled",
+          error: undefined,
+        });
+      }
+    });
+    await renderAt("/?instance=classic");
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Retry cancellation for Classic",
+      }),
+    );
+    const dialog = await screen.findByRole("dialog", {
+      name: "Retry cancellation for Classic?",
+    });
+    expect(within(dialog).getByRole("alert")).toHaveTextContent(
+      "Instance file is locked",
+    );
+    expect(
+      screen.queryByRole("button", { name: "Resume download for Classic" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Retry cancellation" }),
+    );
+    await screen.findByRole("heading", { name: "Next" });
+    expect(invoke).toHaveBeenCalledWith("cancel_download_job", { jobId: "1" });
+    expect(
+      invoke.mock.calls.some(
+        ([command]) =>
+          command === "resume_download_job" ||
+          command === "prepare_instance_download" ||
+          command === "launch",
+      ),
+    ).toBe(false);
+  });
+
+  it.each(["instance page", "downloads popover"])(
+    "removes a new instance only after confirming cancellation from the %s",
+    async (location) => {
+      let entries: InstanceEntry[] = [
+        {
+          ...classicInstance,
+          installation: {
+            source: { type: "vanilla", gameVersion: "1.5.2" },
+            state: "installing",
+          },
+        },
+        contextInstance,
+      ];
+      let jobs = [
+        downloadJob({ instanceFolder: "classic", versionId: "1.5.2" }),
+      ];
+      mockContextMenuCommands((command) => {
+        if (command === "list_instances") return Promise.resolve(entries);
+        if (command === "list_download_jobs") return Promise.resolve(jobs);
+        if (command === "cancel_download_job") {
+          const job = jobs[0];
+          jobs = [];
+          entries = entries.filter((entry) => entry.folder !== "classic");
+          return Promise.resolve({ ...job, status: "cancelled" });
+        }
+      });
+      await renderAt("/?instance=classic");
+      if (location === "downloads popover") {
+        fireEvent.click(
+          await screen.findByRole("button", { name: "Downloads: 25%" }),
+        );
+        const row = await screen.findByRole("region", {
+          name: "Download for Classic",
+        });
+        fireEvent.click(
+          within(row).getByRole("button", {
+            name: "Cancel download for Classic",
+          }),
+        );
+      } else {
+        fireEvent.click(
+          await screen.findByRole("button", {
+            name: "Cancel download for Classic",
+          }),
+        );
+      }
+      const dialog = await screen.findByRole("dialog", {
+        name: "Cancel download for Classic?",
+      });
+      expect(dialog).toHaveTextContent(
+        "removed from your library, along with its files",
+      );
+      expect(invoke).not.toHaveBeenCalledWith("cancel_download_job", {
+        jobId: "1",
+      });
+      const sidebar = screen.getByRole("navigation", { hidden: true });
+      expect(within(sidebar).getByText("Classic")).toBeInTheDocument();
+      fireEvent.click(
+        within(dialog).getByRole("button", { name: "Cancel download" }),
+      );
+      await waitFor(() =>
+        expect(within(sidebar).queryByText("Classic")).not.toBeInTheDocument(),
+      );
+      expect(within(sidebar).getByText("Next")).toBeInTheDocument();
+      expect(invoke).toHaveBeenCalledWith("cancel_download_job", {
+        jobId: "1",
+      });
+    },
+  );
 
   it("sorts instances by last played or name", async () => {
     invoke.mockImplementation((command: string) => {
@@ -438,7 +657,7 @@ describe("InstancesPage", () => {
     expect(screen.getByText("Sound engine started")).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Files" })).toBeInTheDocument();
     expect(invoke).not.toHaveBeenCalledWith(
-      "install_version",
+      "prepare_instance_download",
       expect.anything(),
     );
     expect(invoke).not.toHaveBeenCalledWith(
@@ -617,7 +836,7 @@ describe("InstancesPage", () => {
   });
 
   it("installs a missing version when playing", async () => {
-    let finishInstall: (java: string) => void = () => {};
+    let finishInstall: (job: DownloadJobSnapshot) => void = () => {};
     invoke.mockImplementation((command: string) => {
       if (command === "list_instances") {
         return Promise.resolve([
@@ -640,8 +859,8 @@ describe("InstancesPage", () => {
       if (command === "get_settings") {
         return Promise.resolve(snapshot);
       }
-      if (command === "install_version") {
-        return new Promise<string>((resolve) => {
+      if (command === "prepare_instance_download") {
+        return new Promise<DownloadJobSnapshot>((resolve) => {
           finishInstall = resolve;
         });
       }
@@ -668,8 +887,9 @@ describe("InstancesPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Play" }));
 
     await waitFor(() => {
-      expect(invoke).toHaveBeenCalledWith("install_version", {
-        versionId: "1.20.1",
+      expect(invoke).toHaveBeenCalledWith("prepare_instance_download", {
+        folder: "next",
+        operation: "install",
       });
     });
     expect(
@@ -702,11 +922,8 @@ describe("InstancesPage", () => {
       await screen.findByText(/50\.0%\s+5\.0MB\/10\.0MB/),
     ).toBeInTheDocument();
 
-    finishInstall("java");
+    finishInstall(completedDownload({ instanceFolder: "next" }));
     await waitFor(() => {
-      expect(invoke).toHaveBeenCalledWith("install_modpack_files", {
-        folder: "next",
-      });
       expect(invoke).toHaveBeenCalledWith("launch", {
         folder: "next",
         username: "Steve",
@@ -770,7 +987,7 @@ describe("InstancesPage", () => {
       });
     });
     expect(invoke).not.toHaveBeenCalledWith(
-      "install_version",
+      "prepare_instance_download",
       expect.anything(),
     );
     expect(invoke).not.toHaveBeenCalledWith(
@@ -780,7 +997,7 @@ describe("InstancesPage", () => {
   });
 
   it("keeps Preparing while install progress has no totals yet", async () => {
-    let finishInstall: (java: string) => void = () => {};
+    let finishInstall: (job: DownloadJobSnapshot) => void = () => {};
     invoke.mockImplementation((command: string) => {
       if (command === "list_instances") {
         return Promise.resolve([
@@ -807,8 +1024,8 @@ describe("InstancesPage", () => {
       if (command === "get_settings") {
         return Promise.resolve(snapshot);
       }
-      if (command === "install_version") {
-        return new Promise<string>((resolve) => {
+      if (command === "prepare_instance_download") {
+        return new Promise<DownloadJobSnapshot>((resolve) => {
           finishInstall = resolve;
         });
       }
@@ -866,7 +1083,12 @@ describe("InstancesPage", () => {
       await screen.findByText(/50\.0%\s+5\.0MB\/10\.0MB/),
     ).toBeInTheDocument();
 
-    finishInstall("java");
+    finishInstall(
+      completedDownload({
+        instanceFolder: "modded",
+        versionId: "fabric-loader-0.16.0-1.20.1",
+      }),
+    );
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("launch", {
         folder: "modded",
@@ -875,8 +1097,114 @@ describe("InstancesPage", () => {
     });
   });
 
+  it("does not launch the game when preparation is cancelled", async () => {
+    invoke.mockImplementation((command: string) => {
+      if (command === "list_instances")
+        return Promise.resolve([classicInstance]);
+      if (command === "get_settings") return Promise.resolve(snapshot);
+      if (command === "list_versions") return Promise.resolve([]);
+      if (command === "list_running_games") return Promise.resolve([]);
+      if (command === "is_version_ready_cmd") return Promise.resolve(false);
+      if (command === "prepare_instance_download")
+        return Promise.resolve(
+          downloadJob({ status: "cancelled", instanceFolder: "classic" }),
+        );
+      if (command === "launch") return Promise.resolve({ code: 0 });
+      return defaultCommandResponse(command);
+    });
+    await renderAt("/");
+    fireEvent.click(await screen.findByRole("button", { name: "Play" }));
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("prepare_instance_download", {
+        folder: "classic",
+        operation: "install",
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Play" })).toBeEnabled(),
+    );
+    expect(invoke).not.toHaveBeenCalledWith("launch", expect.anything());
+  });
+
+  it("prepares a pack with an unresolved version before enabling an explicit launch", async () => {
+    let ready = false;
+    let finish: (() => void) | undefined;
+    const pending: InstanceEntry = {
+      ...classicInstance,
+      name: "Pending pack",
+      versionId: null,
+      installation: {
+        state: "preparing",
+        source: {
+          type: "modpack",
+          source: "modrinth",
+          projectId: "pack",
+          versionId: "pack-version",
+          iconUrl: null,
+        },
+      },
+    };
+    invoke.mockImplementation((command: string) => {
+      if (command === "list_instances")
+        return Promise.resolve([
+          ready
+            ? {
+                ...pending,
+                versionId: "fabric-loader-0.16.10-1.21.1",
+                installation: { ...pending.installation, state: "ready" },
+              }
+            : pending,
+        ]);
+      if (command === "get_settings") return Promise.resolve(snapshot);
+      if (command === "list_versions" || command === "list_running_games")
+        return Promise.resolve([]);
+      if (command === "is_version_ready_cmd") return Promise.resolve(ready);
+      if (command === "prepare_instance_download")
+        return new Promise<DownloadJobSnapshot>((resolve) => {
+          finish = () => {
+            ready = true;
+            resolve(
+              completedDownload({
+                instanceFolder: "classic",
+                versionId: "fabric-loader-0.16.10-1.21.1",
+              }),
+            );
+          };
+        });
+      if (command === "touch_last_opened")
+        return Promise.resolve({
+          ...pending,
+          versionId: "fabric-loader-0.16.10-1.21.1",
+        });
+      if (command === "launch") return Promise.resolve({ code: 0 });
+      return defaultCommandResponse(command);
+    });
+    await renderAt("/");
+    fireEvent.click(await screen.findByRole("button", { name: "Install" }));
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("prepare_instance_download", {
+        folder: "classic",
+        operation: "install",
+      }),
+    );
+    expect(screen.getByRole("button", { name: "Install" })).toBeDisabled();
+    expect(invoke).not.toHaveBeenCalledWith("launch", expect.anything());
+    if (!finish) throw new Error("preparation was not started");
+    await act(async () => finish?.());
+    const play = await screen.findByRole("button", { name: "Play" });
+    expect(invoke).not.toHaveBeenCalledWith("launch", expect.anything());
+    fireEvent.click(play);
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("launch", {
+        folder: "classic",
+        username: "Steve",
+      }),
+    );
+  });
+
   it("installs two versions in parallel without locking the sidebar", async () => {
-    const finishInstall: Record<string, (java: string) => void> = {};
+    const finishInstall: Record<string, (job: DownloadJobSnapshot) => void> =
+      {};
     invoke.mockImplementation((command: string, args?: unknown) => {
       if (command === "list_instances") {
         return Promise.resolve([
@@ -906,9 +1234,10 @@ describe("InstancesPage", () => {
       if (command === "get_settings") {
         return Promise.resolve(snapshot);
       }
-      if (command === "install_version") {
-        const versionId = (args as { versionId: string }).versionId;
-        return new Promise<string>((resolve) => {
+      if (command === "prepare_instance_download") {
+        const folder = (args as { folder: string }).folder;
+        const versionId = folder === "next" ? "1.20.1" : "1.21.1";
+        return new Promise<DownloadJobSnapshot>((resolve) => {
           finishInstall[versionId] = resolve;
         });
       }
@@ -936,8 +1265,9 @@ describe("InstancesPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Play" }));
 
     await waitFor(() => {
-      expect(invoke).toHaveBeenCalledWith("install_version", {
-        versionId: "1.20.1",
+      expect(invoke).toHaveBeenCalledWith("prepare_instance_download", {
+        folder: "next",
+        operation: "install",
       });
     });
     expect(screen.getByRole("button", { name: "New instance" })).toBeEnabled();
@@ -949,8 +1279,9 @@ describe("InstancesPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Play" }));
 
     await waitFor(() => {
-      expect(invoke).toHaveBeenCalledWith("install_version", {
-        versionId: "1.21.1",
+      expect(invoke).toHaveBeenCalledWith("prepare_instance_download", {
+        folder: "fresh",
+        operation: "install",
       });
     });
 
@@ -983,8 +1314,10 @@ describe("InstancesPage", () => {
       await screen.findByText(/50\.0%\s+5\.0MB\/10\.0MB/),
     ).toBeInTheDocument();
 
-    finishInstall["1.20.1"]?.("java");
-    finishInstall["1.21.1"]?.("java");
+    finishInstall["1.20.1"]?.(completedDownload({ instanceFolder: "next" }));
+    finishInstall["1.21.1"]?.(
+      completedDownload({ instanceFolder: "fresh", versionId: "1.21.1" }),
+    );
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("launch", {
         folder: "next",

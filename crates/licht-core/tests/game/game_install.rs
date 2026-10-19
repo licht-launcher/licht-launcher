@@ -100,8 +100,9 @@ fn version_json(base: &str, index_sha1: &str) -> String {
     let client_sha1 = sha1_hex(CLIENT);
     let library_sha1 = sha1_hex(LIBRARY);
     format!(
-        r#"{{"minecraftArguments":"","libraries":[{{"name":"com.example:demo:1.0","downloads":{{"artifact":{{"path":"com/example/demo/1.0/demo-1.0.jar","sha1":"{library_sha1}","size":1,"url":"{base}/library"}}}}}}],"assetIndex":{{"id":"test","sha1":"{index_sha1}","size":1,"totalSize":1,"url":"{base}/index"}},"mainClass":"a.B","downloads":{{"client":{{"sha1":"{client_sha1}","size":{client_size},"url":"{base}/client"}}}}}}"#,
-        client_size = CLIENT.len()
+        r#"{{"minecraftArguments":"","libraries":[{{"name":"com.example:demo:1.0","downloads":{{"artifact":{{"path":"com/example/demo/1.0/demo-1.0.jar","sha1":"{library_sha1}","size":{library_size},"url":"{base}/library"}}}}}}],"assetIndex":{{"id":"test","sha1":"{index_sha1}","size":1,"totalSize":1,"url":"{base}/index"}},"mainClass":"a.B","downloads":{{"client":{{"sha1":"{client_sha1}","size":{client_size},"url":"{base}/client"}}}}}}"#,
+        client_size = CLIENT.len(),
+        library_size = LIBRARY.len()
     )
 }
 

@@ -16,9 +16,11 @@ pub async fn launch(
     app: AppHandle,
     paths: State<'_, LauncherPaths>,
     sessions: State<'_, LaunchSessions>,
+    downloads: State<'_, std::sync::Arc<licht_core::DownloadManager>>,
     folder: String,
     username: String,
 ) -> Result<GameExit, String> {
+    downloads.ensure_launchable(&folder).map_err(failure)?;
     let instances_dir = paths.game.instances_dir().map_err(failure)?;
     sessions.reconcile(&instances_dir)?;
     let _guard = sessions.try_begin(&folder)?;
@@ -67,7 +69,7 @@ async fn launch_one(
     let settings = load_settings(settings_home)?;
     let dir = cache.instance_dir(folder)?;
     let profile = load_instance(&dir)?;
-    let version_id = profile.version_id.clone();
+    let version_id = licht_core::instance_version_for_launch(&profile)?.to_string();
     let json = load_resolved_version_json(&cache, &version_id)?;
     let version = parse_version(&json)?;
     let environment = host_environment()?;

@@ -6,6 +6,7 @@ import {
   beginMicrosoftLogin,
   browseApplicationDirectory,
   browseJava,
+  cancelDownloadJob,
   clearLastPlayedFolder,
   createInstance,
   createInstanceFromModpack,
@@ -22,6 +23,7 @@ import {
   isVersionReady,
   javaInstallationStatus,
   launchVersion,
+  listDownloadJobs,
   listInstanceEntries,
   listInstances,
   listLoaderVersions,
@@ -32,9 +34,12 @@ import {
   logoutMicrosoftAccount,
   openInstanceFolder,
   openRepository,
+  pauseDownloadJob,
+  prepareInstanceDownload,
   renameInstance,
   repairInstance,
   restartApp,
+  resumeDownloadJob,
   runtimeJava,
   saveInstance,
   saveSettings,
@@ -45,6 +50,7 @@ import {
   stopGame,
   touchLastOpened,
 } from "@/lib/commands";
+import type { DownloadJobSnapshot } from "@/lib/generated/DownloadJobSnapshot";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
@@ -59,6 +65,57 @@ describe("launcher commands", () => {
   it("lists instances without arguments", async () => {
     await listInstances();
     expect(invoke).toHaveBeenCalledWith("list_instances");
+  });
+
+  it("returns persisted download snapshots without requesting a new transfer", async () => {
+    const jobs: DownloadJobSnapshot[] = [
+      {
+        id: "17",
+        instanceFolder: "Survival",
+        versionId: "1.21.1",
+        operation: "install",
+        status: "interrupted",
+        component: "java",
+        phase: "downloading",
+        progress: {
+          finished: 0,
+          failed: 0,
+          total: 1,
+          bytesDone: 5,
+          bytesTotal: 11,
+        },
+        createdAt: 1_700_000_000_000,
+        updatedAt: 1_700_000_001_000,
+      },
+    ];
+    vi.mocked(invoke).mockResolvedValueOnce(jobs);
+
+    await expect(listDownloadJobs()).resolves.toEqual(jobs);
+    expect(invoke).toHaveBeenCalledExactlyOnceWith("list_download_jobs");
+  });
+
+  it("propagates download job listing failures", async () => {
+    vi.mocked(invoke).mockRejectedValueOnce(
+      new Error("database operation failed"),
+    );
+
+    await expect(listDownloadJobs()).rejects.toThrow(
+      "database operation failed",
+    );
+  });
+
+  it("routes preparation and per-job controls through the managed download commands", async () => {
+    await prepareInstanceDownload("Survival", "repair");
+    expect(invoke).toHaveBeenCalledWith("prepare_instance_download", {
+      folder: "Survival",
+      operation: "repair",
+    });
+    await pauseDownloadJob("17");
+    expect(invoke).toHaveBeenCalledWith("pause_download_job", { jobId: "17" });
+    await resumeDownloadJob("17");
+    expect(invoke).toHaveBeenCalledWith("resume_download_job", { jobId: "17" });
+    await cancelDownloadJob("17");
+    expect(invoke).toHaveBeenCalledWith("cancel_download_job", { jobId: "17" });
   });
 
   it("creates, renames, duplicates, and deletes an instance", async () => {
