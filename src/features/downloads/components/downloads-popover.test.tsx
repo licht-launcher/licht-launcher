@@ -8,7 +8,7 @@ import {
 } from "@testing-library/react";
 import { toast } from "sonner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-
+import { DownloadJobsProvider } from "@/features/downloads/components/download-jobs-provider";
 import { DownloadsPopover } from "@/features/downloads/components/downloads-popover";
 import { downloadJob } from "@/features/downloads/fixtures/job";
 import type { DownloadJobSnapshot } from "@/lib/generated/DownloadJobSnapshot";
@@ -73,7 +73,9 @@ function renderDownloads() {
   });
   return render(
     <QueryClientProvider client={client}>
-      <DownloadsPopover />
+      <DownloadJobsProvider>
+        <DownloadsPopover />
+      </DownloadJobsProvider>
     </QueryClientProvider>,
   );
 }
