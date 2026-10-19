@@ -1,7 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { listen } from "@tauri-apps/api/event";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { DownloadJobsProvider } from "@/features/downloads/components/download-jobs-provider";
 
 import {
   completedDownload,
@@ -34,6 +36,7 @@ describe("download task activity", () => {
   beforeEach(() => {
     listeners.clear();
     invoke.mockReset();
+    vi.mocked(listen).mockClear();
   });
 
   it("keeps preparing and byte-complete tasks active until the job completes", () => {
@@ -85,7 +88,9 @@ describe("download task activity", () => {
       defaultOptions: { queries: { retry: false } },
     });
     const wrapper = ({ children }: { children: ReactNode }) => (
-      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      <QueryClientProvider client={client}>
+        <DownloadJobsProvider>{children}</DownloadJobsProvider>
+      </QueryClientProvider>
     );
     const { result, unmount } = renderHook(() => useDownloadJobs(), {
       wrapper,
@@ -101,6 +106,94 @@ describe("download task activity", () => {
       finish([]);
     });
     await waitFor(() => expect(result.current.data).toEqual([downloadJob()]));
+    unmount();
+    expect(listeners.size).toBe(0);
+  });
+
+  it("subscribes once when multiple consumers use the same downloads query", async () => {
+    invoke.mockResolvedValue([]);
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>
+        <DownloadJobsProvider>{children}</DownloadJobsProvider>
+      </QueryClientProvider>
+    );
+    const { result } = renderHook(
+      () => ({ first: useDownloadJobs(), second: useDownloadJobs() }),
+      { wrapper },
+    );
+    await waitFor(() => expect(result.current.first.data).toEqual([]));
+    expect(result.current.second.data).toEqual([]);
+    expect(listen).toHaveBeenCalledTimes(2);
+  });
+
+  it("uses a newer database snapshot instead of an event received before the fetch", async () => {
+    invoke.mockResolvedValue([downloadJob()]);
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>
+        <DownloadJobsProvider>{children}</DownloadJobsProvider>
+      </QueryClientProvider>
+    );
+    const { result } = renderHook(() => useDownloadJobs(), { wrapper });
+    await waitFor(() => expect(result.current.data).toEqual([downloadJob()]));
+    act(() =>
+      listeners.get("download-job-updated")?.({
+        payload: downloadJob({ status: "paused" }),
+      }),
+    );
+    await waitFor(() =>
+      expect(result.current.data?.[0]?.status).toBe("paused"),
+    );
+    const stored = downloadJob({
+      progress: {
+        finished: 2,
+        failed: 0,
+        total: 4,
+        bytesDone: 200_000,
+        bytesTotal: 400_000,
+      },
+    });
+    invoke.mockResolvedValue([stored]);
+    await act(async () => {
+      await result.current.refetch();
+    });
+    await waitFor(() => expect(result.current.data).toEqual([stored]));
+  });
+
+  it("cleans up a partial subscription and keeps database recovery available", async () => {
+    const subscribe = vi.mocked(listen).getMockImplementation();
+    if (!subscribe) throw new Error("missing event mock");
+    vi.mocked(listen)
+      .mockImplementationOnce(subscribe)
+      .mockRejectedValueOnce(new Error("event bridge unavailable"));
+    invoke.mockResolvedValue([downloadJob({ status: "paused" })]);
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>
+        <DownloadJobsProvider>{children}</DownloadJobsProvider>
+      </QueryClientProvider>
+    );
+    const { result, unmount } = renderHook(() => useDownloadJobs(), {
+      wrapper,
+    });
+    await waitFor(() =>
+      expect(result.current.data?.[0]?.status).toBe("paused"),
+    );
+    expect(listeners.size).toBe(0);
+    invoke.mockResolvedValue([downloadJob()]);
+    await act(async () => {
+      await result.current.refetch();
+    });
+    await waitFor(() =>
+      expect(result.current.data?.[0]?.status).toBe("running"),
+    );
     unmount();
     expect(listeners.size).toBe(0);
   });

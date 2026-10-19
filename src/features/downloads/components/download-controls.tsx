@@ -75,6 +75,8 @@ export function DownloadControls({
     job.status === "queued" ||
     (job.status === "running" && job.phase === "downloading");
   const pending = disabled || actionPending;
+  const cancelling = job.status === "cancelling";
+  const cancelLabel = cancelling ? "Retry cancellation" : "Cancel download";
 
   return (
     <Dialog
@@ -83,42 +85,53 @@ export function DownloadControls({
         if (!mutation.isPending) setConfirming(open);
       }}
     >
-      <Button
-        type="button"
-        variant={resumable ? "warning" : compact ? "ghost" : "secondary"}
-        size={compact ? "icon" : "default"}
-        aria-label={`${resumable ? "Resume" : "Pause"} download for ${title}`}
-        disabled={pending || (!resumable && !pausable)}
-        onClick={() => mutation.mutate(resumable ? "resume" : "pause")}
-      >
-        {resumable ? <Play aria-hidden /> : <Pause aria-hidden />}
-        {!compact && (resumable ? "Resume" : "Pause")}
-      </Button>
+      {!cancelling && (
+        <Button
+          type="button"
+          variant={resumable ? "warning" : compact ? "ghost" : "secondary"}
+          size={compact ? "icon" : "default"}
+          aria-label={`${resumable ? "Resume" : "Pause"} download for ${title}`}
+          disabled={pending || (!resumable && !pausable)}
+          onClick={() => mutation.mutate(resumable ? "resume" : "pause")}
+        >
+          {resumable ? <Play aria-hidden /> : <Pause aria-hidden />}
+          {!compact && (resumable ? "Resume" : "Pause")}
+        </Button>
+      )}
       <DialogTrigger asChild>
         <Button
           type="button"
           variant={compact ? "ghost" : "destructive"}
           size={compact ? "icon" : "default"}
-          aria-label={`Cancel download for ${title}`}
+          aria-label={`${cancelLabel} for ${title}`}
           disabled={pending}
         >
           <X aria-hidden />
-          {!compact && "Cancel"}
+          {!compact && (cancelling ? "Retry cancellation" : "Cancel")}
         </Button>
       </DialogTrigger>
       <DialogContent showCloseButton={!mutation.isPending}>
         <DialogHeader>
-          <DialogTitle>Cancel download for {title}?</DialogTitle>
+          <DialogTitle>
+            {cancelLabel} for {title}?
+          </DialogTitle>
           <DialogDescription>
-            {job.instanceFolder === null
-              ? "The download will be cancelled. Completed shared files will be kept."
-              : "A new instance that has not finished installing will be removed from your library, along with its files. Existing instances and their files will be kept."}
+            {cancelling
+              ? "Cancellation has not finished. Retry to remove the incomplete instance and its remaining files."
+              : job.instanceFolder === null
+                ? "The download will be cancelled. Completed shared files will be kept."
+                : "A new instance that has not finished installing will be removed from your library, along with its files. Existing instances and their files will be kept."}
           </DialogDescription>
+          {cancelling && job.error && (
+            <p role="alert" className="text-sm text-destructive">
+              {job.error}
+            </p>
+          )}
         </DialogHeader>
         <DialogFooter>
           <DialogClose asChild>
             <Button variant="outline" disabled={mutation.isPending}>
-              Keep downloading
+              {cancelling ? "Close" : "Keep downloading"}
             </Button>
           </DialogClose>
           <Button
@@ -126,7 +139,7 @@ export function DownloadControls({
             disabled={mutation.isPending}
             onClick={() => mutation.mutate("cancel")}
           >
-            {mutation.isPending ? "Cancelling…" : "Cancel download"}
+            {mutation.isPending ? "Cancelling…" : cancelLabel}
           </Button>
         </DialogFooter>
       </DialogContent>

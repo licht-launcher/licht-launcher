@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TitleBar } from "@/components/title-bar/title-bar";
+import { DownloadJobsProvider } from "@/features/downloads/components/download-jobs-provider";
 import {
   completedDownload,
   downloadJob,
@@ -52,7 +53,9 @@ function renderTitleBar() {
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <TitleBar />
+      <DownloadJobsProvider>
+        <TitleBar />
+      </DownloadJobsProvider>
     </QueryClientProvider>,
   );
 }
