@@ -1,4 +1,10 @@
+use super::{
+    GlobalLaunch, Instance, InstanceEntry, display_name, entry_from, folder_id, instance_dir,
+    instance_from_template, load_instance, profile_guard, single_component, write_instance,
+};
 use serde::{Deserialize, Serialize};
+use std::fs;
+use std::path::Path;
 use ts_rs::TS;
 
 use crate::{CoreError, LoaderChannel, LoaderPlatform, ModpackSource, Result};
@@ -108,4 +114,79 @@ pub enum InstancePreparationState {
     Preparing,
     Installing,
     Ready,
+}
+
+/// Writes the instance before any metadata or artifact requests begin.
+pub fn create_pending_instance(
+    instances_dir: &Path,
+    name: &str,
+    source: InstanceSource,
+    template: &GlobalLaunch,
+) -> Result<InstanceEntry> {
+    let _guard = profile_guard()?;
+    source.validate()?;
+    let name = display_name(name)?;
+    let folder = folder_id(&name)?;
+    fs::create_dir_all(instances_dir)?;
+    let dir = instances_dir.join(&folder);
+    fs::create_dir(&dir).map_err(|error| {
+        if error.kind() == std::io::ErrorKind::AlreadyExists {
+            CoreError::InstanceExists
+        } else {
+            CoreError::Io(error)
+        }
+    })?;
+    let mut instance = instance_from_template(name, String::new(), template);
+    instance.version_id = source.game_version().map(str::to_string);
+    instance.installation = Some(InstanceInstallation {
+        source,
+        state: InstancePreparationState::Preparing,
+    });
+    write_instance(&dir, &instance)?;
+    Ok(entry_from(&dir, folder, instance))
+}
+pub fn complete_instance_preparation(instances_dir: &Path, folder: &str) -> Result<InstanceEntry> {
+    let _guard = profile_guard()?;
+    let dir = instance_dir(instances_dir, folder)?;
+    let mut instance = load_instance(&dir)?;
+    if instance.version_id.is_none() {
+        return Err(CoreError::InstancePreparing);
+    }
+    if let Some(installation) = instance.installation.as_mut() {
+        if installation.state == InstancePreparationState::Preparing {
+            return Err(CoreError::InstancePreparing);
+        }
+        installation.state = InstancePreparationState::Ready;
+    }
+    write_instance(&dir, &instance)?;
+    Ok(entry_from(&dir, folder.to_string(), instance))
+}
+pub fn instance_version_for_launch(instance: &Instance) -> Result<&str> {
+    if instance
+        .installation
+        .as_ref()
+        .is_some_and(|installation| installation.state != InstancePreparationState::Ready)
+    {
+        return Err(CoreError::InstancePreparing);
+    }
+    instance
+        .version_id
+        .as_deref()
+        .ok_or(CoreError::InstancePreparing)
+}
+pub fn configure_instance_version(
+    instances_dir: &Path,
+    folder: &str,
+    version: &str,
+) -> Result<InstanceEntry> {
+    let _guard = profile_guard()?;
+    single_component(version)?;
+    let dir = instance_dir(instances_dir, folder)?;
+    let mut instance = load_instance(&dir)?;
+    instance.version_id = Some(version.to_string());
+    if let Some(installation) = instance.installation.as_mut() {
+        installation.state = InstancePreparationState::Installing;
+    }
+    write_instance(&dir, &instance)?;
+    Ok(entry_from(&dir, folder.to_string(), instance))
 }
