@@ -11,12 +11,11 @@ use tokio_util::io::StreamReader;
 use tracing::warn;
 
 mod http;
-use http::{invalid_response, request, response_total};
 mod limits;
 mod progress;
-use progress::{Attempt, ByteProgress};
 mod queue;
 mod types;
+
 pub use limits::{TransferLimits, shared_transfer_limits};
 pub(crate) use queue::download_verified_all_with_cleanup;
 pub use queue::{download_all, download_all_with_control, download_verified_all};
@@ -27,6 +26,8 @@ pub use types::{
 
 use super::checksum::TransferHasher;
 use crate::{CoreError, DownloadChecksum, DownloadControl, Result};
+use http::{invalid_response, request, response_total};
+use progress::{Attempt, ByteProgress};
 
 const CHUNK_SIZE: usize = 64 * 1024;
 
@@ -115,11 +116,14 @@ async fn download_one(job: TransferJob<'_>) -> Result<()> {
         tokio::select! {
             biased;
             error = job.control.interrupted() => {
-                if matches!(error, CoreError::DownloadCancelled) { return Err(error); }
+                if matches!(error, CoreError::DownloadCancelled) {
+                    return Err(error);
+                }
             }
             guard = lock.lock() => break guard,
         }
     };
+
     let part = part_path(job.destination)?;
     let result = download_locked(&job, &part).await;
     if matches!(result, Err(CoreError::DownloadCancelled))
@@ -128,11 +132,13 @@ async fn download_one(job: TransferJob<'_>) -> Result<()> {
         // Only the owner of this destination lock may remove its partial.
         remove_partial(&part).await?;
     }
+
     result
 }
 
 async fn download_locked(job: &TransferJob<'_>, part: &Path) -> Result<()> {
     job.control.ready().await?;
+
     if job.checksum.matches_file(job.destination)? {
         if let Some(progress) = job.progress {
             let size = if job.published_size == 0 {
@@ -147,6 +153,7 @@ async fn download_locked(job: &TransferJob<'_>, part: &Path) -> Result<()> {
         }
         return Ok(());
     }
+
     let mut credited = Attempt {
         progress: job.progress,
         added: 0,
@@ -155,6 +162,7 @@ async fn download_locked(job: &TransferJob<'_>, part: &Path) -> Result<()> {
     };
     let mut backoff = job.retry.initial_backoff;
     let mut attempt = 1;
+
     loop {
         job.control.ready().await?;
         let result = async {
@@ -183,14 +191,18 @@ async fn download_locked(job: &TransferJob<'_>, part: &Path) -> Result<()> {
                 if attempt == job.retry.attempts {
                     return Err(error);
                 }
+
                 warn!(attempt, "download attempt failed");
                 tokio::select! {
                     biased;
                     error = job.control.interrupted() => {
-                        if matches!(error, CoreError::DownloadCancelled) { return Err(error); }
+                        if matches!(error, CoreError::DownloadCancelled) {
+                            return Err(error);
+                        }
                     }
                     _ = tokio::time::sleep(backoff) => {}
                 }
+
                 backoff = backoff.saturating_mul(2);
                 attempt += 1;
             }
@@ -205,11 +217,13 @@ async fn transfer_partial(
 ) -> Result<()> {
     let (mut offset, mut hasher) = read_prefix(job, part).await?;
     credited.set(offset);
+
     if offset > 0 && job.checksum.matches(&hasher.clone().finish()) {
         credited.set_total(offset);
         credited.set(offset);
         return Ok(());
     }
+
     let _download = tokio::select! {
         biased;
         error = job.control.interrupted() => return Err(error),
@@ -217,6 +231,7 @@ async fn transfer_partial(
     };
     let _activity = job.control.begin_transfer()?;
     let mut response = request(job, offset).await?;
+
     if response.status() == StatusCode::RANGE_NOT_SATISFIABLE && offset > 0 {
         drop(response);
         remove_partial(part).await?;
@@ -225,12 +240,14 @@ async fn transfer_partial(
         credited.set(0);
         response = request(job, 0).await?;
     }
+
     let response = response.error_for_status()?;
     if response.status() == StatusCode::OK {
         offset = 0;
         hasher = job.checksum.hasher();
         credited.set(0);
     }
+
     let total = match response_total(&response, offset, job.published_size) {
         Ok(total) => total,
         Err(error) => {
@@ -243,6 +260,7 @@ async fn transfer_partial(
         credited.set_total(total);
     }
     credited.set(offset);
+
     if let Some(parent) = part.parent() {
         tokio::fs::create_dir_all(parent).await?;
     }
@@ -256,6 +274,7 @@ async fn transfer_partial(
     let stream = response.bytes_stream().map_err(std::io::Error::other);
     let mut reader = StreamReader::new(stream);
     let mut buffer = vec![0_u8; CHUNK_SIZE];
+
     loop {
         let read = tokio::select! {
             biased;
@@ -265,12 +284,14 @@ async fn transfer_partial(
         if read == 0 {
             break;
         }
+
         if total.is_some_and(|total| offset.saturating_add(read as u64) > total) {
             drop(file);
             remove_partial(part).await?;
             credited.set(0);
             return Err(invalid_response("body exceeds its declared size"));
         }
+
         {
             let _write = tokio::select! {
                 biased;
@@ -282,15 +303,19 @@ async fn transfer_partial(
             file.write_all(&buffer[..read]).await?;
             file.flush().await?;
         }
+
         hasher.update(&buffer[..read]);
         offset += read as u64;
         credited.set(offset);
     }
+
     file.sync_data().await?;
     drop(file);
+
     if total.is_some_and(|total| offset != total) {
         return Err(invalid_response("body is shorter than its declared size"));
     }
+
     if job.checksum.expected().is_none() {
         warn!("download has no checksum; content is not verified");
     } else {
@@ -301,27 +326,33 @@ async fn transfer_partial(
             return Err(job.checksum.mismatch(actual));
         }
     }
+
     Ok(())
 }
 
 async fn read_prefix(job: &TransferJob<'_>, part: &Path) -> Result<(u64, TransferHasher)> {
     let mut hasher = job.checksum.hasher();
+
     // Without a checksum there is no stable content identity across calls.
     if job.checksum.expected().is_none() {
         return Ok((0, hasher));
     }
+
     let mut file = match tokio::fs::File::open(part).await {
         Ok(file) => file,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok((0, hasher)),
         Err(error) => return Err(error.into()),
     };
+
     if job.published_size > 0 && file.metadata().await?.len() > job.published_size {
         drop(file);
         remove_partial(part).await?;
         return Ok((0, hasher));
     }
+
     let mut offset = 0;
     let mut buffer = vec![0_u8; CHUNK_SIZE];
+
     loop {
         let count = tokio::select! {
             biased;
@@ -331,6 +362,7 @@ async fn read_prefix(job: &TransferJob<'_>, part: &Path) -> Result<(u64, Transfe
         if count == 0 {
             return Ok((offset, hasher));
         }
+
         hasher.update(&buffer[..count]);
         offset += count as u64;
     }
@@ -349,6 +381,7 @@ pub(crate) async fn remove_partial_if_idle(destination: &Path) -> Result<()> {
     if let Ok(_guard) = lock.try_lock() {
         remove_partial(&part_path(destination)?).await?;
     }
+
     Ok(())
 }
 
@@ -356,6 +389,7 @@ pub(crate) fn destination_lock(destination: &Path) -> Arc<Mutex<()>> {
     let mut locks = DESTINATION_LOCKS
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
+
     Arc::clone(
         locks
             .entry(destination.to_path_buf())
@@ -370,6 +404,7 @@ fn part_path(destination: &Path) -> Result<PathBuf> {
             "download destination has no file name",
         )
     })?;
+
     let mut part_name = name.to_os_string();
     part_name.push(".part");
     Ok(destination.with_file_name(part_name))

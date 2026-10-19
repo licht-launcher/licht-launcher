@@ -1,10 +1,12 @@
-use super::{TransferLimits, shared_transfer_limits};
-use crate::DownloadChecksum;
-use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
+
+use serde::{Deserialize, Serialize};
 use ts_rs::TS;
+
+use super::{TransferLimits, shared_transfer_limits};
+use crate::DownloadChecksum;
 
 pub const DEFAULT_CONCURRENCY: usize = 8;
 pub const DEFAULT_RETRY: Retry = Retry {
@@ -53,6 +55,7 @@ pub struct InstallProgress {
     #[ts(type = "number")]
     pub bytes_total: u64,
 }
+
 impl InstallProgress {
     pub fn tagged(version_id: impl Into<String>, progress: DownloadProgress) -> Self {
         Self {
@@ -64,6 +67,7 @@ impl InstallProgress {
             bytes_total: progress.bytes_total,
         }
     }
+
     pub fn download(&self) -> DownloadProgress {
         DownloadProgress {
             finished: self.finished,
@@ -82,6 +86,7 @@ pub struct DownloadOptions {
     pub write_concurrency: usize,
     pub retry: Retry,
 }
+
 #[derive(Debug, Clone)]
 pub struct VerifiedDownloadTask {
     pub url: String,
@@ -89,6 +94,7 @@ pub struct VerifiedDownloadTask {
     pub checksum: DownloadChecksum,
     pub size: u64,
 }
+
 impl Default for DownloadOptions {
     fn default() -> Self {
         Self {

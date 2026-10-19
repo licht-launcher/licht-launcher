@@ -1,4 +1,5 @@
 use std::sync::{Arc, LazyLock, Mutex as StdMutex};
+
 use tokio::sync::Notify;
 
 static SHARED_TRANSFER_LIMITS: LazyLock<Arc<TransferLimits>> =
@@ -37,8 +38,10 @@ impl ConcurrencyGate {
             waiters: Notify::new(),
         }
     }
+
     pub async fn acquire(&self, limit: usize) -> GatePermit<'_> {
         let limit = limit.max(1);
+
         loop {
             let notified = self.waiters.notified();
             {
@@ -51,6 +54,7 @@ impl ConcurrencyGate {
                     return GatePermit { gate: self };
                 }
             }
+
             notified.await;
         }
     }
@@ -62,6 +66,7 @@ pub struct TransferLimits {
     pub download: ConcurrencyGate,
     pub write: ConcurrencyGate,
 }
+
 impl TransferLimits {
     pub fn new() -> Self {
         Self {
