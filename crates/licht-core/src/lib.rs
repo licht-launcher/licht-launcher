@@ -50,8 +50,9 @@ pub use db::{
 };
 pub use download::{
     DEFAULT_CONCURRENCY, DEFAULT_RETRY, DownloadOptions, DownloadProgress, DownloadTask,
-    InstallProgress, Retry, TransferLimits, download_all, download_all_with_control, download_file,
-    download_file_with_control, shared_transfer_limits,
+    InstallProgress, Retry, TransferLimits, VerifiedDownloadTask, download_all,
+    download_all_with_control, download_file, download_file_with_control, download_verified_all,
+    shared_transfer_limits,
 };
 pub use error::CoreError;
 pub use install::{
@@ -64,10 +65,12 @@ pub use instance::content::{
 };
 pub use instance::icon::{ICON_FILE, download_instance_icon, icon_url_allowed};
 pub use instance::{
-    Instance, InstanceEntry, InstanceSettings, create_instance, delete_instance,
-    duplicate_instance, instance_entry, instance_launch, list_instances, load_instance,
-    parse_instance, rename_instance, resolved_java_path, resolved_launch, touch_last_opened,
-    update_instance, update_instance_version,
+    Instance, InstanceEntry, InstanceInstallation, InstancePreparationState, InstanceSettings,
+    InstanceSource, complete_instance_preparation, configure_instance_version, create_instance,
+    create_pending_instance, delete_instance, duplicate_instance, instance_entry, instance_launch,
+    instance_version_for_launch, list_instances, load_instance, parse_instance, rename_instance,
+    resolved_java_path, resolved_launch, touch_last_opened, update_instance,
+    update_instance_version,
 };
 pub use instance_fs::{InstanceFsEntry, list_instance_entries};
 pub use launch::{apply_global_launch, classpath, launch_command};
@@ -103,12 +106,15 @@ pub use settings::{
     global_launch, load_settings, memory_slider_max, recommended_max_memory_mb, save_settings,
     set_java_path, settings_snapshot, total_memory_mb, write_concurrency,
 };
+pub use transfer::checksum::DownloadChecksum;
 pub use transfer::control::{DownloadControl, DownloadState};
+pub use transfer::installation::InstallationContext;
 pub use transfer::jobs::{
     DownloadComponent, DownloadJobOperation, DownloadJobSnapshot, DownloadJobStatus,
-    DownloadJobUpdate, DownloadPhase, create_download_job, get_download_job, list_download_jobs,
-    recover_download_jobs, update_download_job,
+    DownloadJobUpdate, DownloadPhase, create_download_job, create_pending_download_job,
+    get_download_job, list_download_jobs, recover_download_jobs, update_download_job,
 };
+pub use transfer::manager::DownloadManager;
 pub use version::{
     Arch, Argument, ArgumentValue, Artifact, AssetIndex, Download, GameArguments, JavaVersion,
     LaunchEnvironment, Library, LibraryDownloads, LibraryExtract, OsName, OsRule, Rule, RuleAction,

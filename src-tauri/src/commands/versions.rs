@@ -1,6 +1,6 @@
 use licht_core::{
     CoreError, DownloadProgress, SharedCache, VersionSummary, install_game_version,
-    is_version_ready, list_version_summaries, load_instance,
+    is_version_ready, list_version_summaries,
 };
 use tauri::{AppHandle, State};
 use tokio::sync::mpsc;
@@ -8,7 +8,6 @@ use tokio::sync::mpsc;
 use crate::progress::ProgressThrottle;
 
 use super::install_progress::emit_install_progress;
-use super::modpacks::install_modpack_files;
 use super::{LauncherPaths, failure, host_environment, http_client};
 
 #[tauri::command]
@@ -42,22 +41,14 @@ pub async fn install_version(
 /// Re-downloads game assets and modpack files for an instance (Repair).
 #[tauri::command]
 pub async fn repair_instance(
-    app: AppHandle,
-    paths: State<'_, LauncherPaths>,
+    downloads: State<'_, std::sync::Arc<licht_core::DownloadManager>>,
     folder: String,
-) -> Result<(), String> {
-    let dir = paths.game.instance_dir(&folder).map_err(failure)?;
-    let instance = load_instance(&dir).map_err(failure)?;
-    install_one(
-        &app,
-        &paths.game,
-        &paths.settings,
-        &instance.version_id,
-        &instance.version_id,
-    )
-    .await
-    .map_err(failure)?;
-    install_modpack_files(app, paths, folder).await
+) -> Result<licht_core::DownloadJobSnapshot, String> {
+    downloads
+        .inner()
+        .prepare(&folder, licht_core::DownloadJobOperation::Repair)
+        .await
+        .map_err(failure)
 }
 
 async fn install_one(

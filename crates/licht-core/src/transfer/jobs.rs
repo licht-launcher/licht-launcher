@@ -1,96 +1,34 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use ts_rs::TS;
+use serde::{Serialize, de::DeserializeOwned};
+
+mod artifacts;
+mod model;
+pub(crate) use artifacts::{cleanup_artifacts, register_artifacts};
+pub use model::{
+    DownloadComponent, DownloadJobOperation, DownloadJobSnapshot, DownloadJobStatus,
+    DownloadJobUpdate, DownloadPhase,
+};
+use model::{validate_cancellation_target, validate_completion, validate_phase, validate_progress};
 
 use crate::{CoreError, DownloadProgress, Result, SharedCache, open_db};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[serde(rename_all = "lowercase")]
-pub enum DownloadJobOperation {
-    Install,
-    Repair,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[serde(rename_all = "lowercase")]
-pub enum DownloadJobStatus {
-    Queued,
-    Running,
-    Paused,
-    Interrupted,
-    Completed,
-    Cancelled,
-    Failed,
-}
-
-impl DownloadJobStatus {
-    fn can_transition_to(self, next: Self) -> bool {
-        use DownloadJobStatus::*;
-        match self {
-            Completed | Cancelled => false,
-            _ if self == next => true,
-            Queued => matches!(next, Running | Paused | Interrupted | Cancelled | Failed),
-            Running => matches!(next, Paused | Interrupted | Completed | Cancelled | Failed),
-            Paused | Interrupted | Failed => matches!(next, Queued | Running | Cancelled),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[serde(rename_all = "lowercase")]
-pub enum DownloadComponent {
-    Minecraft,
-    Java,
-    Fabric,
-    Quilt,
-    Forge,
-    NeoForge,
-    Modpack,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[serde(rename_all = "lowercase")]
-pub enum DownloadPhase {
-    Preparing,
-    Downloading,
-    Verifying,
-    Extracting,
-    Installing,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct DownloadJobSnapshot {
-    pub id: String,
-    pub instance_folder: String,
-    pub version_id: String,
-    pub operation: DownloadJobOperation,
-    pub status: DownloadJobStatus,
-    pub component: Option<DownloadComponent>,
-    pub phase: DownloadPhase,
-    pub progress: DownloadProgress,
-    #[ts(type = "number")]
-    pub created_at: i64,
-    #[ts(type = "number")]
-    pub updated_at: i64,
-}
-
-/// Only core callers update lifecycle state; frontend commands cannot set progress.
-#[derive(Debug, Clone)]
-pub struct DownloadJobUpdate {
-    pub status: DownloadJobStatus,
-    pub component: Option<DownloadComponent>,
-    pub phase: DownloadPhase,
-    pub progress: DownloadProgress,
-}
 
 pub fn create_download_job(
     settings: &SharedCache,
     game: &SharedCache,
     folder: &str,
     version_id: &str,
+    operation: DownloadJobOperation,
+) -> Result<DownloadJobSnapshot> {
+    create_pending_download_job(settings, game, folder, Some(version_id), operation)
+}
+
+pub fn create_pending_download_job(
+    settings: &SharedCache,
+    game: &SharedCache,
+    folder: &str,
+    version_id: Option<&str>,
     operation: DownloadJobOperation,
 ) -> Result<DownloadJobSnapshot> {
     let directory = validate_context(game, folder, version_id)?;
@@ -135,8 +73,8 @@ pub fn create_download_job(
     transaction.commit()?;
     Ok(DownloadJobSnapshot {
         id,
-        instance_folder: folder.to_string(),
-        version_id: version_id.to_string(),
+        instance_folder: Some(folder.to_string()),
+        version_id: version_id.map(str::to_string),
         operation,
         status: DownloadJobStatus::Queued,
         component: None,
@@ -144,6 +82,8 @@ pub fn create_download_job(
         progress,
         created_at: now,
         updated_at: now,
+        error: None,
+        java_major: None,
     })
 }
 
@@ -190,6 +130,7 @@ pub fn update_download_job(
     let mut connection = open_db(settings)?;
     let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
     let mut job = load(&transaction, game, id)?;
+    validate_cancellation_target(&job, update.status)?;
     if !job.status.can_transition_to(update.status) {
         return Err(CoreError::DownloadJobTransition);
     }
@@ -197,10 +138,11 @@ pub fn update_download_job(
     job.component = update.component;
     job.phase = update.phase;
     job.progress = update.progress;
+    job.error = update.error;
     job.updated_at = timestamp()?.max(job.updated_at);
     transaction.execute(
         "UPDATE download_jobs SET status = ?1, component = ?2, phase = ?3,
-         progress = ?4, updated_at = ?5 WHERE id = ?6 AND data_directory = ?7",
+         progress = ?4, updated_at = ?5, error = ?8 WHERE id = ?6 AND data_directory = ?7",
         params![
             encode(&job.status)?,
             job.component.as_ref().map(encode).transpose()?,
@@ -208,7 +150,8 @@ pub fn update_download_job(
             encode(&job.progress)?,
             job.updated_at,
             parse_id(id)?,
-            data_directory(game)?
+            data_directory(game)?,
+            job.error
         ],
     )?;
     transaction.commit()?;
@@ -233,12 +176,12 @@ pub fn recover_download_jobs(settings: &SharedCache, game: &SharedCache) -> Resu
 }
 
 const COLUMNS: &str = "id, instance_folder, version_id, operation, status, component,
-                      phase, progress, created_at, updated_at";
+                      phase, progress, created_at, updated_at, error, java_major";
 
 struct StoredJob {
     id: i64,
-    folder: String,
-    version_id: String,
+    folder: Option<String>,
+    version_id: Option<String>,
     operation: String,
     status: String,
     component: Option<String>,
@@ -246,6 +189,8 @@ struct StoredJob {
     progress: String,
     created_at: i64,
     updated_at: i64,
+    error: Option<String>,
+    java_major: Option<u32>,
 }
 
 fn read_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<StoredJob> {
@@ -260,11 +205,23 @@ fn read_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<StoredJob> {
         progress: row.get(7)?,
         created_at: row.get(8)?,
         updated_at: row.get(9)?,
+        error: row.get(10)?,
+        java_major: row.get(11)?,
     })
 }
 
 fn decode_row(row: StoredJob, game: &SharedCache) -> Result<DownloadJobSnapshot> {
-    validate_context(game, &row.folder, &row.version_id)?;
+    if let Some(folder) = &row.folder {
+        validate_context(game, folder, row.version_id.as_deref())?;
+        if row.java_major.is_some() {
+            return Err(invalid("a Java task cannot target an instance"));
+        }
+    } else if !row
+        .java_major
+        .is_some_and(|major| [8, 17, 21, 25].contains(&major))
+    {
+        return Err(invalid("task target is missing or invalid"));
+    }
     if row.id <= 0 || row.created_at < 0 || row.updated_at < row.created_at {
         return Err(invalid("invalid identity or timestamps"));
     }
@@ -279,8 +236,11 @@ fn decode_row(row: StoredJob, game: &SharedCache) -> Result<DownloadJobSnapshot>
         progress: decode(&row.progress)?,
         created_at: row.created_at,
         updated_at: row.updated_at,
+        error: row.error,
+        java_major: row.java_major,
     };
     validate_progress(job.progress)?;
+    validate_cancellation_target(&job, job.status)?;
     validate_phase(job.phase, job.component)?;
     validate_completion(job.status, job.progress)?;
     Ok(job)
@@ -307,40 +267,16 @@ fn data_directory(game: &SharedCache) -> Result<&str> {
         .ok_or_else(|| invalid("the data directory must be valid UTF-8"))
 }
 
-fn validate_context<'a>(game: &'a SharedCache, folder: &str, version_id: &str) -> Result<&'a str> {
+fn validate_context<'a>(
+    game: &'a SharedCache,
+    folder: &str,
+    version_id: Option<&str>,
+) -> Result<&'a str> {
     game.instance_dir(folder)?;
-    game.version_json(version_id)?;
+    if let Some(version) = version_id {
+        game.version_json(version)?;
+    }
     data_directory(game)
-}
-
-fn validate_progress(progress: DownloadProgress) -> Result<()> {
-    if progress
-        .finished
-        .checked_add(progress.failed)
-        .is_none_or(|count| count > progress.total)
-        || (progress.bytes_total > 0 && progress.bytes_done > progress.bytes_total)
-    {
-        return Err(invalid("progress exceeds its totals"));
-    }
-    Ok(())
-}
-
-fn validate_phase(phase: DownloadPhase, component: Option<DownloadComponent>) -> Result<()> {
-    if phase != DownloadPhase::Preparing && component.is_none() {
-        return Err(invalid("an active phase requires a component"));
-    }
-    Ok(())
-}
-
-fn validate_completion(status: DownloadJobStatus, progress: DownloadProgress) -> Result<()> {
-    if status == DownloadJobStatus::Completed
-        && (progress.failed != 0 || progress.finished != progress.total)
-    {
-        return Err(invalid(
-            "a completed job must have no unfinished or failed files",
-        ));
-    }
-    Ok(())
 }
 
 fn parse_id(id: &str) -> Result<i64> {
@@ -371,4 +307,61 @@ fn decode<T: DeserializeOwned>(value: &str) -> Result<T> {
 
 fn invalid(detail: &'static str) -> CoreError {
     CoreError::DownloadJobInvalid { detail }
+}
+
+pub(crate) fn set_job_version(
+    settings: &SharedCache,
+    game: &SharedCache,
+    id: &str,
+    version: &str,
+) -> Result<()> {
+    game.version_json(version)?;
+    let connection = open_db(settings)?;
+    load(&connection, game, id)?;
+    connection.execute(
+        "UPDATE download_jobs SET version_id = ?1 WHERE id = ?2 AND data_directory = ?3",
+        params![version, parse_id(id)?, data_directory(game)?],
+    )?;
+    Ok(())
+}
+
+pub(crate) fn create_java_job(
+    settings: &SharedCache,
+    game: &SharedCache,
+    major: u32,
+) -> Result<DownloadJobSnapshot> {
+    if ![8, 17, 21, 25].contains(&major) {
+        return Err(invalid("unsupported Java major"));
+    }
+    let directory = data_directory(game)?;
+    let mut connection = open_db(settings)?;
+    let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    let now = timestamp()?;
+    let progress = DownloadProgress {
+        finished: 0,
+        failed: 0,
+        total: 0,
+        bytes_done: 0,
+        bytes_total: 0,
+    };
+    transaction.execute(
+        "INSERT INTO download_jobs (data_directory, instance_folder, version_id, operation,
+         status, component, phase, progress, created_at, updated_at, java_major)
+         VALUES (?1, NULL, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8, ?9)",
+        params![
+            directory,
+            format!("java-{major}"),
+            encode(&DownloadJobOperation::Install)?,
+            encode(&DownloadJobStatus::Queued)?,
+            encode(&DownloadComponent::Java)?,
+            encode(&DownloadPhase::Preparing)?,
+            encode(&progress)?,
+            now,
+            major
+        ],
+    )?;
+    let id = transaction.last_insert_rowid().to_string();
+    let result = load(&transaction, game, &id)?;
+    transaction.commit()?;
+    Ok(result)
 }

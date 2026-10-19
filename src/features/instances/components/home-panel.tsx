@@ -39,6 +39,7 @@ import {
 } from "@/features/instances/sections/files-section";
 import { PlaySection } from "@/features/instances/sections/play-section";
 import { listInstanceContent, openInstanceFolder } from "@/lib/commands";
+import type { DownloadJobSnapshot } from "@/lib/generated/DownloadJobSnapshot";
 import type { DownloadProgress } from "@/lib/generated/DownloadProgress";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 
@@ -48,6 +49,7 @@ export function HomePanel({
   playDisabled,
   phase,
   installing,
+  downloadJob,
   progress,
   speedBytesPerSecond,
   lines,
@@ -61,6 +63,7 @@ export function HomePanel({
   playDisabled: boolean;
   phase: PlayPhase;
   installing: boolean;
+  downloadJob?: DownloadJobSnapshot;
   progress: DownloadProgress | null;
   speedBytesPerSecond: number;
   lines: ConsoleLine[];
@@ -96,6 +99,7 @@ export function HomePanel({
           playDisabled={playDisabled}
           phase={phase}
           installing={installing}
+          downloadJob={downloadJob}
           progress={progress}
           speedBytesPerSecond={speedBytesPerSecond}
           onPlay={onPlay}

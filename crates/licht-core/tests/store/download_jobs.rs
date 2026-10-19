@@ -1,9 +1,10 @@
 use std::sync::{Arc, Barrier};
 
 use licht_core::{
-    CoreError, DownloadComponent, DownloadJobOperation, DownloadJobSnapshot, DownloadJobStatus,
-    DownloadJobUpdate, DownloadPhase, DownloadProgress, SharedCache, create_download_job,
-    get_download_job, list_download_jobs, open_db, recover_download_jobs, update_download_job,
+    Arch, CoreError, DownloadComponent, DownloadJobOperation, DownloadJobSnapshot,
+    DownloadJobStatus, DownloadJobUpdate, DownloadManager, DownloadPhase, DownloadProgress,
+    LaunchEnvironment, OsName, SharedCache, create_download_job, get_download_job,
+    list_download_jobs, open_db, recover_download_jobs, update_download_job,
 };
 
 #[test]
@@ -13,8 +14,8 @@ fn a_new_job_round_trips_as_a_queued_snapshot_with_a_string_id() {
     assert!(job.id.parse::<u64>().expect("numeric ID") > 0);
     assert_eq!(job.status, DownloadJobStatus::Queued);
     assert_eq!(job.operation, DownloadJobOperation::Install);
-    assert_eq!(job.instance_folder, "Survival");
-    assert_eq!(job.version_id, "1.21.1");
+    assert_eq!(job.instance_folder.as_deref(), Some("Survival"));
+    assert_eq!(job.version_id.as_deref(), Some("1.21.1"));
     assert_eq!(job.phase, DownloadPhase::Preparing);
     assert_eq!(job.component, None);
     assert_eq!(job.progress, progress(0, 0, 0));
@@ -54,6 +55,7 @@ fn phase_component_progress_and_lifecycle_survive_reopening_the_database() {
             component: Some(DownloadComponent::Fabric),
             phase: DownloadPhase::Extracting,
             progress: progress(1, 11, 11),
+            error: None,
         },
     )
     .expect("next component");
@@ -159,6 +161,41 @@ fn completed_and_cancelled_jobs_cannot_restart() {
 }
 
 #[test]
+fn pending_cancellation_survives_recovery_and_cannot_restart_installation() {
+    let fixture = Fixture::new("pending-cancellation");
+    let job = fixture.create("Pending removal");
+    let mut pending = update(DownloadJobStatus::Cancelling, progress(0, 0, 0));
+    pending.error = Some("Instance file is locked".into());
+    let stored = update_download_job(&fixture.settings, &fixture.game, &job.id, pending)
+        .expect("cleanup pending");
+    assert_eq!(
+        recover_download_jobs(&fixture.settings, &fixture.game).expect("recovery"),
+        0
+    );
+    assert_eq!(fixture.list(), vec![stored.clone()]);
+    for next in [
+        DownloadJobStatus::Queued,
+        DownloadJobStatus::Running,
+        DownloadJobStatus::Failed,
+        DownloadJobStatus::Completed,
+    ] {
+        assert!(matches!(
+            update_download_job(
+                &fixture.settings,
+                &fixture.game,
+                &job.id,
+                update(next, progress(0, 0, 0))
+            ),
+            Err(CoreError::DownloadJobTransition)
+        ));
+        assert_eq!(fixture.get(&job.id), stored);
+    }
+    let cancelled = fixture.update(&job.id, DownloadJobStatus::Cancelled, progress(0, 0, 0));
+    assert_eq!(cancelled.error, None);
+    assert!(fixture.list().is_empty());
+}
+
+#[test]
 fn one_unfinished_job_per_instance_is_allowed_and_new_jobs_get_fresh_ids() {
     let fixture = Fixture::new("duplicate");
     let job = fixture.create("Survival");
@@ -183,6 +220,50 @@ fn one_unfinished_job_per_instance_is_allowed_and_new_jobs_get_fresh_ids() {
     assert_ne!(job.id, repair.id);
     assert_eq!(repair.operation, DownloadJobOperation::Repair);
     assert_eq!(fixture.list(), vec![repair]);
+}
+
+#[test]
+fn pending_instance_removal_rejects_repairs_and_standalone_java_tasks() {
+    let fixture = Fixture::new("pending-removal-targets");
+    let repair = create_download_job(
+        &fixture.settings,
+        &fixture.game,
+        "Repair",
+        "1.21.1",
+        DownloadJobOperation::Repair,
+    )
+    .expect("repair");
+    let java = fixture.create("Java target");
+    let connection = open_db(&fixture.settings).expect("database");
+    connection
+        .execute(
+            "UPDATE download_jobs SET instance_folder = NULL, java_major = 21 WHERE id = ?1",
+            [&java.id],
+        )
+        .expect("standalone Java target");
+    for id in [&repair.id, &java.id] {
+        let before = fixture.get(id);
+        assert!(matches!(
+            update_download_job(
+                &fixture.settings,
+                &fixture.game,
+                id,
+                update(DownloadJobStatus::Cancelling, progress(0, 0, 0))
+            ),
+            Err(CoreError::DownloadJobInvalid { .. })
+        ));
+        assert_eq!(fixture.get(id), before);
+    }
+    connection
+        .execute(
+            "UPDATE download_jobs SET status = ?1 WHERE id = ?2",
+            rusqlite::params!["\"cancelling\"", repair.id],
+        )
+        .expect("invalid persisted removal");
+    assert!(matches!(
+        list_download_jobs(&fixture.settings, &fixture.game),
+        Err(CoreError::DownloadJobInvalid { .. })
+    ));
 }
 
 #[test]
@@ -345,6 +426,88 @@ fn invalid_database_payloads_fail_explicitly_instead_of_disappearing_from_the_li
     ));
 }
 
+#[tokio::test]
+async fn indexed_cleanup_preserves_active_shared_partials_and_complete_files() {
+    let fixture = Fixture::new("indexed-cleanup");
+    let cancelled = create_download_job(
+        &fixture.settings,
+        &fixture.game,
+        "Cancelled repair",
+        "1.21.1",
+        DownloadJobOperation::Repair,
+    )
+    .expect("repair job");
+    let paused = fixture.create("Paused");
+    fixture.update(&paused.id, DownloadJobStatus::Paused, progress(0, 5, 11));
+    let completed = fixture.create("Completed");
+    fixture.update(
+        &completed.id,
+        DownloadJobStatus::Running,
+        progress(1, 11, 11),
+    );
+    fixture.update(
+        &completed.id,
+        DownloadJobStatus::Completed,
+        progress(1, 11, 11),
+    );
+    let connection = open_db(&fixture.settings).expect("database");
+    for (id, name) in [
+        (&cancelled.id, "exclusive.jar"),
+        (&cancelled.id, "shared.jar"),
+        (&cancelled.id, "completed.jar"),
+        (&cancelled.id, "complete.jar"),
+        (&paused.id, "shared.jar"),
+        (&completed.id, "completed.jar"),
+    ] {
+        let path = fixture.game.root().join(name);
+        connection
+            .execute(
+                "INSERT INTO download_job_artifacts (job_id, path) VALUES (?1, ?2)",
+                rusqlite::params![id, path.to_str().expect("artifact path")],
+            )
+            .expect("artifact association");
+    }
+    drop(connection);
+    std::fs::create_dir_all(fixture.game.root()).expect("game directory");
+    for name in [
+        "exclusive.jar.part",
+        "shared.jar.part",
+        "completed.jar.part",
+    ] {
+        std::fs::write(fixture.game.root().join(name), b"partial bytes").expect("partial");
+    }
+    let complete_file = fixture.game.root().join("complete.jar");
+    std::fs::write(&complete_file, b"complete bytes").expect("complete file");
+    let manager = DownloadManager::new(
+        fixture.settings.clone(),
+        fixture.game.clone(),
+        LaunchEnvironment {
+            os: OsName::Linux,
+            arch: Arch::X86_64,
+            os_version: String::new(),
+            features: Default::default(),
+        },
+        reqwest::Client::new(),
+    );
+    let outcome = manager.cancel(&cancelled.id).await.expect("cancel repair");
+    assert_eq!(outcome.status, DownloadJobStatus::Cancelled);
+    assert!(!fixture.game.root().join("exclusive.jar.part").exists());
+    assert!(!fixture.game.root().join("completed.jar.part").exists());
+    assert_eq!(
+        std::fs::read(fixture.game.root().join("shared.jar.part")).expect("active shared partial"),
+        b"partial bytes"
+    );
+    assert_eq!(
+        std::fs::read(complete_file).expect("complete file preserved"),
+        b"complete bytes"
+    );
+    assert_eq!(fixture.get(&paused.id).status, DownloadJobStatus::Paused);
+    assert_eq!(
+        fixture.get(&completed.id).status,
+        DownloadJobStatus::Completed
+    );
+}
+
 fn progress(finished: u32, bytes_done: u64, bytes_total: u64) -> DownloadProgress {
     DownloadProgress {
         finished,
@@ -361,6 +524,7 @@ fn update(status: DownloadJobStatus, progress: DownloadProgress) -> DownloadJobU
         component: Some(DownloadComponent::Java),
         phase: DownloadPhase::Downloading,
         progress,
+        error: None,
     }
 }
 

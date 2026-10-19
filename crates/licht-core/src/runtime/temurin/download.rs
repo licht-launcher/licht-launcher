@@ -1,11 +1,6 @@
 use std::path::Path;
 
-use futures_util::StreamExt;
-use sha2::{Digest, Sha256};
-use tokio::sync::mpsc;
-
-use crate::hashes::hex_encode;
-use crate::{CoreError, DownloadProgress, Result};
+use crate::{CoreError, DownloadChecksum, InstallationContext, Result, VerifiedDownloadTask};
 
 pub(super) fn archive_name(name: &str) -> Result<&str> {
     if name.is_empty() || name.contains(['/', '\\']) || name == "." || name == ".." {
@@ -20,35 +15,15 @@ pub(super) async fn download_sha256(
     destination: &Path,
     expected_sha256: &str,
     size: u64,
-    progress: &mpsc::Sender<DownloadProgress>,
+    progress: &InstallationContext,
 ) -> Result<()> {
-    let response = client.get(url).send().await?.error_for_status()?;
-    let mut stream = response.bytes_stream();
-    let mut file = tokio::fs::File::create(destination).await?;
-    let mut hasher = Sha256::new();
-    let mut done = 0_u64;
-    while let Some(chunk) = stream.next().await {
-        let chunk = chunk?;
-        hasher.update(&chunk);
-        tokio::io::AsyncWriteExt::write_all(&mut file, &chunk).await?;
-        done = done.saturating_add(chunk.len() as u64);
-        let _ = progress.try_send(DownloadProgress {
-            finished: 0,
-            failed: 0,
-            total: 1,
-            bytes_done: done,
-            bytes_total: size,
-        });
-    }
-    tokio::io::AsyncWriteExt::flush(&mut file).await?;
-    drop(file);
-    let actual = hex_encode(hasher.finalize().as_slice());
-    if !actual.eq_ignore_ascii_case(expected_sha256) {
-        let _ = std::fs::remove_file(destination);
-        return Err(CoreError::Sha256Mismatch {
-            expected: expected_sha256.to_string(),
-            actual,
-        });
-    }
-    Ok(())
+    let task = VerifiedDownloadTask {
+        url: url.to_string(),
+        destination: destination.to_path_buf(),
+        checksum: DownloadChecksum::Sha256(expected_sha256.to_string()),
+        size,
+    };
+    progress
+        .verified_queue(client, &[task], progress.options()?)
+        .await
 }

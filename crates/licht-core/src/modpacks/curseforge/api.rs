@@ -160,7 +160,11 @@ pub(super) async fn resolve_remote(
     Ok((remote, mods))
 }
 
-async fn fetch_remote_files(client: &Client, key: &str, ids: &[u64]) -> Result<Vec<RemoteFile>> {
+pub(super) async fn fetch_remote_files(
+    client: &Client,
+    key: &str,
+    ids: &[u64],
+) -> Result<Vec<RemoteFile>> {
     let mut files = Vec::new();
     for chunk in ids.chunks(FILE_BATCH) {
         let body = post_api(

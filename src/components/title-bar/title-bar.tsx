@@ -1,29 +1,14 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import {
-  Download,
-  DownloadCloud,
-  Loader2,
-  Minus,
-  UserRound,
-} from "lucide-react";
+import { DownloadCloud, Minus, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import {
-  barValue,
-  progressText,
-} from "@/features/instances/lib/download-progress";
+import { DownloadsPopover } from "@/features/downloads/components/downloads-popover";
 import {
   getUpdateCheckStatus,
   INSTALL_UPDATE_EVENT,
   UPDATE_CHECK_STATUS_EVENT,
 } from "@/features/updater/components/update-check";
-import { useInstallActivity } from "@/hooks/use-install-activity";
 import { useTitleBarDecorations } from "@/hooks/use-title-bar-decorations";
 import { usesNativeCaptionButtons } from "@/lib/native-caption";
 import { requestOpenSettings } from "@/lib/shell-events";
@@ -46,7 +31,6 @@ function currentWindow() {
 export function TitleBar() {
   const windowApi = currentWindow();
   const { username } = useTitleBarDecorations();
-  const { active, activeCount, progress, label } = useInstallActivity();
   const nativeCaption = usesNativeCaptionButtons();
   const [updateAvailable, setUpdateAvailable] = useState(
     () => getUpdateCheckStatus() === "available",
@@ -61,19 +45,6 @@ export function TitleBar() {
       window.removeEventListener(UPDATE_CHECK_STATUS_EVENT, updateStatus);
     };
   }, []);
-  const downloadChipLabel = !active
-    ? "Idle"
-    : activeCount > 1
-      ? String(activeCount)
-      : progress !== null
-        ? `${Math.floor(barValue(progress))}%`
-        : "Idle";
-  const downloadDetail =
-    active && label !== null
-      ? label
-      : active && progress !== null
-        ? progressText(progress)
-        : "No downloads in progress";
 
   return (
     <header
@@ -130,34 +101,7 @@ export function TitleBar() {
             />
             <span className="truncate">{username}</span>
           </Button>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                className={chipClass}
-                aria-label={`Downloads: ${downloadChipLabel}`}
-              >
-                {active ? (
-                  <Loader2
-                    aria-hidden
-                    className="size-3.5 shrink-0 animate-spin"
-                    strokeWidth={2}
-                  />
-                ) : (
-                  <Download
-                    aria-hidden
-                    className="size-3.5 shrink-0"
-                    strokeWidth={2}
-                  />
-                )}
-                <span className="tabular-nums">{downloadChipLabel}</span>
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-56 p-3">
-              <p className="text-sm text-muted-foreground">{downloadDetail}</p>
-            </PopoverContent>
-          </Popover>
+          <DownloadsPopover triggerClassName={chipClass} />
         </div>
         {nativeCaption ? null : (
           <div className="flex shrink-0 items-stretch text-muted-foreground">

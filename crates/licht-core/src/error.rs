@@ -68,6 +68,8 @@ pub enum CoreError {
     InstanceName,
     #[error("an instance folder already exists")]
     InstanceExists,
+    #[error("instance preparation is incomplete")]
+    InstancePreparing,
     #[error("Java runtime index JSON is invalid")]
     JavaRuntime(#[source] serde_json::Error),
     #[error("Java runtime was not found for this system")]
@@ -108,6 +110,8 @@ pub enum CoreError {
     DownloadJobExists,
     #[error("download job state transition is invalid")]
     DownloadJobTransition,
+    #[error("{detail}")]
+    DownloadJobExecution { detail: String },
     #[error("LICHT_MSA_CLIENT_ID is missing or empty")]
     MsaClientIdMissing,
     #[error("Microsoft auth JSON is invalid")]

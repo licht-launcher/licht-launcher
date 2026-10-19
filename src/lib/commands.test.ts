@@ -6,6 +6,7 @@ import {
   beginMicrosoftLogin,
   browseApplicationDirectory,
   browseJava,
+  cancelDownloadJob,
   clearLastPlayedFolder,
   createInstance,
   createInstanceFromModpack,
@@ -33,9 +34,12 @@ import {
   logoutMicrosoftAccount,
   openInstanceFolder,
   openRepository,
+  pauseDownloadJob,
+  prepareInstanceDownload,
   renameInstance,
   repairInstance,
   restartApp,
+  resumeDownloadJob,
   runtimeJava,
   saveInstance,
   saveSettings,
@@ -98,6 +102,20 @@ describe("launcher commands", () => {
     await expect(listDownloadJobs()).rejects.toThrow(
       "database operation failed",
     );
+  });
+
+  it("routes preparation and per-job controls through the managed download commands", async () => {
+    await prepareInstanceDownload("Survival", "repair");
+    expect(invoke).toHaveBeenCalledWith("prepare_instance_download", {
+      folder: "Survival",
+      operation: "repair",
+    });
+    await pauseDownloadJob("17");
+    expect(invoke).toHaveBeenCalledWith("pause_download_job", { jobId: "17" });
+    await resumeDownloadJob("17");
+    expect(invoke).toHaveBeenCalledWith("resume_download_job", { jobId: "17" });
+    await cancelDownloadJob("17");
+    expect(invoke).toHaveBeenCalledWith("cancel_download_job", { jobId: "17" });
   });
 
   it("creates, renames, duplicates, and deletes an instance", async () => {

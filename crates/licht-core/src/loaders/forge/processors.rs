@@ -10,7 +10,10 @@ use tokio::process::Command;
 use super::archive::{Installer, Processor, entry};
 use super::artifacts::{failure, maven_path, write_verified};
 use crate::hashes::file_matches_sha1;
-use crate::{CoreError, DEFAULT_RETRY, OsName, Result, SharedCache};
+use crate::{
+    CoreError, DownloadChecksum, DownloadOptions, DownloadPhase, InstallationContext, OsName,
+    Result, SharedCache, VerifiedDownloadTask,
+};
 
 pub(super) fn expand(value: &str, data: &BTreeMap<String, String>) -> Result<String> {
     let mut expanded = String::new();
@@ -117,6 +120,7 @@ pub(super) async fn run(
     java: &Path,
     installer_path: &Path,
     os: OsName,
+    context: &InstallationContext,
 ) -> Result<Vec<PathBuf>> {
     let work = installer_path
         .parent()
@@ -175,6 +179,7 @@ pub(super) async fn run(
         .enumerate()
         .filter(|(_, processor)| processor.is_client())
     {
+        context.checkpoint().await?;
         let outputs = processor
             .outputs
             .iter()
@@ -216,22 +221,30 @@ pub(super) async fn run(
                 .get("url")
                 .and_then(serde_json::Value::as_str)
                 .ok_or_else(|| failure("Mojang mapping URL is missing"))?;
-            crate::download_file(client, url, output, sha1, DEFAULT_RETRY).await?;
+            context
+                .verified_queue(
+                    client,
+                    &[VerifiedDownloadTask {
+                        url: url.to_string(),
+                        destination: output.clone(),
+                        checksum: DownloadChecksum::Sha1(sha1.to_string()),
+                        size: mapping
+                            .get("size")
+                            .and_then(serde_json::Value::as_u64)
+                            .unwrap_or(0),
+                    }],
+                    DownloadOptions::default(),
+                )
+                .await?;
         } else {
+            context.stage(DownloadPhase::Installing).await?;
             let arguments = command(java, processor, &data, cache, os)?;
             tracing::info!(processor = index + 1, jar = %processor.jar, "Running loader client processor");
-            let mut child = Command::new(&arguments[0]);
-            child
-                .args(&arguments[1..])
-                .current_dir(cache.root())
-                .kill_on_drop(true);
-            let result = tokio::time::timeout(Duration::from_secs(600), child.output())
-                .await
-                .map_err(|_| failure("client processor timed out"))??;
-            if !result.status.success() {
+            let status = execute_child(&arguments, cache.root(), context).await?;
+            if !status.success() {
                 return Err(CoreError::LoaderProcessor {
                     processor: index + 1,
-                    code: result.status.code(),
+                    code: status.code(),
                 });
             }
         }
@@ -262,6 +275,38 @@ pub(super) async fn run(
     Ok(produced)
 }
 
+async fn execute_child(
+    arguments: &[String],
+    directory: &Path,
+    context: &InstallationContext,
+) -> Result<std::process::ExitStatus> {
+    context.checkpoint().await?;
+    let program = arguments
+        .first()
+        .ok_or_else(|| failure("processor command is empty"))?;
+    let mut command = Command::new(program);
+    #[cfg(windows)]
+    command.creation_flags(0x0800_0000);
+    command
+        .args(&arguments[1..])
+        .current_dir(directory)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .kill_on_drop(true);
+    let mut child = command.spawn()?;
+    tokio::select! {
+        _ = context.control.cancelled() => {
+            child.kill().await?;
+            Err(CoreError::DownloadCancelled)
+        }
+        result = tokio::time::timeout(Duration::from_secs(600), child.wait()) => match result {
+            Ok(status) => Ok(status?),
+            Err(_) => { child.kill().await?; Err(failure("client processor timed out")) }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -278,5 +323,62 @@ mod tests {
         );
         assert!(expand("{MISSING}", &data).is_err());
         assert!(expand("{ROOT", &data).is_err());
+    }
+
+    #[tokio::test]
+    async fn cancelling_a_processor_waits_until_its_process_has_exited() {
+        const CHILD_MARKER: &str = "licht-processor-cancellation-child";
+        if std::env::args().any(|argument| argument == CHILD_MARKER) {
+            fs::write("pid.txt", std::process::id().to_string()).expect("child PID");
+            tokio::time::sleep(Duration::from_secs(60)).await;
+            return;
+        }
+        let root = std::env::temp_dir().join(format!(
+            "licht-processor-cancellation-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&root).expect("fixture directory");
+        let marker = root.join("pid.txt");
+        if marker.exists() {
+            fs::remove_file(&marker).expect("previous marker");
+        }
+        let module = module_path!().split_once("::").expect("test module").1;
+        let arguments = vec![
+            std::env::current_exe()
+                .expect("test executable")
+                .display()
+                .to_string(),
+            "--exact".into(),
+            format!("{module}::cancelling_a_processor_waits_until_its_process_has_exited"),
+            // libtest accepts a skip filter as an isolated child marker; it matches no test.
+            "--skip".into(),
+            CHILD_MARKER.into(),
+        ];
+        let context = InstallationContext::default();
+        let control = context.control.clone();
+        let directory = root.clone();
+        let running =
+            tokio::spawn(async move { execute_child(&arguments, &directory, &context).await });
+        let pid = tokio::time::timeout(Duration::from_secs(10), async {
+            loop {
+                if let Ok(text) = fs::read_to_string(&marker)
+                    && let Ok(pid) = text.trim().parse::<u32>()
+                {
+                    break pid;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("processor startup");
+        assert!(crate::process_start_time(pid).is_some());
+        control.cancel();
+        let result = tokio::time::timeout(Duration::from_secs(10), running)
+            .await
+            .expect("cancellation")
+            .expect("worker");
+        assert!(matches!(result, Err(CoreError::DownloadCancelled)));
+        assert!(crate::process_start_time(pid).is_none());
+        fs::remove_dir_all(root).expect("cleanup");
     }
 }

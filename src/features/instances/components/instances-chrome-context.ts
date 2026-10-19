@@ -18,6 +18,7 @@ export type InstancesChromeContext = {
   playBlocked: boolean;
   playPhase: (folder: string) => PlayPhase;
   isInstalling: (folder: string) => boolean;
+  downloadJobs: ReturnType<typeof usePlaySession>["downloadJobs"];
   progressForVersion: ReturnType<typeof useGameEvents>["progressForVersion"];
   speedForVersion: ReturnType<typeof useGameEvents>["speedForVersion"];
   logsByFolder: ReturnType<typeof useGameEvents>["logsByFolder"];

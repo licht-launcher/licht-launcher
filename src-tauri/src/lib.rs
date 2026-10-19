@@ -20,16 +20,35 @@ pub fn run() -> anyhow::Result<()> {
     let paths = commands::LauncherPaths::load().context("Failed to resolve Licht folders")?;
     licht_core::recover_download_jobs(&paths.settings, &paths.game)
         .context("Failed to recover download jobs")?;
+    let client = reqwest::Client::builder()
+        .connect_timeout(licht_core::MANIFEST_REQUEST_TIMEOUT)
+        .read_timeout(licht_core::MANIFEST_REQUEST_TIMEOUT)
+        .build()
+        .context("Failed to create the download client")?;
+    let downloads = std::sync::Arc::new(licht_core::DownloadManager::new(
+        paths.settings.clone(),
+        paths.game.clone(),
+        commands::host_environment()?,
+        client,
+    ));
+    let shutdown_downloads = std::sync::Arc::clone(&downloads);
 
-    tauri::Builder::default()
+    let application = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_window_controls::init())
         .manage(paths)
+        .manage(downloads)
         .manage(commands::LaunchSessions::new())
         .setup(|app| {
+            commands::downloads::forward_events(
+                app.handle().clone(),
+                app.state::<std::sync::Arc<licht_core::DownloadManager>>()
+                    .inner()
+                    .clone(),
+            );
             let paths = app.state::<commands::LauncherPaths>();
             let settings =
                 licht_core::load_settings(&paths.settings).map_err(|error| error.to_string())?;
@@ -42,6 +61,10 @@ pub fn run() -> anyhow::Result<()> {
         })
         .invoke_handler(tauri::generate_handler![
             commands::downloads::list_download_jobs,
+            commands::downloads::prepare_instance_download,
+            commands::downloads::pause_download_job,
+            commands::downloads::resume_download_job,
+            commands::downloads::cancel_download_job,
             commands::instances::list_instances,
             commands::instances::create_instance,
             commands::instances::list_loader_versions,
@@ -88,8 +111,26 @@ pub fn run() -> anyhow::Result<()> {
             commands::launch::list_running_games,
             commands::launch::stop_game
         ])
-        .run(tauri::generate_context!())
-        .context("Failed to run Licht Launcher")
+        .build(tauri::generate_context!())
+        .context("Failed to build Licht Launcher")?;
+    let mut closing = false;
+    application.run(move |app, event| {
+        if let tauri::RunEvent::ExitRequested { api, code, .. } = event
+            && !closing
+        {
+            closing = true;
+            api.prevent_exit();
+            let app = app.clone();
+            let downloads = std::sync::Arc::clone(&shutdown_downloads);
+            tauri::async_runtime::spawn(async move {
+                if downloads.suspend_all().await.is_err() {
+                    tracing::error!("Failed to persist all download states during shutdown");
+                }
+                app.exit(code.unwrap_or(0));
+            });
+        }
+    });
+    Ok(())
 }
 
 fn create_main_window(app: &tauri::App, custom_title_bar: bool) -> tauri::Result<()> {

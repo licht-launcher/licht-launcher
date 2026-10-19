@@ -18,6 +18,7 @@ export function InstanceSettingsPanel({
   versionId,
   busy,
   versionBusy,
+  preparing = false,
   onChange,
   onRename,
   onChangeVersion,
@@ -30,7 +31,8 @@ export function InstanceSettingsPanel({
   snapshot: SettingsSnapshot;
   instanceName: string;
   folder: string;
-  versionId: string;
+  versionId: string | null;
+  preparing?: boolean;
   busy: boolean;
   versionBusy: boolean;
   onChange: (patch: Partial<InstanceDraft>) => void;
@@ -67,6 +69,7 @@ export function InstanceSettingsPanel({
             <InstanceBaseSection
               folder={folder}
               versionId={versionId}
+              preparing={preparing}
               busy={busy}
               versionBusy={versionBusy}
               onChangeVersion={onChangeVersion}

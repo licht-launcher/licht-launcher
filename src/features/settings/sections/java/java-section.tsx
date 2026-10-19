@@ -48,6 +48,7 @@ export function JavaSection({
   const install = useMutation({
     mutationFn: installRecommendedJava,
     onSuccess: (path, major) => {
+      if (path === null) return;
       const row = JAVA_MAJORS.find((item) => item.major === major);
       if (!row) {
         return;

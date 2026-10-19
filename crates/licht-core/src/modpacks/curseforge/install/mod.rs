@@ -9,7 +9,6 @@ use std::fs;
 use std::path::Path;
 
 use reqwest::Client;
-use tokio::sync::mpsc;
 
 use self::index::{CurseforgeIndex, pending_task, write_index};
 use self::manifest::{Manifest, manifest_from_zip};
@@ -17,40 +16,20 @@ use self::overrides::{extract_override_files, list_override_files, override_pref
 use self::plan::{Plan, format_blocked, resolve_plan};
 use super::cdn::cdn_client;
 use super::{CURSEFORGE_INDEX_FILE, curseforge_api_key};
-use crate::download::{DEFAULT_RETRY, DownloadProgress, DownloadTask, download_all};
-use crate::instance::{InstanceEntry, create_instance};
+use crate::download::{DEFAULT_RETRY, DownloadProgress};
+use crate::instance::InstanceEntry;
 use crate::modpacks::MODPACK_INDEX_FILE;
 use crate::modpacks::file_hashes::ensure_md5;
-use crate::settings::{GlobalLaunch, download_concurrency, write_concurrency};
+use crate::settings::{download_concurrency, write_concurrency};
 use crate::{CoreError, Result, SharedCache, shared_transfer_limits};
 
 /// Names that must not be overwritten at the instance root by pack content.
-const PROTECTED_ROOT_NAMES: [&str; 3] =
-    ["instance.json", MODPACK_INDEX_FILE, CURSEFORGE_INDEX_FILE];
-
-/// Creates an instance from a CurseForge pack zip.
-///
-/// Resolves `manifest.json` files through the CurseForge API, writes
-/// [`CURSEFORGE_INDEX_FILE`], and extracts overrides. Download of those files
-/// happens in [`install_curseforge_files`]. Mods with a null `downloadUrl` are
-/// not fetched from a guessed CDN path; import fails before the instance exists
-/// and the error lists them.
-pub async fn import_curseforge_pack(
-    client: &Client,
-    instances_dir: &Path,
-    name: &str,
-    bytes: &[u8],
-    template: &GlobalLaunch,
-) -> Result<InstanceEntry> {
-    let manifest = manifest_from_zip(bytes)?;
-    let plan = if manifest.files.is_empty() {
-        Plan::default()
-    } else {
-        let key = curseforge_api_key()?;
-        resolve_plan(client, &key, &manifest.files).await?
-    };
-    import_planned(instances_dir, name, bytes, &manifest, &plan, template)
-}
+const PROTECTED_ROOT_NAMES: [&str; 4] = [
+    "instance.json",
+    ".instance.json.tmp",
+    MODPACK_INDEX_FILE,
+    CURSEFORGE_INDEX_FILE,
+];
 
 /// Downloads files recorded in [`CURSEFORGE_INDEX_FILE`].
 ///
@@ -61,12 +40,14 @@ pub async fn install_curseforge_files(
     game: &SharedCache,
     settings: &SharedCache,
     instance_dir: &Path,
-    progress: mpsc::Sender<DownloadProgress>,
+    progress: impl Into<crate::InstallationContext>,
 ) -> Result<()> {
+    let progress = progress.into().component(crate::DownloadComponent::Modpack);
     let index_path = instance_dir.join(CURSEFORGE_INDEX_FILE);
     if !index_path.is_file() {
         return Ok(());
     }
+    progress.stage(crate::DownloadPhase::Verifying).await?;
     let body = fs::read_to_string(&index_path)?;
     let index: CurseforgeIndex = serde_json::from_str(&body).map_err(CoreError::LoaderJson)?;
     let mut pending = Vec::new();
@@ -87,17 +68,35 @@ pub async fn install_curseforge_files(
     }
     let key = curseforge_api_key()?;
     let client = cdn_client(&key)?;
-    let tasks: Vec<DownloadTask> = pending.iter().map(|item| item.task.clone()).collect();
-    download_all(
-        &client,
-        &tasks,
-        shared_transfer_limits(),
-        download_concurrency(game, settings)?,
-        write_concurrency(game, settings)?,
-        DEFAULT_RETRY,
-        progress,
-    )
-    .await?;
+    let tasks: Vec<_> = pending
+        .iter()
+        .map(|item| crate::VerifiedDownloadTask {
+            url: item.task.url.clone(),
+            destination: item.task.destination.clone(),
+            size: item.task.size,
+            checksum: if item.task.sha1.is_empty() {
+                item.md5
+                    .clone()
+                    .map(crate::DownloadChecksum::Md5)
+                    .unwrap_or(crate::DownloadChecksum::Unverified)
+            } else {
+                crate::DownloadChecksum::Sha1(item.task.sha1.clone())
+            },
+        })
+        .collect();
+    progress
+        .verified_queue(
+            &client,
+            &tasks,
+            crate::DownloadOptions {
+                limits: shared_transfer_limits(),
+                download_concurrency: download_concurrency(game, settings)?,
+                write_concurrency: write_concurrency(game, settings)?,
+                retry: DEFAULT_RETRY,
+            },
+        )
+        .await?;
+    progress.stage(crate::DownloadPhase::Verifying).await?;
     for item in &pending {
         if let Some(expected) = &item.md5 {
             ensure_md5(&item.task.destination, expected)?;
@@ -106,13 +105,52 @@ pub async fn install_curseforge_files(
     Ok(())
 }
 
+pub(crate) async fn import_curseforge_into(
+    client: &Client,
+    cache: &SharedCache,
+    instances_dir: &Path,
+    entry: &InstanceEntry,
+    bytes: &[u8],
+    context: &crate::InstallationContext,
+) -> Result<InstanceEntry> {
+    let manifest = manifest_from_zip(bytes)?;
+    let plan = if manifest.files.is_empty() {
+        Plan::default()
+    } else {
+        context.stage(crate::DownloadPhase::Preparing).await?;
+        context
+            .metadata(resolve_plan(
+                client,
+                &curseforge_api_key()?,
+                &manifest.files,
+            ))
+            .await?
+    };
+    context.stage(crate::DownloadPhase::Extracting).await?;
+    let entry = import_planned(instances_dir, entry, bytes, &manifest, &plan)?;
+    let version = if let Some((platform, version)) = &manifest.loader {
+        crate::loaders::prepare_platform_profile(
+            client,
+            cache,
+            *platform,
+            &manifest.game_version,
+            crate::LoaderChannel::Manual,
+            Some(version),
+            context,
+        )
+        .await?
+    } else {
+        manifest.game_version
+    };
+    crate::update_instance_version(instances_dir, &entry.folder, &version)
+}
+
 fn import_planned(
     instances_dir: &Path,
-    name: &str,
+    entry: &InstanceEntry,
     bytes: &[u8],
     manifest: &Manifest,
     plan: &Plan,
-    template: &GlobalLaunch,
 ) -> Result<InstanceEntry> {
     if !plan.blocked.is_empty() {
         return Err(CoreError::CurseforgeDistributionDenied {
@@ -121,11 +159,10 @@ fn import_planned(
     }
     let prefixes = override_prefixes(&manifest.overrides_dir);
     let entries = list_override_files(bytes, &prefixes)?;
-    let entry = create_instance(instances_dir, name, &manifest.game_version, template)?;
     let instance_dir = instances_dir.join(&entry.folder);
     extract_override_files(bytes, &instance_dir, &entries)?;
     write_index(&instance_dir, plan)?;
-    Ok(entry)
+    crate::update_instance_version(instances_dir, &entry.folder, &manifest.game_version)
 }
 
 #[cfg(test)]
@@ -134,7 +171,9 @@ mod tests {
     use super::plan::{BlockedMod, PlannedFile};
     use super::test_support::{temp_dir, zip_with};
     use super::*;
+    use crate::{GlobalLaunch, InstanceSource, ModpackSource, create_pending_instance};
     use serde_json::Value;
+    use tokio::sync::mpsc;
 
     const SHA1: &str = "2aae6c35c94fcfb415dbe95f408b9ce91ee846ed";
     const MD5: &str = "5eb63bbbe01eeed093cb22bb8f5acdc3";
@@ -168,17 +207,12 @@ mod tests {
         let root = temp_dir("import");
         let instances = root.join("instances");
         fs::create_dir_all(&instances).unwrap();
-        let entry = import_planned(
-            &instances,
-            "Cobble",
-            &bytes,
-            &sample_manifest(),
-            &plan,
-            &launch_template(),
-        )
-        .expect("import");
+        let pending = pending(&instances);
+        let entry = import_planned(&instances, &pending, &bytes, &sample_manifest(), &plan)
+            .expect("import");
+        assert_eq!(entry.folder, pending.folder);
         let dir = instances.join(&entry.folder);
-        assert_eq!(entry.version_id, "1.20.1");
+        assert_eq!(entry.version_id.as_deref(), Some("1.20.1"));
         assert_eq!(
             fs::read_to_string(dir.join("options.txt")).unwrap(),
             "fov:90"
@@ -208,7 +242,7 @@ mod tests {
     }
 
     #[test]
-    fn does_not_create_an_instance_when_distribution_is_denied() {
+    fn preserves_the_pending_instance_when_distribution_is_denied() {
         let bytes = zip_with(&[(
             "manifest.json",
             br#"{"minecraft":{"version":"1.20.1"},"files":[]}"#,
@@ -229,25 +263,29 @@ mod tests {
         let root = temp_dir("blocked");
         let instances = root.join("instances");
         fs::create_dir_all(&instances).unwrap();
-        let error = import_planned(
-            &instances,
-            "Cobble",
-            &bytes,
-            &sample_manifest(),
-            &plan,
-            &launch_template(),
-        )
-        .unwrap_err();
+        let pending = pending(&instances);
+        let profile = fs::read(instances.join(&pending.folder).join("instance.json")).unwrap();
+        let error =
+            import_planned(&instances, &pending, &bytes, &sample_manifest(), &plan).unwrap_err();
         assert_eq!(
             error.to_string(),
             "curseforge mods disallow third-party distribution: Iris (iris.jar), Sodium (sodium.jar)"
         );
-        assert!(fs::read_dir(&instances).unwrap().next().is_none());
+        assert_eq!(
+            fs::read(instances.join(&pending.folder).join("instance.json")).unwrap(),
+            profile
+        );
+        assert!(
+            !instances
+                .join(&pending.folder)
+                .join(CURSEFORGE_INDEX_FILE)
+                .exists()
+        );
         let _ = fs::remove_dir_all(&root);
     }
 
     #[test]
-    fn does_not_create_an_instance_when_an_override_is_unsafe() {
+    fn preserves_the_pending_instance_when_an_override_is_unsafe() {
         let bytes = zip_with(&[
             (
                 "manifest.json",
@@ -258,17 +296,27 @@ mod tests {
         let root = temp_dir("override");
         let instances = root.join("instances");
         fs::create_dir_all(&instances).unwrap();
+        let pending = pending(&instances);
+        let profile = fs::read(instances.join(&pending.folder).join("instance.json")).unwrap();
         let error = import_planned(
             &instances,
-            "Cobble",
+            &pending,
             &bytes,
             &sample_manifest(),
             &Plan::default(),
-            &launch_template(),
         )
         .unwrap_err();
         assert!(matches!(error, CoreError::ModpackArchive), "{error}");
-        assert!(fs::read_dir(&instances).unwrap().next().is_none());
+        assert_eq!(
+            fs::read(instances.join(&pending.folder).join("instance.json")).unwrap(),
+            profile
+        );
+        assert!(
+            !instances
+                .join(&pending.folder)
+                .join(CURSEFORGE_INDEX_FILE)
+                .exists()
+        );
         let _ = fs::remove_dir_all(&root);
     }
 
@@ -315,6 +363,7 @@ mod tests {
             game_version: "1.20.1".into(),
             files: Vec::new(),
             overrides_dir: "overrides".into(),
+            loader: None,
         }
     }
 
@@ -326,5 +375,20 @@ mod tests {
             width: None,
             height: None,
         }
+    }
+
+    fn pending(instances: &Path) -> InstanceEntry {
+        create_pending_instance(
+            instances,
+            "Cobble",
+            InstanceSource::Modpack {
+                source: ModpackSource::Curseforge,
+                project_id: "1".into(),
+                version_id: "2".into(),
+                icon_url: None,
+            },
+            &launch_template(),
+        )
+        .expect("pending instance")
     }
 }
