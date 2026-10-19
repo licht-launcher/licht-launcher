@@ -1,171 +1,38 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, LazyLock, Mutex as StdMutex};
-use std::time::Duration;
 
-use futures_util::{StreamExt, TryStreamExt, stream::FuturesUnordered};
+use futures_util::TryStreamExt;
 use reqwest::StatusCode;
-use reqwest::header::{ACCEPT_ENCODING, CONTENT_ENCODING, CONTENT_RANGE, RANGE};
-use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::sync::{Mutex, Notify, mpsc};
+use tokio::sync::Mutex;
 use tokio_util::io::StreamReader;
 use tracing::warn;
-use ts_rs::TS;
+
+mod http;
+use http::{invalid_response, request, response_total};
+mod limits;
+mod progress;
+use progress::{Attempt, ByteProgress};
+mod queue;
+mod types;
+pub use limits::{TransferLimits, shared_transfer_limits};
+pub(crate) use queue::download_verified_all_with_cleanup;
+pub use queue::{download_all, download_all_with_control, download_verified_all};
+pub use types::{
+    DEFAULT_CONCURRENCY, DEFAULT_RETRY, DownloadOptions, DownloadProgress, DownloadTask,
+    InstallProgress, Retry, VerifiedDownloadTask,
+};
 
 use super::checksum::TransferHasher;
 use crate::{CoreError, DownloadChecksum, DownloadControl, Result};
 
 const CHUNK_SIZE: usize = 64 * 1024;
 
-pub const DEFAULT_CONCURRENCY: usize = 8;
-
-pub const DEFAULT_RETRY: Retry = Retry {
-    attempts: 3,
-    initial_backoff: Duration::from_millis(200),
-};
-
 /// One mutex per destination so parallel installs cannot corrupt a shared file.
 static DESTINATION_LOCKS: LazyLock<StdMutex<HashMap<PathBuf, Arc<Mutex<()>>>>> =
     LazyLock::new(|| StdMutex::new(HashMap::new()));
-
-static SHARED_TRANSFER_LIMITS: LazyLock<Arc<TransferLimits>> =
-    LazyLock::new(|| Arc::new(TransferLimits::new()));
-
-/// Shared download/write gates for the whole process (all installs).
-pub fn shared_transfer_limits() -> Arc<TransferLimits> {
-    Arc::clone(&SHARED_TRANSFER_LIMITS)
-}
-
-/// Caps how many network fetches or disk writes run at once. Limit is passed
-/// on each acquire so Settings changes apply without recreating the gate.
-#[derive(Debug, Default)]
-pub struct ConcurrencyGate {
-    active: StdMutex<usize>,
-    waiters: Notify,
-}
-
-pub struct GatePermit<'a> {
-    gate: &'a ConcurrencyGate,
-}
-
-impl Drop for GatePermit<'_> {
-    fn drop(&mut self) {
-        if let Ok(mut active) = self.gate.active.lock() {
-            *active = active.saturating_sub(1);
-        }
-        self.gate.waiters.notify_waiters();
-    }
-}
-
-impl ConcurrencyGate {
-    pub fn new() -> Self {
-        Self {
-            active: StdMutex::new(0),
-            waiters: Notify::new(),
-        }
-    }
-
-    pub async fn acquire(&self, limit: usize) -> GatePermit<'_> {
-        let limit = limit.max(1);
-        loop {
-            let notified = self.waiters.notified();
-            {
-                let mut active = self
-                    .active
-                    .lock()
-                    .unwrap_or_else(|poisoned| poisoned.into_inner());
-                if *active < limit {
-                    *active += 1;
-                    return GatePermit { gate: self };
-                }
-            }
-            notified.await;
-        }
-    }
-}
-
-/// Pair of gates shared across installs (or isolated in tests).
-#[derive(Debug, Default)]
-pub struct TransferLimits {
-    pub download: ConcurrencyGate,
-    pub write: ConcurrencyGate,
-}
-
-impl TransferLimits {
-    pub fn new() -> Self {
-        Self {
-            download: ConcurrencyGate::new(),
-            write: ConcurrencyGate::new(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Retry {
-    pub attempts: u32,
-    pub initial_backoff: Duration,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DownloadTask {
-    pub url: String,
-    pub destination: PathBuf,
-    pub sha1: String,
-    /// Size published by Mojang. The progress total is the sum of these sizes.
-    pub size: u64,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct DownloadProgress {
-    pub finished: u32,
-    pub failed: u32,
-    pub total: u32,
-    // JSON numbers. A download size fits in a JavaScript number, unlike `bigint`.
-    #[ts(type = "number")]
-    pub bytes_done: u64,
-    #[ts(type = "number")]
-    pub bytes_total: u64,
-}
-
-/// Download progress tagged with the version (or Java major) being installed.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct InstallProgress {
-    pub version_id: String,
-    pub finished: u32,
-    pub failed: u32,
-    pub total: u32,
-    #[ts(type = "number")]
-    pub bytes_done: u64,
-    #[ts(type = "number")]
-    pub bytes_total: u64,
-}
-
-impl InstallProgress {
-    pub fn tagged(version_id: impl Into<String>, progress: DownloadProgress) -> Self {
-        Self {
-            version_id: version_id.into(),
-            finished: progress.finished,
-            failed: progress.failed,
-            total: progress.total,
-            bytes_done: progress.bytes_done,
-            bytes_total: progress.bytes_total,
-        }
-    }
-
-    pub fn download(&self) -> DownloadProgress {
-        DownloadProgress {
-            finished: self.finished,
-            failed: self.failed,
-            total: self.total,
-            bytes_done: self.bytes_done,
-            bytes_total: self.bytes_total,
-        }
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CancellationCleanup {
@@ -187,33 +54,6 @@ struct TransferJob<'a> {
     progress: Option<&'a ByteProgress>,
     control: &'a DownloadControl,
     cancellation_cleanup: CancellationCleanup,
-}
-
-#[derive(Debug, Clone)]
-pub struct DownloadOptions {
-    pub limits: Arc<TransferLimits>,
-    pub download_concurrency: usize,
-    pub write_concurrency: usize,
-    pub retry: Retry,
-}
-
-#[derive(Debug, Clone)]
-pub struct VerifiedDownloadTask {
-    pub url: String,
-    pub destination: PathBuf,
-    pub checksum: DownloadChecksum,
-    pub size: u64,
-}
-
-impl Default for DownloadOptions {
-    fn default() -> Self {
-        Self {
-            limits: shared_transfer_limits(),
-            download_concurrency: DEFAULT_CONCURRENCY,
-            write_concurrency: DEFAULT_CONCURRENCY,
-            retry: DEFAULT_RETRY,
-        }
-    }
 }
 
 pub async fn download_file(
@@ -261,140 +101,6 @@ pub async fn download_file_with_control(
         cancellation_cleanup: CancellationCleanup::RemovePartial,
     })
     .await
-}
-
-pub async fn download_all(
-    client: &reqwest::Client,
-    tasks: &[DownloadTask],
-    limits: Arc<TransferLimits>,
-    download_concurrency: usize,
-    write_concurrency: usize,
-    retry: Retry,
-    progress: mpsc::Sender<DownloadProgress>,
-) -> Result<()> {
-    let options = DownloadOptions {
-        limits,
-        download_concurrency,
-        write_concurrency,
-        retry,
-    };
-    download_all_with_control(client, tasks, &options, &DownloadControl::new(), progress).await
-}
-
-/// A dropped queue drops its in-flight transfers instead of leaving detached tasks.
-/// Cancellation waits for owned partials to be removed and preserves complete files.
-pub async fn download_all_with_control(
-    client: &reqwest::Client,
-    tasks: &[DownloadTask],
-    options: &DownloadOptions,
-    control: &DownloadControl,
-    progress: mpsc::Sender<DownloadProgress>,
-) -> Result<()> {
-    let verified: Vec<_> = tasks
-        .iter()
-        .map(|task| VerifiedDownloadTask {
-            url: task.url.clone(),
-            destination: task.destination.clone(),
-            checksum: DownloadChecksum::legacy_sha1(&task.sha1),
-            size: task.size,
-        })
-        .collect();
-    download_verified_all(client, &verified, options, control, progress).await
-}
-
-pub async fn download_verified_all(
-    client: &reqwest::Client,
-    tasks: &[VerifiedDownloadTask],
-    options: &DownloadOptions,
-    control: &DownloadControl,
-    progress: mpsc::Sender<DownloadProgress>,
-) -> Result<()> {
-    download_verified_all_with_cleanup(
-        client,
-        tasks,
-        options,
-        control,
-        progress,
-        CancellationCleanup::RemovePartial,
-    )
-    .await
-}
-
-pub(crate) async fn download_verified_all_with_cleanup(
-    client: &reqwest::Client,
-    tasks: &[VerifiedDownloadTask],
-    options: &DownloadOptions,
-    control: &DownloadControl,
-    progress: mpsc::Sender<DownloadProgress>,
-    cancellation_cleanup: CancellationCleanup,
-) -> Result<()> {
-    control.ready().await?;
-    if tasks.is_empty() {
-        return Ok(());
-    }
-    if options.download_concurrency == 0 {
-        return Err(CoreError::DownloadConcurrency);
-    }
-    if options.write_concurrency == 0 {
-        return Err(CoreError::WriteConcurrency);
-    }
-
-    let total = u32::try_from(tasks.len())
-        .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "too many downloads"))?;
-    let bytes = ByteProgress {
-        done: AtomicU64::new(0),
-        total: AtomicU64::new(
-            tasks
-                .iter()
-                .fold(0, |sum, task| sum.saturating_add(task.size)),
-        ),
-        files: total,
-        sink: progress.clone(),
-    };
-    let _ = bytes.sink.try_send(bytes.snapshot(0, 0));
-    let mut pending = FuturesUnordered::new();
-    for task in tasks {
-        pending.push(download_one(TransferJob {
-            client,
-            url: &task.url,
-            destination: &task.destination,
-            checksum: task.checksum.clone(),
-            published_size: task.size,
-            limits: &options.limits,
-            download_concurrency: options.download_concurrency,
-            write_concurrency: options.write_concurrency,
-            retry: options.retry,
-            progress: Some(&bytes),
-            control,
-            cancellation_cleanup,
-        }));
-    }
-
-    let mut finished = 0;
-    let mut failed = 0;
-    let mut first_error = None;
-    let mut cancelled = false;
-    while let Some(result) = pending.next().await {
-        match result {
-            Ok(()) => finished += 1,
-            Err(CoreError::DownloadCancelled) => cancelled = true,
-            Err(error) => {
-                if first_error.is_none() {
-                    first_error = Some(error);
-                }
-                failed += 1;
-            }
-        }
-        let _ = progress.try_send(bytes.snapshot(finished, failed));
-    }
-
-    if cancelled {
-        return Err(CoreError::DownloadCancelled);
-    }
-    match first_error {
-        Some(error) => Err(error),
-        None => Ok(()),
-    }
 }
 
 async fn download_one(job: TransferJob<'_>) -> Result<()> {
@@ -630,81 +336,6 @@ async fn read_prefix(job: &TransferJob<'_>, part: &Path) -> Result<(u64, Transfe
     }
 }
 
-async fn request(job: &TransferJob<'_>, offset: u64) -> Result<reqwest::Response> {
-    let mut request = job.client.get(job.url).header(ACCEPT_ENCODING, "identity");
-    if offset > 0 {
-        request = request.header(RANGE, format!("bytes={offset}-"));
-    }
-    tokio::select! {
-        biased;
-        error = job.control.interrupted() => Err(error),
-        response = request.send() => Ok(response?),
-    }
-}
-
-fn response_total(
-    response: &reqwest::Response,
-    offset: u64,
-    published_size: u64,
-) -> Result<Option<u64>> {
-    if let Some(encoding) = response.headers().get(CONTENT_ENCODING)
-        && !encoding.as_bytes().eq_ignore_ascii_case(b"identity")
-    {
-        return Err(invalid_response("encoded bodies cannot be resumed"));
-    }
-    let total = match response.status() {
-        StatusCode::OK => response.content_length(),
-        StatusCode::PARTIAL_CONTENT => {
-            let range = response
-                .headers()
-                .get(CONTENT_RANGE)
-                .and_then(|value| value.to_str().ok())
-                .and_then(|value| value.strip_prefix("bytes "))
-                .ok_or_else(|| invalid_response("missing or invalid Content-Range"))?;
-            let (bounds, total) = range
-                .split_once('/')
-                .ok_or_else(|| invalid_response("invalid range total"))?;
-            let (start, end) = bounds
-                .split_once('-')
-                .ok_or_else(|| invalid_response("invalid range bounds"))?;
-            let parse = |value: &str| {
-                value
-                    .parse::<u64>()
-                    .map_err(|_| invalid_response("invalid range number"))
-            };
-            let (start, end, total) = (parse(start)?, parse(end)?, parse(total)?);
-            if start != offset || total <= start || end.checked_add(1) != Some(total) {
-                return Err(invalid_response(
-                    "range does not match the requested suffix",
-                ));
-            }
-            if response
-                .content_length()
-                .is_some_and(|length| length != total - start)
-            {
-                return Err(invalid_response(
-                    "range length does not match Content-Length",
-                ));
-            }
-            Some(total)
-        }
-        _ => return Err(invalid_response("expected a full or partial file response")),
-    };
-    if published_size > 0 {
-        if total.is_some_and(|total| total != published_size) {
-            return Err(invalid_response(
-                "response size does not match published size",
-            ));
-        }
-        return Ok(Some(published_size));
-    }
-    Ok(total)
-}
-
-fn invalid_response(detail: &'static str) -> CoreError {
-    CoreError::DownloadResponse { detail }
-}
-
 async fn remove_partial(part: &Path) -> Result<()> {
     match tokio::fs::remove_file(part).await {
         Ok(()) => Ok(()),
@@ -730,97 +361,6 @@ pub(crate) fn destination_lock(destination: &Path) -> Arc<Mutex<()>> {
             .entry(destination.to_path_buf())
             .or_insert_with(|| Arc::new(Mutex::new(()))),
     )
-}
-
-struct ByteProgress {
-    done: AtomicU64,
-    total: AtomicU64,
-    files: u32,
-    sink: mpsc::Sender<DownloadProgress>,
-}
-
-impl ByteProgress {
-    fn add(&self, bytes: u64) {
-        let done = self.done.fetch_add(bytes, Ordering::Relaxed) + bytes;
-        let _ = self.sink.try_send(DownloadProgress {
-            finished: 0,
-            failed: 0,
-            total: self.files,
-            bytes_done: done,
-            bytes_total: self.total.load(Ordering::Relaxed),
-        });
-    }
-
-    fn subtract(&self, bytes: u64) {
-        if bytes == 0 {
-            return;
-        }
-        let previous = self.done.fetch_sub(bytes, Ordering::Relaxed);
-        let done = previous.saturating_sub(bytes);
-        let _ = self.sink.try_send(DownloadProgress {
-            finished: 0,
-            failed: 0,
-            total: self.files,
-            bytes_done: done,
-            bytes_total: self.total.load(Ordering::Relaxed),
-        });
-    }
-
-    fn snapshot(&self, finished: u32, failed: u32) -> DownloadProgress {
-        DownloadProgress {
-            finished,
-            failed,
-            total: self.files,
-            bytes_done: self.done.load(Ordering::Relaxed),
-            bytes_total: self.total.load(Ordering::Relaxed),
-        }
-    }
-}
-
-/// Contribution of one destination, retained across pause/retry and removed on failure.
-struct Attempt<'a> {
-    progress: Option<&'a ByteProgress>,
-    added: u64,
-    committed: bool,
-    known_total: u64,
-}
-
-impl Attempt<'_> {
-    fn set_total(&mut self, total: u64) {
-        if let Some(progress) = self.progress {
-            if total >= self.known_total {
-                progress
-                    .total
-                    .fetch_add(total - self.known_total, Ordering::Relaxed);
-            } else {
-                progress
-                    .total
-                    .fetch_sub(self.known_total - total, Ordering::Relaxed);
-            }
-        }
-        self.known_total = total;
-    }
-    fn set(&mut self, bytes: u64) {
-        if let Some(progress) = self.progress {
-            if bytes >= self.added {
-                progress.add(bytes - self.added);
-            } else {
-                progress.subtract(self.added - bytes);
-            }
-        }
-        self.added = bytes;
-    }
-}
-
-impl Drop for Attempt<'_> {
-    fn drop(&mut self) {
-        if self.committed || self.added == 0 {
-            return;
-        }
-        if let Some(progress) = self.progress {
-            progress.subtract(self.added);
-        }
-    }
 }
 
 fn part_path(destination: &Path) -> Result<PathBuf> {
