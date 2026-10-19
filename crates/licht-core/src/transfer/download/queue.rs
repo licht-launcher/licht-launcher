@@ -1,12 +1,14 @@
+use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
+
+use futures_util::{StreamExt, stream::FuturesUnordered};
+use tokio::sync::mpsc;
+
 use super::{
     ByteProgress, CancellationCleanup, DownloadOptions, DownloadProgress, DownloadTask, Retry,
     TransferJob, TransferLimits, VerifiedDownloadTask, download_one,
 };
 use crate::{CoreError, DownloadChecksum, DownloadControl, Result};
-use futures_util::{StreamExt, stream::FuturesUnordered};
-use std::sync::Arc;
-use std::sync::atomic::AtomicU64;
-use tokio::sync::mpsc;
 
 pub async fn download_all(
     client: &reqwest::Client,
@@ -23,6 +25,7 @@ pub async fn download_all(
         write_concurrency,
         retry,
     };
+
     download_all_with_control(client, tasks, &options, &DownloadControl::new(), progress).await
 }
 
@@ -44,6 +47,7 @@ pub async fn download_all_with_control(
             size: task.size,
         })
         .collect();
+
     download_verified_all(client, &verified, options, control, progress).await
 }
 
@@ -74,15 +78,18 @@ pub(crate) async fn download_verified_all_with_cleanup(
     cancellation_cleanup: CancellationCleanup,
 ) -> Result<()> {
     control.ready().await?;
+
     if tasks.is_empty() {
         return Ok(());
     }
+
     if options.download_concurrency == 0 {
         return Err(CoreError::DownloadConcurrency);
     }
     if options.write_concurrency == 0 {
         return Err(CoreError::WriteConcurrency);
     }
+
     let total = u32::try_from(tasks.len())
         .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "too many downloads"))?;
     let bytes = ByteProgress {
@@ -96,6 +103,7 @@ pub(crate) async fn download_verified_all_with_cleanup(
         sink: progress.clone(),
     };
     let _ = bytes.sink.try_send(bytes.snapshot(0, 0));
+
     let mut pending = FuturesUnordered::new();
     for task in tasks {
         pending.push(download_one(TransferJob {
@@ -113,10 +121,12 @@ pub(crate) async fn download_verified_all_with_cleanup(
             cancellation_cleanup,
         }));
     }
+
     let mut finished = 0;
     let mut failed = 0;
     let mut first_error = None;
     let mut cancelled = false;
+
     while let Some(result) = pending.next().await {
         match result {
             Ok(()) => finished += 1,
@@ -128,11 +138,14 @@ pub(crate) async fn download_verified_all_with_cleanup(
                 failed += 1;
             }
         }
+
         let _ = progress.try_send(bytes.snapshot(finished, failed));
     }
+
     if cancelled {
         return Err(CoreError::DownloadCancelled);
     }
+
     match first_error {
         Some(error) => Err(error),
         None => Ok(()),

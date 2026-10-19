@@ -1,14 +1,20 @@
-use super::TransferJob;
-use crate::{CoreError, Result};
 use reqwest::StatusCode;
 use reqwest::header::{ACCEPT_ENCODING, CONTENT_ENCODING, CONTENT_RANGE, RANGE};
+
+use super::TransferJob;
+use crate::{CoreError, Result};
 
 pub(super) async fn request(job: &TransferJob<'_>, offset: u64) -> Result<reqwest::Response> {
     let mut request = job.client.get(job.url).header(ACCEPT_ENCODING, "identity");
     if offset > 0 {
         request = request.header(RANGE, format!("bytes={offset}-"));
     }
-    tokio::select! { biased; error = job.control.interrupted() => Err(error), response = request.send() => Ok(response?), }
+
+    tokio::select! {
+        biased;
+        error = job.control.interrupted() => Err(error),
+        response = request.send() => Ok(response?),
+    }
 }
 
 pub(super) fn response_total(
@@ -21,6 +27,7 @@ pub(super) fn response_total(
     {
         return Err(invalid_response("encoded bodies cannot be resumed"));
     }
+
     let total = match response.status() {
         StatusCode::OK => response.content_length(),
         StatusCode::PARTIAL_CONTENT => {
@@ -36,17 +43,20 @@ pub(super) fn response_total(
             let (start, end) = bounds
                 .split_once('-')
                 .ok_or_else(|| invalid_response("invalid range bounds"))?;
+
             let parse = |value: &str| {
                 value
                     .parse::<u64>()
                     .map_err(|_| invalid_response("invalid range number"))
             };
+
             let (start, end, total) = (parse(start)?, parse(end)?, parse(total)?);
             if start != offset || total <= start || end.checked_add(1) != Some(total) {
                 return Err(invalid_response(
                     "range does not match the requested suffix",
                 ));
             }
+
             if response
                 .content_length()
                 .is_some_and(|length| length != total - start)
@@ -55,10 +65,12 @@ pub(super) fn response_total(
                     "range length does not match Content-Length",
                 ));
             }
+
             Some(total)
         }
         _ => return Err(invalid_response("expected a full or partial file response")),
     };
+
     if published_size > 0 {
         if total.is_some_and(|total| total != published_size) {
             return Err(invalid_response(
@@ -67,6 +79,7 @@ pub(super) fn response_total(
         }
         return Ok(Some(published_size));
     }
+
     Ok(total)
 }
 
