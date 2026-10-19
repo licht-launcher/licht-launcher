@@ -8,7 +8,7 @@ import {
 } from "@testing-library/react";
 import { toast } from "sonner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-
+import { DownloadJobsProvider } from "@/features/downloads/components/download-jobs-provider";
 import { DownloadsPopover } from "@/features/downloads/components/downloads-popover";
 import { downloadJob } from "@/features/downloads/fixtures/job";
 import type { DownloadJobSnapshot } from "@/lib/generated/DownloadJobSnapshot";
@@ -73,7 +73,9 @@ function renderDownloads() {
   });
   return render(
     <QueryClientProvider client={client}>
-      <DownloadsPopover />
+      <DownloadJobsProvider>
+        <DownloadsPopover />
+      </DownloadJobsProvider>
     </QueryClientProvider>,
   );
 }
@@ -207,6 +209,49 @@ describe("DownloadsPopover", () => {
     expect(
       screen.getByRole("button", { name: "Cancel download for My Survival" }),
     ).toBeEnabled();
+  });
+
+  it("keeps pending cancellation visible and confirms a cleanup retry without offering resume", async () => {
+    backend([
+      downloadJob({ status: "cancelling", error: "Instance file is locked" }),
+    ]);
+    renderDownloads();
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Downloads: Cancellation pending",
+      }),
+    );
+    const row = await screen.findByRole("region", {
+      name: "Download for My Survival",
+    });
+    expect(within(row).getByRole("alert")).toHaveTextContent(
+      "Instance file is locked",
+    );
+    expect(
+      within(row).queryByRole("button", { name: /Resume|Pause/ }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(
+      within(row).getByRole("button", {
+        name: "Retry cancellation for My Survival",
+      }),
+    );
+    const dialog = await screen.findByRole("dialog", {
+      name: "Retry cancellation for My Survival?",
+    });
+    expect(within(dialog).getByRole("alert")).toHaveTextContent(
+      "Instance file is locked",
+    );
+    expect(invoke).not.toHaveBeenCalledWith("cancel_download_job", {
+      jobId: "1",
+    });
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Retry cancellation" }),
+    );
+    await screen.findByRole("button", { name: "Downloads: Idle" });
+    expect(invoke).toHaveBeenCalledWith("cancel_download_job", { jobId: "1" });
+    expect(
+      invoke.mock.calls.some(([command]) => command === "resume_download_job"),
+    ).toBe(false);
   });
 
   it("shows global Java tasks without a fake instance", async () => {

@@ -6,7 +6,7 @@ use rusqlite::{OptionalExtension, TransactionBehavior};
 use crate::{CoreError, Result, SharedCache};
 
 const DB_FILE: &str = "licht.sqlite";
-const SCHEMA_VERSION: u32 = 3;
+const SCHEMA_VERSION: u32 = 4;
 const META_LAST_PLAYED: &str = "last_played_folder";
 
 pub fn db_path(cache: &SharedCache) -> PathBuf {
@@ -72,6 +72,11 @@ fn migrate(connection: &mut rusqlite::Connection) -> Result<()> {
                 job_id INTEGER NOT NULL, path TEXT NOT NULL,
                 PRIMARY KEY (job_id, path)
             );",
+        )?;
+    }
+    if version < 4 {
+        transaction.execute_batch(
+            "CREATE INDEX download_job_artifacts_path ON download_job_artifacts (path, job_id);",
         )?;
         transaction.pragma_update(None, "user_version", SCHEMA_VERSION)?;
     }

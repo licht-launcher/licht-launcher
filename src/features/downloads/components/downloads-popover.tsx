@@ -43,6 +43,7 @@ const states = {
   queued: "Queued",
   paused: "Paused",
   interrupted: "Interrupted",
+  cancelling: "Cancellation pending",
   failed: "Failed",
   completed: "Completed",
   cancelled: "Cancelled",

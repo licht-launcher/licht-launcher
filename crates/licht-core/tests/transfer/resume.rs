@@ -1,15 +1,10 @@
-use std::path::PathBuf;
-use std::sync::Arc;
-use std::time::Duration;
-
 use licht_core::{
-    CoreError, DownloadChecksum, DownloadControl, DownloadOptions, DownloadProgress, DownloadState,
-    DownloadTask, Retry, TransferLimits, VerifiedDownloadTask, download_all_with_control,
-    download_file, download_file_with_control, download_verified_all,
+    CoreError, DownloadChecksum, DownloadControl, DownloadState, DownloadTask,
+    VerifiedDownloadTask, download_all_with_control, download_file, download_verified_all,
 };
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpListener;
 use tokio::sync::{mpsc, oneshot};
+mod support;
+use support::*;
 
 const BODY: &[u8] = b"hello world";
 const SHA1: &str = "2aae6c35c94fcfb415dbe95f408b9ce91ee846ed";
@@ -338,6 +333,46 @@ async fn a_paused_control_does_not_start_network_requests_until_resumed() {
 }
 
 #[tokio::test]
+async fn cancelling_the_public_verified_queue_removes_its_unshared_partial() {
+    let mut server = Server::start().await;
+    let destination = Destination::new("cancel-verified-queue");
+    let control = DownloadControl::new();
+    let worker_control = control.clone();
+    let task = VerifiedDownloadTask {
+        url: server.url.clone(),
+        destination: destination.path.clone(),
+        checksum: DownloadChecksum::Sha256(
+            "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9".into(),
+        ),
+        size: 11,
+    };
+    let (progress, _) = mpsc::channel(64);
+    let running = tokio::spawn(async move {
+        download_verified_all(
+            &reqwest::Client::new(),
+            &[task],
+            &options(),
+            &worker_control,
+            progress,
+        )
+        .await
+    });
+    let (tail, incoming_tail) = oneshot::channel();
+    let mut reply = Reply::new(200, "", b"hello", 11);
+    reply.tail = Some(incoming_tail);
+    server.request().await.respond(reply);
+    destination.wait_for_partial(5).await;
+    control.cancel();
+    assert!(matches!(
+        finish(running).await,
+        Err(CoreError::DownloadCancelled)
+    ));
+    assert!(!destination.part().exists());
+    assert!(!destination.path.exists());
+    drop(tail);
+}
+
+#[tokio::test]
 async fn cancelling_a_waiter_does_not_remove_another_transfers_partial() {
     let mut server = Server::start().await;
     let destination = Destination::new("shared-cancel");
@@ -412,8 +447,9 @@ async fn cancelling_a_queue_stops_waiting_files_without_counting_them_as_failure
     std::fs::write(&cached.path, BODY).expect("cached file");
     let tasks: Vec<_> = [&destination, &waiting, &cached]
         .into_iter()
-        .map(|destination| DownloadTask {
-            url: server.url.clone(),
+        .enumerate()
+        .map(|(index, destination)| DownloadTask {
+            url: format!("{}?target={index}", server.url),
             destination: destination.path.clone(),
             sha1: SHA1.to_string(),
             size: 11,
@@ -435,14 +471,27 @@ async fn cancelling_a_queue_stops_waiting_files_without_counting_them_as_failure
     let (tail, incoming_tail) = oneshot::channel();
     let mut reply = Reply::new(200, "", b"hello", 11);
     reply.tail = Some(incoming_tail);
-    server.request().await.respond(reply);
-    destination.wait_for_partial(5).await;
+    let request = server.request().await;
+    let (active, queued) = if request.headers.starts_with("GET /file?target=0 ") {
+        (&destination, &waiting)
+    } else {
+        assert!(
+            request.headers.starts_with("GET /file?target=1 "),
+            "cached files must not be requested: {}",
+            request.headers
+        );
+        (&waiting, &destination)
+    };
+    request.respond(reply);
+    active.wait_for_partial(5).await;
+    assert!(!queued.part().exists());
     control.cancel();
     assert!(matches!(
         finish(running).await,
         Err(CoreError::DownloadCancelled)
     ));
     assert!(!destination.part().exists());
+    assert!(!destination.path.exists());
     assert!(!waiting.path.exists());
     assert!(!waiting.part().exists());
     assert_eq!(std::fs::read(&cached.path).expect("cached file"), BODY);
@@ -501,230 +550,4 @@ async fn a_response_disagreeing_with_the_published_size_is_rejected() {
     assert!(!destination.part().exists());
     let last = last_progress(&mut incoming).await;
     assert_eq!((last.finished, last.failed, last.bytes_done), (0, 1, 0));
-}
-
-fn transfer(
-    url: &str,
-    destination: &Destination,
-    control: &DownloadControl,
-    attempts: u32,
-) -> tokio::task::JoinHandle<licht_core::Result<()>> {
-    let (url, path, control) = (url.to_string(), destination.path.clone(), control.clone());
-    tokio::spawn(async move {
-        download_file_with_control(
-            &reqwest::Client::new(),
-            &url,
-            &path,
-            SHA1,
-            retry(attempts),
-            &control,
-        )
-        .await
-    })
-}
-
-fn options() -> DownloadOptions {
-    DownloadOptions {
-        limits: Arc::new(TransferLimits::new()),
-        download_concurrency: 1,
-        write_concurrency: 1,
-        retry: retry(1),
-    }
-}
-
-fn queue(
-    url: &str,
-    destination: &Destination,
-    control: &DownloadControl,
-    options: DownloadOptions,
-) -> (
-    tokio::task::JoinHandle<licht_core::Result<()>>,
-    mpsc::Receiver<DownloadProgress>,
-) {
-    let task = DownloadTask {
-        url: url.to_string(),
-        destination: destination.path.clone(),
-        sha1: SHA1.to_string(),
-        size: 11,
-    };
-    let control = control.clone();
-    let (progress, incoming) = mpsc::channel(64);
-    let running = tokio::spawn(async move {
-        download_all_with_control(
-            &reqwest::Client::new(),
-            &[task],
-            &options,
-            &control,
-            progress,
-        )
-        .await
-    });
-    (running, incoming)
-}
-
-async fn finish(
-    running: tokio::task::JoinHandle<licht_core::Result<()>>,
-) -> licht_core::Result<()> {
-    tokio::time::timeout(Duration::from_secs(5), running)
-        .await
-        .expect("transfer timeout")
-        .expect("join")
-}
-
-async fn last_progress(progress: &mut mpsc::Receiver<DownloadProgress>) -> DownloadProgress {
-    let mut last = None;
-    while let Some(event) = progress.recv().await {
-        last = Some(event);
-    }
-    last.expect("progress event")
-}
-
-fn retry(attempts: u32) -> Retry {
-    Retry {
-        attempts,
-        initial_backoff: Duration::from_millis(1),
-    }
-}
-
-struct Destination {
-    path: PathBuf,
-}
-
-impl Destination {
-    fn new(name: &str) -> Self {
-        let directory =
-            std::env::temp_dir().join(format!("licht-resume-{name}-{}", std::process::id()));
-        std::fs::create_dir_all(&directory).expect("test directory");
-        Self {
-            path: directory.join("file.jar"),
-        }
-    }
-
-    fn part(&self) -> PathBuf {
-        self.path.with_file_name("file.jar.part")
-    }
-
-    async fn wait_for_partial(&self, length: u64) {
-        tokio::time::timeout(Duration::from_secs(5), async {
-            loop {
-                if std::fs::metadata(self.part()).is_ok_and(|metadata| metadata.len() == length) {
-                    break;
-                }
-                tokio::time::sleep(Duration::from_millis(5)).await;
-            }
-        })
-        .await
-        .expect("partial write timeout");
-    }
-}
-
-impl Drop for Destination {
-    fn drop(&mut self) {
-        std::fs::remove_dir_all(self.path.parent().expect("directory")).expect("cleanup");
-    }
-}
-
-struct Request {
-    headers: String,
-    reply: oneshot::Sender<Reply>,
-}
-
-impl Request {
-    fn respond(self, reply: Reply) {
-        self.reply
-            .send(reply)
-            .unwrap_or_else(|_| panic!("request must still be waiting"));
-    }
-}
-
-struct Reply {
-    bytes: Vec<u8>,
-    tail: Option<oneshot::Receiver<Vec<u8>>>,
-}
-
-impl Reply {
-    fn full() -> Self {
-        Self::new(200, "", BODY, BODY.len())
-    }
-
-    fn suffix() -> Self {
-        Self::new(206, "Content-Range: bytes 5-10/11\r\n", b" world", 6)
-    }
-
-    fn new(status: u16, headers: &str, body: &[u8], length: usize) -> Self {
-        let mut bytes = format!(
-            "HTTP/1.1 {status} Response\r\nContent-Length: {length}\r\n{headers}Connection: close\r\n\r\n"
-        ).into_bytes();
-        bytes.extend_from_slice(body);
-        Self { bytes, tail: None }
-    }
-}
-
-struct Server {
-    url: String,
-    incoming: mpsc::UnboundedReceiver<Request>,
-    task: tokio::task::JoinHandle<()>,
-}
-
-impl Server {
-    async fn start() -> Self {
-        let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
-        let url = format!("http://{}/file", listener.local_addr().expect("address"));
-        let (requests, incoming) = mpsc::unbounded_channel();
-        let task = tokio::spawn(async move {
-            loop {
-                let (mut socket, _) = listener.accept().await.expect("accept");
-                let requests = requests.clone();
-                tokio::spawn(async move {
-                    let mut headers = Vec::new();
-                    let mut buffer = [0_u8; 1024];
-                    loop {
-                        let count = socket.read(&mut buffer).await.expect("request headers");
-                        if count == 0 {
-                            return;
-                        }
-                        headers.extend_from_slice(&buffer[..count]);
-                        if headers.windows(4).any(|part| part == b"\r\n\r\n") {
-                            break;
-                        }
-                    }
-                    let (reply, response) = oneshot::channel();
-                    requests
-                        .send(Request {
-                            headers: String::from_utf8(headers).expect("headers"),
-                            reply,
-                        })
-                        .expect("request receiver");
-                    let reply = response.await.expect("response");
-                    if socket.write_all(&reply.bytes).await.is_err() {
-                        return;
-                    }
-                    if let Some(tail) = reply.tail
-                        && let Ok(bytes) = tail.await
-                    {
-                        // The client may have intentionally paused or cancelled its connection.
-                        let _ = socket.write_all(&bytes).await;
-                    }
-                });
-            }
-        });
-        Self {
-            url,
-            incoming,
-            task,
-        }
-    }
-
-    async fn request(&mut self) -> Request {
-        tokio::time::timeout(Duration::from_secs(5), self.incoming.recv())
-            .await
-            .expect("request timeout")
-            .expect("server request")
-    }
-}
-
-impl Drop for Server {
-    fn drop(&mut self) {
-        self.task.abort();
-    }
 }
