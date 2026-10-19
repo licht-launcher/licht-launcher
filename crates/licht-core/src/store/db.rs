@@ -22,7 +22,16 @@ pub fn open_db(cache: &SharedCache) -> Result<rusqlite::Connection> {
 }
 
 fn migrate(connection: &mut rusqlite::Connection) -> Result<()> {
+    let version: u32 = connection.pragma_query_value(None, "user_version", |row| row.get(0))?;
+    if version > SCHEMA_VERSION {
+        return Err(CoreError::DatabaseSchema { schema: version });
+    }
+    if version == SCHEMA_VERSION {
+        return Ok(());
+    }
+
     let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    // Another connection may have migrated while we waited for the writer lock.
     let version: u32 = transaction.pragma_query_value(None, "user_version", |row| row.get(0))?;
     if version > SCHEMA_VERSION {
         return Err(CoreError::DatabaseSchema { schema: version });
