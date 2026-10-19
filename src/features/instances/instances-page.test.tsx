@@ -65,11 +65,13 @@ async function renderAt(path: string) {
     history: createMemoryHistory({ initialEntries: [path] }),
   });
   await router.load();
-  const view = render(
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
-      <Toaster />
-    </QueryClientProvider>,
+  const view = await act(async () =>
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+        <Toaster />
+      </QueryClientProvider>,
+    ),
   );
   return { ...view, router };
 }
@@ -1715,14 +1717,10 @@ describe("InstancesPage", () => {
   });
 
   it("shows a network toast when the list fails", async () => {
-    invoke.mockImplementation((command: string) => {
+    mockContextMenuCommands((command) => {
       if (command === "list_instances") {
-        return Promise.resolve([]);
+        return Promise.reject(new Error("HTTP request failed"));
       }
-      if (command === "list_running_games") {
-        return Promise.resolve([]);
-      }
-      return Promise.reject(new Error("HTTP request failed"));
     });
     await renderAt("/");
     expect(
