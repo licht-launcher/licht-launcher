@@ -1,7 +1,7 @@
 use tauri::{AppHandle, State};
 use tauri_plugin_opener::OpenerExt;
 
-const REPOSITORY_URL: &str = "https://github.com/mateusneiva/licht-launcher";
+const REPOSITORY_URL: &str = "https://github.com/licht-launcher/licht-launcher";
 
 /// Title bar mode chosen when the main window was created (restart to change).
 #[derive(Clone, Copy)]

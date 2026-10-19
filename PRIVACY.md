@@ -5,7 +5,7 @@ Last updated: 2026-10-15
 ## Scope and contact
 
 This policy describes the official Licht Launcher desktop application and CLI
-distributed from [this repository](https://github.com/mateusneiva/licht-launcher).
+distributed from [this repository](https://github.com/licht-launcher/licht-launcher).
 The project is maintained by Mateus Neiva
 ([@mateusneiva](https://github.com/mateusneiva)). For privacy questions or
 requests concerning information held by the maintainer, contact
