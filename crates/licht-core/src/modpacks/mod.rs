@@ -1,5 +1,6 @@
 //! Modpack discovery (Modrinth / CurseForge) and `.mrpack` import.
 
+mod archive;
 mod curseforge;
 mod file_hashes;
 mod modrinth;
