@@ -19,6 +19,74 @@ fn open_creates_the_database_and_is_idempotent() {
 }
 
 #[test]
+fn opening_an_up_to_date_database_can_read_while_another_connection_is_writing() {
+    let cache = cache("open-during-write");
+    set_last_played_folder(&cache, "survival").expect("committed metadata");
+    let mut connection = open_db(&cache).expect("writer connection");
+    let transaction = connection
+        .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+        .expect("writer transaction");
+    transaction
+        .execute(
+            "UPDATE meta SET value = 'creative' WHERE key = 'last_played_folder'",
+            [],
+        )
+        .expect("pending write");
+
+    let reader = open_db(&cache).expect("opening a reader must not require a writer lock");
+    let folder: String = reader
+        .query_row(
+            "SELECT value FROM meta WHERE key = 'last_played_folder'",
+            [],
+            |row| row.get(0),
+        )
+        .expect("read committed metadata during the pending write");
+    assert_eq!(folder, "survival");
+
+    drop(reader);
+    transaction.commit().expect("commit writer transaction");
+    assert_eq!(
+        last_played_folder(&cache).expect("updated metadata"),
+        Some("creative".into())
+    );
+}
+
+#[test]
+fn concurrent_first_opens_share_a_complete_migrated_schema() {
+    let cache = cache("concurrent-first-open");
+    let barrier = std::sync::Barrier::new(4);
+
+    std::thread::scope(|scope| {
+        let handles: Vec<_> = (0..4)
+            .map(|_| {
+                scope.spawn(|| {
+                    barrier.wait();
+                    let connection = open_db(&cache).expect("concurrent open");
+                    let version: u32 = connection
+                        .pragma_query_value(None, "user_version", |row| row.get(0))
+                        .expect("schema version");
+                    assert_eq!(version, 4);
+                    let tables: u32 = connection
+                        .query_row(
+                            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table'
+                             AND name IN ('meta', 'download_jobs', 'download_job_artifacts')",
+                            [],
+                            |row| row.get(0),
+                        )
+                        .expect("migrated tables");
+                    assert_eq!(tables, 3);
+                    assert_artifact_path_lookup_is_indexed(&connection);
+                })
+            })
+            .collect();
+
+        for handle in handles {
+            handle.join().expect("concurrent opener");
+        }
+    });
+}
+
+#[test]
 fn artifact_cleanup_seeks_by_path_on_new_and_reopened_databases() {
     let cache = cache("artifact-path-lookup");
     for _ in 0..2 {
