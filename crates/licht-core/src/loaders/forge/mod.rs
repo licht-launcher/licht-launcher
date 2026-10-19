@@ -13,12 +13,13 @@ use std::path::{Path, PathBuf};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tokio::sync::{Mutex, mpsc};
+use tokio::sync::Mutex;
 
 use crate::hashes::file_matches_sha1;
 use crate::{
-    CoreError, DEFAULT_RETRY, DownloadProgress, LaunchEnvironment, LoaderChannel, Result,
-    SharedCache,
+    CoreError, DownloadChecksum, DownloadComponent, DownloadPhase, DownloadProgress,
+    InstallationContext, LaunchEnvironment, LoaderChannel, Result, SharedCache,
+    VerifiedDownloadTask,
 };
 use archive::Installer;
 use artifacts::{checksum, failure, normalize_libraries};
@@ -131,6 +132,7 @@ async fn installer(
     cache: &SharedCache,
     id: &str,
     request: &ForgeRequest,
+    context: &InstallationContext,
 ) -> Result<(PathBuf, Installer)> {
     request.validate()?;
     let path = cache
@@ -155,9 +157,23 @@ async fn installer(
     let url = request
         .family
         .installer_url(&request.build, &request.game_version);
-    let hash = checksum(client, &format!("{url}.sha1")).await?;
+    let hash = context
+        .metadata(checksum(client, &format!("{url}.sha1")))
+        .await?;
     fs::create_dir_all(path.parent().ok_or(CoreError::CachePath)?)?;
-    crate::download_file(client, &url, &path, &hash, DEFAULT_RETRY).await?;
+    context
+        .verified_queue(
+            client,
+            &[VerifiedDownloadTask {
+                url,
+                destination: path.clone(),
+                checksum: DownloadChecksum::Sha1(hash.clone()),
+                size: 0,
+            }],
+            context.options()?,
+        )
+        .await?;
+    context.stage(DownloadPhase::Verifying).await?;
     receipt::atomic_write(&sidecar, hash.as_bytes())?;
     let installer = archive::read_installer(&path)?;
     if installer.profile.minecraft != request.game_version {
@@ -212,9 +228,41 @@ pub async fn install_forge_like(
     channel: LoaderChannel,
     loader_version: Option<&str>,
 ) -> Result<String> {
+    install_forge_like_with_context(
+        client,
+        cache,
+        family,
+        game_version,
+        channel,
+        loader_version,
+        &InstallationContext::default(),
+    )
+    .await
+}
+
+pub(crate) async fn install_forge_like_with_context(
+    client: &Client,
+    cache: &SharedCache,
+    family: ForgeFamily,
+    game_version: &str,
+    channel: LoaderChannel,
+    loader_version: Option<&str>,
+    context: &InstallationContext,
+) -> Result<String> {
+    let context = context.component(match family {
+        ForgeFamily::Forge => DownloadComponent::Forge,
+        ForgeFamily::NeoForge => DownloadComponent::NeoForge,
+    });
+    context.stage(DownloadPhase::Preparing).await?;
     let build = match loader_version.filter(|value| !value.is_empty()) {
         Some(build) => build.to_string(),
-        None => list_forge_like_versions(client, family.metadata(), game_version, channel)
+        None => context
+            .metadata(list_forge_like_versions(
+                client,
+                family.metadata(),
+                game_version,
+                channel,
+            ))
             .await?
             .into_iter()
             .next()
@@ -237,13 +285,18 @@ pub async fn install_forge_like(
         }
         _ => format!("{}-{}", family.prefix(), request.build),
     };
-    let _guard = INSTALL_LOCK.lock().await;
+    let _guard = context
+        .metadata(async { Ok(INSTALL_LOCK.lock().await) })
+        .await?;
     if installation_ready(cache, &id) {
         return Ok(id);
     }
     cache.create()?;
-    let (_, mut installer) = installer(client, cache, &id, &request).await?;
-    write_profile(client, cache, &id, &request, &mut installer).await?;
+    let (_, mut installer) = installer(client, cache, &id, &request, &context).await?;
+    context.stage(DownloadPhase::Preparing).await?;
+    context
+        .metadata(write_profile(client, cache, &id, &request, &mut installer))
+        .await?;
     Ok(id)
 }
 
@@ -254,21 +307,38 @@ pub(crate) async fn prepare(
     id: &str,
     java: &Path,
     environment: &LaunchEnvironment,
-    progress: mpsc::Sender<DownloadProgress>,
+    progress: impl Into<InstallationContext>,
 ) -> Result<Option<Vec<PathBuf>>> {
+    let progress = progress.into();
     let Some(request) = request(cache, id)? else {
         return Ok(None);
     };
+    let progress = progress.component(match request.family {
+        ForgeFamily::Forge => DownloadComponent::Forge,
+        ForgeFamily::NeoForge => DownloadComponent::NeoForge,
+    });
     if installation_ready(cache, id) {
         return Ok(None);
     }
-    let (installer_path, mut installer) = installer(client, cache, id, &request).await?;
-    let mut artifacts = write_profile(client, cache, id, &request, &mut installer).await?;
+    progress.stage(DownloadPhase::Preparing).await?;
+    let (installer_path, mut installer) = installer(client, cache, id, &request, &progress).await?;
+    progress.stage(DownloadPhase::Preparing).await?;
+    let mut artifacts = progress
+        .metadata(write_profile(client, cache, id, &request, &mut installer))
+        .await?;
     let mut processor_libraries = installer.profile.libraries.clone();
     artifacts.extend(
-        normalize_libraries(client, &mut processor_libraries, &mut installer, cache).await?,
+        progress
+            .metadata(normalize_libraries(
+                client,
+                &mut processor_libraries,
+                &mut installer,
+                cache,
+            ))
+            .await?,
     );
     artifacts::download_libraries(client, cache, settings, &artifacts, progress.clone()).await?;
+    progress.stage(DownloadPhase::Installing).await?;
     progress
         .send(DownloadProgress {
             finished: 0,
@@ -291,6 +361,7 @@ pub(crate) async fn prepare(
             java,
             &installer_path,
             environment.os,
+            &progress,
         )
         .await?,
     );

@@ -71,19 +71,6 @@ pub(super) fn cdn_client(key: &str) -> Result<Client> {
     )
 }
 
-pub(super) async fn fetch_cdn_bytes(key: &str, url: &str) -> Result<Vec<u8>> {
-    let url = canonical_download_url(url)?;
-    let client = cdn_client(key)?;
-    let response = client.get(url).send().await?;
-    let status = response.status().as_u16();
-    if !(200..300).contains(&status) {
-        return Err(CoreError::ModpackMeta {
-            detail: format!("curseforge_cdn_http_{status}"),
-        });
-    }
-    Ok(response.bytes().await?.to_vec())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

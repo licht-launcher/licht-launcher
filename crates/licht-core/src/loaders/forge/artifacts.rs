@@ -4,13 +4,10 @@ use std::path::Path;
 
 use reqwest::Client;
 use serde_json::Value;
-use tokio::sync::mpsc;
 
 use super::archive::{Installer, entry};
 use crate::hashes::{file_matches_sha1, sha1_hex};
-use crate::{
-    Artifact, CoreError, DEFAULT_RETRY, DownloadProgress, DownloadTask, Result, SharedCache,
-};
+use crate::{Artifact, CoreError, DEFAULT_RETRY, DownloadTask, Result, SharedCache};
 
 pub(super) fn failure(detail: &str) -> CoreError {
     CoreError::LoaderInstall {
@@ -166,8 +163,9 @@ pub(super) async fn download_libraries(
     cache: &SharedCache,
     settings: &SharedCache,
     artifacts: &[Artifact],
-    progress: mpsc::Sender<DownloadProgress>,
+    progress: impl Into<crate::InstallationContext>,
 ) -> Result<()> {
+    let progress = progress.into();
     let mut pending = BTreeMap::new();
     for artifact in artifacts {
         let destination = cache.library(&artifact.path)?;
@@ -187,16 +185,18 @@ pub(super) async fn download_libraries(
             },
         );
     }
-    crate::download_all(
-        client,
-        &pending.into_values().collect::<Vec<_>>(),
-        crate::shared_transfer_limits(),
-        crate::download_concurrency(cache, settings)?,
-        crate::write_concurrency(cache, settings)?,
-        DEFAULT_RETRY,
-        progress,
-    )
-    .await
+    progress
+        .queue(
+            client,
+            &pending.into_values().collect::<Vec<_>>(),
+            crate::DownloadOptions {
+                limits: crate::shared_transfer_limits(),
+                download_concurrency: crate::download_concurrency(cache, settings)?,
+                write_concurrency: crate::write_concurrency(cache, settings)?,
+                retry: DEFAULT_RETRY,
+            },
+        )
+        .await
 }
 
 #[cfg(test)]

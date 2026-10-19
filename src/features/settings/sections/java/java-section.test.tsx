@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-
+import { invoke } from "@/features/settings/fixtures/invoke";
 import {
   mockSettingsCommands,
   renderSettings,
@@ -17,6 +17,31 @@ vi.mock("@tauri-apps/api/core", async () => {
 describe("JavaSection", () => {
   beforeEach(() => {
     mockSettingsCommands();
+  });
+
+  it("keeps the configured path unchanged when a managed Java download is cancelled", async () => {
+    mockSettingsCommands((command) =>
+      command === "install_recommended_java"
+        ? Promise.resolve(null)
+        : undefined,
+    );
+    await renderSettings();
+    fireEvent.click(await screen.findByRole("button", { name: "Java" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Recommended install for Java 25" }),
+    );
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("install_recommended_java", {
+        major: 25,
+      }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Recommended install for Java 25" }),
+      ).toBeEnabled(),
+    );
+    expect(screen.getByLabelText("Java 25")).toHaveValue("");
+    expect(invoke).not.toHaveBeenCalledWith("save_settings", expect.anything());
   });
 
   it("uses an installed runtime java and leaves the others empty", async () => {

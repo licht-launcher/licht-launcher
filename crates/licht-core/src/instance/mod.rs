@@ -3,6 +3,20 @@
 pub(crate) mod content;
 pub mod icon;
 pub(crate) mod listing;
+mod operations;
+mod persistence;
+mod preparation;
+
+pub use operations::{
+    create_instance, delete_instance, duplicate_instance, list_instances, rename_instance,
+    touch_last_opened, update_instance, update_instance_version,
+};
+pub use persistence::{load_instance, parse_instance};
+use persistence::{validate, write_instance};
+pub use preparation::{
+    InstanceInstallation, InstancePreparationState, InstanceSource, complete_instance_preparation,
+    configure_instance_version, create_pending_instance, instance_version_for_launch,
+};
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -15,10 +29,18 @@ use crate::instance::icon::ICON_FILE;
 use crate::settings::GlobalLaunch;
 use crate::{CoreError, Result};
 
-const SCHEMA: u32 = 1;
+const SCHEMA: u32 = 2;
 const DEFAULT_MIN_MEMORY_MB: u32 = 512;
 const DEFAULT_MAX_MEMORY_MB: u32 = 2048;
 const FILE_NAME: &str = "instance.json";
+// Background preparation and UI edits must not overwrite each other's profile changes.
+static PROFILE_MUTATIONS: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn profile_guard() -> Result<std::sync::MutexGuard<'static, ()>> {
+    PROFILE_MUTATIONS
+        .lock()
+        .map_err(|_| CoreError::Io(std::io::Error::other("instance profile lock was poisoned")))
+}
 
 /// Profile stored at `instances/<folder>/instance.json`.
 ///
@@ -29,7 +51,9 @@ const FILE_NAME: &str = "instance.json";
 pub struct Instance {
     pub schema: u32,
     pub name: String,
-    pub version_id: String,
+    pub version_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub installation: Option<InstanceInstallation>,
     pub min_memory_mb: u32,
     pub max_memory_mb: u32,
     pub jvm_arguments: Vec<String>,
@@ -55,12 +79,16 @@ pub struct Instance {
 /// An instance folder and the profile stored in it.
 ///
 /// `folder` is chosen once and does not change when the profile is renamed.
+/// `icon_path` is the absolute path to `icon.png` when present beside `instance.json`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct InstanceEntry {
     pub folder: String,
     pub name: String,
-    pub version_id: String,
+    pub version_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub installation: Option<InstanceInstallation>,
     pub min_memory_mb: u32,
     pub max_memory_mb: u32,
     pub jvm_arguments: Vec<String>,
@@ -73,7 +101,6 @@ pub struct InstanceEntry {
     pub override_jvm_arguments: bool,
     pub java_path: Option<String>,
     pub last_opened_at: Option<String>,
-    /// Absolute path to `icon.png` when present beside `instance.json`.
     pub icon_path: Option<String>,
 }
 
@@ -93,176 +120,12 @@ pub struct InstanceSettings {
     pub height: Option<u32>,
 }
 
-#[derive(Deserialize)]
-struct SchemaHeader {
-    schema: u32,
-}
-
-pub fn parse_instance(json: &str) -> Result<Instance> {
-    let header: SchemaHeader = serde_json::from_str(json).map_err(CoreError::Instance)?;
-    if header.schema != SCHEMA {
-        return Err(CoreError::InstanceSchema {
-            schema: header.schema,
-        });
-    }
-    let instance: Instance = serde_json::from_str(json).map_err(CoreError::Instance)?;
-    validate(&instance)?;
-    Ok(instance)
-}
-
-/// Reads `instance.json` in `dir`. A missing file is written as schema 1.
-/// The directory itself is not created.
-pub fn load_instance(dir: &Path) -> Result<Instance> {
-    if !dir.is_dir() {
-        return Err(CoreError::Io(std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            "instance directory is missing",
-        )));
-    }
-    let path = dir.join(FILE_NAME);
-    if path.is_file() {
-        let json = fs::read_to_string(&path)?;
-        return parse_instance(&json);
-    }
-    let name = directory_name(dir)?;
-    let instance = default_instance(name.clone(), name);
-    write_instance(dir, &instance)?;
-    Ok(instance)
-}
-
-/// Loads every direct child directory. A missing `instances` directory is an empty list.
-pub fn list_instances(instances_dir: &Path) -> Result<Vec<InstanceEntry>> {
-    if !instances_dir.exists() {
-        return Ok(Vec::new());
-    }
-    let mut instances = Vec::new();
-    for entry in fs::read_dir(instances_dir)? {
-        let entry = entry?;
-        if entry.file_type()?.is_dir() {
-            let path = entry.path();
-            let folder = directory_name(&path)?;
-            let instance = load_instance(&path)?;
-            instances.push(entry_from(&path, folder, instance));
-        }
-    }
-    instances.sort_by(|left, right| {
-        left.name
-            .cmp(&right.name)
-            .then_with(|| left.folder.cmp(&right.folder))
-    });
-    Ok(instances)
-}
-
-pub fn create_instance(
-    instances_dir: &Path,
-    name: &str,
-    version_id: &str,
-    template: &GlobalLaunch,
-) -> Result<InstanceEntry> {
-    let name = display_name(name)?;
-    single_component(version_id)?;
-    let folder = folder_id(&name)?;
-    fs::create_dir_all(instances_dir)?;
-    let dir = instances_dir.join(&folder);
-    if dir.exists() {
-        return Err(CoreError::InstanceExists);
-    }
-    fs::create_dir(&dir)?;
-    let instance = instance_from_template(name, version_id.to_string(), template);
-    write_instance(&dir, &instance)?;
-    Ok(entry_from(&dir, folder, instance))
-}
-
-pub fn rename_instance(instances_dir: &Path, folder: &str, name: &str) -> Result<InstanceEntry> {
-    let name = display_name(name)?;
-    let dir = instance_dir(instances_dir, folder)?;
-    let mut instance = load_instance(&dir)?;
-    instance.name = name;
-    write_instance(&dir, &instance)?;
-    Ok(entry_from(&dir, folder.to_string(), instance))
-}
-
-pub fn duplicate_instance(instances_dir: &Path, folder: &str, name: &str) -> Result<InstanceEntry> {
-    let name = display_name(name)?;
-    let source = instance_dir(instances_dir, folder)?;
-    let _ = load_instance(&source)?;
-    let new_folder = folder_id(&name)?;
-    let destination = instances_dir.join(&new_folder);
-    if destination.exists() {
-        return Err(CoreError::InstanceExists);
-    }
-    if let Err(error) = copy_tree(&source, &destination) {
-        let _ = fs::remove_dir_all(&destination);
-        return Err(error);
-    }
-    let mut instance = load_instance(&destination)?;
-    instance.name = name;
-    instance.last_opened_at = None;
-    if let Err(error) = write_instance(&destination, &instance) {
-        let _ = fs::remove_dir_all(&destination);
-        return Err(error);
-    }
-    Ok(entry_from(&destination, new_folder, instance))
-}
-
-/// Records that the instance was opened now (RFC 3339 UTC on the profile).
-pub fn touch_last_opened(instances_dir: &Path, folder: &str) -> Result<InstanceEntry> {
-    let dir = instance_dir(instances_dir, folder)?;
-    let mut instance = load_instance(&dir)?;
-    instance.last_opened_at = Some(utc_now_rfc3339()?);
-    write_instance(&dir, &instance)?;
-    Ok(entry_from(&dir, folder.to_string(), instance))
-}
-
-pub fn delete_instance(instances_dir: &Path, folder: &str) -> Result<()> {
-    let dir = instance_dir(instances_dir, folder)?;
-    fs::remove_dir_all(dir)?;
-    Ok(())
-}
-
-/// Writes launch personalization. Name and version stay as stored on disk.
-pub fn update_instance(
-    instances_dir: &Path,
-    folder: &str,
-    settings: &InstanceSettings,
-) -> Result<InstanceEntry> {
-    let dir = instance_dir(instances_dir, folder)?;
-    let mut instance = load_instance(&dir)?;
-    instance.override_window = settings.override_window;
-    instance.override_memory = settings.override_memory;
-    instance.override_java = settings.override_java;
-    instance.override_jvm_arguments = settings.override_jvm_arguments;
-    instance.java_path = normalize_java_path(settings.java_path.as_deref());
-    instance.max_memory_mb = settings.max_memory_mb;
-    instance.jvm_arguments = settings.jvm_arguments.clone();
-    instance.fullscreen = settings.fullscreen;
-    instance.width = settings.width;
-    instance.height = settings.height;
-    validate(&instance)?;
-    write_instance(&dir, &instance)?;
-    Ok(entry_from(&dir, folder.to_string(), instance))
-}
-
-/// Points the instance at another game version. Does not download files.
-pub fn update_instance_version(
-    instances_dir: &Path,
-    folder: &str,
-    version_id: &str,
-) -> Result<InstanceEntry> {
-    single_component(version_id)?;
-    let dir = instance_dir(instances_dir, folder)?;
-    let mut instance = load_instance(&dir)?;
-    instance.version_id = version_id.to_string();
-    validate(&instance)?;
-    write_instance(&dir, &instance)?;
-    Ok(entry_from(&dir, folder.to_string(), instance))
-}
-
 fn default_instance(name: String, version_id: String) -> Instance {
     Instance {
         schema: SCHEMA,
         name,
-        version_id,
+        version_id: Some(version_id),
+        installation: None,
         min_memory_mb: DEFAULT_MIN_MEMORY_MB,
         max_memory_mb: DEFAULT_MAX_MEMORY_MB,
         jvm_arguments: Vec::new(),
@@ -282,7 +145,8 @@ fn instance_from_template(name: String, version_id: String, template: &GlobalLau
     Instance {
         schema: SCHEMA,
         name,
-        version_id,
+        version_id: Some(version_id),
+        installation: None,
         min_memory_mb: DEFAULT_MIN_MEMORY_MB,
         max_memory_mb: template.max_memory_mb,
         jvm_arguments: template.jvm_arguments.clone(),
@@ -365,6 +229,7 @@ fn entry_from(dir: &Path, folder: String, instance: Instance) -> InstanceEntry {
         folder,
         name: instance.name,
         version_id: instance.version_id,
+        installation: instance.installation,
         min_memory_mb: instance.min_memory_mb,
         max_memory_mb: instance.max_memory_mb,
         jvm_arguments: instance.jvm_arguments,
@@ -412,12 +277,6 @@ fn civil_from_days(days_since_epoch: i64) -> (i32, u32, u32) {
     let month = if mp < 10 { mp + 3 } else { mp - 9 };
     let year = if month <= 2 { y + 1 } else { y };
     (year as i32, month, day)
-}
-
-fn write_instance(dir: &Path, instance: &Instance) -> Result<()> {
-    let body = serde_json::to_string_pretty(instance).map_err(CoreError::Instance)?;
-    fs::write(dir.join(FILE_NAME), body)?;
-    Ok(())
 }
 
 fn instance_dir(instances_dir: &Path, folder: &str) -> Result<PathBuf> {
@@ -482,18 +341,6 @@ fn normalize_java_path(path: Option<&str>) -> Option<String> {
     } else {
         Some(path.to_string())
     }
-}
-
-fn validate(instance: &Instance) -> Result<()> {
-    display_name(&instance.name)?;
-    single_component(&instance.version_id)?;
-    if instance.min_memory_mb == 0
-        || instance.max_memory_mb == 0
-        || instance.min_memory_mb > instance.max_memory_mb
-    {
-        return Err(CoreError::InstanceMemory);
-    }
-    Ok(())
 }
 
 fn directory_name(dir: &Path) -> Result<String> {

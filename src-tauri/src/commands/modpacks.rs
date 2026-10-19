@@ -1,6 +1,6 @@
 use licht_core::{
     DownloadProgress, InstanceEntry, ModpackListItem, ModpackSource, ModpackVersionItem,
-    global_launch, install_curseforge_files, install_mrpack_files, load_instance, load_settings,
+    install_curseforge_files, install_mrpack_files, load_instance,
 };
 use tauri::{AppHandle, State};
 use tokio::sync::mpsc;
@@ -8,7 +8,7 @@ use tokio::sync::mpsc;
 use crate::progress::ProgressThrottle;
 
 use super::install_progress::emit_install_progress;
-use super::{LauncherPaths, failure, http_client, instances_root};
+use super::{LauncherPaths, failure, http_client};
 
 #[tauri::command]
 pub async fn search_modpacks(query: String) -> Result<Vec<ModpackListItem>, String> {
@@ -33,7 +33,7 @@ pub async fn list_modpack_versions(
 
 #[tauri::command]
 pub async fn create_instance_from_modpack(
-    paths: State<'_, LauncherPaths>,
+    downloads: State<'_, std::sync::Arc<licht_core::DownloadManager>>,
     name: String,
     source: String,
     project_id: String,
@@ -42,22 +42,19 @@ pub async fn create_instance_from_modpack(
 ) -> Result<InstanceEntry, String> {
     let source =
         ModpackSource::parse(&source).ok_or_else(|| "unknown modpack source".to_string())?;
-    let root = instances_root(&paths).map_err(failure)?;
-    let settings = load_settings(&paths.settings).map_err(failure)?;
-    let client = http_client().map_err(failure)?;
-    licht_core::create_instance_from_modpack(
-        &client,
-        &paths.game,
-        &root,
-        &name,
-        source,
-        &project_id,
-        &version_id,
-        icon_url.as_deref(),
-        &global_launch(&settings),
-    )
-    .await
-    .map_err(failure)
+    downloads
+        .inner()
+        .create(
+            &name,
+            licht_core::InstanceSource::Modpack {
+                source,
+                project_id,
+                version_id,
+                icon_url,
+            },
+        )
+        .await
+        .map_err(failure)
 }
 
 #[tauri::command]
@@ -70,7 +67,10 @@ pub async fn install_modpack_files(
     let settings = paths.settings.clone();
     let dir = cache.instance_dir(&folder).map_err(failure)?;
     let profile = load_instance(&dir).map_err(failure)?;
-    let progress_version_id = profile.version_id.clone();
+    let progress_version_id = profile
+        .version_id
+        .clone()
+        .ok_or_else(|| failure(licht_core::CoreError::InstancePreparing))?;
     emit_install_progress(
         &app,
         &progress_version_id,

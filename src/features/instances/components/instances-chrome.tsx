@@ -122,6 +122,7 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
 
   const {
     isInstalling,
+    downloadJobs,
     beginInstall,
     endInstall,
     playBlocked,
@@ -161,6 +162,7 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
       playBlocked,
       playPhase,
       isInstalling,
+      downloadJobs,
       progressForVersion,
       speedForVersion,
       logsByFolder,
@@ -181,6 +183,7 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
       playBlocked,
       playPhase,
       isInstalling,
+      downloadJobs,
       progressForVersion,
       speedForVersion,
       logsByFolder,

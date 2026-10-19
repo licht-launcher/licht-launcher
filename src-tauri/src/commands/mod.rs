@@ -1,6 +1,7 @@
 //! Tauri command handlers. Thin wrappers over `licht-core`.
 
 pub mod accounts;
+pub mod downloads;
 mod install_progress;
 pub mod instances;
 pub mod launch;

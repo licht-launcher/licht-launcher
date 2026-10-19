@@ -158,7 +158,7 @@ fn processor_command_uses_manifest_main_class_and_platform_separator() {
             &processor(),
             &data,
             &cache,
-            OsName::Linux
+            OsName::Linux,
         )
         .is_err()
     );
@@ -193,7 +193,8 @@ async fn processor_failure_is_reported_and_server_processors_are_not_run() {
             &cache,
             Path::new("missing-java"),
             &archive_path,
-            OsName::Linux
+            OsName::Linux,
+            &crate::InstallationContext::default(),
         )
         .await
         .expect("server is skipped")
@@ -221,6 +222,7 @@ async fn processor_failure_is_reported_and_server_processors_are_not_run() {
         &java,
         &archive_path,
         OsName::Linux,
+        &crate::InstallationContext::default(),
     )
     .await
     .expect_err("failed processor");

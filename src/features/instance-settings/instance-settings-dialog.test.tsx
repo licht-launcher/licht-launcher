@@ -1,9 +1,14 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ComponentProps } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { toast } from "sonner";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Toaster } from "@/components/ui/sonner";
+import {
+  completedDownload,
+  downloadJob,
+} from "@/features/downloads/fixtures/job";
 import { InstanceSettingsDialog } from "@/features/instance-settings/instance-settings-dialog";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 
@@ -62,6 +67,7 @@ function renderDialog(
 }
 
 describe("InstanceSettingsDialog", () => {
+  afterEach(() => vi.restoreAllMocks());
   beforeEach(() => {
     invoke.mockReset();
     invoke.mockImplementation((command: string) => {
@@ -224,7 +230,7 @@ describe("InstanceSettingsDialog", () => {
         });
       }
       if (command === "repair_instance") {
-        return Promise.resolve(undefined);
+        return Promise.resolve(completedDownload({ operation: "repair" }));
       }
       return Promise.resolve(entry);
     });
@@ -241,6 +247,33 @@ describe("InstanceSettingsDialog", () => {
     expect(
       await screen.findByText("Instance files were repaired."),
     ).toBeInTheDocument();
+  });
+
+  it("does not announce repair success when the task is cancelled", async () => {
+    const original = invoke.getMockImplementation();
+    if (!original) throw new Error("missing command implementation");
+    invoke.mockImplementation((command: string) =>
+      command === "repair_instance"
+        ? Promise.resolve(
+            downloadJob({ status: "cancelled", operation: "repair" }),
+          )
+        : original(command),
+    );
+    const success = vi.spyOn(toast, "success");
+    renderDialog();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Instance base" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Repair" }));
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("repair_instance", {
+        folder: "Survival",
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Repair" })).toBeEnabled(),
+    );
+    expect(success).not.toHaveBeenCalled();
   });
 
   it("groups overrides under Override Settings", async () => {

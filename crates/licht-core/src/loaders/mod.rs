@@ -15,6 +15,90 @@ use crate::settings::GlobalLaunch;
 use crate::{Result, SharedCache};
 use std::path::Path;
 
+pub(crate) async fn prepare_platform_profile(
+    client: &Client,
+    cache: &SharedCache,
+    platform: LoaderPlatform,
+    game_version: &str,
+    channel: LoaderChannel,
+    loader_version: Option<&str>,
+    context: &crate::InstallationContext,
+) -> Result<String> {
+    use crate::{DownloadComponent, DownloadPhase};
+    cache.version_json(game_version)?;
+    if platform != LoaderPlatform::Vanilla {
+        crate::InstanceSource::Loader {
+            platform,
+            game_version: game_version.to_string(),
+            channel,
+            loader_version: loader_version.map(str::to_string),
+        }
+        .validate()?;
+    }
+    let component = match platform {
+        LoaderPlatform::Vanilla => return Ok(game_version.to_string()),
+        LoaderPlatform::Fabric => DownloadComponent::Fabric,
+        LoaderPlatform::Quilt => DownloadComponent::Quilt,
+        LoaderPlatform::Forge => DownloadComponent::Forge,
+        LoaderPlatform::NeoForge => DownloadComponent::NeoForge,
+    };
+    let context = context.component(component);
+    context.stage(DownloadPhase::Preparing).await?;
+    match platform {
+        LoaderPlatform::Fabric => {
+            context
+                .metadata(install_fabric_like(
+                    client,
+                    cache,
+                    fabric::FABRIC_META,
+                    "fabric-loader",
+                    game_version,
+                    channel,
+                    loader_version,
+                ))
+                .await
+        }
+        LoaderPlatform::Quilt => {
+            context
+                .metadata(install_fabric_like(
+                    client,
+                    cache,
+                    fabric::QUILT_META,
+                    "quilt-loader",
+                    game_version,
+                    channel,
+                    loader_version,
+                ))
+                .await
+        }
+        LoaderPlatform::Forge => {
+            forge::install_forge_like_with_context(
+                client,
+                cache,
+                forge::ForgeFamily::Forge,
+                game_version,
+                channel,
+                loader_version,
+                &context,
+            )
+            .await
+        }
+        LoaderPlatform::NeoForge => {
+            forge::install_forge_like_with_context(
+                client,
+                cache,
+                forge::ForgeFamily::NeoForge,
+                game_version,
+                channel,
+                loader_version,
+                &context,
+            )
+            .await
+        }
+        LoaderPlatform::Vanilla => Ok(game_version.to_string()),
+    }
+}
+
 /// Lists loader builds for a game version (newest first).
 pub async fn list_loader_versions(
     client: &Client,

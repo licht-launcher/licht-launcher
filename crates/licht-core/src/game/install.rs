@@ -1,14 +1,12 @@
 use std::path::{Path, PathBuf};
 
-use tokio::sync::mpsc;
-
-use crate::download::DownloadProgress;
 use crate::hashes::{file_matches_sha1, sha1_hex};
 use crate::natives::{classifier_matches, native_classifier};
 use crate::{
-    ADOPTIUM_API, AssetIndexFile, CoreError, DEFAULT_RETRY, DownloadTask, LaunchEnvironment,
-    Result, SharedCache, Version, applicable_libraries, download_all, download_concurrency,
-    install_temurin, parse_asset_index, parse_version, required_java_major, use_custom_java,
+    ADOPTIUM_API, AssetIndexFile, CoreError, DEFAULT_RETRY, DownloadComponent, DownloadOptions,
+    DownloadPhase, DownloadTask, InstallationContext, LaunchEnvironment, Result, SharedCache,
+    Version, applicable_libraries, download_concurrency, install_temurin, parse_asset_index,
+    parse_version, required_java_major, use_custom_java,
 };
 
 pub const ASSET_OBJECT_BASE: &str = "https://resources.download.minecraft.net";
@@ -27,8 +25,9 @@ pub async fn install_version(
     cache: &SharedCache,
     settings: &SharedCache,
     plan: InstallPlan<'_>,
-    progress: mpsc::Sender<DownloadProgress>,
+    progress: impl Into<InstallationContext>,
 ) -> Result<()> {
+    let progress = progress.into();
     cache.create()?;
     write_asset_index(cache, plan.version, plan.asset_index_json)?;
 
@@ -43,16 +42,18 @@ pub async fn install_version(
         pending.push(task);
     }
 
-    download_all(
-        client,
-        &pending,
-        crate::shared_transfer_limits(),
-        download_concurrency(cache, settings)?,
-        crate::write_concurrency(cache, settings)?,
-        DEFAULT_RETRY,
-        progress,
-    )
-    .await
+    progress
+        .queue(
+            client,
+            &pending,
+            DownloadOptions {
+                limits: crate::shared_transfer_limits(),
+                download_concurrency: download_concurrency(cache, settings)?,
+                write_concurrency: crate::write_concurrency(cache, settings)?,
+                retry: DEFAULT_RETRY,
+            },
+        )
+        .await
 }
 
 pub struct GameInstall<'a> {
@@ -112,9 +113,13 @@ pub async fn install_game(
     cache: &SharedCache,
     settings: &SharedCache,
     request: GameInstall<'_>,
-    progress: mpsc::Sender<DownloadProgress>,
+    progress: impl Into<InstallationContext>,
 ) -> Result<PathBuf> {
-    let json = read_text(client, request.version_json_url).await?;
+    let progress = progress.into().component(DownloadComponent::Minecraft);
+    progress.stage(DownloadPhase::Preparing).await?;
+    let json = progress
+        .metadata(read_text(client, request.version_json_url))
+        .await?;
     let actual = sha1_hex(json.as_bytes());
     if !actual.eq_ignore_ascii_case(request.version_sha1) {
         return Err(CoreError::Sha1Mismatch {
@@ -129,7 +134,9 @@ pub async fn install_game(
     }
     std::fs::write(&json_path, &json)?;
 
-    let index_json = read_text(client, &version.asset_index.url).await?;
+    let index_json = progress
+        .metadata(read_text(client, &version.asset_index.url))
+        .await?;
     let assets = parse_asset_index(&index_json)?;
     install_version(
         client,
@@ -170,8 +177,9 @@ pub async fn install_game_version(
     settings: &SharedCache,
     id: &str,
     environment: &LaunchEnvironment,
-    progress: mpsc::Sender<DownloadProgress>,
+    progress: impl Into<InstallationContext>,
 ) -> Result<PathBuf> {
+    let progress = progress.into();
     install_requested(
         client,
         cache,
@@ -190,7 +198,7 @@ async fn install_requested(
     settings: &SharedCache,
     id: &str,
     environment: &LaunchEnvironment,
-    progress: mpsc::Sender<DownloadProgress>,
+    progress: InstallationContext,
     mut chain: Vec<String>,
 ) -> Result<PathBuf> {
     cache.version_json(id)?;
@@ -213,7 +221,11 @@ async fn install_requested(
         .await?;
         return install_local_version(client, cache, settings, id, environment, progress).await;
     }
-    let manifest = crate::fetch_version_manifest(client, cache).await;
+    progress.stage(DownloadPhase::Preparing).await?;
+    let manifest = progress
+        .metadata(crate::fetch_version_manifest(client, cache))
+        .await;
+    progress.checkpoint().await?;
     if let Ok(manifest) = &manifest
         && let Some(entry) = manifest.versions.iter().find(|entry| entry.id == id)
     {
@@ -248,13 +260,29 @@ async fn install_local_version(
     settings: &SharedCache,
     id: &str,
     environment: &LaunchEnvironment,
-    progress: mpsc::Sender<DownloadProgress>,
+    progress: InstallationContext,
 ) -> Result<PathBuf> {
+    let component = if id.starts_with("fabric-loader") {
+        DownloadComponent::Fabric
+    } else if id.starts_with("quilt-loader") {
+        DownloadComponent::Quilt
+    } else if id.starts_with("neoforge") {
+        DownloadComponent::NeoForge
+    } else if id.starts_with("forge") {
+        DownloadComponent::Forge
+    } else {
+        DownloadComponent::Minecraft
+    };
+    let progress = progress.component(component);
+    progress.stage(DownloadPhase::Preparing).await?;
     cache.create()?;
     let cache = installation_cache(cache)?;
     let is_forge = crate::loaders::forge::request(&cache, id)?.is_some();
     let _loader_guard = if is_forge {
-        Some(crate::loaders::forge::INSTALL_LOCK.lock().await)
+        Some(tokio::select! {
+            _ = progress.control.cancelled() => return Err(CoreError::DownloadCancelled),
+            guard = crate::loaders::forge::INSTALL_LOCK.lock() => guard,
+        })
     } else {
         None
     };
@@ -299,7 +327,9 @@ async fn install_local_version(
     let index_json = if file_matches_sha1(&index_path, &version.asset_index.sha1)? {
         std::fs::read_to_string(index_path)?
     } else {
-        read_text(client, &version.asset_index.url).await?
+        progress
+            .metadata(read_text(client, &version.asset_index.url))
+            .await?
     };
     let assets = parse_asset_index(&index_json)?;
     install_version(
