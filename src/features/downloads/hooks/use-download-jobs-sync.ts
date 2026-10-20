@@ -38,6 +38,15 @@ export function useDownloadJobsSync() {
             (current) => replaceDownloadSnapshot(current, payload),
           );
           if (
+            payload.instanceFolder !== null &&
+            (isDownloadFinished(payload) || payload.status === "failed") &&
+            payload.status !== previous?.status
+          ) {
+            void queryClient.invalidateQueries({
+              queryKey: ["instance-content", payload.instanceFolder],
+            });
+          }
+          if (
             isDownloadFinished(payload) ||
             payload.status === "failed" ||
             payload.versionId !== previous?.versionId ||
