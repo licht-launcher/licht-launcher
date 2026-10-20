@@ -18,7 +18,10 @@ pub fn run() -> anyhow::Result<()> {
     );
 
     let paths = commands::LauncherPaths::load().context("Failed to resolve Licht folders")?;
-    licht_core::recover_download_jobs(&paths.settings, &paths.game)
+    let database =
+        tauri::async_runtime::block_on(licht_core::DatabaseService::start(paths.settings.clone()))
+            .context("Failed to start the database service")?;
+    tauri::async_runtime::block_on(database.client().recover_download_jobs(&paths.game))
         .context("Failed to recover download jobs")?;
     let client = reqwest::Client::builder()
         .connect_timeout(licht_core::MANIFEST_REQUEST_TIMEOUT)
@@ -30,6 +33,7 @@ pub fn run() -> anyhow::Result<()> {
         paths.game.clone(),
         commands::host_environment()?,
         client,
+        database.client(),
     ));
     let shutdown_downloads = std::sync::Arc::clone(&downloads);
 
@@ -39,6 +43,7 @@ pub fn run() -> anyhow::Result<()> {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_window_controls::init())
+        .manage(database.client())
         .manage(paths)
         .manage(downloads)
         .manage(commands::LaunchSessions::new())
@@ -114,6 +119,7 @@ pub fn run() -> anyhow::Result<()> {
         .build(tauri::generate_context!())
         .context("Failed to build Licht Launcher")?;
     let mut closing = false;
+    let mut database = Some(database);
     application.run(move |app, event| {
         if let tauri::RunEvent::ExitRequested { api, code, .. } = event
             && !closing
@@ -122,9 +128,15 @@ pub fn run() -> anyhow::Result<()> {
             api.prevent_exit();
             let app = app.clone();
             let downloads = std::sync::Arc::clone(&shutdown_downloads);
+            let database = database.take();
             tauri::async_runtime::spawn(async move {
                 if downloads.suspend_all().await.is_err() {
                     tracing::error!("Failed to persist all download states during shutdown");
+                }
+                if let Some(database) = database
+                    && database.shutdown().await.is_err()
+                {
+                    tracing::error!("Failed to close the database service during shutdown");
                 }
                 app.exit(code.unwrap_or(0));
             });

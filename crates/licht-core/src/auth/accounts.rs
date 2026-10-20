@@ -7,53 +7,13 @@ use crate::auth::keyring_store::{
     set_active_account_uuid, store_account,
 };
 use crate::auth::types::{AccountProfile, MicrosoftSession};
-use crate::db::{get_meta, open_db, set_meta};
-use crate::{Result, SharedCache};
+use crate::{DatabaseClient, Result, SharedCache};
 
-const META_ACCOUNT_UUIDS: &str = "microsoft_account_uuids";
-
-/// Account UUIDs remembered in SQLite (secrets stay in the keyring).
-pub fn remembered_account_uuids(cache: &SharedCache) -> Result<Vec<String>> {
-    let connection = open_db(cache)?;
-    let Some(raw) = get_meta(&connection, META_ACCOUNT_UUIDS)? else {
-        return Ok(Vec::new());
-    };
-    if raw.trim().is_empty() {
-        return Ok(Vec::new());
-    }
-    Ok(raw
-        .split(',')
-        .map(str::trim)
-        .filter(|part| !part.is_empty())
-        .map(str::to_string)
-        .collect())
-}
-
-fn save_remembered_uuids(cache: &SharedCache, uuids: &[String]) -> Result<()> {
-    let connection = open_db(cache)?;
-    set_meta(&connection, META_ACCOUNT_UUIDS, &uuids.join(","))
-}
-
-fn remember_uuid(cache: &SharedCache, uuid: &str) -> Result<()> {
-    let mut uuids = remembered_account_uuids(cache)?;
-    if !uuids.iter().any(|existing| existing == uuid) {
-        uuids.push(uuid.to_string());
-        save_remembered_uuids(cache, &uuids)?;
-    }
-    Ok(())
-}
-
-fn forget_uuid(cache: &SharedCache, uuid: &str) -> Result<()> {
-    let uuids = remembered_account_uuids(cache)?
-        .into_iter()
-        .filter(|existing| existing != uuid)
-        .collect::<Vec<_>>();
-    save_remembered_uuids(cache, &uuids)
-}
-
-pub fn list_accounts(cache: &SharedCache) -> Result<Vec<AccountProfile>> {
-    let uuids = remembered_account_uuids(cache)?;
-    list_stored_profiles(&uuids)
+pub async fn list_accounts(database: &DatabaseClient) -> Result<Vec<AccountProfile>> {
+    let uuids = database.remembered_account_uuids().await?;
+    tokio::task::spawn_blocking(move || list_stored_profiles(&uuids))
+        .await
+        .map_err(|_| crate::CoreError::AuthKeyring)?
 }
 
 pub fn get_active_profile(_cache: &SharedCache) -> Result<Option<AccountProfile>> {
@@ -63,7 +23,7 @@ pub fn get_active_profile(_cache: &SharedCache) -> Result<Option<AccountProfile>
 /// Browser authorization-code + PKCE login. `open_url` must open the system browser.
 pub async fn login_with_browser<F>(
     client: &reqwest::Client,
-    cache: &SharedCache,
+    database: &DatabaseClient,
     open_url: F,
 ) -> Result<AccountProfile>
 where
@@ -72,20 +32,22 @@ where
     let msa = browser_login_msa(client, open_url).await?;
     let session = complete_microsoft_login(client, msa).await?;
     store_account(&session)?;
-    remember_uuid(cache, &session.profile.uuid)?;
+    database
+        .remember_account_uuid(&session.profile.uuid, true)
+        .await?;
     Ok(session.profile)
 }
 
-pub fn set_active_account(cache: &SharedCache, uuid: &str) -> Result<AccountProfile> {
+pub async fn set_active_account(database: &DatabaseClient, uuid: &str) -> Result<AccountProfile> {
     let session = load_account(uuid)?.ok_or(crate::CoreError::AuthNotSignedIn)?;
     set_active_account_uuid(uuid)?;
-    remember_uuid(cache, uuid)?;
+    database.remember_account_uuid(uuid, true).await?;
     Ok(session.profile)
 }
 
-pub fn logout_account(cache: &SharedCache, uuid: &str) -> Result<()> {
+pub async fn logout_account(database: &DatabaseClient, uuid: &str) -> Result<()> {
     delete_account(uuid)?;
-    forget_uuid(cache, uuid)?;
+    database.remember_account_uuid(uuid, false).await?;
     Ok(())
 }
 

@@ -1,7 +1,6 @@
 use super::DownloadManager;
 use crate::{
-    CoreError, DownloadJobOperation, DownloadJobSnapshot, DownloadJobStatus, Result,
-    get_download_job, list_download_jobs, load_instance,
+    CoreError, DownloadJobOperation, DownloadJobSnapshot, DownloadJobStatus, Result, load_instance,
 };
 
 impl DownloadManager {
@@ -9,18 +8,15 @@ impl DownloadManager {
         let _starts = self.starts.lock().await;
         let job = if let Some(slot) = self.active_job(id).await {
             let mut snapshot = slot.snapshot.lock().await;
-            let next = self.prepare_cancellation(snapshot.clone())?;
+            let next = self.prepare_cancellation(snapshot.clone()).await?;
             *snapshot = next;
             if snapshot.status == DownloadJobStatus::Cancelling {
                 slot.control.cancel();
             }
             snapshot.clone()
         } else {
-            self.prepare_cancellation(get_download_job(
-                &self.runtime.settings,
-                &self.runtime.game,
-                id,
-            )?)?
+            self.prepare_cancellation(self.stored_job(id).await?)
+                .await?
         };
         if matches!(
             job.status,
@@ -34,7 +30,7 @@ impl DownloadManager {
         }
         .await;
         let result = match result {
-            Err(error) => match self.record_cancellation_failure(id, &error) {
+            Err(error) => match self.record_cancellation_failure(id, &error).await {
                 Ok(()) => Err(error),
                 Err(record_error) => Err(CoreError::DownloadJobExecution {
                     detail: format!("{error}; failed to record cancellation error: {record_error}"),
@@ -54,7 +50,7 @@ impl DownloadManager {
         }
     }
 
-    pub(super) fn prepare_cancellation(
+    pub(super) async fn prepare_cancellation(
         &self,
         mut job: DownloadJobSnapshot,
     ) -> Result<DownloadJobSnapshot> {
@@ -76,7 +72,7 @@ impl DownloadManager {
                 // Persist removal intent before a partial deletion can remove instance.json.
                 job.status = DownloadJobStatus::Cancelling;
                 job.error = None;
-                self.persist(&mut job)?;
+                self.persist(&mut job).await?;
                 self.emit(job.clone());
             }
         }
@@ -103,16 +99,16 @@ impl DownloadManager {
         }
         job.status = DownloadJobStatus::Cancelled;
         job.error = None;
-        self.persist(&mut job)?;
+        self.persist(&mut job).await?;
         self.emit(job.clone());
         Ok(job)
     }
 
-    fn record_cancellation_failure(&self, id: &str, error: &CoreError) -> Result<()> {
-        let mut job = get_download_job(&self.runtime.settings, &self.runtime.game, id)?;
+    async fn record_cancellation_failure(&self, id: &str, error: &CoreError) -> Result<()> {
+        let mut job = self.stored_job(id).await?;
         if job.status == DownloadJobStatus::Cancelling {
             job.error = Some(error.to_string());
-            self.persist(&mut job)?;
+            self.persist(&mut job).await?;
             self.emit(job);
         }
         Ok(())
@@ -150,27 +146,26 @@ impl DownloadManager {
                 return Ok(outcome);
             }
         }
-        let mut snapshot = get_download_job(&self.runtime.settings, &self.runtime.game, id)?;
+        let mut snapshot = self.stored_job(id).await?;
         if matches!(
             snapshot.status,
             DownloadJobStatus::Completed | DownloadJobStatus::Cancelled
         ) {
             return Ok(snapshot);
         }
-        crate::transfer::jobs::cleanup_artifacts(&self.runtime.settings, &self.runtime.game, id)
-            .await?;
+        self.cleanup_artifacts(id).await?;
         if snapshot.status != DownloadJobStatus::Cancelling {
             snapshot.status = DownloadJobStatus::Cancelled;
         }
         snapshot.error = None;
-        self.persist(&mut snapshot)?;
+        self.persist(&mut snapshot).await?;
         self.emit(snapshot.clone());
         Ok(snapshot)
     }
 
     pub async fn cancel_instance(&self, folder: &str) -> Result<()> {
         let _starts = self.starts.lock().await;
-        let jobs = list_download_jobs(&self.runtime.settings, &self.runtime.game)?;
+        let jobs = self.stored_jobs().await?;
         for job in jobs
             .into_iter()
             .filter(|job| job.instance_folder.as_deref() == Some(folder))
@@ -179,7 +174,7 @@ impl DownloadManager {
             if stopped.status == DownloadJobStatus::Cancelling {
                 // The explicit instance-delete command owns directory removal.
                 stopped.status = DownloadJobStatus::Cancelled;
-                self.persist(&mut stopped)?;
+                self.persist(&mut stopped).await?;
                 self.emit(stopped.clone());
                 self.complete_cancellation(&job.id, &Ok(stopped)).await;
             }

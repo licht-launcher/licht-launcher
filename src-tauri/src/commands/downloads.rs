@@ -8,12 +8,11 @@ use super::{LauncherPaths, failure};
 #[tauri::command]
 pub async fn list_download_jobs(
     paths: State<'_, LauncherPaths>,
+    database: State<'_, licht_core::DatabaseClient>,
 ) -> Result<Vec<DownloadJobSnapshot>, String> {
-    let settings = paths.settings.clone();
-    let game = paths.game.clone();
-    tauri::async_runtime::spawn_blocking(move || licht_core::list_download_jobs(&settings, &game))
+    database
+        .list_download_jobs(&paths.game)
         .await
-        .map_err(|_| "download job listing task failed".to_string())?
         .map_err(failure)
 }
 

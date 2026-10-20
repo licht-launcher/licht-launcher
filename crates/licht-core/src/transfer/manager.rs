@@ -1,8 +1,8 @@
 use crate::{
-    CoreError, DownloadControl, DownloadJobOperation, DownloadJobSnapshot, DownloadJobStatus,
-    DownloadPhase, DownloadState, InstallationContext, InstanceEntry, InstanceSource,
-    LaunchEnvironment, Result, SharedCache, create_pending_download_job, create_pending_instance,
-    get_download_job, global_launch, list_download_jobs, load_instance, load_settings,
+    CoreError, DatabaseClient, DownloadControl, DownloadJobOperation, DownloadJobSnapshot,
+    DownloadJobStatus, DownloadPhase, DownloadState, InstallationContext, InstanceEntry,
+    InstanceSource, LaunchEnvironment, Result, SharedCache, create_pending_instance, global_launch,
+    load_instance, load_settings,
 };
 use futures_util::future::BoxFuture;
 use std::collections::HashMap;
@@ -20,6 +20,7 @@ pub(crate) struct DownloadRuntime {
     pub game: SharedCache,
     pub environment: LaunchEnvironment,
     pub client: reqwest::Client,
+    pub database: DatabaseClient,
 }
 type Executor =
     fn(DownloadRuntime, DownloadJobSnapshot, InstallationContext) -> BoxFuture<'static, Result<()>>;
@@ -48,6 +49,7 @@ impl DownloadManager {
         game: SharedCache,
         environment: LaunchEnvironment,
         client: reqwest::Client,
+        database: DatabaseClient,
     ) -> Self {
         let (events, _) = broadcast::channel(512);
         Self {
@@ -56,6 +58,7 @@ impl DownloadManager {
                 game,
                 environment,
                 client,
+                database,
             },
             executor: super::pipeline::execute,
             starts: Mutex::new(()),
@@ -95,7 +98,9 @@ impl DownloadManager {
     ) -> Result<DownloadJobSnapshot> {
         let starts = self.starts.lock().await;
         self.accept_work()?;
-        if let Some(job) = list_download_jobs(&self.runtime.settings, &self.runtime.game)?
+        if let Some(job) = self
+            .stored_jobs()
+            .await?
             .into_iter()
             .find(|job| job.instance_folder.as_deref() == Some(folder))
         {
@@ -108,19 +113,22 @@ impl DownloadManager {
             };
         }
         let profile = load_instance(&self.runtime.game.instance_dir(folder)?)?;
-        let job = create_pending_download_job(
-            &self.runtime.settings,
-            &self.runtime.game,
-            folder,
-            profile.version_id.as_deref(),
-            operation,
-        )?;
+        let job = self
+            .runtime
+            .database
+            .create_pending_download_job(
+                &self.runtime.game,
+                folder,
+                profile.version_id.as_deref(),
+                operation,
+            )
+            .await?;
         self.spawn(job.clone()).await;
         Ok(job)
     }
     pub async fn pause(&self, id: &str) -> Result<DownloadJobSnapshot> {
         let Some(slot) = self.active_job(id).await else {
-            let snapshot = get_download_job(&self.runtime.settings, &self.runtime.game, id)?;
+            let snapshot = self.stored_job(id).await?;
             return if matches!(
                 snapshot.status,
                 DownloadJobStatus::Completed
@@ -152,7 +160,7 @@ impl DownloadManager {
         }
         slot.control.pause();
         snapshot.status = DownloadJobStatus::Paused;
-        self.persist(&mut snapshot)?;
+        self.persist(&mut snapshot).await?;
         self.emit(snapshot.clone());
         drop(snapshot);
         slot.control.wait_for_idle().await?;
@@ -176,17 +184,17 @@ impl DownloadManager {
             slot.control.resume();
             snapshot.status = DownloadJobStatus::Running;
             snapshot.error = None;
-            self.persist(&mut snapshot)?;
+            self.persist(&mut snapshot).await?;
             self.emit(snapshot.clone());
             return Ok(snapshot.clone());
         }
-        let mut snapshot = get_download_job(&self.runtime.settings, &self.runtime.game, id)?;
+        let mut snapshot = self.stored_job(id).await?;
         if matches!(
             snapshot.status,
             DownloadJobStatus::Running | DownloadJobStatus::Queued
         ) {
             snapshot.status = DownloadJobStatus::Interrupted;
-            self.persist(&mut snapshot)?;
+            self.persist(&mut snapshot).await?;
         }
         if !matches!(
             snapshot.status,
@@ -199,12 +207,14 @@ impl DownloadManager {
         }
         snapshot.status = DownloadJobStatus::Queued;
         snapshot.error = None;
-        self.persist(&mut snapshot)?;
+        self.persist(&mut snapshot).await?;
         self.spawn(snapshot.clone()).await;
         Ok(snapshot)
     }
-    pub fn ensure_launchable(&self, folder: &str) -> Result<()> {
-        if list_download_jobs(&self.runtime.settings, &self.runtime.game)?
+    pub async fn ensure_launchable(&self, folder: &str) -> Result<()> {
+        if self
+            .stored_jobs()
+            .await?
             .iter()
             .any(|job| job.instance_folder.as_deref() == Some(folder))
         {
@@ -215,15 +225,15 @@ impl DownloadManager {
         )?)?;
         Ok(())
     }
-    pub fn change_version(&self, folder: &str, version: &str) -> Result<InstanceEntry> {
-        self.ensure_launchable(folder)?;
+    pub async fn change_version(&self, folder: &str, version: &str) -> Result<InstanceEntry> {
+        self.ensure_launchable(folder).await?;
         crate::update_instance_version(&self.runtime.game.instances_dir()?, folder, version)
     }
     async fn wait(&self, id: &str) -> Result<DownloadJobSnapshot> {
         if let Some(slot) = self.active_job(id).await {
             return Self::wait_slot(&slot).await;
         }
-        get_download_job(&self.runtime.settings, &self.runtime.game, id)
+        self.stored_job(id).await
     }
     async fn wait_slot(slot: &ActiveJob) -> Result<DownloadJobSnapshot> {
         let mut receiver = slot.completion.subscribe();
@@ -241,15 +251,20 @@ impl DownloadManager {
     pub async fn install_java(self: &Arc<Self>, major: u32) -> Result<Option<String>> {
         let starts = self.starts.lock().await;
         self.accept_work()?;
-        let existing = list_download_jobs(&self.runtime.settings, &self.runtime.game)?
+        let existing = self
+            .stored_jobs()
+            .await?
             .into_iter()
             .find(|job| job.java_major == Some(major));
         let job = if let Some(job) = existing {
             drop(starts);
             self.resume(&job.id).await?
         } else {
-            let job =
-                super::jobs::create_java_job(&self.runtime.settings, &self.runtime.game, major)?;
+            let job = self
+                .runtime
+                .database
+                .create_java_download_job(&self.runtime.game, major)
+                .await?;
             self.spawn(job.clone()).await;
             drop(starts);
             job
@@ -301,7 +316,7 @@ impl DownloadManager {
                 DownloadJobStatus::Running | DownloadJobStatus::Queued
             ) {
                 snapshot.status = DownloadJobStatus::Interrupted;
-                match self.persist(&mut snapshot) {
+                match self.persist(&mut snapshot).await {
                     Ok(()) => self.emit(snapshot.clone()),
                     Err(error) => {
                         if failure.is_none() {
@@ -342,6 +357,32 @@ impl DownloadManager {
             return Err(CoreError::DownloadJobExecution {
                 detail: "downloads are suspended for shutdown".to_string(),
             });
+        }
+        Ok(())
+    }
+
+    async fn stored_job(&self, id: &str) -> Result<DownloadJobSnapshot> {
+        self.runtime
+            .database
+            .get_download_job(&self.runtime.game, id)
+            .await
+    }
+
+    async fn stored_jobs(&self) -> Result<Vec<DownloadJobSnapshot>> {
+        self.runtime
+            .database
+            .list_download_jobs(&self.runtime.game)
+            .await
+    }
+
+    async fn cleanup_artifacts(&self, id: &str) -> Result<()> {
+        for path in self
+            .runtime
+            .database
+            .download_cleanup_candidates(&self.runtime.game, id)
+            .await?
+        {
+            super::download::remove_partial_if_idle(&path).await?;
         }
         Ok(())
     }

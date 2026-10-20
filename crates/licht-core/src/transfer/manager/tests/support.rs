@@ -14,12 +14,14 @@ fn fixture_executor(
     context: InstallationContext,
 ) -> BoxFuture<'static, Result<()>> {
     Box::pin(async move {
-        let connection = crate::open_db(&runtime.settings)?;
-        let url =
-            crate::get_meta(&connection, "test_download_url")?.ok_or(CoreError::VersionMissing)?;
-        let finish_after_cancel =
-            crate::get_meta(&connection, "test_finish_after_cancel")?.is_some();
-        drop(connection);
+        let mut connection = crate::open_db(&runtime.settings).await?;
+        let url = crate::get_meta(&mut connection, "test_download_url")
+            .await?
+            .ok_or(CoreError::VersionMissing)?;
+        let finish_after_cancel = crate::get_meta(&mut connection, "test_finish_after_cancel")
+            .await?
+            .is_some();
+        sqlx::Connection::close(connection).await?;
         let component = if job.java_major.is_some() {
             DownloadComponent::Java
         } else {
@@ -80,10 +82,11 @@ pub(super) struct Fixture {
     root: PathBuf,
     pub(super) settings: SharedCache,
     pub(super) game: SharedCache,
+    database: Option<crate::DatabaseService>,
 }
 static FIXTURE_NUMBER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 impl Fixture {
-    pub(super) fn new(url: &str) -> Self {
+    pub(super) async fn new(url: &str) -> Self {
         let stamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("clock")
@@ -95,12 +98,31 @@ impl Fixture {
         ));
         let settings = SharedCache::at(root.join("settings"));
         let game = SharedCache::at(root.join("game").join("data"));
-        let connection = crate::open_db(&settings).expect("database");
-        crate::set_meta(&connection, "test_download_url", url).expect("fixture URL");
+        let mut connection = crate::open_db(&settings).await.expect("database");
+        crate::set_meta(&mut connection, "test_download_url", url)
+            .await
+            .expect("fixture URL");
+        sqlx::Connection::close(connection)
+            .await
+            .expect("close fixture connection");
+        let database = Some(
+            crate::DatabaseService::start(settings.clone())
+                .await
+                .expect("database service"),
+        );
         Self {
             root,
             settings,
             game,
+            database,
+        }
+    }
+    pub(super) fn database(&self) -> crate::DatabaseClient {
+        self.database.as_ref().expect("database owner").client()
+    }
+    pub(super) async fn close(mut self) {
+        if let Some(database) = self.database.take() {
+            database.shutdown().await.expect("close database service");
         }
     }
     pub(super) fn instance(&self, name: &str) -> InstanceEntry {
@@ -132,6 +154,7 @@ impl Fixture {
                 features: BTreeMap::new(),
             },
             client,
+            self.database(),
         );
         manager.executor = executor;
         Arc::new(manager)

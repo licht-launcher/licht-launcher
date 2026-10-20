@@ -23,7 +23,7 @@ pub enum DownloadJobStatus {
     Failed,
 }
 impl DownloadJobStatus {
-    pub(super) fn can_transition_to(self, next: Self) -> bool {
+    pub(crate) fn can_transition_to(self, next: Self) -> bool {
         use DownloadJobStatus::*;
         match self {
             Completed | Cancelled => false,
@@ -98,7 +98,7 @@ pub struct DownloadJobUpdate {
     pub error: Option<String>,
 }
 
-pub(super) fn validate_progress(progress: DownloadProgress) -> Result<()> {
+pub(crate) fn validate_progress(progress: DownloadProgress) -> Result<()> {
     if progress
         .finished
         .checked_add(progress.failed)
@@ -109,7 +109,7 @@ pub(super) fn validate_progress(progress: DownloadProgress) -> Result<()> {
     }
     Ok(())
 }
-pub(super) fn validate_phase(
+pub(crate) fn validate_phase(
     phase: DownloadPhase,
     component: Option<DownloadComponent>,
 ) -> Result<()> {
@@ -118,7 +118,7 @@ pub(super) fn validate_phase(
     }
     Ok(())
 }
-pub(super) fn validate_cancellation_target(
+pub(crate) fn validate_cancellation_target(
     job: &DownloadJobSnapshot,
     status: DownloadJobStatus,
 ) -> Result<()> {
@@ -131,7 +131,7 @@ pub(super) fn validate_cancellation_target(
     }
     Ok(())
 }
-pub(super) fn validate_completion(
+pub(crate) fn validate_completion(
     status: DownloadJobStatus,
     progress: DownloadProgress,
 ) -> Result<()> {

@@ -82,6 +82,49 @@ is created when a `virtual` index is launched. `--cache` replaces this root.
 
 `instances/<id>` is the sibling of the data directory, not a folder inside it.
 
+### Dedicated SQLite service
+
+`store/service.rs` owns an asynchronous dispatcher and a persistent SQLx SQLite
+connection. SQLx executes SQLite's blocking API on its own background worker;
+the launcher does not add another blocking SQL thread. Startup opens and migrates
+the connection before returning the service owner. Cloneable `DatabaseClient`
+handles submit typed requests over a FIFO queue with capacity for 64 pending
+operations and await individual replies. A full queue applies asynchronous
+backpressure rather than blocking a Tokio executor thread.
+
+The application routes last-played metadata, download jobs, artifact associations,
+startup recovery, and remembered account UUIDs through this service. The metadata
+update in `touch_last_opened` uses the service; its instance-profile file write runs
+separately on a blocking worker. Frontend command names, inputs, and responses
+remain the same. Rust persistence and download-manager methods that access the
+database are asynchronous and callers explicitly await them.
+
+`store/repositories/` contains concrete `MetadataRepository`,
+`DownloadJobRepository`, and `DownloadArtifactRepository` implementations. They
+own parameterized SQL, row mapping, database validation, and transactions. The
+download manager coordinates installation state and emits events after persistence
+completes. Filesystem operations and destination locks stay outside repositories.
+Tests exercise repositories through the public service and standalone persistence
+APIs using real temporary SQLite databases; query macros requiring a build-time
+database or checked-in query metadata are not used.
+
+An accepted request runs even if its caller stops awaiting its reply. SQL failures
+are returned to the caller; failures without a remaining caller are logged without
+query parameters or stored values. During shutdown the adapter first suspends
+downloads, then stops database admission, drains accepted requests, and awaits the
+dispatcher and SQLx connection closure. Dropping the service owner also signals
+the dispatcher to stop and drain, but explicit shutdown is required to await
+completion and receive close errors.
+
+The database file, schema version 4, legacy migration paths, stored enum names,
+indices, and five-second busy timeout remain compatible with existing installs.
+Migration checks avoid a writer transaction for an up-to-date schema and recheck
+the version inside the migration transaction. Standalone persistence functions
+also use SQLx repositories and explicitly close their short-lived connections.
+Account identifiers retain the existing metadata format and updates are
+transactional. Account tokens remain in the OS keyring. There is no rusqlite
+dependency or second persistence implementation.
+
 ## Game directory
 
 Each version keeps its saves next to the data directory, in `instances/<id>`.

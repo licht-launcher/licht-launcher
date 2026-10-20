@@ -154,8 +154,14 @@ mod tests {
                     .expect("runtime directory");
                 std::fs::write(&expected, b"temurin").expect("installed Java");
             }
-            let job =
-                crate::transfer::jobs::create_java_job(&settings, &cache, 8).expect("Java job");
+            let database = crate::DatabaseService::start(settings.clone())
+                .await
+                .expect("database");
+            let job = database
+                .client()
+                .create_java_download_job(&cache, 8)
+                .await
+                .expect("Java job");
             let control = DownloadControl::new();
             let (sender, mut events) = tokio::sync::mpsc::channel(64);
             let context = InstallationContext::for_job(
@@ -164,6 +170,7 @@ mod tests {
                 job.id,
                 control.clone(),
                 sender,
+                database.client(),
             );
             let first_cache = cache.clone();
             let running = tokio::spawn(async move {
@@ -217,6 +224,7 @@ mod tests {
                 expected
             );
             assert_eq!(std::fs::read(expected).expect("Java bytes"), b"temurin");
+            database.shutdown().await.expect("close database");
             std::fs::remove_dir_all(directory).expect("cleanup");
         }
     }

@@ -2,9 +2,12 @@ use std::path::Path;
 use std::time::Duration;
 
 use super::*;
+mod persistence;
 mod pipeline;
 mod support;
-use crate::InstancePreparationState;
+use crate::{
+    InstancePreparationState, create_pending_download_job, get_download_job, list_download_jobs,
+};
 use support::*;
 
 const BODY: &[u8] = b"hello world";
@@ -13,7 +16,7 @@ const SHA1: &str = "2aae6c35c94fcfb415dbe95f408b9ce91ee846ed";
 #[tokio::test]
 async fn pause_resume_and_completion_use_the_persisted_job_and_block_early_launch() {
     let mut server = Server::new().await;
-    let fixture = Fixture::new(&server.url);
+    let fixture = Fixture::new(&server.url).await;
     let entry = fixture.instance("Survival");
     let manager = fixture.manager();
     let job = manager
@@ -32,12 +35,13 @@ async fn pause_resume_and_completion_use_the_persisted_job_and_block_early_launc
         .expect("pause");
     assert_eq!(paused.status, DownloadJobStatus::Paused);
     assert!(matches!(
-        manager.ensure_launchable(&entry.folder),
+        manager.ensure_launchable(&entry.folder).await,
         Err(CoreError::InstancePreparing)
     ));
     tokio::time::timeout(Duration::from_secs(10), async {
         loop {
             if get_download_job(&fixture.settings, &fixture.game, &job.id)
+                .await
                 .is_ok_and(|job| job.progress.bytes_done == 5)
             {
                 break;
@@ -81,9 +85,11 @@ async fn pause_resume_and_completion_use_the_persisted_job_and_block_early_launc
     assert_eq!(completed.status, DownloadJobStatus::Completed);
     manager
         .ensure_launchable(&entry.folder)
+        .await
         .expect("launch enabled after preparation");
     assert!(
         list_download_jobs(&fixture.settings, &fixture.game)
+            .await
             .expect("list")
             .is_empty()
     );
@@ -103,12 +109,13 @@ async fn pause_resume_and_completion_use_the_persisted_job_and_block_early_launc
             .exists()
     );
     drop(tail);
+    fixture.close().await;
 }
 
 #[tokio::test]
 async fn shutdown_preserves_partial_bytes_and_a_new_manager_resumes_the_same_job() {
     let mut server = Server::new().await;
-    let fixture = Fixture::new(&server.url);
+    let fixture = Fixture::new(&server.url).await;
     let entry = fixture.instance("Restart");
     let manager = fixture.manager();
     let job = manager
@@ -121,6 +128,7 @@ async fn shutdown_preserves_partial_bytes_and_a_new_manager_resumes_the_same_job
     assert!(manager.active.lock().await.is_empty());
     assert_eq!(
         get_download_job(&fixture.settings, &fixture.game, &job.id)
+            .await
             .expect("stored")
             .status,
         DownloadJobStatus::Interrupted
@@ -133,7 +141,9 @@ async fn shutdown_preserves_partial_bytes_and_a_new_manager_resumes_the_same_job
     drop(manager);
     drop(tail);
 
-    crate::recover_download_jobs(&fixture.settings, &fixture.game).expect("startup");
+    crate::recover_download_jobs(&fixture.settings, &fixture.game)
+        .await
+        .expect("startup");
     let restarted = fixture.manager();
     assert!(
         server.requests.is_empty(),
@@ -152,12 +162,13 @@ async fn shutdown_preserves_partial_bytes_and_a_new_manager_resumes_the_same_job
     assert_eq!(result.id, job.id);
     assert_eq!(result.status, DownloadJobStatus::Completed);
     assert!(!fixture.part().exists());
+    fixture.close().await;
 }
 
 #[tokio::test]
 async fn cancelling_a_new_installation_removes_the_instance_after_the_worker_stops() {
     let mut server = Server::new().await;
-    let fixture = Fixture::new(&server.url);
+    let fixture = Fixture::new(&server.url).await;
     let entry = fixture.instance("Cancel");
     let manager = fixture.manager();
     let worker = Arc::clone(&manager);
@@ -167,6 +178,7 @@ async fn cancelling_a_new_installation_removes_the_instance_after_the_worker_sto
     let tail = server.request().await.hold();
     fixture.partial(5).await;
     let job = list_download_jobs(&fixture.settings, &fixture.game)
+        .await
         .expect("list")
         .pop()
         .expect("job");
@@ -201,13 +213,14 @@ async fn cancelling_a_new_installation_removes_the_instance_after_the_worker_sto
         DownloadJobStatus::Cancelled
     );
     drop(tail);
+    fixture.close().await;
 }
 
 #[tokio::test]
 async fn cancelling_repairs_and_updates_preserves_existing_instances_and_saves() {
     for operation in [DownloadJobOperation::Repair, DownloadJobOperation::Install] {
         let mut server = Server::new().await;
-        let fixture = Fixture::new(&server.url);
+        let fixture = Fixture::new(&server.url).await;
         let entry = fixture.instance("Existing");
         let root = fixture.game.instances_dir().expect("root");
         crate::configure_instance_version(&root, &entry.folder, "1.20.1").expect("version");
@@ -244,6 +257,7 @@ async fn cancelling_repairs_and_updates_preserves_existing_instances_and_saves()
         );
         assert!(!fixture.part().exists());
         drop(tail);
+        fixture.close().await;
     }
 }
 
@@ -253,7 +267,7 @@ async fn failed_instance_removal_can_retry_after_restart_without_the_profile() {
     use std::os::windows::fs::OpenOptionsExt;
 
     let mut server = Server::new().await;
-    let fixture = Fixture::new(&server.url);
+    let fixture = Fixture::new(&server.url).await;
     let entry = fixture.instance("Locked cancellation");
     let dir = fixture.game.instance_dir(&entry.folder).expect("folder");
     let locked = std::fs::OpenOptions::new()
@@ -274,6 +288,7 @@ async fn failed_instance_removal_can_retry_after_restart_without_the_profile() {
     );
     assert!(
         list_download_jobs(&fixture.settings, &fixture.game)
+            .await
             .expect("unfinished jobs")
             .iter()
             .any(|unfinished| unfinished.id == job.id),
@@ -284,7 +299,9 @@ async fn failed_instance_removal_can_retry_after_restart_without_the_profile() {
         std::fs::remove_file(dir.join("instance.json")).expect("partially removed profile");
     }
     drop(manager);
-    crate::recover_download_jobs(&fixture.settings, &fixture.game).expect("restart recovery");
+    crate::recover_download_jobs(&fixture.settings, &fixture.game)
+        .await
+        .expect("restart recovery");
     let restarted = fixture.manager();
     let outcome = finish(restarted.cancel(&job.id))
         .await
@@ -296,13 +313,14 @@ async fn failed_instance_removal_can_retry_after_restart_without_the_profile() {
         "retry must not reinstall the instance"
     );
     drop(tail);
+    fixture.close().await;
 }
 
 #[tokio::test]
 async fn pending_cancellation_recovers_after_cleanup_failure_with_missing_instance_files() {
     for remove_directory in [false, true] {
         let mut server = Server::new().await;
-        let fixture = Fixture::new(&server.url);
+        let fixture = Fixture::new(&server.url).await;
         let entry = fixture.instance("Pending cancellation");
         let dir = fixture.game.instance_dir(&entry.folder).expect("folder");
         let manager = fixture.manager();
@@ -314,13 +332,11 @@ async fn pending_cancellation_recovers_after_cleanup_failure_with_missing_instan
         let slot = manager.active_job(&job.id).await.expect("worker");
         let destination = fixture.game.root().join("blocked.bin");
         let obstruction = fixture.game.root().join("blocked.bin.part");
-        super::super::jobs::register_artifacts(
-            &fixture.settings,
-            &fixture.game,
-            &job.id,
-            &[destination],
-        )
-        .expect("artifact");
+        fixture
+            .database()
+            .register_download_artifacts(&fixture.game, &job.id, &[destination])
+            .await
+            .expect("artifact");
         // A directory at the partial-file path makes cleanup fail on both supported OSes.
         std::fs::create_dir_all(&obstruction).expect("cleanup obstruction");
         assert!(manager.cancel(&job.id).await.is_err());
@@ -328,19 +344,22 @@ async fn pending_cancellation_recovers_after_cleanup_failure_with_missing_instan
             finish(DownloadManager::wait_slot(&slot)).await.is_err(),
             "installation waiters must receive the cleanup failure"
         );
-        let pending =
-            get_download_job(&fixture.settings, &fixture.game, &job.id).expect("pending cleanup");
+        let pending = get_download_job(&fixture.settings, &fixture.game, &job.id)
+            .await
+            .expect("pending cleanup");
         assert_eq!(pending.status, DownloadJobStatus::Cancelling);
         assert!(pending.error.is_some());
         assert_eq!(
-            list_download_jobs(&fixture.settings, &fixture.game).expect("visible job"),
+            list_download_jobs(&fixture.settings, &fixture.game)
+                .await
+                .expect("visible job"),
             vec![pending.clone()]
         );
         assert!(
             manager.resume(&job.id).await.is_err(),
             "cleanup must not restart installation"
         );
-        assert!(manager.ensure_launchable(&entry.folder).is_err());
+        assert!(manager.ensure_launchable(&entry.folder).await.is_err());
         assert!(
             dir.join("instance.json").exists(),
             "artifact cleanup must finish before directory removal"
@@ -352,11 +371,15 @@ async fn pending_cancellation_recovers_after_cleanup_failure_with_missing_instan
         }
         drop(manager);
         assert_eq!(
-            crate::recover_download_jobs(&fixture.settings, &fixture.game).expect("recovery"),
+            crate::recover_download_jobs(&fixture.settings, &fixture.game)
+                .await
+                .expect("recovery"),
             0
         );
         assert_eq!(
-            get_download_job(&fixture.settings, &fixture.game, &job.id).expect("retained intent"),
+            get_download_job(&fixture.settings, &fixture.game, &job.id)
+                .await
+                .expect("retained intent"),
             pending
         );
         let restarted = fixture.manager();
@@ -366,6 +389,7 @@ async fn pending_cancellation_recovers_after_cleanup_failure_with_missing_instan
         );
         assert_eq!(
             get_download_job(&fixture.settings, &fixture.game, &job.id)
+                .await
                 .expect("still pending")
                 .status,
             DownloadJobStatus::Cancelling
@@ -378,18 +402,20 @@ async fn pending_cancellation_recovers_after_cleanup_failure_with_missing_instan
         assert!(!dir.exists());
         assert!(
             list_download_jobs(&fixture.settings, &fixture.game)
+                .await
                 .expect("finished cleanup")
                 .is_empty()
         );
         assert!(server.requests.is_empty());
         drop(tail);
+        fixture.close().await;
     }
 }
 
 #[tokio::test]
 async fn cancelling_a_recovered_new_installation_removes_it_without_starting_network_requests() {
     let server = Server::new().await;
-    let fixture = Fixture::new(&server.url);
+    let fixture = Fixture::new(&server.url).await;
     let entry = fixture.instance("Interrupted new instance");
     let job = create_pending_download_job(
         &fixture.settings,
@@ -398,8 +424,11 @@ async fn cancelling_a_recovered_new_installation_removes_it_without_starting_net
         None,
         DownloadJobOperation::Install,
     )
+    .await
     .expect("job");
-    crate::recover_download_jobs(&fixture.settings, &fixture.game).expect("recovery");
+    crate::recover_download_jobs(&fixture.settings, &fixture.game)
+        .await
+        .expect("recovery");
     let manager = fixture.manager();
     assert_eq!(
         manager.cancel(&job.id).await.expect("cancel").status,
@@ -413,12 +442,13 @@ async fn cancelling_a_recovered_new_installation_removes_it_without_starting_net
             .exists()
     );
     assert!(server.requests.is_empty());
+    fixture.close().await;
 }
 
 #[tokio::test]
 async fn shutdown_preserves_pending_removal_when_the_cancel_caller_does_not_finish() {
     let mut server = Server::new().await;
-    let fixture = Fixture::new(&server.url);
+    let fixture = Fixture::new(&server.url).await;
     let entry = fixture.instance("Pending shutdown");
     let manager = fixture.manager();
     let job = manager
@@ -431,6 +461,7 @@ async fn shutdown_preserves_pending_removal_when_the_cancel_caller_does_not_fini
         let mut snapshot = slot.snapshot.lock().await;
         *snapshot = manager
             .prepare_cancellation(snapshot.clone())
+            .await
             .expect("removal intent");
         slot.control.cancel();
     }
@@ -449,6 +480,7 @@ async fn shutdown_preserves_pending_removal_when_the_cancel_caller_does_not_fini
     assert!(manager.active.lock().await.is_empty());
     assert_eq!(
         get_download_job(&fixture.settings, &fixture.game, &job.id)
+            .await
             .expect("preserved intent")
             .status,
         DownloadJobStatus::Cancelling
@@ -471,12 +503,13 @@ async fn shutdown_preserves_pending_removal_when_the_cancel_caller_does_not_fini
             .exists()
     );
     drop(tail);
+    fixture.close().await;
 }
 
 #[tokio::test]
 async fn cancelling_an_existing_legacy_instance_update_keeps_its_files() {
     let mut server = Server::new().await;
-    let fixture = Fixture::new(&server.url);
+    let fixture = Fixture::new(&server.url).await;
     let root = fixture.game.instances_dir().expect("instances");
     let entry = crate::create_instance(
         &root,
@@ -505,13 +538,14 @@ async fn cancelling_an_existing_legacy_instance_update_keeps_its_files() {
             .is_none()
     );
     drop(tail);
+    fixture.close().await;
 }
 
 #[tokio::test]
 async fn explicit_instance_deletion_cancels_downloads_without_deleting_the_folder_twice() {
     for pending_removal in [false, true] {
         let mut server = Server::new().await;
-        let fixture = Fixture::new(&server.url);
+        let fixture = Fixture::new(&server.url).await;
         let entry = fixture.instance("Delete");
         let manager = fixture.manager();
         let job = manager
@@ -524,6 +558,7 @@ async fn explicit_instance_deletion_cancels_downloads_without_deleting_the_folde
             let mut snapshot = slot.snapshot.lock().await;
             *snapshot = manager
                 .prepare_cancellation(snapshot.clone())
+                .await
                 .expect("pending removal");
             slot.control.cancel();
         }
@@ -547,13 +582,14 @@ async fn explicit_instance_deletion_cancels_downloads_without_deleting_the_folde
                 .exists()
         );
         drop(tail);
+        fixture.close().await;
     }
 }
 
 #[tokio::test]
 async fn a_failed_download_can_retry_the_same_job_and_clear_its_error() {
     let mut server = Server::new().await;
-    let fixture = Fixture::new(&server.url);
+    let fixture = Fixture::new(&server.url).await;
     let entry = fixture.instance("Retry");
     let manager = fixture.manager();
     let job = manager
@@ -576,18 +612,20 @@ async fn a_failed_download_can_retry_the_same_job_and_clear_its_error() {
     let complete = finish(manager.wait(&job.id)).await.expect("complete");
     assert_eq!(complete.status, DownloadJobStatus::Completed);
     assert!(complete.error.is_none());
+    fixture.close().await;
 }
 
 #[tokio::test]
 async fn standalone_java_has_no_fake_instance_and_cancellation_returns_no_path() {
     let mut server = Server::new().await;
-    let fixture = Fixture::new(&server.url);
+    let fixture = Fixture::new(&server.url).await;
     let manager = fixture.manager();
     let worker = Arc::clone(&manager);
     let install = tokio::spawn(async move { worker.install_java(21).await });
     let tail = server.request().await.hold();
     fixture.partial(5).await;
     let job = list_download_jobs(&fixture.settings, &fixture.game)
+        .await
         .expect("list")
         .pop()
         .expect("Java job");
@@ -615,11 +653,12 @@ async fn standalone_java_has_no_fake_instance_and_cancellation_returns_no_path()
         load_settings(&fixture.settings).expect("settings").java21,
         Some(path)
     );
+    fixture.close().await;
 }
 
 #[tokio::test]
 async fn recovered_cancellation_keeps_partials_referenced_by_another_unfinished_job() {
-    let fixture = Fixture::new("http://127.0.0.1:1/unused");
+    let fixture = Fixture::new("http://127.0.0.1:1/unused").await;
     let first = fixture.instance("First");
     let second = fixture.instance("Second");
     let first = create_pending_download_job(
@@ -629,6 +668,7 @@ async fn recovered_cancellation_keeps_partials_referenced_by_another_unfinished_
         Some("1.21.1"),
         DownloadJobOperation::Install,
     )
+    .await
     .expect("first");
     let second = create_pending_download_job(
         &fixture.settings,
@@ -637,16 +677,15 @@ async fn recovered_cancellation_keeps_partials_referenced_by_another_unfinished_
         Some("1.21.1"),
         DownloadJobOperation::Install,
     )
+    .await
     .expect("second");
     let destination = fixture.game.root().join("payload.bin");
     for job in [&first, &second] {
-        super::super::jobs::register_artifacts(
-            &fixture.settings,
-            &fixture.game,
-            &job.id,
-            std::slice::from_ref(&destination),
-        )
-        .expect("artifact association");
+        fixture
+            .database()
+            .register_download_artifacts(&fixture.game, &job.id, std::slice::from_ref(&destination))
+            .await
+            .expect("artifact association");
     }
     std::fs::create_dir_all(fixture.game.root()).expect("data");
     std::fs::write(fixture.part(), b"hello").expect("partial");
@@ -655,13 +694,14 @@ async fn recovered_cancellation_keeps_partials_referenced_by_another_unfinished_
     assert!(fixture.part().exists());
     manager.cancel(&second.id).await.expect("cancel second");
     assert!(!fixture.part().exists());
+    fixture.close().await;
 }
 
 #[tokio::test]
 async fn cancelling_an_active_job_preserves_shared_cache_bytes_until_the_last_job_finishes() {
     for cancel_remaining in [false, true] {
         let mut server = Server::new().await;
-        let fixture = Fixture::new(&server.url);
+        let fixture = Fixture::new(&server.url).await;
         let first_instance = fixture.instance("First shared library consumer");
         let second_instance = fixture.instance("Second shared library consumer");
         let manager = fixture.manager();
@@ -675,15 +715,24 @@ async fn cancelling_an_active_job_preserves_shared_cache_bytes_until_the_last_jo
             .start(&second_instance.folder, DownloadJobOperation::Install)
             .await
             .expect("second install");
-        wait_until(|| {
-            let connection = crate::open_db(&fixture.settings).expect("database");
-            connection
-                .query_row(
+        finish(async {
+            loop {
+                let mut connection = crate::open_db(&fixture.settings).await.expect("database");
+                let registered: bool = sqlx::query_scalar(
                     "SELECT EXISTS(SELECT 1 FROM download_job_artifacts WHERE job_id = ?1)",
-                    [&second.id],
-                    |row| row.get::<_, bool>(0),
                 )
-                .expect("second job artifact registered")
+                .bind(&second.id)
+                .fetch_one(&mut connection)
+                .await
+                .expect("artifact registered");
+                sqlx::Connection::close(connection)
+                    .await
+                    .expect("close fixture connection");
+                if registered {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
         })
         .await;
         manager
@@ -762,16 +811,21 @@ async fn cancelling_an_active_job_preserves_shared_cache_bytes_until_the_last_jo
         }
         assert!(server.requests.is_empty());
         drop(tail);
+        fixture.close().await;
     }
 }
 
 #[tokio::test]
 async fn accepted_cancellation_wins_even_if_an_executor_finishes_successfully() {
     let mut server = Server::new().await;
-    let fixture = Fixture::new(&server.url);
-    let connection = crate::open_db(&fixture.settings).expect("database");
-    crate::set_meta(&connection, "test_finish_after_cancel", "true").expect("completion gate");
-    drop(connection);
+    let fixture = Fixture::new(&server.url).await;
+    let mut connection = crate::open_db(&fixture.settings).await.expect("database");
+    crate::set_meta(&mut connection, "test_finish_after_cancel", "true")
+        .await
+        .expect("completion gate");
+    sqlx::Connection::close(connection)
+        .await
+        .expect("close fixture connection");
     let entry = fixture.instance("Completion race");
     let manager = fixture.manager();
     let job = manager
@@ -795,8 +849,10 @@ async fn accepted_cancellation_wins_even_if_an_executor_finishes_successfully() 
     assert_eq!(outcome.status, DownloadJobStatus::Cancelled);
     assert_eq!(
         get_download_job(&fixture.settings, &fixture.game, &job.id)
+            .await
             .expect("persisted outcome")
             .status,
         DownloadJobStatus::Cancelled
     );
+    fixture.close().await;
 }

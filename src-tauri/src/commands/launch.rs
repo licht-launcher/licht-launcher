@@ -20,7 +20,10 @@ pub async fn launch(
     folder: String,
     username: String,
 ) -> Result<GameExit, String> {
-    downloads.ensure_launchable(&folder).map_err(failure)?;
+    downloads
+        .ensure_launchable(&folder)
+        .await
+        .map_err(failure)?;
     let instances_dir = paths.game.instances_dir().map_err(failure)?;
     sessions.reconcile(&instances_dir)?;
     let _guard = sessions.try_begin(&folder)?;
