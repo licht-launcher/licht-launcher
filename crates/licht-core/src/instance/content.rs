@@ -285,9 +285,11 @@ async fn fetch_remote_metadata(
     name: &str,
 ) -> Option<ContentMetadata> {
     let query = fallback_title(name);
-    fetch_modrinth_metadata(client, kind, &query)
-        .await
-        .or(fetch_curseforge_metadata(client, kind, &query).await)
+    first_metadata(
+        fetch_modrinth_metadata(client, kind, &query),
+        fetch_curseforge_metadata(client, kind, &query),
+    )
+    .await
 }
 
 async fn fetch_fingerprint_metadata(
@@ -295,9 +297,21 @@ async fn fetch_fingerprint_metadata(
     kind: InstanceContentKind,
     fingerprint: &str,
 ) -> Option<ContentMetadata> {
-    fetch_modrinth_fingerprint(client, kind, fingerprint)
-        .await
-        .or(fetch_curseforge_fingerprint(client, kind, fingerprint).await)
+    first_metadata(
+        fetch_modrinth_fingerprint(client, kind, fingerprint),
+        fetch_curseforge_fingerprint(client, kind, fingerprint),
+    )
+    .await
+}
+
+async fn first_metadata(
+    primary: impl std::future::Future<Output = Option<ContentMetadata>>,
+    fallback: impl std::future::Future<Output = Option<ContentMetadata>>,
+) -> Option<ContentMetadata> {
+    match primary.await {
+        Some(metadata) => Some(metadata),
+        None => fallback.await,
+    }
 }
 
 async fn fetch_modrinth_fingerprint(
@@ -628,6 +642,53 @@ impl InstanceContentKind {
 mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn metadata(title: &str) -> ContentMetadata {
+        ContentMetadata {
+            title: title.to_string(),
+            version: Some("1.0".to_string()),
+            icon_url: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn metadata_hit_does_not_execute_the_fallback() {
+        let primary = async { Some(metadata("Primary")) };
+        let fallback = async {
+            panic!("a metadata hit must not execute the fallback provider");
+        };
+
+        let result = first_metadata(primary, fallback).await.expect("metadata");
+
+        assert_eq!(result.title, "Primary");
+        assert_eq!(result.version.as_deref(), Some("1.0"));
+    }
+
+    #[tokio::test]
+    async fn metadata_miss_awaits_the_primary_before_trying_the_fallback() {
+        let primary_finished = std::cell::Cell::new(false);
+        let primary = async {
+            tokio::task::yield_now().await;
+            primary_finished.set(true);
+            None
+        };
+        let fallback = async {
+            assert!(primary_finished.get(), "primary lookup must finish first");
+            Some(metadata("Fallback"))
+        };
+
+        let result = first_metadata(primary, fallback).await.expect("metadata");
+
+        assert_eq!(result.title, "Fallback");
+        assert_eq!(result.version.as_deref(), Some("1.0"));
+    }
+
+    #[tokio::test]
+    async fn metadata_miss_in_both_providers_preserves_the_missing_result() {
+        let result = first_metadata(async { None }, async { None }).await;
+
+        assert!(result.is_none());
+    }
 
     fn cache(name: &str) -> SharedCache {
         let root = std::env::temp_dir().join(format!(
