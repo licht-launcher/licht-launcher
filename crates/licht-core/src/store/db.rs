@@ -7,7 +7,7 @@ use super::repositories::metadata::MetadataRepository;
 
 use crate::{CoreError, Result, SharedCache};
 
-const DB_FILE: &str = "licht.sqlite";
+const DB_FILE: &str = "licht.db";
 const SCHEMA_VERSION: u32 = 5;
 pub(super) const META_LAST_PLAYED: &str = "last_played_folder";
 
@@ -16,13 +16,24 @@ pub fn db_path(cache: &SharedCache) -> PathBuf {
 }
 
 pub async fn open_db(cache: &SharedCache) -> Result<SqliteConnection> {
+    let _initialization = super::layout::initialization_lock(cache, "database.lock").await?;
     tokio::fs::create_dir_all(cache.root()).await?;
     let options = SqliteConnectOptions::new()
         .filename(db_path(cache))
         .create_if_missing(true)
         .busy_timeout(Duration::from_secs(5));
     let mut connection = SqliteConnection::connect_with(&options).await?;
-    let migrated = migrate(&mut connection).await;
+    let migrated = async {
+        migrate(&mut connection).await?;
+        let journal: String = sqlx::query_scalar("PRAGMA journal_mode = WAL")
+            .fetch_one(&mut connection)
+            .await?;
+        if journal != "wal" {
+            return Err(std::io::Error::other("could not enable SQLite WAL mode").into());
+        }
+        Ok(())
+    }
+    .await;
     if let Err(error) = migrated {
         if connection.close().await.is_err() {
             tracing::error!("Failed to close the database after a migration error");

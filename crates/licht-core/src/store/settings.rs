@@ -202,15 +202,13 @@ fn normalize_directory(cache: &SharedCache, value: Option<&str>) -> Result<Optio
     if !path.is_absolute() {
         return Err(CoreError::SettingsDirectory);
     }
-    if let Some(parent) = cache.root().parent()
-        && path.components().eq(parent.components())
-    {
+    if path.components().eq(cache.root().components()) {
         return Ok(None);
     }
     Ok(Some(path.display().to_string()))
 }
 
-fn validated(cache: &SharedCache, settings: Settings) -> Result<Settings> {
+pub(super) fn validated(cache: &SharedCache, settings: Settings) -> Result<Settings> {
     if settings.schema != SCHEMA {
         return Err(CoreError::SettingsSchema {
             schema: settings.schema,
@@ -340,11 +338,7 @@ pub fn settings_snapshot(cache: &SharedCache) -> Result<SettingsSnapshot> {
     let total = total_memory_mb();
     let application_directory = match &settings.data_directory {
         Some(path) => path.clone(),
-        None => cache
-            .root()
-            .parent()
-            .map(|path| path.display().to_string())
-            .ok_or(CoreError::CachePath)?,
+        None => cache.root().display().to_string(),
     };
     Ok(SettingsSnapshot {
         settings,
@@ -403,12 +397,14 @@ pub fn write_concurrency(game: &SharedCache, settings: &SharedCache) -> Result<u
     Ok(load_settings(concurrency_source(game, settings))?.write_concurrency as usize)
 }
 
-/// Next process: game files go to `{dataDirectory}/Licht Launcher`.
-/// An empty directory keeps the cache that was passed in.
+/// Next process: game files go to `{dataDirectory}/Licht Launcher/data`.
+/// The default game directory is `<launcher>/data`.
 pub fn game_cache(defaults: &SharedCache) -> Result<SharedCache> {
     let settings = load_settings(defaults)?;
     match settings.data_directory {
-        Some(path) => Ok(SharedCache::at(PathBuf::from(path).join(GAME_FOLDER))),
-        None => Ok(defaults.clone()),
+        Some(path) => Ok(SharedCache::at(
+            PathBuf::from(path).join(GAME_FOLDER).join("data"),
+        )),
+        None => Ok(SharedCache::at(defaults.root().join("data"))),
     }
 }

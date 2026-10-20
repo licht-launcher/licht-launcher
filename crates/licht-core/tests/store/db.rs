@@ -177,6 +177,11 @@ async fn a_newer_database_schema_is_rejected_without_downgrading_it() {
         Err(CoreError::DatabaseSchema { schema: 6 })
     ));
     assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 6);
+    let journal: String = sqlx::query_scalar("PRAGMA journal_mode")
+        .fetch_one(&mut connection)
+        .await
+        .expect("unchanged journal mode");
+    assert_eq!(journal, "delete");
     assert_eq!(
         scalar(
             &mut connection,

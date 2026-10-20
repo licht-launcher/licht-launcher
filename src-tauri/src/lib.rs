@@ -17,7 +17,8 @@ pub fn run() -> anyhow::Result<()> {
         "Starting Licht Launcher"
     );
 
-    let paths = commands::LauncherPaths::load().context("Failed to resolve Licht folders")?;
+    let paths = tauri::async_runtime::block_on(commands::LauncherPaths::load())
+        .context("Failed to resolve Licht folders")?;
     let database =
         tauri::async_runtime::block_on(licht_core::DatabaseService::start(paths.settings.clone()))
             .context("Failed to start the database service")?;

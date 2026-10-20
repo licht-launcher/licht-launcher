@@ -29,8 +29,8 @@ pub struct LauncherPaths {
 }
 
 impl LauncherPaths {
-    pub fn load() -> Result<Self, CoreError> {
-        let settings = SharedCache::system()?;
+    pub async fn load() -> Result<Self, CoreError> {
+        let settings = licht_core::initialize_launcher().await?;
         let game = game_cache(&settings)?;
         Ok(Self { settings, game })
     }

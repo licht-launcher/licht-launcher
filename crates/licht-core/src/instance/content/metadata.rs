@@ -104,7 +104,7 @@ fn metadata_cache_key(fingerprint: &str) -> String {
 
 fn read_metadata_cache(cache: &SharedCache, key: &str) -> Result<Option<ContentMetadata>> {
     let path = cache
-        .root()
+        .cache_dir()?
         .join("content-metadata")
         .join(format!("{key}.json"));
     if !path.is_file() {
@@ -118,7 +118,7 @@ pub(super) fn write_metadata_cache(
     key: &str,
     metadata: &ContentMetadata,
 ) -> Result<()> {
-    let directory = cache.root().join("content-metadata");
+    let directory = cache.cache_dir()?.join("content-metadata");
     fs::create_dir_all(&directory)?;
     fs::write(
         directory.join(format!("{key}.json")),
