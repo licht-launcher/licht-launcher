@@ -34,7 +34,14 @@ pub async fn install_mrpack_files(
     let files = index_files(&index, instance_dir)?;
     let mut pending = Vec::new();
     for file in &files {
-        if !prepare_download(&file.task.destination, &file.task.sha1, &file.sha512)? {
+        if !prepare_download(
+            &file.task.destination,
+            &file.task.sha1,
+            &file.sha512,
+            &progress.control,
+        )
+        .await?
+        {
             continue;
         }
         if let Some(parent) = file.task.destination.parent() {
@@ -68,7 +75,7 @@ pub async fn install_mrpack_files(
         .await?;
     progress.stage(crate::DownloadPhase::Verifying).await?;
     for file in &files {
-        ensure_sha512(&file.task.destination, &file.sha512)?;
+        ensure_sha512(&file.task.destination, &file.sha512, &progress.control).await?;
     }
     Ok(())
 }

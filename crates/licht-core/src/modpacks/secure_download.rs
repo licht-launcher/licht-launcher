@@ -66,6 +66,8 @@ pub(super) fn allowlisted_download_client_with_headers(
     let too_many_msg = too_many_msg.to_string();
     Client::builder()
         .default_headers(headers)
+        .connect_timeout(crate::MANIFEST_REQUEST_TIMEOUT)
+        .read_timeout(crate::MANIFEST_REQUEST_TIMEOUT)
         .redirect(reqwest::redirect::Policy::custom(move |attempt| {
             let allowed: Vec<&str> = hosts.iter().map(String::as_str).collect();
             match redirect_hop(attempt.url().as_str(), attempt.previous().len(), &allowed) {
@@ -85,6 +87,61 @@ mod tests {
     const HOSTS: &[&str] = &["cdn.modrinth.com"];
     const BLOCKED: &str = "redirect target is not allowed";
     const TOO_MANY: &str = "too many redirects";
+
+    #[tokio::test]
+    async fn modpack_client_times_out_when_response_body_stops_arriving() {
+        use std::time::Duration;
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let _guard = crate::test_http::lock_local_http().await;
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind");
+        let address = listener.local_addr().expect("address");
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.expect("accept");
+            let mut buffer = [0_u8; 1024];
+            let mut request = Vec::new();
+            loop {
+                let read = socket.read(&mut buffer).await.expect("request");
+                assert!(read > 0, "request closed before headers");
+                request.extend_from_slice(&buffer[..read]);
+                if request.windows(4).any(|window| window == b"\r\n\r\n") {
+                    break;
+                }
+            }
+            socket
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nx")
+                .await
+                .expect("partial body");
+            std::future::pending::<()>().await;
+        });
+        let client = allowlisted_download_client(HOSTS, BLOCKED, TOO_MANY).expect("client");
+        let mut response = client
+            .get(format!("http://{address}/file.jar"))
+            .send()
+            .await
+            .expect("headers");
+        assert_eq!(
+            response
+                .chunk()
+                .await
+                .expect("first chunk")
+                .expect("body")
+                .as_ref(),
+            b"x"
+        );
+        let result = tokio::time::timeout(
+            crate::MANIFEST_REQUEST_TIMEOUT + Duration::from_secs(5),
+            response.chunk(),
+        )
+        .await;
+        server.abort();
+        let error = result
+            .expect("a stalled body must hit the client's inactivity timeout")
+            .expect_err("body timeout");
+        assert!(error.is_timeout(), "expected a timeout: {error}");
+    }
 
     #[test]
     fn url_rules_are_strict() {
