@@ -4,7 +4,7 @@ use licht_core::{
     set_instance_content_enabled as set_content_enabled,
     touch_last_opened as touch_instance_opened, update_instance,
 };
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Emitter, State};
 use tauri_plugin_opener::OpenerExt;
 
 use super::{LauncherPaths, failure, http_client, instances_root};
@@ -157,14 +157,38 @@ pub fn list_instance_entries(
 
 #[tauri::command]
 pub async fn list_instance_content(
+    app: AppHandle,
     paths: State<'_, LauncherPaths>,
+    database: State<'_, DatabaseClient>,
     folder: String,
     refresh: bool,
+    request_id: String,
 ) -> Result<Vec<InstanceContentEntry>, String> {
+    if request_id.is_empty() || request_id.len() > 128 {
+        return Err("invalid content request identifier".to_string());
+    }
     let client = http_client().map_err(failure)?;
-    licht_core::list_instance_content_with_metadata(&paths.game, &client, &folder, refresh)
-        .await
-        .map_err(failure)
+    licht_core::list_instance_content_progressively(
+        &paths.game,
+        &database,
+        &client,
+        &folder,
+        refresh,
+        |entries| {
+            app.emit(
+                "instance-content-updated",
+                licht_core::InstanceContentUpdate {
+                    request_id: request_id.clone(),
+                    instance_folder: folder.clone(),
+                    entries: entries.to_vec(),
+                },
+            )
+            .map_err(std::io::Error::other)?;
+            Ok(())
+        },
+    )
+    .await
+    .map_err(failure)
 }
 
 #[tauri::command]

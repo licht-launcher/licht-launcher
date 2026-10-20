@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import type {
   LoaderChannel,
   ModpackListItem,
@@ -12,6 +13,7 @@ import type { DownloadJobSnapshot } from "@/lib/generated/DownloadJobSnapshot";
 import type { GameExit } from "@/lib/generated/GameExit";
 import type { InstanceContentEntry } from "@/lib/generated/InstanceContentEntry";
 import type { InstanceContentKind } from "@/lib/generated/InstanceContentKind";
+import type { InstanceContentUpdate } from "@/lib/generated/InstanceContentUpdate";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 import type { InstanceFsEntry } from "@/lib/generated/InstanceFsEntry";
 import type { InstanceSettings } from "@/lib/generated/InstanceSettings";
@@ -150,11 +152,49 @@ export function listInstanceEntries(
   return invoke("list_instance_entries", { folder, relativePath });
 }
 
-export function listInstanceContent(
+export async function listInstanceContent(
   folder: string,
   refresh = false,
+  onUpdate?: (entries: InstanceContentEntry[], initial: boolean) => void,
+  signal?: AbortSignal,
 ): Promise<InstanceContentEntry[]> {
-  return invoke("list_instance_content", { folder, refresh });
+  const requestId = crypto.randomUUID();
+  let stopped = false;
+  let initial = true;
+  const unsubscribe = onUpdate
+    ? await listen<InstanceContentUpdate>(
+        "instance-content-updated",
+        ({ payload }) => {
+          if (
+            stopped ||
+            signal?.aborted ||
+            payload.requestId !== requestId ||
+            payload.instanceFolder !== folder
+          )
+            return;
+          onUpdate(payload.entries, initial);
+          initial = false;
+        },
+      )
+    : undefined;
+  const stop = () => {
+    if (stopped) return;
+    stopped = true;
+    unsubscribe?.();
+  };
+  signal?.addEventListener("abort", stop, { once: true });
+  try {
+    if (signal?.aborted)
+      throw new DOMException("Content request aborted", "AbortError");
+    return await invoke("list_instance_content", {
+      folder,
+      refresh,
+      requestId,
+    });
+  } finally {
+    stop();
+    signal?.removeEventListener("abort", stop);
+  }
 }
 
 export function setInstanceContentEnabled(

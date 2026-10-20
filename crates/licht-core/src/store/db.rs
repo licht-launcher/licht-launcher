@@ -8,7 +8,7 @@ use super::repositories::metadata::MetadataRepository;
 use crate::{CoreError, Result, SharedCache};
 
 const DB_FILE: &str = "licht.sqlite";
-const SCHEMA_VERSION: u32 = 4;
+const SCHEMA_VERSION: u32 = 5;
 pub(super) const META_LAST_PLAYED: &str = "last_played_folder";
 
 pub fn db_path(cache: &SharedCache) -> PathBuf {
@@ -130,6 +130,22 @@ async fn migrate(connection: &mut SqliteConnection) -> Result<()> {
         sqlx::query("PRAGMA user_version = 4")
             .execute(&mut *transaction)
             .await?;
+    }
+    if version < 5 {
+        sqlx::raw_sql(
+            "CREATE TABLE content_fingerprints (
+                data_directory TEXT NOT NULL,
+                instance_folder TEXT NOT NULL,
+                relative_path TEXT NOT NULL,
+                size INTEGER NOT NULL CHECK(size >= 0),
+                modified TEXT NOT NULL,
+                sha1 TEXT NOT NULL CHECK(length(sha1) = 40 AND sha1 NOT GLOB '*[^0-9a-f]*'),
+                PRIMARY KEY (data_directory, instance_folder, relative_path)
+            );
+            PRAGMA user_version = 5;",
+        )
+        .execute(&mut *transaction)
+        .await?;
     }
     transaction.commit().await?;
     Ok(())

@@ -179,7 +179,7 @@ async fn startup_reports_an_unsupported_schema_without_modifying_it() {
     )
     .await
     .expect("future database");
-    sqlx::query("PRAGMA user_version = 5")
+    sqlx::query("PRAGMA user_version = 6")
         .execute(&mut connection)
         .await
         .expect("future schema");
@@ -187,7 +187,7 @@ async fn startup_reports_an_unsupported_schema_without_modifying_it() {
 
     assert!(matches!(
         DatabaseService::start(fixture.cache.clone()).await,
-        Err(CoreError::DatabaseSchema { schema: 5 })
+        Err(CoreError::DatabaseSchema { schema: 6 })
     ));
     let mut connection = SqliteConnection::connect_with(
         &SqliteConnectOptions::new().filename(db_path(&fixture.cache)),
@@ -198,7 +198,7 @@ async fn startup_reports_an_unsupported_schema_without_modifying_it() {
         .fetch_one(&mut connection)
         .await
         .expect("schema version");
-    assert_eq!(version, 5);
+    assert_eq!(version, 6);
     connection.close().await.expect("close fixture connection");
 }
 

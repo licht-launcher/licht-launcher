@@ -10,6 +10,7 @@ use crate::{CoreError, Result, SharedCache};
 
 const QUEUE_CAPACITY: usize = 64;
 
+mod content;
 mod downloads;
 
 enum Request {
@@ -17,6 +18,7 @@ enum Request {
     SetLastPlayed(String, oneshot::Sender<Result<()>>),
     ClearLastPlayed(oneshot::Sender<Result<()>>),
     Downloads(downloads::Request),
+    Content(content::Request),
     RememberAccount(String, bool, oneshot::Sender<Result<()>>),
     AccountUuids(oneshot::Sender<Result<Vec<String>>>),
     Stop,
@@ -186,6 +188,7 @@ async fn run(
             }
             Request::Stop => {}
             Request::Downloads(request) => downloads::execute(&mut connection, request).await,
+            Request::Content(request) => content::execute(&mut connection, request).await,
             Request::AccountUuids(reply) => {
                 let result = db::get_meta(&mut connection, "microsoft_account_uuids")
                     .await
