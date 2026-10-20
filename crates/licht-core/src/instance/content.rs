@@ -34,6 +34,15 @@ pub struct InstanceContentEntry {
     pub icon_url: Option<String>,
 }
 
+/// The first event contains the local listing; later events contain enriched batches.
+#[derive(Debug, Clone, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct InstanceContentUpdate {
+    pub request_id: String,
+    pub instance_folder: String,
+    pub entries: Vec<InstanceContentEntry>,
+}
+
 pub fn list_instance_content(
     cache: &SharedCache,
     folder: &str,
@@ -92,15 +101,30 @@ pub async fn list_instance_content_with_metadata(
     folder: &str,
     refresh: bool,
 ) -> Result<Vec<InstanceContentEntry>> {
+    list_instance_content_progressively(cache, database, client, folder, refresh, |_| Ok(())).await
+}
+
+pub async fn list_instance_content_progressively(
+    cache: &SharedCache,
+    database: &DatabaseClient,
+    client: &Client,
+    folder: &str,
+    refresh: bool,
+    mut publish: impl FnMut(&[InstanceContentEntry]) -> Result<()>,
+) -> Result<Vec<InstanceContentEntry>> {
     let root = instance_root(cache, folder)?;
     let mut entries = list_instance_content(cache, folder)?;
+    publish(&entries)?;
+    let mut last_published = std::time::Instant::now();
+    let mut batch_start = 0;
     let previous = database.content_fingerprints(cache, folder).await?;
     let known: std::collections::BTreeMap<_, _> = previous
         .iter()
         .map(|entry| (entry.relative_path.as_str(), entry))
         .collect();
     let mut fingerprints = Vec::with_capacity(entries.len());
-    for entry in &mut entries {
+    for index in 0..entries.len() {
+        let entry = &mut entries[index];
         let filename = if entry.enabled {
             entry.name.clone()
         } else {
@@ -147,11 +171,33 @@ pub async fn list_instance_content_with_metadata(
         entry.version = metadata.version;
         entry.icon_url = metadata.icon_url;
         fingerprints.push(fingerprint);
+        if publish_content_batch(
+            &entries[batch_start..=index],
+            &mut last_published,
+            std::time::Instant::now(),
+            &mut publish,
+        )? {
+            batch_start = index + 1;
+        }
     }
     database
         .sync_content_fingerprints(cache, folder, previous, fingerprints)
         .await?;
     Ok(entries)
+}
+
+fn publish_content_batch(
+    entries: &[InstanceContentEntry],
+    last_published: &mut std::time::Instant,
+    now: std::time::Instant,
+    publish: &mut impl FnMut(&[InstanceContentEntry]) -> Result<()>,
+) -> Result<bool> {
+    if now.duration_since(*last_published) < std::time::Duration::from_millis(100) {
+        return Ok(false);
+    }
+    publish(entries)?;
+    *last_published = now;
+    Ok(true)
 }
 
 fn content_fingerprint(
@@ -918,6 +964,165 @@ mod tests {
         .await
         .expect("updated content");
         assert_eq!(entries[0].title, "Updated");
+        service.shutdown().await.expect("shutdown");
+    }
+
+    #[tokio::test]
+    async fn progressive_content_publishes_local_rows_before_database_failure() {
+        let cache = cache("progressive-before-database");
+        let root = instance(&cache);
+        fs::write(root.join("mods").join("one.jar"), b"mod").expect("mod");
+        let service = crate::DatabaseService::start(cache.clone())
+            .await
+            .expect("service");
+        let database = service.client();
+        service.shutdown().await.expect("shutdown");
+        let mut snapshots = Vec::new();
+        let result = list_instance_content_progressively(
+            &cache,
+            &database,
+            &offline_client(),
+            "classic",
+            false,
+            |entries| {
+                snapshots.push(entries.to_vec());
+                Ok(())
+            },
+        )
+        .await;
+        assert!(matches!(result, Err(CoreError::DatabaseService { .. })));
+        assert_eq!(snapshots.len(), 1);
+        assert_eq!(snapshots[0][0].name, "one.jar");
+        assert_eq!(snapshots[0][0].version, None);
+    }
+
+    #[tokio::test]
+    async fn progressive_content_propagates_publication_failure() {
+        let cache = cache("progressive-emission-error");
+        instance(&cache);
+        let service = crate::DatabaseService::start(cache.clone())
+            .await
+            .expect("service");
+        let result = list_instance_content_progressively(
+            &cache,
+            &service.client(),
+            &offline_client(),
+            "classic",
+            false,
+            |_| Err(std::io::Error::other("event bridge unavailable").into()),
+        )
+        .await;
+        assert!(
+            matches!(result, Err(CoreError::Io(error)) if error.to_string() == "event bridge unavailable")
+        );
+        service.shutdown().await.expect("shutdown");
+    }
+
+    #[test]
+    fn progressive_content_batches_are_throttled_and_errors_propagate() {
+        let start = std::time::Instant::now();
+        let mut last = start;
+        let mut snapshots = Vec::new();
+        let mut publish = |entries: &[InstanceContentEntry]| {
+            snapshots.push(entries.len());
+            Ok(())
+        };
+        assert!(
+            !publish_content_batch(
+                &[],
+                &mut last,
+                start + std::time::Duration::from_millis(99),
+                &mut publish
+            )
+            .expect("throttled")
+        );
+        assert!(
+            publish_content_batch(
+                &[],
+                &mut last,
+                start + std::time::Duration::from_millis(100),
+                &mut publish
+            )
+            .expect("publish")
+        );
+        assert!(
+            !publish_content_batch(
+                &[],
+                &mut last,
+                start + std::time::Duration::from_millis(199),
+                &mut publish
+            )
+            .expect("throttled")
+        );
+        assert!(
+            publish_content_batch(
+                &[],
+                &mut last,
+                start + std::time::Duration::from_millis(200),
+                &mut publish
+            )
+            .expect("publish")
+        );
+        assert_eq!(snapshots, [0, 0]);
+        assert!(
+            publish_content_batch(
+                &[],
+                &mut last,
+                start + std::time::Duration::from_millis(300),
+                &mut |_| Err(std::io::Error::other("publish failed").into())
+            )
+            .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn progressive_content_measures_first_list_and_completion_with_local_fixtures() {
+        let cache = cache("progressive-latency");
+        let root = instance(&cache);
+        for index in 0..256 {
+            fs::write(
+                root.join("mods").join(format!("mod-{index}.jar")),
+                b"fixture",
+            )
+            .expect("mod");
+        }
+        seed_metadata(&cache, b"fixture", "Known metadata");
+        let service = crate::DatabaseService::start(cache.clone())
+            .await
+            .expect("service");
+        for pass in ["cold fingerprint index", "warm fingerprint index"] {
+            let start = std::time::Instant::now();
+            let mut first = None;
+            let mut published = 0;
+            let entries = list_instance_content_progressively(
+                &cache,
+                &service.client(),
+                &offline_client(),
+                "classic",
+                false,
+                |entries| {
+                    if first.is_none() {
+                        first = Some(start.elapsed());
+                        assert_eq!(entries.len(), 256);
+                        assert!(entries.iter().all(|entry| entry.version.is_none()));
+                    }
+                    published += 1;
+                    Ok(())
+                },
+            )
+            .await
+            .expect("enriched content");
+            let total = start.elapsed();
+            let first = first.expect("initial list");
+            assert!(first < total);
+            assert!(
+                entries.iter().all(|entry| entry.title == "Known metadata"
+                    && entry.version.as_deref() == Some("1.0"))
+            );
+            eprintln!(
+                "Content fixture (256 files, {pass}): first list {first:?}, complete {total:?}, events {published}"
+            );
+        }
         service.shutdown().await.expect("shutdown");
     }
 }

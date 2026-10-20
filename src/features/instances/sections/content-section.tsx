@@ -29,8 +29,8 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
+import { instanceContentQuery } from "@/features/instances/lib/content-query";
 import {
-  listInstanceContent,
   removeInstanceContent,
   setInstanceContentEnabled,
 } from "@/lib/commands";
@@ -252,8 +252,7 @@ export function ContentSection({
   const [sortKey, setSortKey] = useState<ContentSortKey>("name");
   const [sortDir, setSortDir] = useState<ContentSortDir>("asc");
   const content = useQuery({
-    queryKey: ["instance-content", folder],
-    queryFn: () => listInstanceContent(folder ?? ""),
+    ...instanceContentQuery(queryClient, folder ?? ""),
     enabled: folder !== null,
     staleTime: CONTENT_STALE_TIME,
   });
@@ -377,7 +376,7 @@ export function ContentSection({
       </div>
     );
   }
-  if (content.isError) {
+  if (content.isError && content.data === undefined) {
     return (
       <p className="p-3 text-sm text-destructive">
         Could not list instance content.
@@ -404,6 +403,11 @@ export function ContentSection({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border/60 bg-black/20">
+      {content.isError ? (
+        <p role="alert" className="p-3 text-sm text-destructive">
+          Some content metadata could not be loaded. Refresh to try again.
+        </p>
+      ) : null}
       <table className="w-full shrink-0 table-fixed text-sm">
         <colgroup>
           <col />

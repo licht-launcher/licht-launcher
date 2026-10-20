@@ -20,6 +20,7 @@ import { useInstanceMutations } from "@/features/instances/hooks/use-instance-mu
 import { useInstanceSelection } from "@/features/instances/hooks/use-instance-selection";
 import { useInstancesData } from "@/features/instances/hooks/use-instances-data";
 import { usePlaySession } from "@/features/instances/hooks/use-play-session";
+import { instanceContentQuery } from "@/features/instances/lib/content-query";
 import {
   MAIN_PANEL_ID,
   SIDEBAR_DEFAULT_SIZE_PX,
@@ -31,7 +32,7 @@ import {
   sidebarLayoutStorage,
 } from "@/features/instances/lib/sidebar-layout";
 import { useCustomTitleBar } from "@/hooks/use-custom-title-bar";
-import { getLastPlayedFolder, listInstanceContent } from "@/lib/commands";
+import { getLastPlayedFolder } from "@/lib/commands";
 import type { HomeSearch } from "@/routes/_app/index";
 
 export function InstancesChrome({ children }: { children: ReactNode }) {
@@ -68,11 +69,9 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
     if (selectedFolder === null) {
       return;
     }
-    void queryClient.prefetchQuery({
-      queryKey: ["instance-content", selectedFolder],
-      queryFn: () => listInstanceContent(selectedFolder),
-      staleTime: Number.POSITIVE_INFINITY,
-    });
+    void queryClient.prefetchQuery(
+      instanceContentQuery(queryClient, selectedFolder),
+    );
   }, [queryClient, selectedFolder]);
 
   useEffect(() => {

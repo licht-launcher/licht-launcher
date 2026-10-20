@@ -8,6 +8,7 @@ import {
 } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { instanceContentQuery } from "@/features/instances/lib/content-query";
 import { ContentSection } from "@/features/instances/sections/content-section";
 import type { InstanceContentEntry } from "@/lib/generated/InstanceContentEntry";
 
@@ -152,8 +153,7 @@ describe("ContentSection", () => {
 
     act(() => {
       void client.fetchQuery({
-        queryKey: ["instance-content", "classic"],
-        queryFn: () => listInstanceContent("classic", true),
+        ...instanceContentQuery(client, "classic", true),
         staleTime: 0,
       });
     });
@@ -177,6 +177,99 @@ describe("ContentSection", () => {
         screen.queryByRole("progressbar", { name: "Loading content metadata" }),
       ).not.toBeInTheDocument();
     });
+  });
+
+  it("shows and sorts local rows while metadata is pending, then applies enriched batches", async () => {
+    const entries: InstanceContentEntry[] = [
+      {
+        name: "alpha.jar",
+        kind: "mods",
+        enabled: true,
+        size: 3,
+        title: "Alpha",
+        version: null,
+        iconUrl: null,
+      },
+      {
+        name: "zeta.jar",
+        kind: "mods",
+        enabled: true,
+        size: 4,
+        title: "Zeta",
+        version: null,
+        iconUrl: null,
+      },
+    ];
+    let publish:
+      | ((entries: InstanceContentEntry[], initial: boolean) => void)
+      | undefined;
+    let finish: ((entries: InstanceContentEntry[]) => void) | undefined;
+    listInstanceContent.mockImplementation((_folder, _refresh, onUpdate) => {
+      publish = onUpdate;
+      return new Promise<InstanceContentEntry[]>((resolve) => {
+        finish = resolve;
+      });
+    });
+    const { client } = renderContent("classic");
+    await waitFor(() => expect(publish).toBeDefined());
+    act(() => publish?.(entries, true));
+    expect(await screen.findByText("Alpha")).toBeVisible();
+    expect(screen.getByText("Zeta")).toBeVisible();
+    expect(
+      screen.getByRole("progressbar", { name: "Loading content metadata" }),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Content" }));
+    expect(screen.getAllByRole("switch")[0]).toHaveAccessibleName(
+      "Disable Zeta",
+    );
+    const enriched = { ...entries[1], title: "Resolved Zeta", version: "1.0" };
+    act(() => publish?.([enriched], false));
+    expect(await screen.findByText("Resolved Zeta")).toBeVisible();
+    expect(screen.getByText("Alpha")).toBeVisible();
+    expect(client.getQueryData(["instance-content", "classic"])).toEqual([
+      entries[0],
+      enriched,
+    ]);
+    await act(async () => finish?.([entries[0], enriched]));
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("progressbar", { name: "Loading content metadata" }),
+      ).not.toBeInTheDocument(),
+    );
+  });
+
+  it("preserves partial content and reports a metadata failure", async () => {
+    const entry: InstanceContentEntry = {
+      name: "one.jar",
+      kind: "mods",
+      enabled: true,
+      size: 3,
+      title: "One",
+      version: null,
+      iconUrl: null,
+    };
+    let publish:
+      | ((entries: InstanceContentEntry[], initial: boolean) => void)
+      | undefined;
+    let fail: ((reason: Error) => void) | undefined;
+    listInstanceContent.mockImplementation((_folder, _refresh, onUpdate) => {
+      publish = onUpdate;
+      return new Promise<InstanceContentEntry[]>((_resolve, reject) => {
+        fail = reject;
+      });
+    });
+    renderContent("classic");
+    await waitFor(() => expect(publish).toBeDefined());
+    act(() => publish?.([entry], true));
+    expect(await screen.findByText("One")).toBeVisible();
+    await act(async () => fail?.(new Error("metadata failed")));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Some content metadata could not be loaded.",
+    );
+    expect(screen.getByText("One")).toBeVisible();
+    expect(
+      screen.queryByRole("progressbar", { name: "Loading content metadata" }),
+    ).not.toBeInTheDocument();
   });
 
   it("sorts content by name and size with direction indicators", async () => {

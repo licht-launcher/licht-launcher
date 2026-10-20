@@ -11,6 +11,7 @@ import {
   SquareTerminalIcon,
 } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +24,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { PlayPhase } from "@/features/instances/hooks/use-play-session";
+import { instanceContentQuery } from "@/features/instances/lib/content-query";
 import type { LogLevelSelection } from "@/features/instances/lib/log-level";
 import type { ConsoleLine } from "@/features/instances/model/console-line";
 import {
@@ -38,7 +40,8 @@ import {
   FilesSection,
 } from "@/features/instances/sections/files-section";
 import { PlaySection } from "@/features/instances/sections/play-section";
-import { listInstanceContent, openInstanceFolder } from "@/lib/commands";
+import { openInstanceFolder } from "@/lib/commands";
+import { friendlyError, messageOf } from "@/lib/errors";
 import type { DownloadJobSnapshot } from "@/lib/generated/DownloadJobSnapshot";
 import type { DownloadProgress } from "@/lib/generated/DownloadProgress";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
@@ -223,11 +226,14 @@ export function HomePanel({
                 disabled={folder === null || refreshingContent}
                 onClick={() => {
                   if (folder === null) return;
-                  void queryClient.fetchQuery({
-                    queryKey: ["instance-content", folder],
-                    queryFn: () => listInstanceContent(folder, true),
-                    staleTime: 0,
-                  });
+                  void queryClient
+                    .fetchQuery({
+                      ...instanceContentQuery(queryClient, folder, true),
+                      staleTime: 0,
+                    })
+                    .catch((error: unknown) =>
+                      toast.error(friendlyError(messageOf(error))),
+                    );
                 }}
               >
                 <RefreshCwIcon
