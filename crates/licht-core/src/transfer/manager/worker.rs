@@ -66,6 +66,7 @@ impl DownloadManager {
             id.clone(),
             slot.control.clone(),
             events,
+            self.runtime.database.clone(),
         );
         let operation = (self.executor)(self.runtime.clone(), initial, context);
         tokio::pin!(operation);
@@ -99,12 +100,7 @@ impl DownloadManager {
             result
         };
         if matches!(result, Err(CoreError::DownloadCancelled)) {
-            crate::transfer::jobs::cleanup_artifacts(
-                &self.runtime.settings,
-                &self.runtime.game,
-                &id,
-            )
-            .await?;
+            self.cleanup_artifacts(&id).await?;
         }
         snapshot.status = match &result {
             Ok(()) => DownloadJobStatus::Completed,
@@ -120,7 +116,7 @@ impl DownloadManager {
             .err()
             .filter(|error| !matches!(error, CoreError::DownloadCancelled))
             .map(|error| error.to_string());
-        self.persist(&mut snapshot)?;
+        self.persist(&mut snapshot).await?;
         self.emit(snapshot.clone());
         if snapshot.status == DownloadJobStatus::Cancelling {
             // The cancel command still needs to remove the instance directory.
@@ -139,7 +135,7 @@ impl DownloadManager {
             snapshot.status = DownloadJobStatus::Failed;
         }
         snapshot.error = Some(detail.clone());
-        let outcome = match self.persist(&mut snapshot) {
+        let outcome = match self.persist(&mut snapshot).await {
             Ok(()) => {
                 self.emit(snapshot.clone());
                 if snapshot.status == DownloadJobStatus::Cancelling {

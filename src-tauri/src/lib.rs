@@ -21,7 +21,7 @@ pub fn run() -> anyhow::Result<()> {
     let database =
         tauri::async_runtime::block_on(licht_core::DatabaseService::start(paths.settings.clone()))
             .context("Failed to start the database service")?;
-    licht_core::recover_download_jobs(&paths.settings, &paths.game)
+    tauri::async_runtime::block_on(database.client().recover_download_jobs(&paths.game))
         .context("Failed to recover download jobs")?;
     let client = reqwest::Client::builder()
         .connect_timeout(licht_core::MANIFEST_REQUEST_TIMEOUT)
@@ -33,6 +33,7 @@ pub fn run() -> anyhow::Result<()> {
         paths.game.clone(),
         commands::host_environment()?,
         client,
+        database.client(),
     ));
     let shutdown_downloads = std::sync::Arc::clone(&downloads);
 

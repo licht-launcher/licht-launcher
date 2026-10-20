@@ -1,29 +1,35 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::thread::{self, JoinHandle};
 
+use sqlx::Connection;
 use tokio::sync::{mpsc, oneshot};
+use tokio::task::JoinHandle;
 
 use super::db::{self, META_LAST_PLAYED};
 use crate::{CoreError, Result, SharedCache};
 
 const QUEUE_CAPACITY: usize = 64;
 
+mod downloads;
+
 enum Request {
     LastPlayed(oneshot::Sender<Result<Option<String>>>),
     SetLastPlayed(String, oneshot::Sender<Result<()>>),
     ClearLastPlayed(oneshot::Sender<Result<()>>),
+    Downloads(downloads::Request),
+    RememberAccount(String, bool, oneshot::Sender<Result<()>>),
+    AccountUuids(oneshot::Sender<Result<Vec<String>>>),
     Stop,
 }
 
-/// Owns the database thread. Explicit shutdown waits for accepted work and connection closure.
+/// Owns the dispatcher and persistent SQLx connection. Shutdown waits for accepted work and closure.
 #[derive(Debug)]
 pub struct DatabaseService {
     client: DatabaseClient,
     worker: Option<JoinHandle<Result<()>>>,
 }
 
-/// Shared asynchronous access to the database thread's bounded request queue.
+/// Shared asynchronous access to the database dispatcher's bounded request queue.
 #[derive(Clone, Debug)]
 pub struct DatabaseClient {
     requests: mpsc::Sender<Request>,
@@ -36,15 +42,13 @@ impl DatabaseService {
         let (initialized, ready) = oneshot::channel();
         let closing = Arc::new(AtomicBool::new(false));
         let worker_closing = Arc::clone(&closing);
-        let worker = thread::Builder::new()
-            .name("licht-database".into())
-            .spawn(move || {
-                let result = run(cache, incoming, initialized, worker_closing);
-                if result.is_err() {
-                    tracing::error!("Database worker failed");
-                }
-                result
-            })?;
+        let worker = tokio::spawn(async move {
+            let result = run(cache, incoming, initialized, worker_closing).await;
+            if result.is_err() {
+                tracing::error!("Database worker failed");
+            }
+            result
+        });
         let service = Self {
             client: DatabaseClient { requests, closing },
             worker: Some(worker),
@@ -73,14 +77,7 @@ impl DatabaseService {
             return Ok(());
         };
 
-        // Joining is the only blocking-pool task; SQL always runs on the dedicated thread.
-        tokio::task::spawn_blocking(move || {
-            worker.join().map_err(|_| CoreError::DatabaseService {
-                detail: "worker panicked",
-            })?
-        })
-        .await
-        .map_err(|_| CoreError::DatabaseService {
+        worker.await.map_err(|_| CoreError::DatabaseService {
             detail: "could not join the worker",
         })?
     }
@@ -94,6 +91,19 @@ impl Drop for DatabaseService {
 }
 
 impl DatabaseClient {
+    pub async fn remembered_account_uuids(&self) -> Result<Vec<String>> {
+        let (reply, response) = oneshot::channel();
+        self.send(Request::AccountUuids(reply)).await?;
+        response.await.map_err(|_| unavailable())?
+    }
+
+    pub async fn remember_account_uuid(&self, uuid: &str, remember: bool) -> Result<()> {
+        let (reply, response) = oneshot::channel();
+        self.send(Request::RememberAccount(uuid.to_string(), remember, reply))
+            .await?;
+        response.await.map_err(|_| unavailable())?
+    }
+
     pub async fn last_played_folder(&self) -> Result<Option<String>> {
         let (reply, response) = oneshot::channel();
         self.send(Request::LastPlayed(reply)).await?;
@@ -130,13 +140,13 @@ impl DatabaseClient {
     }
 }
 
-fn run(
+async fn run(
     cache: SharedCache,
     mut incoming: mpsc::Receiver<Request>,
     initialized: oneshot::Sender<Result<()>>,
     closing: Arc<AtomicBool>,
 ) -> Result<()> {
-    let connection = match db::open_db(&cache) {
+    let mut connection = match db::open_db(&cache).await {
         Ok(connection) => connection,
         Err(error) => {
             if let Err(Err(_)) = initialized.send(Err(error)) {
@@ -153,26 +163,57 @@ fn run(
         if closing.load(Ordering::SeqCst) {
             incoming.close();
         }
-        let Some(request) = incoming.blocking_recv() else {
+        let Some(request) = incoming.recv().await else {
             break;
         };
 
         // Accepted writes execute even when their caller has stopped awaiting the reply.
         match request {
             Request::LastPlayed(reply) => {
-                respond(reply, db::get_meta(&connection, META_LAST_PLAYED));
+                respond(reply, db::get_meta(&mut connection, META_LAST_PLAYED).await);
             }
             Request::SetLastPlayed(folder, reply) => {
-                respond(reply, db::set_meta(&connection, META_LAST_PLAYED, &folder));
+                respond(
+                    reply,
+                    db::set_meta(&mut connection, META_LAST_PLAYED, &folder).await,
+                );
             }
             Request::ClearLastPlayed(reply) => {
-                respond(reply, db::clear_meta(&connection, META_LAST_PLAYED));
+                respond(
+                    reply,
+                    db::clear_meta(&mut connection, META_LAST_PLAYED).await,
+                );
             }
             Request::Stop => {}
+            Request::Downloads(request) => downloads::execute(&mut connection, request).await,
+            Request::AccountUuids(reply) => {
+                let result = db::get_meta(&mut connection, "microsoft_account_uuids")
+                    .await
+                    .map(|raw| {
+                        raw.unwrap_or_default()
+                            .split(',')
+                            .map(str::trim)
+                            .filter(|value| !value.is_empty())
+                            .map(str::to_string)
+                            .collect()
+                    });
+                respond(reply, result);
+            }
+            Request::RememberAccount(uuid, remember, reply) => {
+                respond(
+                    reply,
+                    super::repositories::metadata::MetadataRepository::update_account(
+                        &mut connection,
+                        &uuid,
+                        remember,
+                    )
+                    .await,
+                );
+            }
         }
     }
 
-    connection.close().map_err(|(_, error)| error.into())
+    connection.close().await.map_err(Into::into)
 }
 
 fn respond<T>(reply: oneshot::Sender<Result<T>>, result: Result<T>) {
@@ -203,17 +244,12 @@ mod tests {
         let worker = service.worker.take().expect("worker handle");
         drop(service);
 
-        let joined = tokio::time::timeout(
-            Duration::from_secs(10),
-            tokio::task::spawn_blocking(move || worker.join()),
-        )
-        .await;
+        let joined = tokio::time::timeout(Duration::from_secs(10), worker).await;
         let closed = client.last_played_folder().await;
         drop(client);
         joined
             .expect("owner drop must stop the worker without waiting for clients")
             .expect("join task")
-            .expect("worker thread")
             .expect("connection close");
         assert!(matches!(closed, Err(CoreError::DatabaseService { .. })));
         std::fs::remove_dir_all(cache.root()).expect("fixture cleanup");

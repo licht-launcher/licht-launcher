@@ -120,13 +120,14 @@ pub fn save_instance(
 }
 
 #[tauri::command]
-pub fn set_instance_version(
+pub async fn set_instance_version(
     downloads: State<'_, std::sync::Arc<licht_core::DownloadManager>>,
     folder: String,
     version_id: String,
 ) -> Result<InstanceEntry, String> {
     downloads
         .change_version(&folder, &version_id)
+        .await
         .map_err(failure)
 }
 

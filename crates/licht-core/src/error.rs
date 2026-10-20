@@ -97,7 +97,7 @@ pub enum CoreError {
     #[error("this system is not supported for launch")]
     LaunchHost,
     #[error("database operation failed")]
-    Database(#[from] rusqlite::Error),
+    Database(#[from] sqlx::Error),
     #[error("database schema {schema} is not supported")]
     DatabaseSchema { schema: u32 },
     #[error("database service failed: {detail}")]

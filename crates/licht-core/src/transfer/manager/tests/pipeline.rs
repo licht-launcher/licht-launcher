@@ -62,7 +62,7 @@ fn pending(fixture: &Fixture) -> InstanceEntry {
 #[tokio::test]
 async fn real_vanilla_pipeline_pauses_resumes_and_publishes_a_ready_instance() {
     let mut server = Server::new().await;
-    let fixture = Fixture::new(&server.url);
+    let fixture = Fixture::new(&server.url).await;
     let manager = prepare_cache(&fixture, &server);
     let instance = pending(&fixture);
     let worker = Arc::clone(&manager);
@@ -77,11 +77,12 @@ async fn real_vanilla_pipeline_pauses_resumes_and_publishes_a_ready_instance() {
         .with_file_name(format!("{VERSION}.jar.part"));
     wait_until(|| std::fs::metadata(&part).is_ok_and(|file| file.len() == 5)).await;
     let job = list_download_jobs(&fixture.settings, &fixture.game)
+        .await
         .expect("jobs")
         .pop()
         .expect("job");
     manager.pause(&job.id).await.expect("pause");
-    assert!(manager.ensure_launchable(&instance.folder).is_err());
+    assert!(manager.ensure_launchable(&instance.folder).await.is_err());
     assert_eq!(
         load_instance(&fixture.game.instance_dir(&instance.folder).expect("folder"))
             .expect("profile")
@@ -112,16 +113,18 @@ async fn real_vanilla_pipeline_pauses_resumes_and_publishes_a_ready_instance() {
     );
     manager
         .ensure_launchable(&instance.folder)
+        .await
         .expect("ready instance");
     assert!(!part.exists());
     assert!(server.requests.is_empty());
     drop(tail);
+    fixture.close().await;
 }
 
 #[tokio::test]
 async fn real_pipeline_checksum_failure_keeps_the_instance_unlaunchable() {
     let mut server = Server::new().await;
-    let fixture = Fixture::new(&server.url);
+    let fixture = Fixture::new(&server.url).await;
     let manager = prepare_cache(&fixture, &server);
     let instance = pending(&fixture);
     let worker = Arc::clone(&manager);
@@ -137,17 +140,20 @@ async fn real_pipeline_checksum_failure_keeps_the_instance_unlaunchable() {
     assert_eq!(outcome.status, DownloadJobStatus::Failed);
     assert!(outcome.error.is_some());
     assert!(!fixture.game.version_jar(VERSION).expect("client").exists());
-    assert!(manager.ensure_launchable(&instance.folder).is_err());
+    assert!(manager.ensure_launchable(&instance.folder).await.is_err());
     assert_eq!(
-        get_download_job(&fixture.settings, &fixture.game, &outcome.id).expect("persisted failure"),
+        get_download_job(&fixture.settings, &fixture.game, &outcome.id)
+            .await
+            .expect("persisted failure"),
         outcome
     );
+    fixture.close().await;
 }
 
 #[tokio::test]
 async fn real_pipeline_cancellation_stops_installation_before_removing_the_instance() {
     let mut server = Server::new().await;
-    let fixture = Fixture::new(&server.url);
+    let fixture = Fixture::new(&server.url).await;
     let manager = prepare_cache(&fixture, &server);
     let instance = pending(&fixture);
     let worker = Arc::clone(&manager);
@@ -156,6 +162,7 @@ async fn real_pipeline_cancellation_stops_installation_before_removing_the_insta
         tokio::spawn(async move { worker.prepare(&folder, DownloadJobOperation::Install).await });
     let tail = server.request().await.hold();
     let job = list_download_jobs(&fixture.settings, &fixture.game)
+        .await
         .expect("jobs")
         .pop()
         .expect("job");
@@ -183,16 +190,18 @@ async fn real_pipeline_cancellation_stops_installation_before_removing_the_insta
     assert!(!fixture.game.version_jar(VERSION).expect("client").exists());
     assert!(
         list_download_jobs(&fixture.settings, &fixture.game)
+            .await
             .expect("jobs")
             .is_empty()
     );
     drop(tail);
+    fixture.close().await;
 }
 
 #[tokio::test]
 async fn real_pipeline_resumes_a_persisted_loader_profile_without_reselecting_it() {
     let mut server = Server::new().await;
-    let fixture = Fixture::new(&server.url);
+    let fixture = Fixture::new(&server.url).await;
     let manager = prepare_cache(&fixture, &server);
     let loader = "fabric-loader-0.16.10-1.21.11";
     let source = InstanceSource::Loader {
@@ -236,5 +245,7 @@ async fn real_pipeline_resumes_a_persisted_loader_profile_without_reselecting_it
     assert_eq!(installation.state, InstancePreparationState::Ready);
     manager
         .ensure_launchable(&instance.folder)
+        .await
         .expect("ready loader");
+    fixture.close().await;
 }

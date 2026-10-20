@@ -4,7 +4,7 @@ use tokio::sync::mpsc;
 
 use super::download::{CancellationCleanup, download_verified_all_with_cleanup};
 use crate::{
-    CoreError, DownloadComponent, DownloadControl, DownloadOptions, DownloadPhase,
+    CoreError, DatabaseClient, DownloadComponent, DownloadControl, DownloadOptions, DownloadPhase,
     DownloadProgress, DownloadTask, Result, SharedCache, VerifiedDownloadTask,
 };
 
@@ -21,7 +21,15 @@ pub struct InstallationContext {
     component: DownloadComponent,
     legacy: Option<mpsc::Sender<DownloadProgress>>,
     events: Option<mpsc::Sender<InstallationEvent>>,
-    job: Option<(SharedCache, SharedCache, String)>,
+    job: Option<InstallationJob>,
+}
+
+#[derive(Clone)]
+struct InstallationJob {
+    settings: SharedCache,
+    game: SharedCache,
+    id: String,
+    database: DatabaseClient,
 }
 
 impl Default for InstallationContext {
@@ -48,10 +56,10 @@ impl From<mpsc::Sender<DownloadProgress>> for InstallationContext {
 impl InstallationContext {
     pub(crate) fn options(&self) -> Result<DownloadOptions> {
         match &self.job {
-            Some((settings, game, _)) => Ok(DownloadOptions {
+            Some(job) => Ok(DownloadOptions {
                 limits: crate::shared_transfer_limits(),
-                download_concurrency: crate::download_concurrency(game, settings)?,
-                write_concurrency: crate::write_concurrency(game, settings)?,
+                download_concurrency: crate::download_concurrency(&job.game, &job.settings)?,
+                write_concurrency: crate::write_concurrency(&job.game, &job.settings)?,
                 retry: crate::DEFAULT_RETRY,
             }),
             None => Ok(DownloadOptions::default()),
@@ -63,11 +71,17 @@ impl InstallationContext {
         id: String,
         control: DownloadControl,
         events: mpsc::Sender<InstallationEvent>,
+        database: DatabaseClient,
     ) -> Self {
         Self {
             control,
             events: Some(events),
-            job: Some((settings, game, id)),
+            job: Some(InstallationJob {
+                settings,
+                game,
+                id,
+                database,
+            }),
             ..Self::default()
         }
     }
@@ -166,9 +180,11 @@ impl InstallationContext {
             return Ok(());
         }
         self.stage(DownloadPhase::Downloading).await?;
-        if let Some((settings, game, id)) = &self.job {
+        if let Some(job) = &self.job {
             let paths: Vec<_> = tasks.iter().map(|task| task.destination.clone()).collect();
-            super::jobs::register_artifacts(settings, game, id, &paths)?;
+            job.database
+                .register_download_artifacts(&job.game, &job.id, &paths)
+                .await?;
         }
         let (progress, mut incoming) = mpsc::channel(4096);
         let cleanup = if self.job.is_some() {

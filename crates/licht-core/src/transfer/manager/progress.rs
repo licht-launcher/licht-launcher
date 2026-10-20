@@ -2,7 +2,7 @@ use super::{ActiveJob, DownloadManager};
 use crate::transfer::installation::InstallationEvent;
 use crate::{
     DownloadJobSnapshot, DownloadJobStatus, DownloadJobUpdate, DownloadProgress, DownloadState,
-    Result, update_download_job,
+    Result,
 };
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
@@ -27,12 +27,10 @@ impl DownloadManager {
                 true
             }
             InstallationEvent::Version(version) => {
-                crate::transfer::jobs::set_job_version(
-                    &self.runtime.settings,
-                    &self.runtime.game,
-                    &snapshot.id,
-                    &version,
-                )?;
+                self.runtime
+                    .database
+                    .set_download_job_version(&self.runtime.game, &snapshot.id, &version)
+                    .await?;
                 snapshot.version_id = Some(version);
                 true
             }
@@ -48,7 +46,7 @@ impl DownloadManager {
         };
         slot.dirty.store(true, Ordering::SeqCst);
         if structural || last_save.elapsed() >= Duration::from_secs(1) {
-            self.persist(&mut snapshot)?;
+            self.persist(&mut snapshot).await?;
             *last_save = Instant::now();
         }
         if structural || last_emit.elapsed() >= Duration::from_millis(100) {
@@ -59,19 +57,22 @@ impl DownloadManager {
         Ok(())
     }
 
-    pub(super) fn persist(&self, snapshot: &mut DownloadJobSnapshot) -> Result<()> {
-        *snapshot = update_download_job(
-            &self.runtime.settings,
-            &self.runtime.game,
-            &snapshot.id,
-            DownloadJobUpdate {
-                status: snapshot.status,
-                component: snapshot.component,
-                phase: snapshot.phase,
-                progress: snapshot.progress,
-                error: snapshot.error.clone(),
-            },
-        )?;
+    pub(super) async fn persist(&self, snapshot: &mut DownloadJobSnapshot) -> Result<()> {
+        *snapshot = self
+            .runtime
+            .database
+            .update_download_job(
+                &self.runtime.game,
+                &snapshot.id,
+                DownloadJobUpdate {
+                    status: snapshot.status,
+                    component: snapshot.component,
+                    phase: snapshot.phase,
+                    progress: snapshot.progress,
+                    error: snapshot.error.clone(),
+                },
+            )
+            .await?;
         Ok(())
     }
     pub(super) fn emit(&self, snapshot: DownloadJobSnapshot) {
@@ -94,7 +95,7 @@ impl DownloadManager {
         if snapshot.status == DownloadJobStatus::Paused
             || last_save.elapsed() >= Duration::from_secs(1)
         {
-            self.persist(&mut snapshot)?;
+            self.persist(&mut snapshot).await?;
             *last_save = Instant::now();
         }
         self.emit(snapshot.clone());
