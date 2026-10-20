@@ -1,4 +1,8 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  QueryClient,
+  QueryClientProvider,
+  useQuery,
+} from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
@@ -127,6 +131,136 @@ describe("download task activity", () => {
     await waitFor(() => expect(result.current.first.data).toEqual([]));
     expect(result.current.second.data).toEqual([]);
     expect(listen).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    ["install", "completed"],
+    ["install", "failed"],
+    ["install", "cancelled"],
+    ["repair", "completed"],
+    ["repair", "failed"],
+    ["repair", "cancelled"],
+  ] as const)(
+    "refreshes only the affected content once when %s becomes %s",
+    async (operation, status) => {
+      invoke.mockResolvedValue([]);
+      const client = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      });
+      const key = ["instance-content", "Survival"];
+      client.setQueryData(key, ["cached mod"]);
+      client.setQueryData(["instance-content", "Other"], ["other mod"]);
+      let finish: ((entries: string[]) => void) | undefined;
+      const loadContent = vi.fn(
+        () =>
+          new Promise<string[]>((resolve) => {
+            finish = resolve;
+          }),
+      );
+      const wrapper = ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={client}>
+          <DownloadJobsProvider>{children}</DownloadJobsProvider>
+        </QueryClientProvider>
+      );
+      const { result, unmount } = renderHook(
+        () => ({
+          jobs: useDownloadJobs(),
+          content: useQuery({
+            queryKey: key,
+            queryFn: loadContent,
+            staleTime: Number.POSITIVE_INFINITY,
+          }),
+        }),
+        { wrapper },
+      );
+      await waitFor(() => expect(result.current.jobs.data).toEqual([]));
+      const emit = (snapshot: DownloadJobSnapshot) =>
+        act(() =>
+          listeners.get("download-job-updated")?.({ payload: snapshot }),
+        );
+      emit(downloadJob({ operation }));
+      expect(loadContent).not.toHaveBeenCalled();
+      emit(downloadJob({ operation, status }));
+      await waitFor(() => expect(loadContent).toHaveBeenCalledTimes(1));
+      expect(result.current.content.data).toEqual(["cached mod"]);
+      expect(result.current.content.isFetching).toBe(true);
+      await act(async () => {
+        if (!finish) throw new Error("missing content refresh");
+        finish(["updated mod"]);
+      });
+      await waitFor(() =>
+        expect(result.current.content.data).toEqual(["updated mod"]),
+      );
+      emit(downloadJob({ operation, status, updatedAt: 1_700_000_002_000 }));
+      expect(loadContent).toHaveBeenCalledTimes(1);
+      expect(
+        client.getQueryState(["instance-content", "Other"])?.isInvalidated,
+      ).toBe(false);
+      if (status === "failed") {
+        emit(downloadJob({ operation }));
+        emit(downloadJob({ operation, status }));
+        expect(loadContent).toHaveBeenCalledTimes(2);
+        await act(async () => {
+          if (!finish) throw new Error("missing retry content refresh");
+          finish(["partially repaired mod"]);
+        });
+        await waitFor(() =>
+          expect(result.current.content.data).toEqual([
+            "partially repaired mod",
+          ]),
+        );
+      }
+      unmount();
+    },
+  );
+
+  it("marks inactive content stale even when completion is the first event", async () => {
+    invoke.mockResolvedValue([]);
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const key = ["instance-content", "Survival"];
+    client.setQueryData(key, ["cached mod"]);
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>
+        <DownloadJobsProvider>{children}</DownloadJobsProvider>
+      </QueryClientProvider>
+    );
+    const { result, unmount } = renderHook(() => useDownloadJobs(), {
+      wrapper,
+    });
+    await waitFor(() => expect(result.current.data).toEqual([]));
+    act(() =>
+      listeners.get("download-job-updated")?.({ payload: completedDownload() }),
+    );
+    expect(client.getQueryState(key)?.isInvalidated).toBe(true);
+    expect(client.getQueryData(key)).toEqual(["cached mod"]);
+    unmount();
+  });
+
+  it("does not invalidate content for a completed runtime-only job", async () => {
+    invoke.mockResolvedValue([]);
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const key = ["instance-content", "Survival"];
+    client.setQueryData(key, ["cached mod"]);
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>
+        <DownloadJobsProvider>{children}</DownloadJobsProvider>
+      </QueryClientProvider>
+    );
+    const { result, unmount } = renderHook(() => useDownloadJobs(), {
+      wrapper,
+    });
+    await waitFor(() => expect(result.current.data).toEqual([]));
+    act(() =>
+      listeners.get("download-job-updated")?.({
+        payload: completedDownload({ instanceFolder: null, javaMajor: 21 }),
+      }),
+    );
+    expect(client.getQueryState(key)?.isInvalidated).toBe(false);
+    unmount();
   });
 
   it("uses a newer database snapshot instead of an event received before the fetch", async () => {
