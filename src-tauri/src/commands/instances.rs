@@ -158,13 +158,20 @@ pub fn list_instance_entries(
 #[tauri::command]
 pub async fn list_instance_content(
     paths: State<'_, LauncherPaths>,
+    database: State<'_, DatabaseClient>,
     folder: String,
     refresh: bool,
 ) -> Result<Vec<InstanceContentEntry>, String> {
     let client = http_client().map_err(failure)?;
-    licht_core::list_instance_content_with_metadata(&paths.game, &client, &folder, refresh)
-        .await
-        .map_err(failure)
+    licht_core::list_instance_content_with_metadata(
+        &paths.game,
+        &database,
+        &client,
+        &folder,
+        refresh,
+    )
+    .await
+    .map_err(failure)
 }
 
 #[tauri::command]

@@ -8,7 +8,8 @@ use ts_rs::TS;
 
 use crate::cache::SharedCache;
 use crate::hashes::sha1_hex;
-use crate::{CoreError, Result};
+use crate::store::repositories::content_fingerprints::ContentFingerprint;
+use crate::{CoreError, DatabaseClient, Result};
 
 const DISABLED_SUFFIX: &str = ".disabled";
 
@@ -86,12 +87,19 @@ pub fn list_instance_content(
 
 pub async fn list_instance_content_with_metadata(
     cache: &SharedCache,
+    database: &DatabaseClient,
     client: &Client,
     folder: &str,
     refresh: bool,
 ) -> Result<Vec<InstanceContentEntry>> {
     let root = instance_root(cache, folder)?;
     let mut entries = list_instance_content(cache, folder)?;
+    let previous = database.content_fingerprints(cache, folder).await?;
+    let known: std::collections::BTreeMap<_, _> = previous
+        .iter()
+        .map(|entry| (entry.relative_path.as_str(), entry))
+        .collect();
+    let mut fingerprints = Vec::with_capacity(entries.len());
     for entry in &mut entries {
         let filename = if entry.enabled {
             entry.name.clone()
@@ -99,15 +107,20 @@ pub async fn list_instance_content_with_metadata(
             format!("{}{}", entry.name, DISABLED_SUFFIX)
         };
         let path = content_file(&root, content_directory(entry.kind), &filename)?;
-        let fingerprint = sha1_hex(&fs::read(&path)?);
-        let key = metadata_cache_key(&fingerprint);
-        let metadata = match (!refresh)
-            .then(|| read_metadata_cache(cache, &key))
-            .transpose()?
-        {
-            Some(Some(metadata)) => metadata,
-            Some(None) | None => {
-                let remote = fetch_fingerprint_metadata(client, entry.kind, &fingerprint).await;
+        let relative = Path::new(content_directory(entry.kind)).join(&filename);
+        let relative = relative.to_string_lossy().into_owned();
+        let fingerprint = content_fingerprint(
+            &path,
+            relative.clone(),
+            known.get(relative.as_str()).copied(),
+            refresh,
+        )?;
+        let key = metadata_cache_key(&fingerprint.sha1);
+        let metadata = match read_metadata_cache(cache, &key)? {
+            Some(metadata) => metadata,
+            None => {
+                let remote =
+                    fetch_fingerprint_metadata(client, entry.kind, &fingerprint.sha1).await;
                 let local = if remote.is_none() {
                     read_local_metadata(&path, entry.kind)
                 } else {
@@ -133,8 +146,57 @@ pub async fn list_instance_content_with_metadata(
         entry.title = metadata.title;
         entry.version = metadata.version;
         entry.icon_url = metadata.icon_url;
+        fingerprints.push(fingerprint);
     }
+    database
+        .sync_content_fingerprints(cache, folder, previous, fingerprints)
+        .await?;
     Ok(entries)
+}
+
+fn content_fingerprint(
+    path: &Path,
+    relative_path: String,
+    previous: Option<&ContentFingerprint>,
+    refresh: bool,
+) -> Result<ContentFingerprint> {
+    let before = fs::metadata(path)?;
+    let size = i64::try_from(before.len()).map_err(std::io::Error::other)?;
+    let modified = modification_stamp(&before)?;
+    if !refresh
+        && let Some(previous) = previous
+        && previous.relative_path == relative_path
+        && previous.size == size
+        && previous.modified == modified
+    {
+        return Ok(previous.clone());
+    }
+    let sha1 = sha1_hex(&fs::read(path)?);
+    let after = fs::metadata(path)?;
+    if before.len() != after.len() || modified != modification_stamp(&after)? {
+        return Err(std::io::Error::other(
+            "content file changed while calculating its fingerprint",
+        )
+        .into());
+    }
+    Ok(ContentFingerprint {
+        relative_path,
+        size,
+        modified,
+        sha1,
+    })
+}
+
+fn modification_stamp(metadata: &fs::Metadata) -> Result<String> {
+    let modified = metadata.modified()?;
+    Ok(match modified.duration_since(std::time::UNIX_EPOCH) {
+        Ok(duration) => format!("{}:{}", duration.as_secs(), duration.subsec_nanos()),
+        Err(error) => format!(
+            "-{}:{}",
+            error.duration().as_secs(),
+            error.duration().subsec_nanos()
+        ),
+    })
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -638,5 +700,224 @@ mod tests {
             ),
             Err(CoreError::Io(error)) if error.kind() == std::io::ErrorKind::AlreadyExists
         ));
+    }
+
+    fn seed_metadata(cache: &SharedCache, body: &[u8], title: &str) {
+        write_metadata_cache(
+            cache,
+            &sha1_hex(body),
+            &ContentMetadata {
+                title: title.to_string(),
+                version: Some("1.0".to_string()),
+                icon_url: None,
+            },
+        )
+        .expect("cached metadata");
+    }
+
+    fn offline_client() -> Client {
+        Client::builder()
+            .proxy(reqwest::Proxy::all("http://127.0.0.1:1").expect("offline proxy"))
+            .timeout(std::time::Duration::from_secs(1))
+            .build()
+            .expect("offline client")
+    }
+
+    fn set_modified(path: &Path, modified: std::time::SystemTime) {
+        fs::File::options()
+            .write(true)
+            .open(path)
+            .expect("file")
+            .set_times(fs::FileTimes::new().set_modified(modified))
+            .expect("modified time");
+    }
+
+    #[tokio::test]
+    async fn content_reuses_persisted_fingerprints_and_manual_refresh_revalidates_bytes() {
+        let cache = cache("fingerprint-refresh");
+        let root = instance(&cache);
+        let path = root.join("mods").join("one.jar");
+        fs::write(&path, b"old").expect("original mod");
+        let modified = fs::metadata(&path)
+            .expect("metadata")
+            .modified()
+            .expect("modified");
+        seed_metadata(&cache, b"old", "Original");
+        seed_metadata(&cache, b"new", "Updated");
+        let client = offline_client();
+        let service = crate::DatabaseService::start(cache.clone())
+            .await
+            .expect("service");
+        let entries = list_instance_content_with_metadata(
+            &cache,
+            &service.client(),
+            &client,
+            "classic",
+            false,
+        )
+        .await
+        .expect("initial content");
+        assert_eq!(entries[0].title, "Original");
+        service.shutdown().await.expect("shutdown");
+
+        // Preserving size and mtime deliberately exercises the accepted cache heuristic.
+        fs::write(&path, b"new").expect("same-size mod");
+        set_modified(&path, modified);
+        let service = crate::DatabaseService::start(cache.clone())
+            .await
+            .expect("restart");
+        let entries = list_instance_content_with_metadata(
+            &cache,
+            &service.client(),
+            &client,
+            "classic",
+            false,
+        )
+        .await
+        .expect("cached content");
+        assert_eq!(
+            entries[0].title, "Original",
+            "unchanged attributes must reuse the persisted SHA1 rather than rehash bytes"
+        );
+        let entries = list_instance_content_with_metadata(
+            &cache,
+            &service.client(),
+            &client,
+            "classic",
+            true,
+        )
+        .await
+        .expect("manual refresh with cached metadata");
+        assert_eq!(entries[0].title, "Updated");
+        assert_eq!(
+            service
+                .client()
+                .content_fingerprints(&cache, "classic")
+                .await
+                .expect("updated index")[0]
+                .sha1,
+            sha1_hex(b"new")
+        );
+        service.shutdown().await.expect("shutdown");
+    }
+
+    #[tokio::test]
+    async fn content_detects_added_resized_and_removed_files() {
+        let cache = cache("fingerprint-changes");
+        let root = instance(&cache);
+        let path = root.join("mods").join("one.jar");
+        let removed = root.join("mods").join("removed.jar");
+        fs::write(&path, b"old").expect("original");
+        fs::write(&removed, b"removed").expect("removed");
+        for (body, title) in [
+            (b"old".as_slice(), "Original"),
+            (b"removed", "Removed"),
+            (b"longer", "Resized"),
+            (b"added", "Added"),
+        ] {
+            seed_metadata(&cache, body, title);
+        }
+        let client = offline_client();
+        let service = crate::DatabaseService::start(cache.clone())
+            .await
+            .expect("service");
+        list_instance_content_with_metadata(&cache, &service.client(), &client, "classic", false)
+            .await
+            .expect("initial content");
+        let modified = fs::metadata(&path)
+            .expect("metadata")
+            .modified()
+            .expect("modified");
+        fs::write(&path, b"longer").expect("resized");
+        set_modified(&path, modified);
+        fs::remove_file(&removed).expect("remove mod");
+        fs::write(root.join("mods").join("added.jar"), b"added").expect("added mod");
+        let entries = list_instance_content_with_metadata(
+            &cache,
+            &service.client(),
+            &client,
+            "classic",
+            false,
+        )
+        .await
+        .expect("updated content");
+        assert_eq!(
+            entries
+                .iter()
+                .map(|entry| entry.title.as_str())
+                .collect::<Vec<_>>(),
+            ["Added", "Resized"]
+        );
+        let index = service
+            .client()
+            .content_fingerprints(&cache, "classic")
+            .await
+            .expect("index");
+        assert_eq!(index.len(), 2);
+        assert!(
+            !index
+                .iter()
+                .any(|entry| entry.relative_path.ends_with("removed.jar"))
+        );
+        fs::remove_file(&path).expect("remove resized");
+        fs::remove_file(root.join("mods").join("added.jar")).expect("remove added");
+        assert!(
+            list_instance_content_with_metadata(
+                &cache,
+                &service.client(),
+                &client,
+                "classic",
+                false
+            )
+            .await
+            .expect("empty content")
+            .is_empty()
+        );
+        assert!(
+            service
+                .client()
+                .content_fingerprints(&cache, "classic")
+                .await
+                .expect("empty index")
+                .is_empty()
+        );
+        service.shutdown().await.expect("shutdown");
+    }
+
+    #[tokio::test]
+    async fn content_detects_mtime_changes_even_when_size_is_unchanged() {
+        let cache = cache("fingerprint-mtime");
+        let root = instance(&cache);
+        let path = root.join("mods").join("one.jar");
+        fs::write(&path, b"old").expect("original");
+        set_modified(
+            &path,
+            UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000),
+        );
+        seed_metadata(&cache, b"old", "Original");
+        seed_metadata(&cache, b"new", "Updated");
+        let client = offline_client();
+        let service = crate::DatabaseService::start(cache.clone())
+            .await
+            .expect("service");
+        list_instance_content_with_metadata(&cache, &service.client(), &client, "classic", false)
+            .await
+            .expect("initial content");
+        fs::write(&path, b"new").expect("same-size change");
+        set_modified(
+            &path,
+            UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_100),
+        );
+        let entries = list_instance_content_with_metadata(
+            &cache,
+            &service.client(),
+            &client,
+            "classic",
+            false,
+        )
+        .await
+        .expect("updated content");
+        assert_eq!(entries[0].title, "Updated");
+        service.shutdown().await.expect("shutdown");
     }
 }
