@@ -11,6 +11,10 @@ import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { DownloadControls } from "@/features/downloads/components/download-controls";
 import { useDownloadJobs } from "@/features/downloads/hooks/use-download-jobs";
+import {
+  downloadStatusLabel,
+  downloadStatusText,
+} from "@/features/downloads/lib/download-status";
 import { InstanceIcon } from "@/features/instances/components/instance-icon";
 import {
   barValue,
@@ -18,36 +22,8 @@ import {
   progressText,
 } from "@/features/instances/lib/download-progress";
 import { listInstances } from "@/lib/commands";
-import type { DownloadComponent } from "@/lib/generated/DownloadComponent";
 import type { DownloadJobSnapshot } from "@/lib/generated/DownloadJobSnapshot";
-import type { DownloadPhase } from "@/lib/generated/DownloadPhase";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
-
-const components: Record<DownloadComponent, string> = {
-  minecraft: "Minecraft",
-  java: "Java",
-  fabric: "Fabric",
-  quilt: "Quilt",
-  forge: "Forge",
-  neoforge: "NeoForge",
-  modpack: "Modpack",
-};
-const phases: Record<DownloadPhase, string> = {
-  preparing: "Preparing",
-  downloading: "Downloading",
-  verifying: "Verifying",
-  extracting: "Extracting",
-  installing: "Installing",
-};
-const states = {
-  queued: "Queued",
-  paused: "Paused",
-  interrupted: "Interrupted",
-  cancelling: "Cancellation pending",
-  failed: "Failed",
-  completed: "Completed",
-  cancelled: "Cancelled",
-} as const;
 
 function DownloadRow({
   job,
@@ -61,7 +37,7 @@ function DownloadRow({
       ? `Java ${job.javaMajor}`
       : (instance?.name ?? job.instanceFolder ?? "Download");
   const known = !isPreparingProgress(job.progress);
-  const detail = `${job.status === "running" ? phases[job.phase] : states[job.status]}${job.component ? ` · ${components[job.component]}` : ""}`;
+  const detail = downloadStatusText(job);
   return (
     <section
       aria-label={`Download for ${title}`}
@@ -123,9 +99,7 @@ export function DownloadsPopover({
         ? String(jobs.length)
         : single.status === "running" && !isPreparingProgress(single.progress)
           ? `${Math.floor(barValue(single.progress))}%`
-          : single.status === "running"
-            ? phases[single.phase]
-            : states[single.status];
+          : downloadStatusLabel(single);
   return (
     <Popover>
       <PopoverTrigger asChild>

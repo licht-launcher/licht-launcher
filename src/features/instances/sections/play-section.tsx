@@ -18,6 +18,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { DownloadControls } from "@/features/downloads/components/download-controls";
+import { downloadStatusText } from "@/features/downloads/lib/download-status";
 import { InstanceIcon } from "@/features/instances/components/instance-icon";
 import type { PlayPhase } from "@/features/instances/hooks/use-play-session";
 import {
@@ -108,6 +109,20 @@ export function PlaySection({
   const openedLabel =
     formatRelativeOpenedAt(instance.lastOpenedAt) ?? "Not opened yet";
 
+  let downloadDetail = "Preparing game files and modpack content…";
+  if (downloadJob !== undefined) {
+    downloadDetail = downloadStatusText(downloadJob);
+    if (
+      downloadJob.status === "running" &&
+      downloadJob.phase === "downloading" &&
+      speedBytesPerSecond > 0
+    ) {
+      downloadDetail += ` · ${formatSpeed(speedBytesPerSecond)}`;
+    }
+  } else if (speedBytesPerSecond > 0) {
+    downloadDetail = `Downloading content · ${formatSpeed(speedBytesPerSecond)}`;
+  }
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
@@ -190,11 +205,7 @@ export function PlaySection({
                 ? progressText(progress)
                 : "Preparing…"}
             </span>
-            <span className="ml-2">
-              {speedBytesPerSecond > 0
-                ? `Downloading content · ${formatSpeed(speedBytesPerSecond)}`
-                : "Preparing game files and modpack content…"}
-            </span>
+            <span className="ml-2">{downloadDetail}</span>
           </span>
           <Progress
             aria-label="Install progress"
