@@ -8,7 +8,7 @@ use sqlx::{
 
 use super::*;
 
-fn fixture(name: &str) -> (SharedCache, SharedCache) {
+pub(super) fn fixture(name: &str) -> (SharedCache, SharedCache) {
     let root = std::env::temp_dir().join(format!(
         "licht-layout-{name}-{}",
         std::time::SystemTime::now()
@@ -310,4 +310,93 @@ async fn concurrent_initializations_share_one_complete_migration() {
         b"fixture"
     );
     assert!(db::db_path(&home).is_file());
+}
+
+#[tokio::test]
+async fn migration_does_not_duplicate_instance_payloads_in_temporary_cache() {
+    let (legacy, home) = fixture("no-staged-world");
+    crate::save_settings(&legacy, &crate::load_settings(&legacy).expect("settings"))
+        .expect("legacy settings");
+    let source = legacy
+        .instance_dir("Survival")
+        .expect("source")
+        .join("saves")
+        .join("level.dat");
+    fs::create_dir_all(source.parent().expect("parent")).expect("save directory");
+    fs::write(&source, b"original world").expect("world");
+    let conflict = home
+        .root()
+        .join("instances")
+        .join("Survival")
+        .join("saves")
+        .join("level.dat");
+    fs::create_dir_all(conflict.parent().expect("parent")).expect("destination");
+    fs::write(&conflict, b"different world").expect("conflict");
+    assert!(initialize_at(&legacy, &home).await.is_err());
+    fn contains_world(path: &Path) -> bool {
+        fs::read_dir(path).expect("cache directory").any(|item| {
+            let item = item.expect("cache entry");
+            item.file_name() == "level.dat"
+                || (item.file_type().expect("file type").is_dir() && contains_world(&item.path()))
+        })
+    }
+    assert!(
+        !contains_world(&home.root().join("cache")),
+        "migration must not stage entire instance payloads"
+    );
+    assert_eq!(
+        fs::read(source).expect("source preserved"),
+        b"original world"
+    );
+    assert_eq!(
+        fs::read(conflict).expect("destination preserved"),
+        b"different world"
+    );
+}
+
+#[test]
+fn migration_copies_preserve_modification_time_and_executable_permissions() {
+    let (legacy, home) = fixture("file-metadata");
+    fs::create_dir_all(legacy.root()).expect("legacy directory");
+    let source = legacy.root().join("java");
+    let destination = home.root().join("data").join("java");
+    fs::write(&source, b"executable fixture").expect("source");
+    let modified = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000);
+    fs::File::options()
+        .write(true)
+        .open(&source)
+        .expect("source handle")
+        .set_times(fs::FileTimes::new().set_modified(modified))
+        .expect("source time");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&source, fs::Permissions::from_mode(0o755))
+            .expect("executable permissions");
+    }
+    files::copy_file(&source, &destination).expect("copy");
+    assert_eq!(
+        fs::metadata(&destination)
+            .expect("metadata")
+            .modified()
+            .expect("time"),
+        modified
+    );
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(
+            fs::metadata(&destination)
+                .expect("metadata")
+                .permissions()
+                .mode()
+                & 0o777,
+            0o755
+        );
+    }
+    files::copy_file(&source, &destination).expect("repeat verified copy");
+    assert_eq!(
+        fs::read(&destination).expect("destination"),
+        b"executable fixture"
+    );
 }

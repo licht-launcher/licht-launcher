@@ -14,6 +14,10 @@ const GAME_DIRECTORIES: &[&str] = &[
 ];
 
 pub(super) async fn migrate(legacy: &SharedCache, home: &SharedCache) -> Result<()> {
+    tracing::info!(
+        phase = "database-snapshot",
+        "Starting launcher storage migration"
+    );
     let mut settings = load_settings(legacy)?;
     let old_game = match &settings.data_directory {
         Some(parent) => SharedCache::at(Path::new(parent).join("Licht Launcher")),
@@ -56,10 +60,16 @@ pub(super) async fn migrate(legacy: &SharedCache, home: &SharedCache) -> Result<
     database::snapshot(&legacy.root().join("licht.sqlite"), &staging).await?;
     database::remap(&staging, &mappings).await?;
 
-    for (index, (source, destination)) in [(legacy, &default_game), (&old_game, &new_game)]
-        .into_iter()
-        .enumerate()
-    {
+    let mut scopes = vec![(legacy, &default_game)];
+    if old_game != *legacy || new_game != default_game {
+        scopes.push((&old_game, &new_game));
+    }
+    for (index, (source, destination)) in scopes.into_iter().enumerate() {
+        tracing::info!(
+            phase = "shared-files",
+            scope = index + 1,
+            "Migrating launcher storage"
+        );
         for directory in GAME_DIRECTORIES {
             files::copy_tree(
                 &source.root().join(directory),
@@ -70,10 +80,17 @@ pub(super) async fn migrate(legacy: &SharedCache, home: &SharedCache) -> Result<
             &source.root().join("content-metadata"),
             &destination.cache_dir()?.join("content-metadata"),
         )?;
-        let staged_instances = staging.root().join(format!("instances-{index}"));
-        files::copy_tree(&source.instances_dir()?, &staged_instances)?;
-        remap_instance_java(&staged_instances, &mappings)?;
-        files::copy_tree(&staged_instances, &destination.instances_dir()?)?;
+        tracing::info!(
+            phase = "instances",
+            scope = index + 1,
+            "Migrating launcher storage"
+        );
+        copy_instances(
+            &source.instances_dir()?,
+            &destination.instances_dir()?,
+            &staging.root().join(format!("profiles-{index}")),
+            &mappings,
+        )?;
     }
     for path in [
         &mut settings.java25,
@@ -88,6 +105,7 @@ pub(super) async fn migrate(legacy: &SharedCache, home: &SharedCache) -> Result<
             .to_string_lossy()
             .into_owned();
     }
+    tracing::info!(phase = "settings", "Migrating launcher storage");
     let staged_settings = save_settings(&staging, &settings)?;
     let settings_file = home.root().join("settings.json");
     if settings_file.exists() && settings_file != legacy.root().join("settings.json") {
@@ -104,31 +122,58 @@ pub(super) async fn migrate(legacy: &SharedCache, home: &SharedCache) -> Result<
     // Publishing the validated database last marks a completed migration.
     fs::rename(super::db::db_path(&staging), super::db::db_path(home))?;
     fs::remove_dir_all(staging.root())?;
+    tracing::info!("Launcher storage migration completed");
     Ok(())
 }
 
-fn remap_instance_java(instances: &Path, mappings: &[Relocation]) -> Result<()> {
-    if !instances.exists() {
+fn copy_instances(
+    source: &Path,
+    destination: &Path,
+    staging: &Path,
+    mappings: &[Relocation],
+) -> Result<()> {
+    if !source.exists() {
         return Ok(());
     }
-    for item in fs::read_dir(instances)? {
+    fs::create_dir_all(destination)?;
+    for item in fs::read_dir(source)? {
         let item = item?;
+        let target = destination.join(item.file_name());
         if !item.file_type()?.is_dir() {
+            files::copy_tree(&item.path(), &target)?;
             continue;
         }
-        let file = item.path().join("instance.json");
-        if !file.is_file() {
-            continue;
+        if target.exists() && fs::symlink_metadata(&target)?.file_type().is_symlink() {
+            return Err(CoreError::CachePath);
         }
-        let mut instance: serde_json::Value =
-            serde_json::from_slice(&fs::read(&file)?).map_err(CoreError::Instance)?;
-        if let Some(path) = instance.get("javaPath").and_then(serde_json::Value::as_str) {
-            let path = relocate(Path::new(path), mappings);
-            instance["javaPath"] = serde_json::Value::String(path.to_string_lossy().into_owned());
-            fs::write(
-                file,
-                serde_json::to_vec_pretty(&instance).map_err(CoreError::Instance)?,
-            )?;
+        fs::create_dir_all(&target)?;
+        for entry in fs::read_dir(item.path())? {
+            let entry = entry?;
+            let source = entry.path();
+            let destination = target.join(entry.file_name());
+            if entry.file_name() != "instance.json" {
+                files::copy_tree(&source, &destination)?;
+                continue;
+            }
+            if !entry.file_type()?.is_file() {
+                return Err(CoreError::CachePath);
+            }
+            let mut instance: serde_json::Value =
+                serde_json::from_slice(&fs::read(&source)?).map_err(CoreError::Instance)?;
+            if let Some(path) = instance.get("javaPath").and_then(serde_json::Value::as_str) {
+                let path = relocate(Path::new(path), mappings);
+                instance["javaPath"] =
+                    serde_json::Value::String(path.to_string_lossy().into_owned());
+                let staged = staging.join(item.file_name()).join("instance.json");
+                fs::create_dir_all(staged.parent().ok_or(CoreError::CachePath)?)?;
+                fs::write(
+                    &staged,
+                    serde_json::to_vec_pretty(&instance).map_err(CoreError::Instance)?,
+                )?;
+                files::copy_file(&staged, &destination)?;
+            } else {
+                files::copy_file(&source, &destination)?;
+            }
         }
     }
     Ok(())
