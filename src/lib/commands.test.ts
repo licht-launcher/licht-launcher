@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -24,6 +25,7 @@ import {
   javaInstallationStatus,
   launchVersion,
   listDownloadJobs,
+  listInstanceContent,
   listInstanceEntries,
   listInstances,
   listLoaderVersions,
@@ -51,15 +53,41 @@ import {
   touchLastOpened,
 } from "@/lib/commands";
 import type { DownloadJobSnapshot } from "@/lib/generated/DownloadJobSnapshot";
+import type { InstanceContentEntry } from "@/lib/generated/InstanceContentEntry";
+import type { InstanceContentUpdate } from "@/lib/generated/InstanceContentUpdate";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
+}));
+
+const { contentListeners, unsubscribe } = vi.hoisted(() => ({
+  contentListeners: new Set<
+    (event: { payload: InstanceContentUpdate }) => void
+  >(),
+  unsubscribe: vi.fn(),
+}));
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn(
+    async (
+      _name: string,
+      handler: (event: { payload: InstanceContentUpdate }) => void,
+    ) => {
+      contentListeners.add(handler);
+      return () => {
+        unsubscribe();
+        contentListeners.delete(handler);
+      };
+    },
+  ),
 }));
 
 describe("launcher commands", () => {
   beforeEach(() => {
     vi.mocked(invoke).mockReset();
     vi.mocked(invoke).mockResolvedValue(undefined);
+    contentListeners.clear();
+    unsubscribe.mockClear();
+    vi.mocked(listen).mockClear();
   });
 
   it("lists instances without arguments", async () => {
@@ -215,6 +243,121 @@ describe("launcher commands", () => {
       folder: "Survival",
       relativePath: "saves",
     });
+  });
+
+  it("subscribes before loading content and routes only matching request events", async () => {
+    const updates = vi.fn();
+    const entries: InstanceContentEntry[] = [
+      {
+        name: "one.jar",
+        kind: "mods",
+        enabled: true,
+        size: 3,
+        title: "One",
+        version: null,
+        iconUrl: null,
+      },
+    ];
+    vi.mocked(invoke).mockImplementationOnce(async (_command, args) => {
+      expect(contentListeners.size).toBe(1);
+      const request = args as { requestId: string };
+      for (const handler of contentListeners) {
+        handler({
+          payload: {
+            requestId: "older-request",
+            instanceFolder: "classic",
+            entries,
+          },
+        });
+        handler({
+          payload: {
+            requestId: request.requestId,
+            instanceFolder: "other",
+            entries,
+          },
+        });
+        handler({
+          payload: {
+            requestId: request.requestId,
+            instanceFolder: "classic",
+            entries,
+          },
+        });
+        handler({
+          payload: {
+            requestId: request.requestId,
+            instanceFolder: "classic",
+            entries: [{ ...entries[0], version: "1.0" }],
+          },
+        });
+      }
+      return entries;
+    });
+    await expect(
+      listInstanceContent("classic", false, updates),
+    ).resolves.toEqual(entries);
+    expect(updates.mock.calls).toEqual([
+      [entries, true],
+      [[{ ...entries[0], version: "1.0" }], false],
+    ]);
+    expect(invoke).toHaveBeenCalledWith("list_instance_content", {
+      folder: "classic",
+      refresh: false,
+      requestId: expect.any(String),
+    });
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+    expect(contentListeners.size).toBe(0);
+  });
+
+  it("cleans up the content subscription and preserves command failures", async () => {
+    vi.mocked(invoke).mockRejectedValueOnce(new Error("metadata failed"));
+    await expect(
+      listInstanceContent("classic", false, vi.fn()),
+    ).rejects.toThrow("metadata failed");
+    expect(contentListeners.size).toBe(0);
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops content updates on abort, including events already queued by the bridge", async () => {
+    const updates = vi.fn();
+    const controller = new AbortController();
+    vi.mocked(invoke).mockImplementationOnce(async (_command, args) => {
+      const handler = [...contentListeners][0];
+      const request = args as { requestId: string };
+      controller.abort();
+      handler({
+        payload: {
+          requestId: request.requestId,
+          instanceFolder: "classic",
+          entries: [],
+        },
+      });
+      return [];
+    });
+    await listInstanceContent("classic", true, updates, controller.signal);
+    expect(updates).not.toHaveBeenCalled();
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+    expect(contentListeners.size).toBe(0);
+  });
+
+  it("does not start an already aborted content request", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      listInstanceContent("classic", false, vi.fn(), controller.signal),
+    ).rejects.toThrow("Content request aborted");
+    expect(invoke).not.toHaveBeenCalled();
+    expect(contentListeners.size).toBe(0);
+  });
+
+  it("reports content event subscription failures before invoking the command", async () => {
+    vi.mocked(listen).mockRejectedValueOnce(
+      new Error("event bridge unavailable"),
+    );
+    await expect(
+      listInstanceContent("classic", false, vi.fn()),
+    ).rejects.toThrow("event bridge unavailable");
+    expect(invoke).not.toHaveBeenCalled();
   });
 
   it("opens the repository", async () => {

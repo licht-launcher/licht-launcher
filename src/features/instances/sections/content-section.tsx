@@ -1,5 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  defaultRangeExtractor,
+  type Range,
+  useVirtualizer,
+} from "@tanstack/react-virtual";
+import {
   AlertTriangleIcon,
   ArrowDownAZIcon,
   ArrowDownIcon,
@@ -13,7 +18,14 @@ import {
   SparklesIcon,
   Trash2Icon,
 } from "lucide-react";
-import { useState } from "react";
+import {
+  Fragment,
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -29,8 +41,8 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
+import { instanceContentQuery } from "@/features/instances/lib/content-query";
 import {
-  listInstanceContent,
   removeInstanceContent,
   setInstanceContentEnabled,
 } from "@/lib/commands";
@@ -51,6 +63,7 @@ const skeletonOpacity = [
 export const CONTENT_STALE_TIME = Number.POSITIVE_INFINITY;
 type ContentSortKey = "name" | "size";
 type ContentSortDir = "asc" | "desc";
+type ContentFocus = { key: string; action: "toggle" | "remove" };
 
 function formatSize(size: number): string {
   if (size < 1024) return `${size} B`;
@@ -251,9 +264,13 @@ export function ContentSection({
     useState<InstanceContentEntry | null>(null);
   const [sortKey, setSortKey] = useState<ContentSortKey>("name");
   const [sortDir, setSortDir] = useState<ContentSortDir>("asc");
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const [focusedControl, setFocusedControl] = useState<ContentFocus | null>(
+    null,
+  );
+  const [pendingFocus, setPendingFocus] = useState<ContentFocus | null>(null);
   const content = useQuery({
-    queryKey: ["instance-content", folder],
-    queryFn: () => listInstanceContent(folder ?? ""),
+    ...instanceContentQuery(queryClient, folder ?? ""),
     enabled: folder !== null,
     staleTime: CONTENT_STALE_TIME,
   });
@@ -293,6 +310,83 @@ export function ContentSection({
     },
     onError: (error) => toast.error(friendlyError(messageOf(error))),
   });
+
+  const sortedEntries = useMemo(() => {
+    const normalizedSearch = search.trim().toLocaleLowerCase();
+    const entries = (content.data ?? []).filter(
+      (entry) =>
+        (filter === "all" || entry.kind === filter) &&
+        (normalizedSearch === "" ||
+          [entry.title, entry.name, entry.version ?? ""].some((value) =>
+            value.toLocaleLowerCase().includes(normalizedSearch),
+          )),
+    );
+    return sortContentEntries(entries, sortKey, sortDir);
+  }, [content.data, filter, search, sortKey, sortDir]);
+  const rowKeys = useMemo(
+    () => sortedEntries.map((entry) => `${entry.kind}:${entry.name}`),
+    [sortedEntries],
+  );
+  const rowIndexes = useMemo(
+    () => new Map(rowKeys.map((key, index) => [key, index])),
+    [rowKeys],
+  );
+  const focusedIndex = focusedControl
+    ? (rowIndexes.get(focusedControl.key) ?? -1)
+    : -1;
+  const pendingIndex = pendingFocus
+    ? (rowIndexes.get(pendingFocus.key) ?? -1)
+    : -1;
+  const getItemKey = useCallback((index: number) => rowKeys[index], [rowKeys]);
+  const rangeExtractor = useCallback(
+    (range: Range) => {
+      const indexes = new Set(defaultRangeExtractor(range));
+      if (focusedIndex >= 0) indexes.add(focusedIndex);
+      if (pendingIndex >= 0) indexes.add(pendingIndex);
+      return [...indexes].sort((left, right) => left - right);
+    },
+    [focusedIndex, pendingIndex],
+  );
+  const virtualizer = useVirtualizer<HTMLDivElement, HTMLTableRowElement>({
+    count: sortedEntries.length,
+    getScrollElement: () => viewportRef.current,
+    // This is only an initial geometry estimate; the rows retain their measured token-based sizes.
+    estimateSize: () => 56,
+    getItemKey,
+    rangeExtractor,
+    overscan: 5,
+    enabled: folder !== null && content.data !== undefined,
+  });
+  const virtualRows = virtualizer.getVirtualItems();
+
+  useLayoutEffect(() => {
+    const target = pendingFocus ?? focusedControl;
+    const index = pendingFocus ? pendingIndex : focusedIndex;
+    if (!target || index < 0) {
+      if (pendingFocus) setPendingFocus(null);
+      return;
+    }
+    if (!pendingFocus && document.activeElement !== document.body) return;
+    const control = viewportRef.current?.querySelector<HTMLButtonElement>(
+      `tr[data-index="${index}"] [data-content-action="${target.action}"]`,
+    );
+    if (control && !control.disabled) {
+      control.focus({ preventScroll: true });
+      if (pendingFocus) setPendingFocus(null);
+    }
+  }, [pendingFocus, focusedControl, pendingIndex, focusedIndex]);
+
+  const view = useMemo(
+    () => ({ folder, filter, search, sortKey, sortDir }),
+    [folder, filter, search, sortKey, sortDir],
+  );
+  const previousView = useRef(view);
+  useLayoutEffect(() => {
+    if (previousView.current !== view) {
+      previousView.current = view;
+      virtualizer.scrollToOffset(0);
+    }
+  }, [virtualizer, view]);
 
   if (folder === null) {
     return (
@@ -377,24 +471,13 @@ export function ContentSection({
       </div>
     );
   }
-  if (content.isError) {
+  if (content.isError && content.data === undefined) {
     return (
       <p className="p-3 text-sm text-destructive">
         Could not list instance content.
       </p>
     );
   }
-
-  const normalizedSearch = search.trim().toLocaleLowerCase();
-  const entries = content.data.filter(
-    (entry) =>
-      (filter === "all" || entry.kind === filter) &&
-      (normalizedSearch === "" ||
-        [entry.title, entry.name, entry.version ?? ""].some((value) =>
-          value.toLocaleLowerCase().includes(normalizedSearch),
-        )),
-  );
-  const sortedEntries = sortContentEntries(entries, sortKey, sortDir);
 
   function onSort(nextKey: ContentSortKey) {
     const next = toggleContentSort(sortKey, sortDir, nextKey);
@@ -404,6 +487,11 @@ export function ContentSection({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border/60 bg-black/20">
+      {content.isError ? (
+        <p role="alert" className="p-3 text-sm text-destructive">
+          Some content metadata could not be loaded. Refresh to try again.
+        </p>
+      ) : null}
       <table className="w-full shrink-0 table-fixed text-sm">
         <colgroup>
           <col />
@@ -423,9 +511,63 @@ export function ContentSection({
           className="h-px rounded-none"
         />
       ) : null}
-      <ScrollArea className="min-h-0 flex-1">
+      <ScrollArea className="min-h-0 flex-1" viewportRef={viewportRef}>
         <div className="min-w-[48rem]">
-          <table className="w-full table-fixed text-sm">
+          <table
+            className="w-full table-fixed text-sm"
+            aria-label="Installed content"
+            aria-rowcount={sortedEntries.length || undefined}
+            onFocusCapture={(event) => {
+              if (!(event.target instanceof HTMLElement)) return;
+              const row =
+                event.target.closest<HTMLTableRowElement>("tr[data-index]");
+              const action = event.target.closest<HTMLElement>(
+                "[data-content-action]",
+              )?.dataset.contentAction;
+              const key = rowKeys[Number(row?.dataset.index)];
+              if (key && (action === "toggle" || action === "remove"))
+                setFocusedControl({ key, action });
+            }}
+            onBlurCapture={(event) => {
+              if (pendingRemoval !== null) return;
+              if (
+                !(event.relatedTarget instanceof Node) ||
+                !event.currentTarget.contains(event.relatedTarget)
+              )
+                setFocusedControl(null);
+            }}
+            onKeyDownCapture={(event) => {
+              if (
+                event.key !== "Tab" ||
+                event.altKey ||
+                event.ctrlKey ||
+                event.metaKey ||
+                update.isPending ||
+                remove.isPending ||
+                !(event.target instanceof HTMLElement)
+              )
+                return;
+              const row =
+                event.target.closest<HTMLTableRowElement>("tr[data-index]");
+              const action = event.target.closest<HTMLElement>(
+                "[data-content-action]",
+              )?.dataset.contentAction;
+              if (
+                !row ||
+                (event.shiftKey ? action !== "toggle" : action !== "remove")
+              )
+                return;
+              const index =
+                Number(row.dataset.index) + (event.shiftKey ? -1 : 1);
+              if (index < 0 || index >= sortedEntries.length) return;
+              event.preventDefault();
+              setPendingFocus({
+                key: rowKeys[index],
+                action: event.shiftKey ? "remove" : "toggle",
+              });
+              virtualizer.scrollToIndex(index, { align: "auto" });
+            }}
+          >
             <colgroup>
               <col />
               <col className="w-28" />
@@ -452,72 +594,112 @@ export function ContentSection({
                   </td>
                 </tr>
               ) : (
-                sortedEntries.map((entry) => (
-                  <tr
-                    key={`${entry.kind}:${entry.name}`}
-                    className="border-b border-border/60 last:border-b-0 odd:bg-black/10"
-                  >
-                    <td className="px-3 py-2">
-                      <div className="flex min-w-0 items-center gap-3">
-                        {entry.iconUrl ? (
-                          <img
-                            src={entry.iconUrl}
-                            alt=""
-                            className="size-8 shrink-0 rounded-md object-cover"
+                virtualRows.map((virtualRow, position) => {
+                  const entry = sortedEntries[virtualRow.index];
+                  const gap =
+                    virtualRow.start - (virtualRows[position - 1]?.end ?? 0);
+                  return (
+                    <Fragment key={virtualRow.key}>
+                      {gap > 0 ? (
+                        <tr aria-hidden="true" tabIndex={-1}>
+                          <td
+                            colSpan={3}
+                            className="border-0 p-0"
+                            style={{ height: gap }}
                           />
-                        ) : (
-                          <ContentIcon kind={entry.kind} />
+                        </tr>
+                      ) : null}
+                      <tr
+                        ref={virtualizer.measureElement}
+                        data-index={virtualRow.index}
+                        aria-rowindex={virtualRow.index + 1}
+                        className={cn(
+                          "border-b border-border/60",
+                          virtualRow.index === sortedEntries.length - 1 &&
+                            "border-b-0",
+                          virtualRow.index % 2 === 0 && "bg-black/10",
                         )}
-                        <div className="min-w-0">
-                          <p
-                            className="truncate font-medium"
-                            title={entry.title}
-                          >
-                            {entry.title}
-                          </p>
-                          <p
-                            className="truncate text-xs text-muted-foreground"
-                            title={entry.name}
-                          >
-                            {entry.version ? `${entry.version} · ` : ""}
-                            {entry.name}
-                          </p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2 text-xs text-muted-foreground">
-                      {formatSize(entry.size)}
-                    </td>
-                    <td className="px-3 py-2">
-                      <div className="flex items-center justify-end gap-2">
-                        <Switch
-                          checked={entry.enabled}
-                          disabled={update.isPending || remove.isPending}
-                          aria-label={`${entry.enabled ? "Disable" : "Enable"} ${entry.title}`}
-                          onCheckedChange={(enabled) =>
-                            update.mutate({
-                              kind: entry.kind,
-                              name: entry.name,
-                              enabled,
-                            })
-                          }
-                        />
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          className="text-muted-foreground opacity-60 hover:text-destructive hover:opacity-100"
-                          aria-label={`Remove ${formatContentTitle(entry.name)}`}
-                          disabled={update.isPending || remove.isPending}
-                          onClick={() => setPendingRemoval(entry)}
-                        >
-                          <Trash2Icon aria-hidden className="size-4" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                      >
+                        <td className="px-3 py-2">
+                          <div className="flex min-w-0 items-center gap-3">
+                            {entry.iconUrl ? (
+                              <img
+                                src={entry.iconUrl}
+                                alt=""
+                                className="size-8 shrink-0 rounded-md object-cover"
+                              />
+                            ) : (
+                              <ContentIcon kind={entry.kind} />
+                            )}
+                            <div className="min-w-0">
+                              <p
+                                className="truncate font-medium"
+                                title={entry.title}
+                              >
+                                {entry.title}
+                              </p>
+                              <p
+                                className="truncate text-xs text-muted-foreground"
+                                title={entry.name}
+                              >
+                                {entry.version ? `${entry.version} · ` : ""}
+                                {entry.name}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 text-xs text-muted-foreground">
+                          {formatSize(entry.size)}
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="flex items-center justify-end gap-2">
+                            <Switch
+                              data-content-action="toggle"
+                              checked={entry.enabled}
+                              disabled={update.isPending || remove.isPending}
+                              aria-label={`${entry.enabled ? "Disable" : "Enable"} ${entry.title}`}
+                              onCheckedChange={(enabled) =>
+                                update.mutate({
+                                  kind: entry.kind,
+                                  name: entry.name,
+                                  enabled,
+                                })
+                              }
+                            />
+                            <Button
+                              data-content-action="remove"
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              className="text-muted-foreground opacity-60 hover:text-destructive hover:opacity-100"
+                              aria-label={`Remove ${formatContentTitle(entry.name)}`}
+                              disabled={update.isPending || remove.isPending}
+                              onClick={() => setPendingRemoval(entry)}
+                            >
+                              <Trash2Icon aria-hidden className="size-4" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    </Fragment>
+                  );
+                })
               )}
+              {virtualRows.length > 0 &&
+              virtualizer.getTotalSize() >
+                virtualRows[virtualRows.length - 1].end ? (
+                <tr aria-hidden="true" tabIndex={-1}>
+                  <td
+                    colSpan={3}
+                    className="border-0 p-0"
+                    style={{
+                      height:
+                        virtualizer.getTotalSize() -
+                        virtualRows[virtualRows.length - 1].end,
+                    }}
+                  />
+                </tr>
+              ) : null}
             </tbody>
           </table>
         </div>
@@ -528,7 +710,16 @@ export function ContentSection({
           if (!open) setPendingRemoval(null);
         }}
       >
-        <DialogContent>
+        <DialogContent
+          onCloseAutoFocus={(event) => {
+            if (!focusedControl) return;
+            const index = rowIndexes.get(focusedControl.key);
+            if (index === undefined) return;
+            event.preventDefault();
+            setPendingFocus(focusedControl);
+            virtualizer.scrollToIndex(index, { align: "auto" });
+          }}
+        >
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <AlertTriangleIcon className="size-5 text-destructive" />
