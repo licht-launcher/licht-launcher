@@ -1,7 +1,9 @@
+use std::collections::BTreeMap;
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
+use futures_util::{StreamExt, stream};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -12,6 +14,7 @@ use crate::store::repositories::content_fingerprints::ContentFingerprint;
 use crate::{CoreError, DatabaseClient, Result};
 
 const DISABLED_SUFFIX: &str = ".disabled";
+const CONTENT_METADATA_CONCURRENCY: usize = 4;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -115,75 +118,121 @@ pub async fn list_instance_content_progressively(
     let root = instance_root(cache, folder)?;
     let mut entries = list_instance_content(cache, folder)?;
     publish(&entries)?;
-    let mut last_published = std::time::Instant::now();
-    let mut batch_start = 0;
+    let last_published = std::time::Instant::now();
     let previous = database.content_fingerprints(cache, folder).await?;
-    let known: std::collections::BTreeMap<_, _> = previous
+    let known: BTreeMap<_, _> = previous
         .iter()
         .map(|entry| (entry.relative_path.as_str(), entry))
         .collect();
-    let mut fingerprints = Vec::with_capacity(entries.len());
-    for index in 0..entries.len() {
-        let entry = &mut entries[index];
-        let filename = if entry.enabled {
-            entry.name.clone()
-        } else {
-            format!("{}{}", entry.name, DISABLED_SUFFIX)
-        };
-        let path = content_file(&root, content_directory(entry.kind), &filename)?;
-        let relative = Path::new(content_directory(entry.kind)).join(&filename);
-        let relative = relative.to_string_lossy().into_owned();
-        let fingerprint = content_fingerprint(
-            &path,
-            relative.clone(),
-            known.get(relative.as_str()).copied(),
-            refresh,
-        )?;
-        let key = metadata_cache_key(&fingerprint.sha1);
-        let metadata = match read_metadata_cache(cache, &key)? {
-            Some(metadata) => metadata,
-            None => {
-                let remote =
-                    fetch_fingerprint_metadata(client, entry.kind, &fingerprint.sha1).await;
-                let local = if remote.is_none() {
-                    read_local_metadata(&path, entry.kind)
-                } else {
-                    None
-                };
-                let fallback = if remote.is_none() && local.is_none() {
-                    fetch_remote_metadata(client, entry.kind, &entry.name).await
-                } else {
-                    None
-                };
-                let metadata = remote
-                    .or(local)
-                    .or(fallback)
-                    .unwrap_or_else(|| ContentMetadata {
-                        title: fallback_title(&entry.name),
-                        version: None,
-                        icon_url: None,
-                    });
-                write_metadata_cache(cache, &key, &metadata)?;
-                metadata
-            }
-        };
-        entry.title = metadata.title;
-        entry.version = metadata.version;
-        entry.icon_url = metadata.icon_url;
-        fingerprints.push(fingerprint);
-        if publish_content_batch(
-            &entries[batch_start..=index],
-            &mut last_published,
-            std::time::Instant::now(),
-            &mut publish,
-        )? {
-            batch_start = index + 1;
-        }
-    }
+    let lookups = entries
+        .clone()
+        .into_iter()
+        .enumerate()
+        .map(|(index, entry)| {
+            resolve_content_entry(cache, client, &root, &known, index, entry, refresh)
+        });
+    let fingerprints =
+        enrich_content_entries(&mut entries, lookups, &mut publish, last_published).await?;
     database
         .sync_content_fingerprints(cache, folder, previous, fingerprints)
         .await?;
     Ok(entries)
+}
+
+struct ContentResolution {
+    index: usize,
+    entry: InstanceContentEntry,
+    fingerprint: ContentFingerprint,
+}
+
+async fn enrich_content_entries<F>(
+    entries: &mut [InstanceContentEntry],
+    lookups: impl Iterator<Item = F>,
+    publish: &mut impl FnMut(&[InstanceContentEntry]) -> Result<()>,
+    mut last_published: std::time::Instant,
+) -> Result<Vec<ContentFingerprint>>
+where
+    F: std::future::Future<Output = Result<ContentResolution>>,
+{
+    let mut pending =
+        Box::pin(stream::iter(lookups).buffer_unordered(CONTENT_METADATA_CONCURRENCY));
+    let mut fingerprints = Vec::with_capacity(entries.len());
+    let mut batch = Vec::new();
+    while let Some(result) = pending.next().await {
+        let resolved = result?;
+        entries[resolved.index] = resolved.entry.clone();
+        batch.push(resolved.entry);
+        fingerprints.push(resolved.fingerprint);
+        if publish_content_batch(
+            &batch,
+            &mut last_published,
+            std::time::Instant::now(),
+            publish,
+        )? {
+            batch.clear();
+        }
+    }
+    Ok(fingerprints)
+}
+
+async fn resolve_content_entry(
+    cache: &SharedCache,
+    client: &Client,
+    root: &Path,
+    known: &BTreeMap<&str, &ContentFingerprint>,
+    index: usize,
+    mut entry: InstanceContentEntry,
+    refresh: bool,
+) -> Result<ContentResolution> {
+    let filename = if entry.enabled {
+        entry.name.clone()
+    } else {
+        format!("{}{}", entry.name, DISABLED_SUFFIX)
+    };
+    let path = content_file(root, content_directory(entry.kind), &filename)?;
+    let relative = Path::new(content_directory(entry.kind)).join(&filename);
+    let relative = relative.to_string_lossy().into_owned();
+    let fingerprint = content_fingerprint(
+        &path,
+        relative.clone(),
+        known.get(relative.as_str()).copied(),
+        refresh,
+    )?;
+    let key = metadata_cache_key(&fingerprint.sha1);
+    let metadata = match read_metadata_cache(cache, &key)? {
+        Some(metadata) => metadata,
+        None => {
+            let remote = fetch_fingerprint_metadata(client, entry.kind, &fingerprint.sha1).await;
+            let local = if remote.is_none() {
+                read_local_metadata(&path, entry.kind)
+            } else {
+                None
+            };
+            let fallback = if remote.is_none() && local.is_none() {
+                fetch_remote_metadata(client, entry.kind, &entry.name).await
+            } else {
+                None
+            };
+            let metadata = remote
+                .or(local)
+                .or(fallback)
+                .unwrap_or_else(|| ContentMetadata {
+                    title: fallback_title(&entry.name),
+                    version: None,
+                    icon_url: None,
+                });
+            write_metadata_cache(cache, &key, &metadata)?;
+            metadata
+        }
+    };
+    entry.title = metadata.title;
+    entry.version = metadata.version;
+    entry.icon_url = metadata.icon_url;
+    Ok(ContentResolution {
+        index,
+        entry,
+        fingerprint,
+    })
 }
 
 fn publish_content_batch(
@@ -1124,5 +1173,252 @@ mod tests {
             );
         }
         service.shutdown().await.expect("shutdown");
+    }
+
+    fn simulated_resolution(index: usize) -> ContentResolution {
+        ContentResolution {
+            index,
+            entry: InstanceContentEntry {
+                name: format!("mod-{index}.jar"),
+                kind: InstanceContentKind::Mods,
+                enabled: true,
+                size: 1,
+                title: format!("Resolved {index}"),
+                version: Some(index.to_string()),
+                icon_url: None,
+            },
+            fingerprint: ContentFingerprint {
+                relative_path: Path::new("mods")
+                    .join(format!("mod-{index}.jar"))
+                    .to_string_lossy()
+                    .into_owned(),
+                size: 1,
+                modified: "100:0".to_string(),
+                sha1: sha1_hex(&[index as u8]),
+            },
+        }
+    }
+
+    #[tokio::test]
+    async fn concurrent_content_limits_in_flight_lookups_and_publishes_completion_order() {
+        use std::sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        };
+        let active = Arc::new(AtomicUsize::new(0));
+        let peak = Arc::new(AtomicUsize::new(0));
+        let (started, mut starts) = tokio::sync::mpsc::unbounded_channel();
+        let (mut releases, receivers): (Vec<_>, Vec<_>) = (0..6)
+            .map(|_| {
+                let (send, receive) = tokio::sync::oneshot::channel();
+                (Some(send), receive)
+            })
+            .unzip();
+        let lookups = receivers.into_iter().enumerate().map(|(index, gate)| {
+            let active = Arc::clone(&active);
+            let peak = Arc::clone(&peak);
+            let started = started.clone();
+            async move {
+                let count = active.fetch_add(1, Ordering::SeqCst) + 1;
+                peak.fetch_max(count, Ordering::SeqCst);
+                started.send(index).expect("lookup started");
+                gate.await.expect("release lookup");
+                active.fetch_sub(1, Ordering::SeqCst);
+                Ok(simulated_resolution(index))
+            }
+        });
+        let mut entries: Vec<_> = (0..6)
+            .map(|index| simulated_resolution(index).entry)
+            .collect();
+        let mut batches = Vec::new();
+        let mut publish = |batch: &[InstanceContentEntry]| {
+            batches.push(
+                batch
+                    .iter()
+                    .map(|entry| entry.name.clone())
+                    .collect::<Vec<_>>(),
+            );
+            Ok(())
+        };
+        let resolve = enrich_content_entries(
+            &mut entries,
+            lookups,
+            &mut publish,
+            std::time::Instant::now() - std::time::Duration::from_millis(100),
+        );
+        let control = async {
+            let mut first_wave = Vec::new();
+            for _ in 0..4 {
+                first_wave.push(starts.recv().await.expect("first wave"));
+            }
+            first_wave.sort();
+            assert_eq!(first_wave, [0, 1, 2, 3]);
+            assert!(
+                starts.try_recv().is_err(),
+                "a fifth lookup must wait for a free slot"
+            );
+            releases[2]
+                .take()
+                .expect("second gate")
+                .send(())
+                .expect("release second");
+            assert_eq!(starts.recv().await, Some(4));
+            releases[3]
+                .take()
+                .expect("third gate")
+                .send(())
+                .expect("release third");
+            assert_eq!(starts.recv().await, Some(5));
+            for index in [0, 1, 4, 5] {
+                releases[index]
+                    .take()
+                    .expect("remaining gate")
+                    .send(())
+                    .expect("release remaining");
+            }
+        };
+        let (result, ()) = tokio::time::timeout(std::time::Duration::from_secs(10), async {
+            tokio::join!(resolve, control)
+        })
+        .await
+        .expect("concurrent lookups must make progress");
+        let fingerprints = result.expect("resolved content");
+        assert_eq!(peak.load(Ordering::SeqCst), 4);
+        assert_eq!(active.load(Ordering::SeqCst), 0);
+        assert_eq!(
+            fingerprints[0].relative_path,
+            simulated_resolution(2).fingerprint.relative_path
+        );
+        assert_eq!(batches[0], ["mod-2.jar"]);
+        assert_eq!(
+            entries
+                .iter()
+                .map(|entry| entry.version.as_deref())
+                .collect::<Vec<_>>(),
+            [
+                Some("0"),
+                Some("1"),
+                Some("2"),
+                Some("3"),
+                Some("4"),
+                Some("5")
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn concurrent_content_propagates_lookup_errors_without_losing_published_results() {
+        let mut entries: Vec<_> = (0..3)
+            .map(|index| {
+                let mut entry = simulated_resolution(index).entry;
+                entry.version = None;
+                entry
+            })
+            .collect();
+        let lookups = (0..3).map(|index| async move {
+            if index == 1 {
+                tokio::task::yield_now().await;
+                return Err(std::io::Error::other("lookup failed").into());
+            }
+            if index == 2 {
+                std::future::pending::<()>().await;
+            }
+            Ok(simulated_resolution(index))
+        });
+        let mut batches = Vec::new();
+        let result = enrich_content_entries(
+            &mut entries,
+            lookups,
+            &mut |batch| {
+                batches.push(batch.to_vec());
+                Ok(())
+            },
+            std::time::Instant::now() - std::time::Duration::from_millis(100),
+        )
+        .await;
+        assert!(
+            matches!(result, Err(CoreError::Io(error)) if error.to_string() == "lookup failed")
+        );
+        assert_eq!(batches.len(), 1);
+        assert_eq!(batches[0][0].version.as_deref(), Some("0"));
+        assert_eq!(entries[0].version.as_deref(), Some("0"));
+        assert_eq!(entries[1].version, None);
+    }
+
+    #[tokio::test]
+    async fn concurrent_content_preserves_cached_metadata_for_each_original_file() {
+        let cache = cache("concurrent-cache");
+        let root = instance(&cache);
+        for index in 0..8 {
+            let body = format!("cached file {index}");
+            fs::write(
+                root.join("mods").join(format!("mod-{index}.jar")),
+                body.as_bytes(),
+            )
+            .expect("mod");
+            seed_metadata(&cache, body.as_bytes(), &format!("Cached title {index}"));
+        }
+        let service = crate::DatabaseService::start(cache.clone())
+            .await
+            .expect("service");
+        let entries = list_instance_content_with_metadata(
+            &cache,
+            &service.client(),
+            &offline_client(),
+            "classic",
+            false,
+        )
+        .await
+        .expect("cached content");
+        for (index, entry) in entries.iter().enumerate() {
+            assert_eq!(entry.name, format!("mod-{index}.jar"));
+            assert_eq!(entry.title, format!("Cached title {index}"));
+        }
+        let index = service
+            .client()
+            .content_fingerprints(&cache, "classic")
+            .await
+            .expect("fingerprints");
+        assert_eq!(index.len(), 8);
+        for (number, fingerprint) in index.iter().enumerate() {
+            assert_eq!(
+                fingerprint.sha1,
+                sha1_hex(format!("cached file {number}").as_bytes())
+            );
+        }
+        service.shutdown().await.expect("shutdown");
+    }
+
+    #[tokio::test]
+    async fn concurrent_content_measures_simulated_metadata_latency() {
+        let lookups = || {
+            (0..8).map(|index| async move {
+                tokio::time::sleep(std::time::Duration::from_millis(40)).await;
+                Ok(simulated_resolution(index))
+            })
+        };
+        let sequential_start = std::time::Instant::now();
+        let mut sequential = Vec::new();
+        for lookup in lookups() {
+            sequential.push(lookup.await.expect("sequential lookup").entry);
+        }
+        let sequential_time = sequential_start.elapsed();
+        let concurrent_start = std::time::Instant::now();
+        let mut concurrent: Vec<_> = (0..8)
+            .map(|index| simulated_resolution(index).entry)
+            .collect();
+        enrich_content_entries(
+            &mut concurrent,
+            lookups(),
+            &mut |_| Ok(()),
+            std::time::Instant::now(),
+        )
+        .await
+        .expect("concurrent lookups");
+        let concurrent_time = concurrent_start.elapsed();
+        assert_eq!(sequential, concurrent);
+        eprintln!(
+            "Simulated metadata (8 lookups, 40 ms each): sequential {sequential_time:?}, concurrent {concurrent_time:?}"
+        );
     }
 }
