@@ -152,10 +152,16 @@ impl DownloadManager {
             slot.control.wait_for_idle().await?;
             return Ok(slot.snapshot.lock().await.clone());
         }
-        if snapshot.status != DownloadJobStatus::Queued
-            && (snapshot.status != DownloadJobStatus::Running
-                || snapshot.phase != DownloadPhase::Downloading)
+        if snapshot.status == DownloadJobStatus::Running
+            && snapshot.phase != DownloadPhase::Downloading
         {
+            // The phase may have advanced since the UI offered Pause.
+            return Ok(snapshot.clone());
+        }
+        if !matches!(
+            snapshot.status,
+            DownloadJobStatus::Queued | DownloadJobStatus::Running
+        ) {
             return Err(CoreError::DownloadJobTransition);
         }
         slot.control.pause();

@@ -214,7 +214,7 @@ pub(super) async fn download_modrinth_mrpack_to(
         .await?;
     context.stage(crate::DownloadPhase::Verifying).await?;
     if let Some(expected) = file.pointer("/hashes/sha512").and_then(Value::as_str) {
-        super::file_hashes::ensure_sha512(destination, expected)?;
+        super::file_hashes::ensure_sha512(destination, expected, &context.control).await?;
     }
     Ok(())
 }
