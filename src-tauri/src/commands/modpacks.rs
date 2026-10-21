@@ -67,7 +67,7 @@ pub async fn install_modpack_files(
     let cache = paths.game.clone();
     let settings = paths.settings.clone();
     let dir = cache.instance_dir(&folder).map_err(failure)?;
-    let profile = load_instance(&dir).map_err(failure)?;
+    let profile = load_instance(&database, &dir).await.map_err(failure)?;
     let progress_version_id = profile
         .version_id
         .clone()

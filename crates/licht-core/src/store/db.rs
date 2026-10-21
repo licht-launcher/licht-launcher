@@ -8,7 +8,7 @@ use super::repositories::metadata::MetadataRepository;
 use crate::{CoreError, Result, SharedCache};
 
 const DB_FILE: &str = "licht.db";
-const SCHEMA_VERSION: u32 = 6;
+const SCHEMA_VERSION: u32 = 7;
 pub(super) const META_LAST_PLAYED: &str = "last_played_folder";
 
 pub fn db_path(cache: &SharedCache) -> PathBuf {
@@ -181,6 +181,28 @@ async fn migrate(connection: &mut SqliteConnection) -> Result<()> {
                 FOREIGN KEY (instances_directory, instance_folder) REFERENCES modpack_indexes (instances_directory, instance_folder)
             );
             PRAGMA user_version = 6;",
+        ).execute(&mut *transaction).await?;
+    }
+    if version < 7 {
+        sqlx::raw_sql(
+            "CREATE TABLE instances (
+                instances_directory TEXT NOT NULL, instance_folder TEXT NOT NULL,
+                name TEXT NOT NULL, version_id TEXT,
+                installation TEXT,
+                min_memory_mb INTEGER NOT NULL CHECK(min_memory_mb > 0 AND min_memory_mb <= 4294967295),
+                max_memory_mb INTEGER NOT NULL CHECK(max_memory_mb >= min_memory_mb AND max_memory_mb <= 4294967295),
+                jvm_arguments TEXT NOT NULL,
+                fullscreen INTEGER NOT NULL CHECK(fullscreen IN (0, 1)),
+                width INTEGER CHECK(width BETWEEN 0 AND 4294967295),
+                height INTEGER CHECK(height BETWEEN 0 AND 4294967295),
+                override_window INTEGER NOT NULL CHECK(override_window IN (0, 1)),
+                override_memory INTEGER NOT NULL CHECK(override_memory IN (0, 1)),
+                override_java INTEGER NOT NULL CHECK(override_java IN (0, 1)),
+                override_jvm_arguments INTEGER NOT NULL CHECK(override_jvm_arguments IN (0, 1)),
+                java_path TEXT, last_opened_at TEXT,
+                PRIMARY KEY (instances_directory, instance_folder)
+            );
+            PRAGMA user_version = 7;",
         ).execute(&mut *transaction).await?;
     }
     transaction.commit().await?;

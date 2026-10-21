@@ -30,7 +30,7 @@ pub(crate) fn execute(
         let folder = job.instance_folder.ok_or(CoreError::InstancePreparing)?;
         let root = runtime.game.instances_dir()?;
         let dir = runtime.game.instance_dir(&folder)?;
-        let profile = load_instance(&dir)?;
+        let profile = load_instance(&runtime.database, &dir).await?;
         if let Some(installation) = &profile.installation
             && installation.state == InstancePreparationState::Preparing
         {
@@ -54,7 +54,7 @@ pub(crate) fn execute(
                     .await?
                 }
                 source @ InstanceSource::Modpack { .. } => {
-                    let entry = instance_entry(&dir, &folder)?;
+                    let entry = instance_entry(&runtime.database, &dir, &folder).await?;
                     let imported = crate::modpacks::prepare_modpack_instance(
                         &runtime.database,
                         &runtime.client,
@@ -69,7 +69,7 @@ pub(crate) fn execute(
                 }
             };
             context.checkpoint().await?;
-            configure_instance_version(&root, &folder, &version)?;
+            configure_instance_version(&runtime.database, &root, &folder, &version).await?;
         } else if let Some(installation) = &profile.installation {
             crate::modpacks::restore_instance_icon(
                 &runtime.client,
@@ -79,7 +79,7 @@ pub(crate) fn execute(
             )
             .await?;
         }
-        let profile = load_instance(&dir)?;
+        let profile = load_instance(&runtime.database, &dir).await?;
         let version = profile
             .version_id
             .as_deref()
@@ -104,7 +104,7 @@ pub(crate) fn execute(
         .await?;
         install_curseforge_files(&runtime.game, &runtime.settings, &dir, context.clone()).await?;
         context.checkpoint().await?;
-        complete_instance_preparation(&root, &folder)?;
+        complete_instance_preparation(&runtime.database, &root, &folder).await?;
         Ok(())
     })
 }

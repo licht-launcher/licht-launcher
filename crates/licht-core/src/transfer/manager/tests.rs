@@ -18,7 +18,7 @@ const SHA1: &str = "2aae6c35c94fcfb415dbe95f408b9ce91ee846ed";
 async fn pause_resume_and_completion_use_the_persisted_job_and_block_early_launch() {
     let mut server = Server::new().await;
     let fixture = Fixture::new(&server.url).await;
-    let entry = fixture.instance("Survival");
+    let entry = fixture.instance("Survival").await;
     let manager = fixture.manager();
     let job = manager
         .start(&entry.folder, DownloadJobOperation::Install)
@@ -117,7 +117,7 @@ async fn pause_resume_and_completion_use_the_persisted_job_and_block_early_launc
 async fn shutdown_preserves_partial_bytes_and_a_new_manager_resumes_the_same_job() {
     let mut server = Server::new().await;
     let fixture = Fixture::new(&server.url).await;
-    let entry = fixture.instance("Restart");
+    let entry = fixture.instance("Restart").await;
     let manager = fixture.manager();
     let job = manager
         .start(&entry.folder, DownloadJobOperation::Install)
@@ -170,7 +170,7 @@ async fn shutdown_preserves_partial_bytes_and_a_new_manager_resumes_the_same_job
 async fn cancelling_a_new_installation_removes_the_instance_after_the_worker_stops() {
     let mut server = Server::new().await;
     let fixture = Fixture::new(&server.url).await;
-    let entry = fixture.instance("Cancel");
+    let entry = fixture.instance("Cancel").await;
     let manager = fixture.manager();
     let worker = Arc::clone(&manager);
     let folder = entry.folder.clone();
@@ -201,9 +201,13 @@ async fn cancelling_a_new_installation_removes_the_instance_after_the_worker_sto
             .exists()
     );
     assert!(
-        crate::list_instances(&fixture.game.instances_dir().expect("root"))
-            .expect("library")
-            .is_empty()
+        crate::list_instances(
+            &fixture.database(),
+            &fixture.game.instances_dir().expect("root")
+        )
+        .await
+        .expect("library")
+        .is_empty()
     );
     assert_eq!(
         manager
@@ -222,10 +226,14 @@ async fn cancelling_repairs_and_updates_preserves_existing_instances_and_saves()
     for operation in [DownloadJobOperation::Repair, DownloadJobOperation::Install] {
         let mut server = Server::new().await;
         let fixture = Fixture::new(&server.url).await;
-        let entry = fixture.instance("Existing");
+        let entry = fixture.instance("Existing").await;
         let root = fixture.game.instances_dir().expect("root");
-        crate::configure_instance_version(&root, &entry.folder, "1.20.1").expect("version");
-        crate::complete_instance_preparation(&root, &entry.folder).expect("already installed");
+        crate::configure_instance_version(&fixture.database(), &root, &entry.folder, "1.20.1")
+            .await
+            .expect("version");
+        crate::complete_instance_preparation(&fixture.database(), &root, &entry.folder)
+            .await
+            .expect("already installed");
         let dir = fixture.game.instance_dir(&entry.folder).expect("folder");
         std::fs::create_dir_all(dir.join("saves")).expect("saves");
         let save = dir.join("saves/world.dat");
@@ -249,7 +257,8 @@ async fn cancelling_repairs_and_updates_preserves_existing_instances_and_saves()
             b"existing world"
         );
         assert_eq!(
-            load_instance(&dir)
+            load_instance(&fixture.database(), &dir)
+                .await
                 .expect("instance preserved")
                 .installation
                 .expect("installation")
@@ -269,7 +278,7 @@ async fn failed_instance_removal_can_retry_after_restart_without_the_profile() {
 
     let mut server = Server::new().await;
     let fixture = Fixture::new(&server.url).await;
-    let entry = fixture.instance("Locked cancellation");
+    let entry = fixture.instance("Locked cancellation").await;
     let dir = fixture.game.instance_dir(&entry.folder).expect("folder");
     let locked = std::fs::OpenOptions::new()
         .create_new(true)
@@ -296,9 +305,11 @@ async fn failed_instance_removal_can_retry_after_restart_without_the_profile() {
         "failed cleanup must remain available for retry"
     );
     drop(locked);
-    if dir.join("instance.json").exists() {
-        std::fs::remove_file(dir.join("instance.json")).expect("partially removed profile");
-    }
+    fixture
+        .database()
+        .delete_instance_profile(&dir)
+        .await
+        .expect("partially removed profile");
     drop(manager);
     crate::recover_download_jobs(&fixture.settings, &fixture.game)
         .await
@@ -322,7 +333,7 @@ async fn pending_cancellation_recovers_after_cleanup_failure_with_missing_instan
     for remove_directory in [false, true] {
         let mut server = Server::new().await;
         let fixture = Fixture::new(&server.url).await;
-        let entry = fixture.instance("Pending cancellation");
+        let entry = fixture.instance("Pending cancellation").await;
         let dir = fixture.game.instance_dir(&entry.folder).expect("folder");
         let manager = fixture.manager();
         let job = manager
@@ -362,13 +373,17 @@ async fn pending_cancellation_recovers_after_cleanup_failure_with_missing_instan
         );
         assert!(manager.ensure_launchable(&entry.folder).await.is_err());
         assert!(
-            dir.join("instance.json").exists(),
+            load_instance(&fixture.database(), &dir).await.is_ok(),
             "artifact cleanup must finish before directory removal"
         );
         if remove_directory {
             std::fs::remove_dir_all(&dir).expect("directory already removed");
         } else {
-            std::fs::remove_file(dir.join("instance.json")).expect("partially removed profile");
+            fixture
+                .database()
+                .delete_instance_profile(&dir)
+                .await
+                .expect("partially removed profile");
         }
         drop(manager);
         assert_eq!(
@@ -417,7 +432,7 @@ async fn pending_cancellation_recovers_after_cleanup_failure_with_missing_instan
 async fn cancelling_a_recovered_new_installation_removes_it_without_starting_network_requests() {
     let server = Server::new().await;
     let fixture = Fixture::new(&server.url).await;
-    let entry = fixture.instance("Interrupted new instance");
+    let entry = fixture.instance("Interrupted new instance").await;
     let job = create_pending_download_job(
         &fixture.settings,
         &fixture.game,
@@ -450,7 +465,7 @@ async fn cancelling_a_recovered_new_installation_removes_it_without_starting_net
 async fn shutdown_preserves_pending_removal_when_the_cancel_caller_does_not_finish() {
     let mut server = Server::new().await;
     let fixture = Fixture::new(&server.url).await;
-    let entry = fixture.instance("Pending shutdown");
+    let entry = fixture.instance("Pending shutdown").await;
     let manager = fixture.manager();
     let job = manager
         .start(&entry.folder, DownloadJobOperation::Install)
@@ -513,11 +528,13 @@ async fn cancelling_an_existing_legacy_instance_update_keeps_its_files() {
     let fixture = Fixture::new(&server.url).await;
     let root = fixture.game.instances_dir().expect("instances");
     let entry = crate::create_instance(
+        &fixture.database(),
         &root,
         "Legacy",
         "1.20.1",
         &global_launch(&load_settings(&fixture.settings).expect("settings")),
     )
+    .await
     .expect("legacy instance");
     let dir = fixture.game.instance_dir(&entry.folder).expect("folder");
     std::fs::write(dir.join("options.txt"), b"existing settings").expect("settings");
@@ -533,7 +550,8 @@ async fn cancelling_an_existing_legacy_instance_update_keeps_its_files() {
         b"existing settings"
     );
     assert!(
-        load_instance(&dir)
+        load_instance(&fixture.database(), &dir)
+            .await
             .expect("legacy profile")
             .installation
             .is_none()
@@ -547,7 +565,7 @@ async fn explicit_instance_deletion_cancels_downloads_without_deleting_the_folde
     for pending_removal in [false, true] {
         let mut server = Server::new().await;
         let fixture = Fixture::new(&server.url).await;
-        let entry = fixture.instance("Delete");
+        let entry = fixture.instance("Delete").await;
         let manager = fixture.manager();
         let job = manager
             .start(&entry.folder, DownloadJobOperation::Install)
@@ -596,7 +614,7 @@ async fn explicit_instance_deletion_cancels_downloads_without_deleting_the_folde
 async fn a_failed_download_can_retry_the_same_job_and_clear_its_error() {
     let mut server = Server::new().await;
     let fixture = Fixture::new(&server.url).await;
-    let entry = fixture.instance("Retry");
+    let entry = fixture.instance("Retry").await;
     let manager = fixture.manager();
     let job = manager
         .start(&entry.folder, DownloadJobOperation::Repair)
@@ -665,8 +683,8 @@ async fn standalone_java_has_no_fake_instance_and_cancellation_returns_no_path()
 #[tokio::test]
 async fn recovered_cancellation_keeps_partials_referenced_by_another_unfinished_job() {
     let fixture = Fixture::new("http://127.0.0.1:1/unused").await;
-    let first = fixture.instance("First");
-    let second = fixture.instance("Second");
+    let first = fixture.instance("First").await;
+    let second = fixture.instance("Second").await;
     let first = create_pending_download_job(
         &fixture.settings,
         &fixture.game,
@@ -708,8 +726,8 @@ async fn cancelling_an_active_job_preserves_shared_cache_bytes_until_the_last_jo
     for cancel_remaining in [false, true] {
         let mut server = Server::new().await;
         let fixture = Fixture::new(&server.url).await;
-        let first_instance = fixture.instance("First shared library consumer");
-        let second_instance = fixture.instance("Second shared library consumer");
+        let first_instance = fixture.instance("First shared library consumer").await;
+        let second_instance = fixture.instance("Second shared library consumer").await;
         let manager = fixture.manager();
         let first = manager
             .start(&first_instance.folder, DownloadJobOperation::Install)
@@ -832,21 +850,29 @@ async fn accepted_cancellation_wins_even_if_an_executor_finishes_successfully() 
     sqlx::Connection::close(connection)
         .await
         .expect("close fixture connection");
-    let entry = fixture.instance("Completion race");
+    let entry = fixture.instance("Completion race").await;
     let manager = fixture.manager();
     let job = manager
         .start(&entry.folder, DownloadJobOperation::Install)
         .await
         .expect("start");
     server.request().await.reply(200, "", BODY, 11);
-    wait_until(|| {
-        load_instance(&fixture.game.instance_dir(&entry.folder).expect("folder")).is_ok_and(
-            |profile| {
-                profile.installation.is_some_and(|installation| {
-                    installation.state == InstancePreparationState::Ready
-                })
-            },
-        )
+    finish(async {
+        loop {
+            let profile = load_instance(
+                &fixture.database(),
+                &fixture.game.instance_dir(&entry.folder).expect("folder"),
+            )
+            .await
+            .expect("profile");
+            if profile
+                .installation
+                .is_some_and(|installation| installation.state == InstancePreparationState::Ready)
+            {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
     })
     .await;
     let outcome = finish(manager.cancel(&job.id))

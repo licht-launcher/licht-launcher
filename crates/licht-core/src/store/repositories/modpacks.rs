@@ -147,11 +147,13 @@ mod tests {
         let original = index();
         let settings = crate::load_settings(&cache).expect("settings");
         crate::create_instance(
+            &client,
             &instances,
             "First",
             "1.20.1",
             &crate::global_launch(&settings),
         )
+        .await
         .expect("instance");
         client
             .replace_modpack(&instances, "First", original.clone())
@@ -198,7 +200,11 @@ mod tests {
                 .expect("deleted dependencies")
                 .is_empty()
         );
-        assert!(instances.join("Copy").join("instance.json").exists());
+        assert!(
+            crate::load_instance(&client, &instances.join("Copy"))
+                .await
+                .is_ok()
+        );
         assert!(!instances.join("First").exists());
         service.shutdown().await.expect("shutdown");
         let service = DatabaseService::start(cache.clone()).await.expect("reopen");

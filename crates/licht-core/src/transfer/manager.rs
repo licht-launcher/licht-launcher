@@ -78,7 +78,14 @@ impl DownloadManager {
         self.accept_work()?;
         let settings = load_settings(&self.runtime.settings)?;
         let root = self.runtime.game.instances_dir()?;
-        let entry = create_pending_instance(&root, name, source, &global_launch(&settings))?;
+        let entry = create_pending_instance(
+            &self.runtime.database,
+            &root,
+            name,
+            source,
+            &global_launch(&settings),
+        )
+        .await?;
         self.runtime
             .database
             .delete_modpack(&root, &entry.folder)
@@ -116,7 +123,11 @@ impl DownloadManager {
                 _ => Ok(job),
             };
         }
-        let profile = load_instance(&self.runtime.game.instance_dir(folder)?)?;
+        let profile = load_instance(
+            &self.runtime.database,
+            &self.runtime.game.instance_dir(folder)?,
+        )
+        .await?;
         let job = self
             .runtime
             .database
@@ -213,7 +224,11 @@ impl DownloadManager {
             return Err(CoreError::DownloadJobTransition);
         }
         if let Some(folder) = &snapshot.instance_folder {
-            load_instance(&self.runtime.game.instance_dir(folder)?)?;
+            load_instance(
+                &self.runtime.database,
+                &self.runtime.game.instance_dir(folder)?,
+            )
+            .await?;
         }
         snapshot.status = DownloadJobStatus::Queued;
         snapshot.error = None;
@@ -230,14 +245,24 @@ impl DownloadManager {
         {
             return Err(CoreError::InstancePreparing);
         }
-        crate::instance_version_for_launch(&load_instance(
-            &self.runtime.game.instance_dir(folder)?,
-        )?)?;
+        crate::instance_version_for_launch(
+            &load_instance(
+                &self.runtime.database,
+                &self.runtime.game.instance_dir(folder)?,
+            )
+            .await?,
+        )?;
         Ok(())
     }
     pub async fn change_version(&self, folder: &str, version: &str) -> Result<InstanceEntry> {
         self.ensure_launchable(folder).await?;
-        crate::update_instance_version(&self.runtime.game.instances_dir()?, folder, version)
+        crate::update_instance_version(
+            &self.runtime.database,
+            &self.runtime.game.instances_dir()?,
+            folder,
+            version,
+        )
+        .await
     }
     async fn wait(&self, id: &str) -> Result<DownloadJobSnapshot> {
         if let Some(slot) = self.active_job(id).await {

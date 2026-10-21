@@ -22,7 +22,7 @@ fn verifying_executor(
 #[tokio::test]
 async fn modpack_late_pause_returns_the_current_verifying_snapshot() {
     let fixture = Fixture::new("http://127.0.0.1:1/unused").await;
-    let instance = fixture.instance("Late pause");
+    let instance = fixture.instance("Late pause").await;
     let manager = fixture.manager_with(verifying_executor, reqwest::Client::new());
     let job = manager
         .start(&instance.folder, DownloadJobOperation::Install)
@@ -55,7 +55,7 @@ async fn modpack_late_pause_returns_the_current_verifying_snapshot() {
 #[tokio::test]
 async fn modpack_cached_verification_yields_and_observes_cancellation() {
     let fixture = Fixture::new("http://127.0.0.1:1/unused").await;
-    let instance = fixture.instance("Cached verification");
+    let instance = fixture.instance("Cached verification").await;
     let directory = fixture
         .game
         .instance_dir(&instance.folder)
@@ -141,7 +141,7 @@ fn write_workspace(
 #[tokio::test]
 async fn modpack_repair_uses_sqlite_even_when_the_legacy_backup_is_invalid() {
     let fixture = Fixture::new("http://127.0.0.1:1/unused").await;
-    let instance = fixture.instance("Database repair");
+    let instance = fixture.instance("Database repair").await;
     let directory = fixture
         .game
         .instance_dir(&instance.folder)
@@ -201,7 +201,7 @@ async fn modpack_cancellation_removes_new_indexes_but_preserves_repair_indexes()
         ("New pack", DownloadJobOperation::Install),
         ("Existing pack", DownloadJobOperation::Repair),
     ] {
-        let instance = fixture.instance(name);
+        let instance = fixture.instance(name).await;
         let directory = instances.join(&instance.folder);
         let index = serde_json::json!({"dependencies":{"minecraft":"1.20.1"},"files":[]});
         let stored = crate::modpacks::mrpack::storage::StoredModpack::parse(&index, &directory)
@@ -278,7 +278,7 @@ fn paused_workspace_executor(
 async fn modpack_workspace_is_removed_on_success_and_preserved_on_failure_until_cancelled() {
     let fixture = Fixture::new("http://127.0.0.1:1/unused").await;
     let manager = fixture.manager_with(workspace_executor, reqwest::Client::new());
-    let success = fixture.instance("Complete workspace");
+    let success = fixture.instance("Complete workspace").await;
     let job = manager
         .start(&success.folder, DownloadJobOperation::Install)
         .await
@@ -295,7 +295,7 @@ async fn modpack_workspace_is_removed_on_success_and_preserved_on_failure_until_
             .join(".install")
             .exists()
     );
-    let failed = fixture.instance("Failed workspace");
+    let failed = fixture.instance("Failed workspace").await;
     let job = manager
         .start(&failed.folder, DownloadJobOperation::Repair)
         .await
@@ -324,7 +324,7 @@ async fn modpack_workspace_is_removed_on_success_and_preserved_on_failure_until_
 #[tokio::test]
 async fn modpack_workspace_survives_pause_and_resume_and_is_removed_after_cancellation() {
     let fixture = Fixture::new("http://127.0.0.1:1/unused").await;
-    let instance = fixture.instance("Paused workspace");
+    let instance = fixture.instance("Paused workspace").await;
     let manager = fixture.manager_with(paused_workspace_executor, reqwest::Client::new());
     let job = manager
         .start(&instance.folder, DownloadJobOperation::Repair)

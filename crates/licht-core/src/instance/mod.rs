@@ -1,10 +1,10 @@
-//! Instance profiles (`instance.json`) and folder listing.
+//! SQLite instance profiles and folder listing.
 
 pub(crate) mod content;
 pub mod icon;
 pub(crate) mod listing;
 mod operations;
-mod persistence;
+pub(crate) mod persistence;
 mod preparation;
 
 pub use operations::{
@@ -29,23 +29,16 @@ use crate::instance::icon::ICON_FILE;
 use crate::settings::GlobalLaunch;
 use crate::{CoreError, Result};
 
-const SCHEMA: u32 = 2;
+pub(crate) const SCHEMA: u32 = 2;
 const DEFAULT_MIN_MEMORY_MB: u32 = 512;
-const DEFAULT_MAX_MEMORY_MB: u32 = 2048;
-const FILE_NAME: &str = "instance.json";
 // Background preparation and UI edits must not overwrite each other's profile changes.
-static PROFILE_MUTATIONS: std::sync::Mutex<()> = std::sync::Mutex::new(());
+static PROFILE_MUTATIONS: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
-fn profile_guard() -> Result<std::sync::MutexGuard<'static, ()>> {
-    PROFILE_MUTATIONS
-        .lock()
-        .map_err(|_| CoreError::Io(std::io::Error::other("instance profile lock was poisoned")))
+async fn profile_guard() -> tokio::sync::MutexGuard<'static, ()> {
+    PROFILE_MUTATIONS.lock().await
 }
 
-/// Profile stored at `instances/<folder>/instance.json`.
-///
-/// LaunchWrapper keeps the game in a child `.minecraft` folder, so this file
-/// stays beside that folder instead of inside the directory the old client opens.
+/// Profile stored in SQLite, keyed by the instances directory and folder.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Instance {
@@ -76,10 +69,10 @@ pub struct Instance {
     pub last_opened_at: Option<String>,
 }
 
-/// An instance folder and the profile stored in it.
+/// An instance folder and its profile.
 ///
 /// `folder` is chosen once and does not change when the profile is renamed.
-/// `icon_path` is the absolute path to `icon.png` when present beside `instance.json`.
+/// `icon_path` is the absolute path to the cached icon when present.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct InstanceEntry {
@@ -118,27 +111,6 @@ pub struct InstanceSettings {
     pub fullscreen: bool,
     pub width: Option<u32>,
     pub height: Option<u32>,
-}
-
-fn default_instance(name: String, version_id: String) -> Instance {
-    Instance {
-        schema: SCHEMA,
-        name,
-        version_id: Some(version_id),
-        installation: None,
-        min_memory_mb: DEFAULT_MIN_MEMORY_MB,
-        max_memory_mb: DEFAULT_MAX_MEMORY_MB,
-        jvm_arguments: Vec::new(),
-        fullscreen: false,
-        width: None,
-        height: None,
-        override_window: false,
-        override_memory: false,
-        override_java: false,
-        override_jvm_arguments: false,
-        java_path: None,
-        last_opened_at: None,
-    }
 }
 
 fn instance_from_template(name: String, version_id: String, template: &GlobalLaunch) -> Instance {
@@ -217,8 +189,12 @@ pub fn resolved_java_path(instance: &Instance) -> Option<PathBuf> {
 }
 
 /// Builds an [`InstanceEntry`] from the profile and optional cached icon.
-pub fn instance_entry(dir: &Path, folder: &str) -> Result<InstanceEntry> {
-    let instance = load_instance(dir)?;
+pub async fn instance_entry(
+    database: &crate::DatabaseClient,
+    dir: &Path,
+    folder: &str,
+) -> Result<InstanceEntry> {
+    let instance = load_instance(database, dir).await?;
     Ok(entry_from(dir, folder.to_string(), instance))
 }
 
@@ -326,6 +302,8 @@ fn copy_tree(source: &Path, destination: &Path, skip_install: bool) -> Result<()
         if skip_install
             && entry.file_name().to_str().is_some_and(|name| {
                 name.eq_ignore_ascii_case(crate::modpacks::workspace::INSTALL_DIRECTORY)
+                    || name.eq_ignore_ascii_case("instance.json")
+                    || name.eq_ignore_ascii_case(".instance.json.tmp")
             })
         {
             continue;
@@ -352,16 +330,7 @@ fn normalize_java_path(path: Option<&str>) -> Option<String> {
     }
 }
 
-fn directory_name(dir: &Path) -> Result<String> {
-    let name = dir
-        .file_name()
-        .and_then(|name| name.to_str())
-        .ok_or(CoreError::CachePath)?;
-    single_component(name)?;
-    Ok(name.to_string())
-}
-
-fn single_component(name: &str) -> Result<()> {
+pub(crate) fn single_component(name: &str) -> Result<()> {
     use crate::path_component::path_component_safe;
 
     // Same rules as modpack path segments (reserved names, `:`, trailing junk).

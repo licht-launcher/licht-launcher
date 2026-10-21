@@ -175,11 +175,21 @@ async fn launch(args: &[String]) -> licht_core::Result<i32> {
             path
         }
     };
-    let profile = load_instance(&instance)?;
-    let custom_java = args.java.is_some() || resolved_java_path(&profile).is_some();
+    let database = licht_core::DatabaseService::start(settings_home.clone()).await?;
+    let profile = match load_instance(&database.client(), &instance).await {
+        Ok(profile) => Some(profile),
+        Err(CoreError::Io(error)) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(error) => {
+            database.shutdown().await?;
+            return Err(error);
+        }
+    };
+    database.shutdown().await?;
+    let profile_java = profile.as_ref().and_then(resolved_java_path);
+    let custom_java = args.java.is_some() || profile_java.is_some();
     let java = match args.java {
         Some(path) => path,
-        None => match resolved_java_path(&profile) {
+        None => match profile_java {
             Some(path) => path,
             None => match configured_java(&settings, required) {
                 Some(path) => path,
@@ -194,7 +204,11 @@ async fn launch(args: &[String]) -> licht_core::Result<i32> {
     };
     let codec = log_codec(major);
     let account = offline_account(&args.username)?;
-    let launch_options = resolved_launch(&profile, &global_launch(&settings));
+    let global = global_launch(&settings);
+    let launch_options = profile
+        .as_ref()
+        .map(|profile| resolved_launch(profile, &global))
+        .unwrap_or(global);
     let launch = prepare_offline_launch(
         &java,
         &cache,

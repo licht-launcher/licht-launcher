@@ -65,7 +65,9 @@ pub async fn create_instance_from_modpack(
         version_id: version_id.to_string(),
         icon_url: icon_url.map(str::to_string),
     };
-    let entry = crate::create_pending_instance(instances_dir, name, selection.clone(), template)?;
+    let entry =
+        crate::create_pending_instance(database, instances_dir, name, selection.clone(), template)
+            .await?;
     prepare_modpack_instance(
         database,
         client,
@@ -133,6 +135,7 @@ pub(crate) async fn prepare_modpack_instance(
         }
         ModpackSource::Curseforge => {
             curseforge::import_curseforge_into(
+                database,
                 client,
                 cache,
                 instances_dir,
@@ -144,7 +147,7 @@ pub(crate) async fn prepare_modpack_instance(
         }
     };
     context.checkpoint().await?;
-    instance_entry(&dir, &entry.folder)
+    instance_entry(database, &dir, &entry.folder).await
 }
 
 pub(crate) async fn restore_instance_icon(

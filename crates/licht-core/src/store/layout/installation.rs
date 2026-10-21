@@ -19,7 +19,7 @@ pub(super) async fn migrate(
         if MetadataRepository::get(&mut connection, &key).await?.as_deref() == Some("1") {
             return Ok(());
         }
-        migrate_icons(&game.instances_dir()?, reporter)?;
+        migrate_icons(&mut connection, &game.instances_dir()?, reporter).await?;
         let legacy = game.root().join("modpacks");
         let artifacts: Vec<(i64, String, Option<String>)> = sqlx::query_as(
             "SELECT artifact.job_id, artifact.path, job.instance_folder FROM download_job_artifacts artifact
@@ -55,30 +55,27 @@ pub(super) async fn migrate(
     super::db::complete_operation(connection, result).await
 }
 
-fn migrate_icons(instances: &Path, reporter: &StartupReporter) -> Result<()> {
+async fn migrate_icons(
+    connection: &mut sqlx::SqliteConnection,
+    instances: &Path,
+    reporter: &StartupReporter,
+) -> Result<()> {
     if !instances.exists() {
         return Ok(());
     }
-    for item in fs::read_dir(instances)? {
+    let profiles = crate::store::repositories::instances::InstanceRepository::list(
+        connection,
+        instances.to_str().ok_or(CoreError::CachePath)?,
+    )
+    .await?;
+    for (folder, profile) in profiles {
         reporter.checkpoint()?;
-        let item = item?;
-        if !item.file_type()?.is_dir() {
-            continue;
-        }
-        let dir = item.path();
+        let dir = instances.join(folder);
         let source = dir.join(crate::ICON_FILE);
         if !source.is_file() {
             continue;
         }
-        let profile_file = dir.join("instance.json");
-        let profile: serde_json::Value = if profile_file.is_file() {
-            serde_json::from_slice(&fs::read(profile_file)?).map_err(CoreError::Instance)?
-        } else {
-            serde_json::Value::Null
-        };
-        let url = profile
-            .pointer("/installation/source/iconUrl")
-            .and_then(serde_json::Value::as_str);
+        let url = crate::instance::icon::source_icon_url(&profile);
         let destination =
             crate::instance::icon::cached_icon_path(&dir, url).ok_or(CoreError::CachePath)?;
         if !destination.is_file() {
@@ -135,19 +132,26 @@ mod tests {
             version_id: "v1".to_string(),
             icon_url: Some("https://cdn.modrinth.com/data/fixture/icon.png".to_string()),
         };
+        let service = crate::DatabaseService::start(home.clone())
+            .await
+            .expect("service");
         let first = crate::create_pending_instance(
+            &service.client(),
             &instances,
             "First",
             source.clone(),
             &crate::global_launch(&settings),
         )
+        .await
         .expect("first instance");
         let second = crate::create_pending_instance(
+            &service.client(),
             &instances,
             "Second",
             source,
             &crate::global_launch(&settings),
         )
+        .await
         .expect("second instance");
         for folder in [&first.folder, &second.folder] {
             fs::write(
@@ -166,9 +170,6 @@ mod tests {
         fs::create_dir_all(archive.parent().expect("archive parent")).expect("directory");
         fs::write(&archive, b"archive").expect("archive");
         fs::write(archive.with_file_name("pack.zip.part"), b"partial").expect("partial");
-        let service = crate::DatabaseService::start(home.clone())
-            .await
-            .expect("service");
         let mut jobs = Vec::new();
         for folder in [&first.folder, &second.folder] {
             let job = service
@@ -194,11 +195,25 @@ mod tests {
             .await
             .expect("migrate installation assets");
         assert!(!game.root().join("modpacks").exists());
-        let first_entry = crate::instance_entry(&instances.join(&first.folder), &first.folder)
-            .expect("first icon");
-        let second_entry = crate::instance_entry(&instances.join(&second.folder), &second.folder)
-            .expect("second icon");
+        let service = crate::DatabaseService::start(home.clone())
+            .await
+            .expect("reopen");
+        let first_entry = crate::instance_entry(
+            &service.client(),
+            &instances.join(&first.folder),
+            &first.folder,
+        )
+        .await
+        .expect("first icon");
+        let second_entry = crate::instance_entry(
+            &service.client(),
+            &instances.join(&second.folder),
+            &second.folder,
+        )
+        .await
+        .expect("second icon");
         assert_eq!(first_entry.icon_path, second_entry.icon_path);
+        service.shutdown().await.expect("close service");
         assert_eq!(
             fs::read(first_entry.icon_path.expect("cached icon")).expect("icon bytes"),
             b"legacy icon"

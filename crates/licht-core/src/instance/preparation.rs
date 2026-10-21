@@ -117,13 +117,14 @@ pub enum InstancePreparationState {
 }
 
 /// Writes the instance before any metadata or artifact requests begin.
-pub fn create_pending_instance(
+pub async fn create_pending_instance(
+    database: &crate::DatabaseClient,
     instances_dir: &Path,
     name: &str,
     source: InstanceSource,
     template: &GlobalLaunch,
 ) -> Result<InstanceEntry> {
-    let _guard = profile_guard()?;
+    let _guard = profile_guard().await;
     source.validate()?;
     let name = display_name(name)?;
     let folder = folder_id(&name)?;
@@ -142,13 +143,20 @@ pub fn create_pending_instance(
         source,
         state: InstancePreparationState::Preparing,
     });
-    write_instance(&dir, &instance)?;
+    if let Err(error) = write_instance(database, &dir, &instance).await {
+        fs::remove_dir(&dir)?;
+        return Err(error);
+    }
     Ok(entry_from(&dir, folder, instance))
 }
-pub fn complete_instance_preparation(instances_dir: &Path, folder: &str) -> Result<InstanceEntry> {
-    let _guard = profile_guard()?;
+pub async fn complete_instance_preparation(
+    database: &crate::DatabaseClient,
+    instances_dir: &Path,
+    folder: &str,
+) -> Result<InstanceEntry> {
+    let _guard = profile_guard().await;
     let dir = instance_dir(instances_dir, folder)?;
-    let mut instance = load_instance(&dir)?;
+    let mut instance = load_instance(database, &dir).await?;
     if instance.version_id.is_none() {
         return Err(CoreError::InstancePreparing);
     }
@@ -159,7 +167,7 @@ pub fn complete_instance_preparation(instances_dir: &Path, folder: &str) -> Resu
         installation.state = InstancePreparationState::Ready;
     }
     crate::modpacks::workspace::cleanup(&dir)?;
-    write_instance(&dir, &instance)?;
+    write_instance(database, &dir, &instance).await?;
     Ok(entry_from(&dir, folder.to_string(), instance))
 }
 pub fn instance_version_for_launch(instance: &Instance) -> Result<&str> {
@@ -175,19 +183,20 @@ pub fn instance_version_for_launch(instance: &Instance) -> Result<&str> {
         .as_deref()
         .ok_or(CoreError::InstancePreparing)
 }
-pub fn configure_instance_version(
+pub async fn configure_instance_version(
+    database: &crate::DatabaseClient,
     instances_dir: &Path,
     folder: &str,
     version: &str,
 ) -> Result<InstanceEntry> {
-    let _guard = profile_guard()?;
+    let _guard = profile_guard().await;
     single_component(version)?;
     let dir = instance_dir(instances_dir, folder)?;
-    let mut instance = load_instance(&dir)?;
+    let mut instance = load_instance(database, &dir).await?;
     instance.version_id = Some(version.to_string());
     if let Some(installation) = instance.installation.as_mut() {
         installation.state = InstancePreparationState::Installing;
     }
-    write_instance(&dir, &instance)?;
+    write_instance(database, &dir, &instance).await?;
     Ok(entry_from(&dir, folder.to_string(), instance))
 }

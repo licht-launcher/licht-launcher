@@ -65,11 +65,15 @@ impl DownloadManager {
         if job.operation == DownloadJobOperation::Install
             && let Some(folder) = &job.instance_folder
         {
-            let profile = load_instance(&self.runtime.game.instance_dir(folder)?)?;
+            let profile = load_instance(
+                &self.runtime.database,
+                &self.runtime.game.instance_dir(folder)?,
+            )
+            .await?;
             if profile.installation.is_some_and(|installation| {
                 installation.state != crate::InstancePreparationState::Ready
             }) {
-                // Persist removal intent before a partial deletion can remove instance.json.
+                // Persist removal intent before deleting files or the profile.
                 job.status = DownloadJobStatus::Cancelling;
                 job.error = None;
                 self.persist(&mut job).await?;
@@ -90,17 +94,12 @@ impl DownloadManager {
             .instance_folder
             .as_deref()
             .ok_or(CoreError::InstancePreparing)?;
-        let directory = self.runtime.game.instance_dir(folder)?;
-        if let Err(error) = tokio::fs::remove_dir_all(&directory).await
-            && (error.kind() != std::io::ErrorKind::NotFound
-                || tokio::fs::try_exists(&directory).await?)
-        {
-            return Err(error.into());
-        }
-        self.runtime
-            .database
-            .delete_modpack(&self.runtime.game.instances_dir()?, folder)
-            .await?;
+        crate::delete_instance(
+            &self.runtime.database,
+            &self.runtime.game.instances_dir()?,
+            folder,
+        )
+        .await?;
         job.status = DownloadJobStatus::Cancelled;
         job.error = None;
         self.persist(&mut job).await?;

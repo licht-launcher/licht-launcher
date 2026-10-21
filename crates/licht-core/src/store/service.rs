@@ -12,6 +12,7 @@ const QUEUE_CAPACITY: usize = 64;
 
 mod content;
 mod downloads;
+mod instances;
 mod modpacks;
 
 enum Request {
@@ -21,6 +22,7 @@ enum Request {
     Downloads(downloads::Request),
     Content(content::Request),
     Modpacks(modpacks::Request),
+    Instances(instances::Request),
     RememberAccount(String, bool, oneshot::Sender<Result<()>>),
     AccountUuids(oneshot::Sender<Result<Vec<String>>>),
     Stop,
@@ -192,6 +194,7 @@ async fn run(
             Request::Downloads(request) => downloads::execute(&mut connection, request).await,
             Request::Content(request) => content::execute(&mut connection, request).await,
             Request::Modpacks(request) => modpacks::execute(&mut connection, request).await,
+            Request::Instances(request) => instances::execute(&mut connection, request).await,
             Request::AccountUuids(reply) => {
                 let result = db::get_meta(&mut connection, "microsoft_account_uuids")
                     .await

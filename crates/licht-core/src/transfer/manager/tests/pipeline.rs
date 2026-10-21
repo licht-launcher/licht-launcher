@@ -47,8 +47,9 @@ fn prepare_cache(fixture: &Fixture, server: &Server) -> Arc<DownloadManager> {
     fixture.manager_with(crate::transfer::pipeline::execute, client)
 }
 
-fn pending(fixture: &Fixture) -> InstanceEntry {
+async fn pending(fixture: &Fixture) -> InstanceEntry {
     create_pending_instance(
+        &fixture.database(),
         &fixture.game.instances_dir().expect("instances"),
         "Real pipeline",
         InstanceSource::Vanilla {
@@ -56,6 +57,7 @@ fn pending(fixture: &Fixture) -> InstanceEntry {
         },
         &global_launch(&load_settings(&fixture.settings).expect("settings")),
     )
+    .await
     .expect("pending instance")
 }
 
@@ -64,7 +66,7 @@ async fn real_vanilla_pipeline_pauses_resumes_and_publishes_a_ready_instance() {
     let mut server = Server::new().await;
     let fixture = Fixture::new(&server.url).await;
     let manager = prepare_cache(&fixture, &server);
-    let instance = pending(&fixture);
+    let instance = pending(&fixture).await;
     let worker = Arc::clone(&manager);
     let folder = instance.folder.clone();
     let preparation =
@@ -84,11 +86,15 @@ async fn real_vanilla_pipeline_pauses_resumes_and_publishes_a_ready_instance() {
     manager.pause(&job.id).await.expect("pause");
     assert!(manager.ensure_launchable(&instance.folder).await.is_err());
     assert_eq!(
-        load_instance(&fixture.game.instance_dir(&instance.folder).expect("folder"))
-            .expect("profile")
-            .installation
-            .expect("installation")
-            .state,
+        load_instance(
+            &fixture.database(),
+            &fixture.game.instance_dir(&instance.folder).expect("folder")
+        )
+        .await
+        .expect("profile")
+        .installation
+        .expect("installation")
+        .state,
         InstancePreparationState::Installing
     );
     manager.resume(&job.id).await.expect("resume");
@@ -126,7 +132,7 @@ async fn real_pipeline_checksum_failure_keeps_the_instance_unlaunchable() {
     let mut server = Server::new().await;
     let fixture = Fixture::new(&server.url).await;
     let manager = prepare_cache(&fixture, &server);
-    let instance = pending(&fixture);
+    let instance = pending(&fixture).await;
     let worker = Arc::clone(&manager);
     let folder = instance.folder.clone();
     let preparation =
@@ -155,7 +161,7 @@ async fn real_pipeline_cancellation_stops_installation_before_removing_the_insta
     let mut server = Server::new().await;
     let fixture = Fixture::new(&server.url).await;
     let manager = prepare_cache(&fixture, &server);
-    let instance = pending(&fixture);
+    let instance = pending(&fixture).await;
     let worker = Arc::clone(&manager);
     let folder = instance.folder.clone();
     let preparation =
@@ -212,16 +218,20 @@ async fn real_pipeline_resumes_a_persisted_loader_profile_without_reselecting_it
     };
     let root = fixture.game.instances_dir().expect("instances");
     let instance = create_pending_instance(
+        &fixture.database(),
         &root,
         "Persisted loader",
         source.clone(),
         &global_launch(&load_settings(&fixture.settings).expect("settings")),
     )
+    .await
     .expect("pending loader");
     let profile = fixture.game.version_json(loader).expect("loader path");
     std::fs::create_dir_all(profile.parent().expect("profile directory")).expect("directory");
     std::fs::write(profile, serde_json::to_vec(&serde_json::json!({ "id": loader, "inheritsFrom": VERSION, "mainClass": "net.fabricmc.loader.impl.launch.knot.KnotClient", "libraries": [] })).expect("loader JSON")).expect("cached profile");
-    crate::configure_instance_version(&root, &instance.folder, loader).expect("resolved loader");
+    crate::configure_instance_version(&fixture.database(), &root, &instance.folder, loader)
+        .await
+        .expect("resolved loader");
     let preparation = manager.prepare(&instance.folder, DownloadJobOperation::Install);
     tokio::pin!(preparation);
     let outcome = finish(async {
@@ -238,8 +248,12 @@ async fn real_pipeline_resumes_a_persisted_loader_profile_without_reselecting_it
     }).await.expect("loader installation");
     assert_eq!(outcome.status, DownloadJobStatus::Completed);
     assert_eq!(outcome.version_id.as_deref(), Some(loader));
-    let installed = load_instance(&fixture.game.instance_dir(&instance.folder).expect("folder"))
-        .expect("profile");
+    let installed = load_instance(
+        &fixture.database(),
+        &fixture.game.instance_dir(&instance.folder).expect("folder"),
+    )
+    .await
+    .expect("profile");
     let installation = installed.installation.expect("installation");
     assert_eq!(installation.source, source);
     assert_eq!(installation.state, InstancePreparationState::Ready);

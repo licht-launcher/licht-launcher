@@ -92,15 +92,15 @@ handles submit typed requests over a FIFO queue with capacity for 64 pending
 operations and await individual replies. A full queue applies asynchronous
 backpressure rather than blocking a Tokio executor thread.
 
-The application routes last-played metadata, download jobs, artifact associations,
-startup recovery, and remembered account UUIDs through this service. The metadata
-update in `touch_last_opened` uses the service; its instance-profile file write runs
-separately on a blocking worker. Frontend command names, inputs, and responses
+The application routes instance profiles, last-played metadata, download jobs,
+artifact associations, startup recovery, and remembered account UUIDs through this
+service. Both profile timestamps and global last-played metadata use SQLite.
+Frontend command names, inputs, and responses
 remain the same. Rust persistence and download-manager methods that access the
 database are asynchronous and callers explicitly await them.
 
 `store/repositories/` contains concrete `MetadataRepository`,
-`DownloadJobRepository`, and `DownloadArtifactRepository` implementations. They
+`DownloadJobRepository`, `DownloadArtifactRepository`, and `InstanceRepository` implementations. They
 own parameterized SQL, row mapping, database validation, and transactions. The
 download manager coordinates installation state and emits events after persistence
 completes. Filesystem operations and destination locks stay outside repositories.
@@ -116,7 +116,7 @@ dispatcher and SQLx connection closure. Dropping the service owner also signals
 the dispatcher to stop and drain, but explicit shutdown is required to await
 completion and receive close errors.
 
-The database file, schema version 4, legacy migration paths, stored enum names,
+The database file, schema version 7, legacy migration paths, stored enum names,
 indices, and five-second busy timeout remain compatible with existing installs.
 Migration checks avoid a writer transaction for an up-to-date schema and recheck
 the version inside the migration transaction. Standalone persistence functions
@@ -124,6 +124,23 @@ also use SQLx repositories and explicitly close their short-lived connections.
 Account identifiers retain the existing metadata format and updates are
 transactional. Account tokens remain in the OS keyring. There is no rusqlite
 dependency or second persistence implementation.
+
+### Instance profiles
+
+The `instances` table stores profiles keyed by `(instances_directory,
+instance_folder)`. Profile settings have dedicated columns; JVM argument lists
+and the optional installation selection/state use JSON columns. Reads validate
+stored profiles with the same rules as writes. Instance operations are asynchronous
+and share an asynchronous mutation lock, preventing settings edits and background
+preparation from overwriting each other's changes. Deleting a profile and its
+modpack index is a single database transaction after filesystem cleanup succeeds.
+
+New instances never write `instance.json`. Existing profile files are neither
+imported nor removed; folders without a SQLite profile are not listed or
+automatically registered. A missing registered instance directory is omitted from
+the list. Duplication copies game files and creates a separate database profile,
+without copying obsolete root profile files or the installation workspace. The
+CLI can still launch an unregistered game directory using global settings.
 
 ## Game directory
 
