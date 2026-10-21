@@ -9,8 +9,11 @@ const components: Record<DownloadComponent, string> = {
   fabric: "Fabric",
   quilt: "Quilt",
   forge: "Forge",
+  forgeprofile: "Forge profile",
   neoforge: "NeoForge",
-  modpack: "Modpack",
+  neoforgeprofile: "NeoForge profile",
+  modpack: "Modpack files",
+  modpackarchive: "Modpack archive",
 };
 
 const phases: Record<DownloadPhase, string> = {

@@ -86,6 +86,23 @@ describe("DownloadsPopover", () => {
     vi.mocked(toast.error).mockReset();
   });
 
+  it.each([
+    ["modpackarchive", "downloading", "Downloading · Modpack archive"],
+    ["modpack", "downloading", "Downloading · Modpack files"],
+    ["forgeprofile", "preparing", "Preparing · Forge profile"],
+    ["neoforgeprofile", "preparing", "Preparing · NeoForge profile"],
+    ["forge", "downloading", "Downloading · Forge"],
+    ["forge", "installing", "Installing · Forge"],
+  ] as const)("distinguishes %s during %s", async (component, phase, label) => {
+    backend([downloadJob({ component, phase })]);
+    renderDownloads();
+    fireEvent.click(await screen.findByRole("button", { name: /^Downloads:/ }));
+    const row = await screen.findByRole("region", {
+      name: "Download for My Survival",
+    });
+    expect(within(row).getByText(label)).toBeVisible();
+  });
+
   it("shows the instance, icon, component, percentage and working pause/resume/cancel controls", async () => {
     backend([downloadJob()]);
     renderDownloads();

@@ -99,7 +99,7 @@ pub(crate) async fn prepare_modpack_instance(
         return Err(CoreError::InstancePreparing);
     };
     selection.validate()?;
-    let context = context.component(crate::DownloadComponent::Modpack);
+    let context = context.component(crate::DownloadComponent::ModpackArchive);
     context.stage(crate::DownloadPhase::Preparing).await?;
     let dir = instances_dir.join(&entry.folder);
     restore_instance_icon(client, &dir, selection, &context).await?;

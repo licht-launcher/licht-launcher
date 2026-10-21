@@ -52,8 +52,11 @@ pub enum DownloadComponent {
     Fabric,
     Quilt,
     Forge,
+    ForgeProfile,
     NeoForge,
+    NeoForgeProfile,
     Modpack,
+    ModpackArchive,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
