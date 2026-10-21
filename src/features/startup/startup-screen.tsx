@@ -1,11 +1,11 @@
 import { useMutation } from "@tanstack/react-query";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Button } from "@/components/ui/button";
+import { useEffect, useRef } from "react";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Spinner } from "@/components/ui/spinner";
 import { useStartupProgress } from "@/features/startup/hooks/use-startup-progress";
 import type { StartupPhase } from "@/lib/generated/StartupPhase";
+import logo from "../../../src-tauri/icons/128x128@2x.png?no-inline";
 
 const labels: Record<StartupPhase, string> = {
   preparing: "Preparing launcher…",
@@ -28,8 +28,26 @@ function formatBytes(bytes: number) {
 }
 
 export function StartupScreen() {
-  const startup = useStartupProgress();
-  const close = useMutation({ mutationFn: () => getCurrentWindow().close() });
+  const logoRef = useRef<HTMLImageElement>(null);
+  const revealing = useRef(false);
+  const { mutate: revealWindow, ...reveal } = useMutation({
+    mutationFn: async () => {
+      try {
+        await document.fonts?.ready;
+        await logoRef.current?.decode();
+      } finally {
+        const window = getCurrentWindow();
+        await window.center();
+        await window.show();
+      }
+    },
+  });
+  useEffect(() => {
+    if (revealing.current) return;
+    revealing.current = true;
+    revealWindow();
+  }, [revealWindow]);
+  const startup = useStartupProgress(false, reveal.isSuccess || reveal.isError);
   const snapshot = startup.data;
   const phase = snapshot?.phase ?? "preparing";
   const error =
@@ -48,73 +66,72 @@ export function StartupScreen() {
   return (
     <ScrollArea className="h-full">
       <main
-        className="flex min-h-full flex-col justify-center gap-3 bg-background p-6 text-foreground"
+        className="flex min-h-screen flex-col items-center justify-center gap-6 bg-sidebar p-6 text-center text-sidebar-foreground"
         aria-label="Launcher startup"
       >
-        <div className="flex items-center gap-3">
+        <h1 data-tauri-drag-region className="flex w-full justify-center">
+          <img
+            ref={logoRef}
+            src={logo}
+            alt="Licht Launcher"
+            draggable={false}
+            className="pointer-events-none size-24 object-contain"
+          />
+        </h1>
+        <div className="flex w-full max-w-xs flex-col gap-2">
           {!error && phase !== "ready" ? (
-            <Spinner aria-hidden className="size-5 text-primary" />
+            <Progress
+              value={value}
+              aria-label="Launcher preparation progress"
+            />
           ) : null}
-          <h1 className="font-brand text-lg font-medium">Licht Launcher</h1>
+          {phase === "downloadingUpdate" && snapshot ? (
+            <p className="text-xs text-muted-foreground">
+              {formatBytes(snapshot.processedBytes)}
+              {snapshot.totalBytes
+                ? ` / ${formatBytes(snapshot.totalBytes)}`
+                : ""}
+              {value !== undefined ? ` · ${Math.floor(value)}%` : ""}
+            </p>
+          ) : snapshot && snapshot.processedFiles > 0 ? (
+            <p className="text-xs text-muted-foreground">
+              {snapshot.processedFiles.toLocaleString()} files verified ·{" "}
+              {formatBytes(snapshot.processedBytes)}
+            </p>
+          ) : null}
+          <p role="status" aria-live="polite" className="text-sm">
+            {labels[phase]}
+          </p>
+          {snapshot?.version ? (
+            <p className="text-xs text-muted-foreground">
+              Update: {snapshot.version}
+            </p>
+          ) : null}
+          {snapshot?.warning ? (
+            <p className="text-sm text-warning">{snapshot.warning}</p>
+          ) : null}
+          {snapshot?.preview ? (
+            <p className="text-xs font-medium text-warning">
+              Development preview · updates are simulated and migration uses
+              temporary fixtures.
+            </p>
+          ) : null}
+          {startup.eventError ? (
+            <p className="text-xs text-muted-foreground">
+              Live progress is unavailable. Polling startup status.
+            </p>
+          ) : null}
+          {error ? (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
+          ) : null}
+          {reveal.error ? (
+            <p role="alert" className="text-sm text-destructive">
+              Could not prepare the startup window: {reveal.error.message}
+            </p>
+          ) : null}
         </div>
-        {snapshot?.preview ? (
-          <p className="text-xs font-medium text-warning">
-            Development preview · updates are simulated and migration uses
-            temporary fixtures.
-          </p>
-        ) : null}
-        <p role="status" aria-live="polite" className="text-sm">
-          {labels[phase]}
-        </p>
-        {!error && phase !== "ready" ? (
-          <Progress value={value} aria-label="Launcher preparation progress" />
-        ) : null}
-        {phase === "downloadingUpdate" && snapshot ? (
-          <p className="text-xs text-muted-foreground">
-            {formatBytes(snapshot.processedBytes)}
-            {snapshot.totalBytes
-              ? ` / ${formatBytes(snapshot.totalBytes)}`
-              : ""}
-            {value !== undefined ? ` · ${Math.floor(value)}%` : ""}
-          </p>
-        ) : snapshot && snapshot.processedFiles > 0 ? (
-          <p className="text-xs text-muted-foreground">
-            {snapshot.processedFiles.toLocaleString()} files verified ·{" "}
-            {formatBytes(snapshot.processedBytes)}
-          </p>
-        ) : null}
-        {snapshot?.version ? (
-          <p className="text-xs text-muted-foreground">
-            Update: {snapshot.version}
-          </p>
-        ) : null}
-        {snapshot?.warning ? (
-          <p className="text-sm text-warning">{snapshot.warning}</p>
-        ) : null}
-        {startup.eventError ? (
-          <p className="text-xs text-muted-foreground">
-            Live progress is unavailable. Polling startup status.
-          </p>
-        ) : null}
-        {error ? (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
-        ) : null}
-        {close.error ? (
-          <p role="alert" className="text-sm text-destructive">
-            Could not close the startup window.
-          </p>
-        ) : null}
-        {error || snapshot?.preview ? (
-          <Button
-            variant="outline"
-            disabled={close.isPending}
-            onClick={() => close.mutate()}
-          >
-            Close
-          </Button>
-        ) : null}
       </main>
     </ScrollArea>
   );

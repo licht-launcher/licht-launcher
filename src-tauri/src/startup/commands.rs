@@ -18,7 +18,7 @@ pub fn get_startup_progress(
 }
 
 #[tauri::command]
-pub fn open_startup_preview(
+pub async fn open_startup_preview(
     app: AppHandle,
     window: WebviewWindow,
     runtime: State<'_, Arc<StartupRuntime>>,
@@ -27,7 +27,11 @@ pub fn open_startup_preview(
     if window.label() != "main" {
         return Err("Startup tests must be opened from the launcher".to_string());
     }
-    super::preview::open(app, Arc::clone(runtime.inner()), scenario)
+    let runtime = Arc::clone(runtime.inner());
+    // WebView2 creation must not block the synchronous IPC/UI thread on Windows.
+    tauri::async_runtime::spawn_blocking(move || super::preview::open(app, runtime, scenario))
+        .await
+        .map_err(|_| "Could not join startup preview creation".to_string())?
         .map_err(|error| error.to_string())
 }
 
@@ -67,4 +71,26 @@ pub async fn request_update_restart(
         .map_err(|error| error.to_string())?;
     app.request_restart();
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn preview_command_requires_async_ipc_dispatch() {
+        // WebView2 creation deadlocks on Windows when Tauri dispatches a synchronous command.
+        fn require_async<F, Output>(_: F)
+        where
+            F: Fn(
+                AppHandle,
+                WebviewWindow,
+                State<'static, Arc<StartupRuntime>>,
+                StartupPreviewScenario,
+            ) -> Output,
+            Output: std::future::Future<Output = Result<(), String>>,
+        {
+        }
+        require_async(open_startup_preview);
+    }
 }

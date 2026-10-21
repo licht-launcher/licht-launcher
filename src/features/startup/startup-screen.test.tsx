@@ -1,36 +1,53 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  act,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act, render, screen, waitFor } from "@testing-library/react";
+import { StrictMode } from "react";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { startupProgress } from "@/features/startup/fixtures/progress";
 import { StartupScreen } from "@/features/startup/startup-screen";
 import type { StartupProgress } from "@/lib/generated/StartupProgress";
 
-const { getProgress, close, listen, listeners } = vi.hoisted(() => ({
-  getProgress: vi.fn(),
-  close: vi.fn(),
-  listen: vi.fn(),
-  listeners: new Set<(event: { payload: StartupProgress }) => void>(),
-}));
+const { getProgress, center, show, decode, listen, listeners } = vi.hoisted(
+  () => ({
+    getProgress: vi.fn(),
+    center: vi.fn(),
+    show: vi.fn(),
+    decode: vi.fn(),
+    listen: vi.fn(),
+    listeners: new Set<(event: { payload: StartupProgress }) => void>(),
+  }),
+);
 vi.mock("@/lib/commands", () => ({ getStartupProgress: getProgress }));
 vi.mock("@tauri-apps/api/window", () => ({
-  getCurrentWindow: () => ({ close }),
+  getCurrentWindow: () => ({ center, show }),
 }));
 vi.mock("@tauri-apps/api/event", () => ({ listen }));
+
+const originalDecode = Object.getOwnPropertyDescriptor(
+  HTMLImageElement.prototype,
+  "decode",
+);
+Object.defineProperty(HTMLImageElement.prototype, "decode", {
+  configurable: true,
+  value: decode,
+});
+afterAll(() => {
+  if (originalDecode) {
+    Object.defineProperty(HTMLImageElement.prototype, "decode", originalDecode);
+  } else {
+    Reflect.deleteProperty(HTMLImageElement.prototype, "decode");
+  }
+});
 
 function view() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   const result = render(
-    <QueryClientProvider client={client}>
-      <StartupScreen />
-    </QueryClientProvider>,
+    <StrictMode>
+      <QueryClientProvider client={client}>
+        <StartupScreen />
+      </QueryClientProvider>
+    </StrictMode>,
   );
   return { ...result, client };
 }
@@ -39,9 +56,13 @@ describe("StartupScreen", () => {
   beforeEach(() => {
     listeners.clear();
     getProgress.mockReset();
-    close.mockReset();
+    center.mockReset();
+    show.mockReset();
+    decode.mockReset();
     listen.mockReset();
-    close.mockResolvedValue(undefined);
+    center.mockResolvedValue(undefined);
+    show.mockResolvedValue(undefined);
+    decode.mockResolvedValue(undefined);
     getProgress.mockResolvedValue(startupProgress());
     listen.mockImplementation(
       async (
@@ -120,7 +141,7 @@ describe("StartupScreen", () => {
     expect(listeners.size).toBe(0);
   });
 
-  it("keeps a migration failure visible and lets the user close the window", async () => {
+  it("keeps a migration failure visible without a close button", async () => {
     getProgress.mockResolvedValue(
       startupProgress({
         phase: "failed",
@@ -132,8 +153,7 @@ describe("StartupScreen", () => {
       "Destination contains different data",
     );
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
-    await waitFor(() => expect(close).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
   it("falls back to polling when live events are unavailable and displays offline warnings", async () => {
@@ -147,5 +167,79 @@ describe("StartupScreen", () => {
       screen.getByText("Live progress is unavailable. Polling startup status."),
     ).toBeVisible();
     expect(screen.getByRole("status")).toHaveTextContent("Ready");
+  });
+
+  it("renders the existing logo above the progress and status on the sidebar background", async () => {
+    getProgress.mockResolvedValue(
+      startupProgress({
+        phase: "migratingInstances",
+        processedFiles: 10,
+        processedBytes: 1048576,
+      }),
+    );
+    view();
+    await screen.findByText("Migrating instances…");
+    const logo = screen.getByRole("img", { name: "Licht Launcher" });
+    const progress = screen.getByRole("progressbar");
+    const counter = screen.getByText("10 files verified · 1.0 MB");
+    const status = screen.getByRole("status");
+    expect(logo.getAttribute("src")).toContain("128x128@2x.png");
+    expect(logo.getAttribute("src")).not.toMatch(/^data:/);
+    expect(
+      logo.compareDocumentPosition(progress) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      progress.compareDocumentPosition(counter) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      counter.compareDocumentPosition(status) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(logo.closest("[data-tauri-drag-region]")).not.toBeNull();
+    expect(screen.getByRole("main")).toHaveClass(
+      "bg-sidebar",
+      "text-sidebar-foreground",
+    );
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  it("waits for the logo, centers and shows the rendered interface before starting the check", async () => {
+    let finishDecode: (() => void) | undefined;
+    decode.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finishDecode = resolve;
+        }),
+    );
+    center.mockImplementation(async () => {
+      expect(screen.getByRole("main")).toHaveClass("bg-sidebar");
+      expect(screen.getByRole("status")).toHaveTextContent(
+        "Preparing launcher…",
+      );
+      expect(show).not.toHaveBeenCalled();
+    });
+    show.mockImplementation(async () => {
+      expect(center).toHaveBeenCalledTimes(1);
+      expect(getProgress).not.toHaveBeenCalled();
+    });
+    view();
+    await waitFor(() => expect(decode).toHaveBeenCalledTimes(1));
+    expect(center).not.toHaveBeenCalled();
+    expect(show).not.toHaveBeenCalled();
+    expect(getProgress).not.toHaveBeenCalled();
+    await act(async () => finishDecode?.());
+    await waitFor(() => expect(getProgress).toHaveBeenCalledTimes(1));
+    expect(show).toHaveBeenCalledTimes(1);
+  });
+
+  it("still reveals the interface and reports a logo loading failure", async () => {
+    decode.mockRejectedValue(new Error("Logo decoding failed"));
+    view();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Logo decoding failed",
+    );
+    expect(center).toHaveBeenCalledTimes(1);
+    expect(show).toHaveBeenCalledTimes(1);
   });
 });
