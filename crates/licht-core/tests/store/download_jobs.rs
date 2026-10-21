@@ -315,6 +315,10 @@ async fn pending_instance_removal_rejects_repairs_and_standalone_java_tasks() {
         list_download_jobs(&fixture.settings, &fixture.game).await,
         Err(CoreError::DownloadJobInvalid { .. })
     ));
+    connection
+        .close()
+        .await
+        .expect("close database before fixture cleanup");
 }
 
 #[tokio::test]
@@ -471,6 +475,10 @@ async fn invalid_database_payloads_fail_explicitly_instead_of_disappearing_from_
         list_download_jobs(&fixture.settings, &fixture.game).await,
         Err(CoreError::DownloadJobInvalid { .. })
     ));
+    connection
+        .close()
+        .await
+        .expect("close database before fixture cleanup");
 }
 
 #[tokio::test]

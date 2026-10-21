@@ -179,7 +179,7 @@ fn a_light_theme_and_bad_memory_are_rejected() {
 }
 
 #[test]
-fn a_relative_directory_is_rejected_and_the_default_parent_is_stored_as_empty() {
+fn a_relative_directory_is_rejected_and_the_default_launcher_root_is_stored_as_empty() {
     let cache = cache("directory");
     let mut relative = sample(8);
     relative.data_directory = Some("games".to_string());
@@ -188,7 +188,7 @@ fn a_relative_directory_is_rejected_and_the_default_parent_is_stored_as_empty() 
         CoreError::SettingsDirectory
     ));
 
-    let parent = cache.root().parent().expect("parent").display().to_string();
+    let parent = cache.root().display().to_string();
     let mut defaults = sample(8);
     defaults.data_directory = Some(parent);
     let saved = save_settings(&cache, &defaults).expect("default parent");
@@ -205,7 +205,7 @@ fn a_custom_directory_is_remembered_without_moving_files() {
     save_settings(&home, &settings).expect("save");
     let game = game_cache(&home).expect("game cache");
 
-    assert_eq!(game.root(), chosen.join("Licht Launcher"));
+    assert_eq!(game.root(), chosen.join("Licht Launcher").join("data"));
     assert!(settings_file(&home).is_file());
     assert!(!chosen.join("Licht Launcher").join("settings.json").exists());
     assert_eq!(download_concurrency(&game, &home).expect("concurrency"), 4);

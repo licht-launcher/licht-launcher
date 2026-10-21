@@ -14,13 +14,18 @@ impl SharedCache {
     }
 
     pub fn system() -> Result<Self> {
-        let directories = directories::ProjectDirs::from("app.licht", "Licht", "Licht Launcher")
-            .ok_or(CoreError::DataDirectory)?;
-        Ok(Self::at(directories.data_dir()))
+        let directories = directories::BaseDirs::new().ok_or(CoreError::DataDirectory)?;
+        Ok(Self::at(directories.data_dir().join("Licht Launcher")))
     }
 
     pub fn root(&self) -> &Path {
         &self.root
+    }
+
+    /// Disposable files beside this game's `data` directory.
+    pub fn cache_dir(&self) -> Result<PathBuf> {
+        let launcher = self.root.parent().ok_or(CoreError::CachePath)?;
+        Ok(launcher.join("cache"))
     }
 
     pub fn create(&self) -> Result<()> {
