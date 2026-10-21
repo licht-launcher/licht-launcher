@@ -22,10 +22,29 @@ import type { JavaPaths } from "@/lib/generated/JavaPaths";
 import type { JavaStatus } from "@/lib/generated/JavaStatus";
 import type { Settings } from "@/lib/generated/Settings";
 import type { SettingsSnapshot } from "@/lib/generated/SettingsSnapshot";
+import type { StartupPreviewScenario } from "@/lib/generated/StartupPreviewScenario";
+import type { StartupProgress } from "@/lib/generated/StartupProgress";
 import type { VersionSummary } from "@/lib/generated/VersionSummary";
 
 export function listInstances(): Promise<InstanceEntry[]> {
   return invoke("list_instances");
+}
+
+export function getStartupProgress(): Promise<StartupProgress> {
+  return invoke("get_startup_progress");
+}
+export function openStartupPreview(
+  scenario: StartupPreviewScenario,
+): Promise<void> {
+  return invoke("open_startup_preview", { scenario });
+}
+export function restartStartupPreview(
+  scenario: StartupPreviewScenario,
+): Promise<void> {
+  return invoke("restart_startup_preview", { scenario });
+}
+export function requestUpdateRestart(): Promise<void> {
+  return invoke("request_update_restart");
 }
 
 export function listDownloadJobs(): Promise<DownloadJobSnapshot[]> {

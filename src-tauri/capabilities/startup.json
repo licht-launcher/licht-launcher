@@ -1,0 +1,6 @@
+{
+  "identifier": "startup",
+  "description": "Startup windows can listen for their progress and close themselves.",
+  "windows": ["startup", "startup-preview-*"],
+  "permissions": ["core:event:allow-listen", "core:event:allow-unlisten", "core:window:allow-close"]
+}
