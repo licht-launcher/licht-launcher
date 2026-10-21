@@ -1,7 +1,9 @@
 import { useNavigate } from "@tanstack/react-router";
+import { PlusIcon } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 
+import { Button } from "@/components/ui/button";
 import { HomePanel } from "@/features/instances/components/home-panel";
 import { useInstancesChrome } from "@/features/instances/components/instances-chrome-context";
 import { friendlyError, messageOf } from "@/lib/errors";
@@ -65,6 +67,42 @@ export function InstancesPage() {
     installing && selected && job === undefined
       ? speedForVersion(selected.versionId)
       : 0;
+
+  if (instances.isSuccess && instances.data.length === 0) {
+    return (
+      <section
+        aria-labelledby="instances-welcome-title"
+        className="flex min-h-0 flex-1 flex-col items-center justify-center gap-6 overflow-auto p-8 text-center"
+      >
+        <div className="flex size-16 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+          <PlusIcon aria-hidden className="size-8" />
+        </div>
+        <div className="max-w-md space-y-2">
+          <h1
+            id="instances-welcome-title"
+            className="text-2xl font-semibold tracking-tight"
+          >
+            Create your first instance
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Choose a Minecraft version or install a modpack to start playing.
+          </p>
+        </div>
+        <Button
+          type="button"
+          onClick={() => {
+            void navigate({
+              to: "/instances/new",
+              search: { step: "source" },
+            });
+          }}
+        >
+          <PlusIcon data-icon="inline-start" aria-hidden />
+          Create instance
+        </Button>
+      </section>
+    );
+  }
 
   return (
     <HomePanel
