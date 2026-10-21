@@ -89,24 +89,30 @@ pub fn rename_instance(
 }
 
 #[tauri::command]
-pub fn duplicate_instance(
+pub async fn duplicate_instance(
+    database: State<'_, DatabaseClient>,
     paths: State<'_, LauncherPaths>,
     folder: String,
     name: String,
 ) -> Result<InstanceEntry, String> {
     let root = instances_root(&paths).map_err(failure)?;
-    licht_core::duplicate_instance(&root, &folder, &name).map_err(failure)
+    licht_core::duplicate_instance(&database, &root, &folder, &name)
+        .await
+        .map_err(failure)
 }
 
 #[tauri::command]
 pub async fn delete_instance(
+    database: State<'_, DatabaseClient>,
     paths: State<'_, LauncherPaths>,
     downloads: State<'_, std::sync::Arc<licht_core::DownloadManager>>,
     folder: String,
 ) -> Result<(), String> {
     downloads.cancel_instance(&folder).await.map_err(failure)?;
     let root = instances_root(&paths).map_err(failure)?;
-    licht_core::delete_instance(&root, &folder).map_err(failure)
+    licht_core::delete_instance(&database, &root, &folder)
+        .await
+        .map_err(failure)
 }
 
 #[tauri::command]

@@ -1,22 +1,20 @@
-use std::fs;
 use std::path::Path;
 
-use reqwest::Client;
-use serde_json::Value;
-
-use super::MODPACK_INDEX_FILE;
 use crate::instance::{InstanceEntry, update_instance_version};
 use crate::loaders::{LoaderChannel, LoaderPlatform};
 use crate::{CoreError, Result, SharedCache};
+use reqwest::Client;
 
 /// Installs the loader declared in `dependencies` and updates the instance version id.
 pub async fn apply_mrpack_loader(
+    database: &crate::DatabaseClient,
     client: &Client,
     cache: &SharedCache,
     instances_dir: &Path,
     entry: &InstanceEntry,
 ) -> Result<InstanceEntry> {
     apply_mrpack_loader_with_context(
+        database,
         client,
         cache,
         instances_dir,
@@ -27,24 +25,25 @@ pub async fn apply_mrpack_loader(
 }
 
 pub(crate) async fn apply_mrpack_loader_with_context(
+    database: &crate::DatabaseClient,
     client: &Client,
     cache: &SharedCache,
     instances_dir: &Path,
     entry: &InstanceEntry,
     context: &crate::InstallationContext,
 ) -> Result<InstanceEntry> {
-    let index_path = instances_dir.join(&entry.folder).join(MODPACK_INDEX_FILE);
-    if !index_path.is_file() {
+    let deps = database
+        .modpack_dependencies(instances_dir, &entry.folder)
+        .await?;
+    if deps.is_empty() {
         return Ok(entry.clone());
     }
-    let body = fs::read_to_string(&index_path)?;
-    let index: Value = serde_json::from_str(&body).map_err(CoreError::LoaderJson)?;
-    let Some(deps) = index.get("dependencies").and_then(Value::as_object) else {
-        return Ok(entry.clone());
+    let dependency = |name: &str| {
+        deps.iter()
+            .find(|(key, _)| key == name)
+            .map(|(_, version)| version.as_str())
     };
-    let game_version = deps
-        .get("minecraft")
-        .and_then(Value::as_str)
+    let game_version = dependency("minecraft")
         .or(entry.version_id.as_deref())
         .ok_or(CoreError::ModpackArchive)?;
 
@@ -55,11 +54,7 @@ pub(crate) async fn apply_mrpack_loader_with_context(
         ("neoforge", LoaderPlatform::NeoForge),
     ]
     .into_iter()
-    .find_map(|(key, platform)| {
-        deps.get(key)
-            .and_then(Value::as_str)
-            .map(|version| (platform, version))
-    });
+    .find_map(|(key, platform)| dependency(key).map(|version| (platform, version)));
     let Some((platform, version)) = selected else {
         return Ok(entry.clone());
     };

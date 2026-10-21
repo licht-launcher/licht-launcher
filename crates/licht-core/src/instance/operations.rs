@@ -60,7 +60,27 @@ pub fn rename_instance(instances_dir: &Path, folder: &str, name: &str) -> Result
     write_instance(&dir, &instance)?;
     Ok(entry_from(&dir, folder.to_string(), instance))
 }
-pub fn duplicate_instance(instances_dir: &Path, folder: &str, name: &str) -> Result<InstanceEntry> {
+pub async fn duplicate_instance(
+    database: &crate::DatabaseClient,
+    instances_dir: &Path,
+    folder: &str,
+    name: &str,
+) -> Result<InstanceEntry> {
+    let entry = duplicate_files(instances_dir, folder, name)?;
+    if let Err(error) = database
+        .duplicate_modpack(instances_dir, folder, &entry.folder)
+        .await
+    {
+        let destination = instances_dir.join(&entry.folder);
+        if let Err(cleanup) = tokio::fs::remove_dir_all(destination).await {
+            return Err(std::io::Error::other(format!("Could not duplicate modpack index: {error}; could not remove incomplete copy: {cleanup}")).into());
+        }
+        return Err(error);
+    }
+    Ok(entry)
+}
+
+fn duplicate_files(instances_dir: &Path, folder: &str, name: &str) -> Result<InstanceEntry> {
     let _guard = profile_guard()?;
     let name = display_name(name)?;
     let source = instance_dir(instances_dir, folder)?;
@@ -94,10 +114,18 @@ pub fn touch_last_opened(instances_dir: &Path, folder: &str) -> Result<InstanceE
     write_instance(&dir, &instance)?;
     Ok(entry_from(&dir, folder.to_string(), instance))
 }
-pub fn delete_instance(instances_dir: &Path, folder: &str) -> Result<()> {
+pub async fn delete_instance(
+    database: &crate::DatabaseClient,
+    instances_dir: &Path,
+    folder: &str,
+) -> Result<()> {
     let dir = instance_dir(instances_dir, folder)?;
-    fs::remove_dir_all(dir)?;
-    Ok(())
+    match tokio::fs::remove_dir_all(dir).await {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error.into()),
+    }
+    database.delete_modpack(instances_dir, folder).await
 }
 /// Writes launch personalization. Name and version stay as stored on disk.
 pub fn update_instance(

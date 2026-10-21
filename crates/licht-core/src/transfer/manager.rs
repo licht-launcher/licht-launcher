@@ -79,6 +79,10 @@ impl DownloadManager {
         let settings = load_settings(&self.runtime.settings)?;
         let root = self.runtime.game.instances_dir()?;
         let entry = create_pending_instance(&root, name, source, &global_launch(&settings))?;
+        self.runtime
+            .database
+            .delete_modpack(&root, &entry.folder)
+            .await?;
         self.start(&entry.folder, DownloadJobOperation::Install)
             .await?;
         Ok(entry)

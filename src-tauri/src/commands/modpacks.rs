@@ -60,6 +60,7 @@ pub async fn create_instance_from_modpack(
 #[tauri::command]
 pub async fn install_modpack_files(
     app: AppHandle,
+    database: State<'_, licht_core::DatabaseClient>,
     paths: State<'_, LauncherPaths>,
     folder: String,
 ) -> Result<(), String> {
@@ -83,8 +84,9 @@ pub async fn install_modpack_files(
         },
     );
     let (progress, mut incoming) = mpsc::channel(4096);
+    let database = database.inner().clone();
     let installing = tauri::async_runtime::spawn(async move {
-        install_mrpack_files(&cache, &settings, &dir, progress.clone()).await?;
+        install_mrpack_files(&database, &cache, &settings, &dir, progress.clone()).await?;
         // CurseForge uses its own allowlisted client (forgecdn hosts).
         install_curseforge_files(&cache, &settings, &dir, progress).await
     });
