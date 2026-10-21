@@ -6,6 +6,7 @@ use crate::{CoreError, Result, SharedCache};
 
 mod database;
 mod files;
+mod installation;
 mod migration;
 
 pub async fn initialize_launcher() -> Result<SharedCache> {
@@ -33,10 +34,11 @@ async fn initialize_at(legacy: &SharedCache, home: &SharedCache) -> Result<()> {
     if !home.root().join("settings.json").exists() {
         settings::save_settings(home, &settings::load_settings(home)?)?;
     }
+    installation::migrate(home, &game).await?;
     Ok(())
 }
 
-pub(super) async fn initialization_lock(home: &SharedCache, name: &str) -> Result<File> {
+pub(crate) async fn initialization_lock(home: &SharedCache, name: &str) -> Result<File> {
     let cache = home.root().join("cache");
     tokio::fs::create_dir_all(&cache).await?;
     let lock_path = cache.join(name);

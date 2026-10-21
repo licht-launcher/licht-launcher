@@ -30,9 +30,10 @@ pub(super) fn safe_instance_path(
             return Err(CoreError::ModpackArchive);
         }
         if depth == 0
-            && protected_root_names
-                .iter()
-                .any(|protected| part.eq_ignore_ascii_case(protected))
+            && (part.eq_ignore_ascii_case(super::workspace::INSTALL_DIRECTORY)
+                || protected_root_names
+                    .iter()
+                    .any(|protected| part.eq_ignore_ascii_case(protected)))
         {
             return Err(CoreError::ModpackArchive);
         }
@@ -55,6 +56,8 @@ mod tests {
     fn rejects_protected_files_reserved_names_and_drive_prefixes() {
         for path in [
             "instance.json",
+            ".install/pack.zip",
+            ".INSTALL/pack.zip.part",
             "Instance.JSON",
             "licht-modpack.json",
             "C:evil.jar",

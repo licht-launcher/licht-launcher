@@ -105,3 +105,139 @@ async fn modpack_cached_verification_yields_and_observes_cancellation() {
     assert_eq!(std::fs::read(&file).expect("cached mod preserved"), body);
     fixture.close().await;
 }
+
+fn write_workspace(
+    runtime: &DownloadRuntime,
+    job: &DownloadJobSnapshot,
+) -> Result<std::path::PathBuf> {
+    let directory = runtime
+        .game
+        .instance_dir(job.instance_folder.as_deref().expect("instance"))?;
+    let archive = crate::modpacks::workspace::archive_path(&directory)?;
+    std::fs::create_dir_all(archive.parent().expect("workspace"))?;
+    std::fs::write(&archive, b"archive")?;
+    std::fs::write(archive.with_file_name("pack.zip.part"), b"partial")?;
+    std::fs::write(directory.join("save.dat"), b"world")?;
+    Ok(archive)
+}
+
+fn workspace_executor(
+    runtime: DownloadRuntime,
+    job: DownloadJobSnapshot,
+    context: InstallationContext,
+) -> BoxFuture<'static, Result<()>> {
+    Box::pin(async move {
+        write_workspace(&runtime, &job)?;
+        context.stage(DownloadPhase::Downloading).await?;
+        if job.operation == DownloadJobOperation::Repair {
+            return Err(std::io::Error::other("fixture failure").into());
+        }
+        Ok(())
+    })
+}
+
+fn paused_workspace_executor(
+    runtime: DownloadRuntime,
+    job: DownloadJobSnapshot,
+    context: InstallationContext,
+) -> BoxFuture<'static, Result<()>> {
+    Box::pin(async move {
+        write_workspace(&runtime, &job)?;
+        context.stage(DownloadPhase::Downloading).await?;
+        context.metadata(std::future::pending::<Result<()>>()).await
+    })
+}
+
+#[tokio::test]
+async fn modpack_workspace_is_removed_on_success_and_preserved_on_failure_until_cancelled() {
+    let fixture = Fixture::new("http://127.0.0.1:1/unused").await;
+    let manager = fixture.manager_with(workspace_executor, reqwest::Client::new());
+    let success = fixture.instance("Complete workspace");
+    let job = manager
+        .start(&success.folder, DownloadJobOperation::Install)
+        .await
+        .expect("start");
+    assert_eq!(
+        finish(manager.wait(&job.id)).await.expect("finish").status,
+        DownloadJobStatus::Completed
+    );
+    assert!(
+        !fixture
+            .game
+            .instance_dir(&success.folder)
+            .expect("instance")
+            .join(".install")
+            .exists()
+    );
+    let failed = fixture.instance("Failed workspace");
+    let job = manager
+        .start(&failed.folder, DownloadJobOperation::Repair)
+        .await
+        .expect("repair");
+    assert_eq!(
+        finish(manager.wait(&job.id))
+            .await
+            .expect("failed snapshot")
+            .status,
+        DownloadJobStatus::Failed
+    );
+    let directory = fixture.game.instance_dir(&failed.folder).expect("instance");
+    assert!(directory.join(".install").join("pack.zip").is_file());
+    assert_eq!(
+        manager.cancel(&job.id).await.expect("cancel").status,
+        DownloadJobStatus::Cancelled
+    );
+    assert!(!directory.join(".install").exists());
+    assert_eq!(
+        std::fs::read(directory.join("save.dat")).expect("preserved save"),
+        b"world"
+    );
+    fixture.close().await;
+}
+
+#[tokio::test]
+async fn modpack_workspace_survives_pause_and_resume_and_is_removed_after_cancellation() {
+    let fixture = Fixture::new("http://127.0.0.1:1/unused").await;
+    let instance = fixture.instance("Paused workspace");
+    let manager = fixture.manager_with(paused_workspace_executor, reqwest::Client::new());
+    let job = manager
+        .start(&instance.folder, DownloadJobOperation::Repair)
+        .await
+        .expect("repair");
+    finish(async {
+        loop {
+            if fixture
+                .database()
+                .get_download_job(&fixture.game, &job.id)
+                .await
+                .expect("job")
+                .phase
+                == DownloadPhase::Downloading
+            {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await;
+    let directory = fixture
+        .game
+        .instance_dir(&instance.folder)
+        .expect("instance");
+    assert_eq!(
+        manager.pause(&job.id).await.expect("pause").status,
+        DownloadJobStatus::Paused
+    );
+    assert!(directory.join(".install").join("pack.zip.part").is_file());
+    assert_eq!(
+        manager.resume(&job.id).await.expect("resume").status,
+        DownloadJobStatus::Running
+    );
+    assert!(directory.join(".install").join("pack.zip").is_file());
+    assert_eq!(
+        manager.cancel(&job.id).await.expect("cancel").status,
+        DownloadJobStatus::Cancelled
+    );
+    assert!(!directory.join(".install").exists());
+    fixture.close().await;
+}

@@ -390,6 +390,9 @@ impl DownloadManager {
         {
             super::download::remove_partial_if_idle(&path).await?;
         }
+        if let Some(folder) = self.stored_job(id).await?.instance_folder {
+            crate::modpacks::workspace::cleanup(&self.runtime.game.instance_dir(&folder)?)?;
+        }
         Ok(())
     }
 }
