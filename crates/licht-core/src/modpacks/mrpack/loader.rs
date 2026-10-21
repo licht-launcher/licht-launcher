@@ -68,5 +68,5 @@ pub(crate) async fn apply_mrpack_loader_with_context(
         context,
     )
     .await?;
-    update_instance_version(instances_dir, &entry.folder, &loader_id)
+    update_instance_version(database, instances_dir, &entry.folder, &loader_id).await
 }

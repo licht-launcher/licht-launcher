@@ -10,9 +10,14 @@ use tauri_plugin_opener::OpenerExt;
 use super::{LauncherPaths, failure, http_client, instances_root};
 
 #[tauri::command]
-pub fn list_instances(paths: State<'_, LauncherPaths>) -> Result<Vec<InstanceEntry>, String> {
+pub async fn list_instances(
+    database: State<'_, DatabaseClient>,
+    paths: State<'_, LauncherPaths>,
+) -> Result<Vec<InstanceEntry>, String> {
     let root = instances_root(&paths).map_err(failure)?;
-    licht_core::list_instances(&root).map_err(failure)
+    licht_core::list_instances(&database, &root)
+        .await
+        .map_err(failure)
 }
 
 #[tauri::command]
@@ -79,13 +84,16 @@ pub async fn create_instance_with_platform(
 }
 
 #[tauri::command]
-pub fn rename_instance(
+pub async fn rename_instance(
+    database: State<'_, DatabaseClient>,
     paths: State<'_, LauncherPaths>,
     folder: String,
     name: String,
 ) -> Result<InstanceEntry, String> {
     let root = instances_root(&paths).map_err(failure)?;
-    licht_core::rename_instance(&root, &folder, &name).map_err(failure)
+    licht_core::rename_instance(&database, &root, &folder, &name)
+        .await
+        .map_err(failure)
 }
 
 #[tauri::command]
@@ -116,13 +124,16 @@ pub async fn delete_instance(
 }
 
 #[tauri::command]
-pub fn save_instance(
+pub async fn save_instance(
+    database: State<'_, DatabaseClient>,
     paths: State<'_, LauncherPaths>,
     folder: String,
     settings: InstanceSettings,
 ) -> Result<InstanceEntry, String> {
     let root = instances_root(&paths).map_err(failure)?;
-    update_instance(&root, &folder, &settings).map_err(failure)
+    update_instance(&database, &root, &folder, &settings)
+        .await
+        .map_err(failure)
 }
 
 #[tauri::command]
@@ -245,12 +256,9 @@ pub async fn touch_last_opened(
     folder: String,
 ) -> Result<InstanceEntry, String> {
     let root = instances_root(&paths).map_err(failure)?;
-    let profile_folder = folder.clone();
-    let entry =
-        tauri::async_runtime::spawn_blocking(move || touch_instance_opened(&root, &profile_folder))
-            .await
-            .map_err(|_| "instance timestamp task failed".to_string())?
-            .map_err(failure)?;
+    let entry = touch_instance_opened(&database, &root, &folder)
+        .await
+        .map_err(failure)?;
     database
         .set_last_played_folder(&folder)
         .await

@@ -11,7 +11,7 @@ use crate::transfer::installation::InstallationEvent;
 async fn a_contended_progress_write_yields_and_cannot_overwrite_shutdown_state() {
     let mut server = Server::new().await;
     let fixture = Fixture::new(&server.url).await;
-    let entry = fixture.instance("Contended progress");
+    let entry = fixture.instance("Contended progress").await;
     let manager = fixture.manager();
     let job = manager
         .start(&entry.folder, DownloadJobOperation::Install)

@@ -39,8 +39,19 @@ fn fixture_executor(
             .await?;
         context.checkpoint().await?;
         if let Some(folder) = &job.instance_folder {
-            crate::configure_instance_version(&runtime.game.instances_dir()?, folder, "1.21.1")?;
-            crate::complete_instance_preparation(&runtime.game.instances_dir()?, folder)?;
+            crate::configure_instance_version(
+                &runtime.database,
+                &runtime.game.instances_dir()?,
+                folder,
+                "1.21.1",
+            )
+            .await?;
+            crate::complete_instance_preparation(
+                &runtime.database,
+                &runtime.game.instances_dir()?,
+                folder,
+            )
+            .await?;
         }
         if let Some(major) = job.java_major {
             let root = runtime
@@ -125,8 +136,9 @@ impl Fixture {
             database.shutdown().await.expect("close database service");
         }
     }
-    pub(super) fn instance(&self, name: &str) -> InstanceEntry {
+    pub(super) async fn instance(&self, name: &str) -> InstanceEntry {
         create_pending_instance(
+            &self.database(),
             &self.game.instances_dir().expect("instances"),
             name,
             InstanceSource::Vanilla {
@@ -134,6 +146,7 @@ impl Fixture {
             },
             &global_launch(&load_settings(&self.settings).expect("settings")),
         )
+        .await
         .expect("instance before network activity")
     }
     pub(super) fn manager(&self) -> Arc<DownloadManager> {

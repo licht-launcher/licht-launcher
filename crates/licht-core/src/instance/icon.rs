@@ -44,7 +44,7 @@ pub(crate) fn duplicate_cached_icon(
     Ok(())
 }
 
-/// File name stored beside `instance.json`.
+/// Legacy icon file name inside the instance directory.
 pub const ICON_FILE: &str = "icon.png";
 
 const MAX_ICON_BYTES: usize = 2 * 1024 * 1024;
@@ -190,12 +190,17 @@ mod tests {
         ));
         let instances = root.join("instances");
         let settings = crate::load_settings(&crate::SharedCache::at(&root)).expect("settings");
+        let service = crate::DatabaseService::start(crate::SharedCache::at(&root))
+            .await
+            .expect("database");
         let entry = crate::create_instance(
+            &service.client(),
             &instances,
             "Source",
             "1.21",
             &crate::global_launch(&settings),
         )
+        .await
         .expect("source");
         let source = instances.join(&entry.folder);
         let cached = cached_icon_path(&source, None).expect("icon path");
@@ -209,9 +214,6 @@ mod tests {
             b"user data",
         )
         .expect("nested user file");
-        let service = crate::DatabaseService::start(crate::SharedCache::at(&root))
-            .await
-            .expect("database");
         let copied =
             crate::duplicate_instance(&service.client(), &instances, &entry.folder, "Copy")
                 .await

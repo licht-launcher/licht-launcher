@@ -2,9 +2,9 @@
 import type { InstanceInstallation } from "./InstanceInstallation";
 
 /**
- * An instance folder and the profile stored in it.
+ * An instance folder and its profile.
  *
  * `folder` is chosen once and does not change when the profile is renamed.
- * `icon_path` is the absolute path to `icon.png` when present beside `instance.json`.
+ * `icon_path` is the absolute path to the cached icon when present.
  */
 export type InstanceEntry = { folder: string, name: string, versionId: string | null, installation?: InstanceInstallation, minMemoryMb: number, maxMemoryMb: number, jvmArguments: Array<string>, fullscreen: boolean, width: number | null, height: number | null, overrideWindow: boolean, overrideMemory: boolean, overrideJava: boolean, overrideJvmArguments: boolean, javaPath: string | null, lastOpenedAt: string | null, iconPath: string | null, };

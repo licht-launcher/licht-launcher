@@ -22,7 +22,8 @@ pub(crate) async fn import_mrpack_into(
         .pointer("/dependencies/minecraft")
         .and_then(serde_json::Value::as_str)
         .ok_or(CoreError::ModpackArchive)?;
-    let updated = crate::update_instance_version(instances_dir, &entry.folder, version)?;
+    let updated =
+        crate::update_instance_version(database, instances_dir, &entry.folder, version).await?;
     extract_prefixed(&mut archive, &dir, "overrides/")?;
     extract_prefixed(&mut archive, &dir, "client-overrides/")?;
     database
@@ -63,10 +64,10 @@ mod tests {
         let _ = fs::remove_dir_all(&root);
         let instances = root.join("instances");
         fs::create_dir_all(&instances).unwrap();
-        let pending = pending(&instances);
         let service = crate::DatabaseService::start(crate::SharedCache::at(&root))
             .await
             .expect("database");
+        let pending = pending(&service.client(), &instances).await;
         let entry = import_mrpack_into(&service.client(), &instances, &pending, &bytes)
             .await
             .expect("import");
@@ -119,10 +120,10 @@ mod tests {
             let root = temp_dir("override");
             let instances = root.join("instances");
             fs::create_dir_all(&instances).unwrap();
-            let pending = pending(&instances);
             let service = crate::DatabaseService::start(crate::SharedCache::at(&root))
                 .await
                 .expect("database");
+            let pending = pending(&service.client(), &instances).await;
             let error = import_mrpack_into(&service.client(), &instances, &pending, &bytes)
                 .await
                 .expect_err(name);
@@ -133,8 +134,11 @@ mod tests {
                 .unwrap()
                 .unwrap()
                 .path();
-            let profile = fs::read_to_string(instance_dir.join("instance.json")).unwrap();
-            assert!(!profile.contains("pwned"), "{name}");
+            let profile = crate::load_instance(&service.client(), &instance_dir)
+                .await
+                .unwrap();
+            assert_eq!(profile.name, pending.name, "{name}");
+            assert!(!instance_dir.join("instance.json").exists(), "{name}");
             assert!(!instance_dir.join("C:evil.txt").exists(), "{name}");
             assert!(!instance_dir.join("CON").exists(), "{name}");
             service.shutdown().await.expect("shutdown");
@@ -152,8 +156,9 @@ mod tests {
         }
     }
 
-    fn pending(instances: &Path) -> InstanceEntry {
+    async fn pending(database: &crate::DatabaseClient, instances: &Path) -> InstanceEntry {
         create_pending_instance(
+            database,
             instances,
             "Cobble",
             InstanceSource::Modpack {
@@ -164,6 +169,7 @@ mod tests {
             },
             &launch_template(),
         )
+        .await
         .expect("pending instance")
     }
 

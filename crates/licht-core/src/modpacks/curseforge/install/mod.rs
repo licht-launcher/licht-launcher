@@ -106,6 +106,7 @@ pub async fn install_curseforge_files(
 }
 
 pub(crate) async fn import_curseforge_into(
+    database: &crate::DatabaseClient,
     client: &Client,
     cache: &SharedCache,
     instances_dir: &Path,
@@ -127,7 +128,7 @@ pub(crate) async fn import_curseforge_into(
             .await?
     };
     context.stage(crate::DownloadPhase::Extracting).await?;
-    let entry = import_planned(instances_dir, entry, bytes, &manifest, &plan)?;
+    let entry = import_planned(database, instances_dir, entry, bytes, &manifest, &plan).await?;
     let version = if let Some((platform, version)) = &manifest.loader {
         crate::loaders::prepare_platform_profile(
             client,
@@ -142,10 +143,11 @@ pub(crate) async fn import_curseforge_into(
     } else {
         manifest.game_version
     };
-    crate::update_instance_version(instances_dir, &entry.folder, &version)
+    crate::update_instance_version(database, instances_dir, &entry.folder, &version).await
 }
 
-fn import_planned(
+async fn import_planned(
+    database: &crate::DatabaseClient,
     instances_dir: &Path,
     entry: &InstanceEntry,
     bytes: &[u8],
@@ -162,7 +164,13 @@ fn import_planned(
     let instance_dir = instances_dir.join(&entry.folder);
     extract_override_files(bytes, &instance_dir, &entries)?;
     write_index(&instance_dir, plan)?;
-    crate::update_instance_version(instances_dir, &entry.folder, &manifest.game_version)
+    crate::update_instance_version(
+        database,
+        instances_dir,
+        &entry.folder,
+        &manifest.game_version,
+    )
+    .await
 }
 
 #[cfg(test)]
@@ -178,8 +186,8 @@ mod tests {
     const SHA1: &str = "2aae6c35c94fcfb415dbe95f408b9ce91ee846ed";
     const MD5: &str = "5eb63bbbe01eeed093cb22bb8f5acdc3";
 
-    #[test]
-    fn imports_overrides_and_records_the_resolved_files() {
+    #[tokio::test]
+    async fn imports_overrides_and_records_the_resolved_files() {
         let bytes = zip_with(&[
             (
                 "manifest.json",
@@ -207,9 +215,20 @@ mod tests {
         let root = temp_dir("import");
         let instances = root.join("instances");
         fs::create_dir_all(&instances).unwrap();
-        let pending = pending(&instances);
-        let entry = import_planned(&instances, &pending, &bytes, &sample_manifest(), &plan)
-            .expect("import");
+        let service = crate::DatabaseService::start(SharedCache::at(&root))
+            .await
+            .expect("database");
+        let pending = pending(&service.client(), &instances).await;
+        let entry = import_planned(
+            &service.client(),
+            &instances,
+            &pending,
+            &bytes,
+            &sample_manifest(),
+            &plan,
+        )
+        .await
+        .expect("import");
         assert_eq!(entry.folder, pending.folder);
         let dir = instances.join(&entry.folder);
         assert_eq!(entry.version_id.as_deref(), Some("1.20.1"));
@@ -222,8 +241,9 @@ mod tests {
             fs::read_to_string(dir.join("config").join("instance.json")).unwrap(),
             "nested"
         );
-        let profile = fs::read_to_string(dir.join("instance.json")).unwrap();
-        assert!(!profile.contains("nested"));
+        let profile = crate::load_instance(&service.client(), &dir).await.unwrap();
+        assert_eq!(profile.name, pending.name);
+        assert!(!dir.join("instance.json").exists());
         let index: Value =
             serde_json::from_str(&fs::read_to_string(dir.join(CURSEFORGE_INDEX_FILE)).unwrap())
                 .unwrap();
@@ -238,11 +258,12 @@ mod tests {
             "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         );
         assert!(index["files"][0]["hashes"].get("md5").is_none());
+        service.shutdown().await.expect("shutdown");
         let _ = fs::remove_dir_all(&root);
     }
 
-    #[test]
-    fn preserves_the_pending_instance_when_distribution_is_denied() {
+    #[tokio::test]
+    async fn preserves_the_pending_instance_when_distribution_is_denied() {
         let bytes = zip_with(&[(
             "manifest.json",
             br#"{"minecraft":{"version":"1.20.1"},"files":[]}"#,
@@ -263,16 +284,31 @@ mod tests {
         let root = temp_dir("blocked");
         let instances = root.join("instances");
         fs::create_dir_all(&instances).unwrap();
-        let pending = pending(&instances);
-        let profile = fs::read(instances.join(&pending.folder).join("instance.json")).unwrap();
-        let error =
-            import_planned(&instances, &pending, &bytes, &sample_manifest(), &plan).unwrap_err();
+        let service = crate::DatabaseService::start(SharedCache::at(&root))
+            .await
+            .expect("database");
+        let pending = pending(&service.client(), &instances).await;
+        let profile = crate::load_instance(&service.client(), &instances.join(&pending.folder))
+            .await
+            .unwrap();
+        let error = import_planned(
+            &service.client(),
+            &instances,
+            &pending,
+            &bytes,
+            &sample_manifest(),
+            &plan,
+        )
+        .await
+        .unwrap_err();
         assert_eq!(
             error.to_string(),
             "curseforge mods disallow third-party distribution: Iris (iris.jar), Sodium (sodium.jar)"
         );
         assert_eq!(
-            fs::read(instances.join(&pending.folder).join("instance.json")).unwrap(),
+            crate::load_instance(&service.client(), &instances.join(&pending.folder))
+                .await
+                .unwrap(),
             profile
         );
         assert!(
@@ -281,11 +317,12 @@ mod tests {
                 .join(CURSEFORGE_INDEX_FILE)
                 .exists()
         );
+        service.shutdown().await.expect("shutdown");
         let _ = fs::remove_dir_all(&root);
     }
 
-    #[test]
-    fn preserves_the_pending_instance_when_an_override_is_unsafe() {
+    #[tokio::test]
+    async fn preserves_the_pending_instance_when_an_override_is_unsafe() {
         let bytes = zip_with(&[
             (
                 "manifest.json",
@@ -296,19 +333,28 @@ mod tests {
         let root = temp_dir("override");
         let instances = root.join("instances");
         fs::create_dir_all(&instances).unwrap();
-        let pending = pending(&instances);
-        let profile = fs::read(instances.join(&pending.folder).join("instance.json")).unwrap();
+        let service = crate::DatabaseService::start(SharedCache::at(&root))
+            .await
+            .expect("database");
+        let pending = pending(&service.client(), &instances).await;
+        let profile = crate::load_instance(&service.client(), &instances.join(&pending.folder))
+            .await
+            .unwrap();
         let error = import_planned(
+            &service.client(),
             &instances,
             &pending,
             &bytes,
             &sample_manifest(),
             &Plan::default(),
         )
+        .await
         .unwrap_err();
         assert!(matches!(error, CoreError::ModpackArchive), "{error}");
         assert_eq!(
-            fs::read(instances.join(&pending.folder).join("instance.json")).unwrap(),
+            crate::load_instance(&service.client(), &instances.join(&pending.folder))
+                .await
+                .unwrap(),
             profile
         );
         assert!(
@@ -317,6 +363,7 @@ mod tests {
                 .join(CURSEFORGE_INDEX_FILE)
                 .exists()
         );
+        service.shutdown().await.expect("shutdown");
         let _ = fs::remove_dir_all(&root);
     }
 
@@ -377,8 +424,9 @@ mod tests {
         }
     }
 
-    fn pending(instances: &Path) -> InstanceEntry {
+    async fn pending(database: &crate::DatabaseClient, instances: &Path) -> InstanceEntry {
         create_pending_instance(
+            database,
             instances,
             "Cobble",
             InstanceSource::Modpack {
@@ -389,6 +437,7 @@ mod tests {
             },
             &launch_template(),
         )
+        .await
         .expect("pending instance")
     }
 }

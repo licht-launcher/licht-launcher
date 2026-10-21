@@ -14,6 +14,7 @@ use super::{LauncherPaths, failure, host_environment, http_client};
 #[tauri::command]
 pub async fn launch(
     app: AppHandle,
+    database: State<'_, licht_core::DatabaseClient>,
     paths: State<'_, LauncherPaths>,
     sessions: State<'_, LaunchSessions>,
     downloads: State<'_, std::sync::Arc<licht_core::DownloadManager>>,
@@ -29,6 +30,7 @@ pub async fn launch(
     let _guard = sessions.try_begin(&folder)?;
     launch_one(
         &app,
+        &database,
         &paths.game,
         &paths.settings,
         &sessions,
@@ -62,6 +64,7 @@ pub fn stop_game(
 
 async fn launch_one(
     app: &AppHandle,
+    database: &licht_core::DatabaseClient,
     game: &SharedCache,
     settings_home: &SharedCache,
     sessions: &LaunchSessions,
@@ -71,7 +74,7 @@ async fn launch_one(
     let cache = game.clone();
     let settings = load_settings(settings_home)?;
     let dir = cache.instance_dir(folder)?;
-    let profile = load_instance(&dir)?;
+    let profile = load_instance(database, &dir).await?;
     let version_id = licht_core::instance_version_for_launch(&profile)?.to_string();
     let json = load_resolved_version_json(&cache, &version_id)?;
     let version = parse_version(&json)?;

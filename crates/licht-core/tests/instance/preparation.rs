@@ -5,24 +5,29 @@ use licht_core::{
     update_instance_version,
 };
 
-#[test]
-fn a_modpack_instance_exists_before_its_version_is_resolved_and_cannot_launch() {
+#[tokio::test]
+async fn a_modpack_instance_exists_before_its_version_is_resolved_and_cannot_launch() {
     let root = root("pack");
+    let service = super::database(&root).await;
+    let client = service.client();
     let source = InstanceSource::Modpack {
         source: ModpackSource::Modrinth,
         project_id: "project".into(),
         version_id: "pack-version".into(),
         icon_url: None,
     };
-    let entry =
-        create_pending_instance(&root, "My pack", source.clone(), &template()).expect("create");
-    assert!(root.join(&entry.folder).join("instance.json").is_file());
+    let entry = create_pending_instance(&client, &root, "My pack", source.clone(), &template())
+        .await
+        .expect("create");
+    assert!(!root.join(&entry.folder).join("instance.json").exists());
     assert_eq!(entry.version_id, None);
     assert_eq!(
-        list_instances(&root).expect("instances"),
+        list_instances(&client, &root).await.expect("instances"),
         vec![entry.clone()]
     );
-    let profile = load_instance(&root.join(&entry.folder)).expect("profile");
+    let profile = load_instance(&client, &root.join(&entry.folder))
+        .await
+        .expect("profile");
     assert_eq!(
         profile.installation.as_ref().expect("installation").source,
         source
@@ -32,38 +37,63 @@ fn a_modpack_instance_exists_before_its_version_is_resolved_and_cannot_launch() 
         Err(CoreError::InstancePreparing)
     ));
     assert!(matches!(
-        complete_instance_preparation(&root, &entry.folder),
+        complete_instance_preparation(&client, &root, &entry.folder).await,
         Err(CoreError::InstancePreparing)
     ));
-    update_instance_version(&root, &entry.folder, "fabric-loader-0.16.10-1.21.1")
-        .expect("resolved version");
-    let profile = load_instance(&root.join(&entry.folder)).expect("resolved profile");
+    update_instance_version(
+        &client,
+        &root,
+        &entry.folder,
+        "fabric-loader-0.16.10-1.21.1",
+    )
+    .await
+    .expect("resolved version");
+    let profile = load_instance(&client, &root.join(&entry.folder))
+        .await
+        .expect("resolved profile");
     assert!(matches!(
         instance_version_for_launch(&profile),
         Err(CoreError::InstancePreparing)
     ));
     assert!(matches!(
-        complete_instance_preparation(&root, &entry.folder),
+        complete_instance_preparation(&client, &root, &entry.folder).await,
         Err(CoreError::InstancePreparing)
     ));
-    configure_instance_version(&root, &entry.folder, "fabric-loader-0.16.10-1.21.1")
-        .expect("configured profile");
+    configure_instance_version(
+        &client,
+        &root,
+        &entry.folder,
+        "fabric-loader-0.16.10-1.21.1",
+    )
+    .await
+    .expect("configured profile");
     assert!(matches!(
-        instance_version_for_launch(&load_instance(&root.join(&entry.folder)).expect("configured")),
+        instance_version_for_launch(
+            &load_instance(&client, &root.join(&entry.folder))
+                .await
+                .expect("configured")
+        ),
         Err(CoreError::InstancePreparing)
     ));
-    complete_instance_preparation(&root, &entry.folder).expect("complete");
-    let profile = load_instance(&root.join(&entry.folder)).expect("ready profile");
+    complete_instance_preparation(&client, &root, &entry.folder)
+        .await
+        .expect("complete");
+    let profile = load_instance(&client, &root.join(&entry.folder))
+        .await
+        .expect("ready profile");
     assert_eq!(
         instance_version_for_launch(&profile).expect("launchable"),
         "fabric-loader-0.16.10-1.21.1"
     );
+    service.shutdown().await.expect("shutdown");
     std::fs::remove_dir_all(root).expect("cleanup");
 }
 
-#[test]
-fn every_loader_keeps_its_selection_on_disk_before_downloading() {
+#[tokio::test]
+async fn every_loader_keeps_its_selection_on_disk_before_downloading() {
     let root = root("loaders");
+    let service = super::database(&root).await;
+    let client = service.client();
     for platform in [
         LoaderPlatform::Fabric,
         LoaderPlatform::Quilt,
@@ -76,10 +106,18 @@ fn every_loader_keeps_its_selection_on_disk_before_downloading() {
             channel: LoaderChannel::Manual,
             loader_version: Some("test-build".into()),
         };
-        let entry =
-            create_pending_instance(&root, &format!("{platform:?}"), source.clone(), &template())
-                .expect("create");
-        let profile = load_instance(&root.join(entry.folder)).expect("profile");
+        let entry = create_pending_instance(
+            &client,
+            &root,
+            &format!("{platform:?}"),
+            source.clone(),
+            &template(),
+        )
+        .await
+        .expect("create");
+        let profile = load_instance(&client, &root.join(entry.folder))
+            .await
+            .expect("profile");
         assert_eq!(profile.version_id.as_deref(), Some("1.21.1"));
         let installation = profile.installation.as_ref().expect("selection");
         assert_eq!(installation.state, InstancePreparationState::Preparing);
@@ -89,6 +127,7 @@ fn every_loader_keeps_its_selection_on_disk_before_downloading() {
             Err(CoreError::InstancePreparing)
         ));
     }
+    service.shutdown().await.expect("shutdown");
     std::fs::remove_dir_all(root).expect("cleanup");
 }
 

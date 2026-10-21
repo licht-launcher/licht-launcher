@@ -126,6 +126,7 @@ pub async fn list_loader_versions(
 /// Creates an instance and installs the selected loader profile when needed.
 #[allow(clippy::too_many_arguments)]
 pub async fn create_instance_with_platform(
+    database: &crate::DatabaseClient,
     client: &Client,
     cache: &SharedCache,
     instances_dir: &Path,
@@ -137,7 +138,9 @@ pub async fn create_instance_with_platform(
     template: &GlobalLaunch,
 ) -> Result<InstanceEntry> {
     match platform {
-        LoaderPlatform::Vanilla => create_instance(instances_dir, name, game_version, template),
+        LoaderPlatform::Vanilla => {
+            create_instance(database, instances_dir, name, game_version, template).await
+        }
         LoaderPlatform::Fabric => {
             let version_id = install_fabric_like(
                 client,
@@ -149,7 +152,7 @@ pub async fn create_instance_with_platform(
                 loader_version,
             )
             .await?;
-            create_instance(instances_dir, name, &version_id, template)
+            create_instance(database, instances_dir, name, &version_id, template).await
         }
         LoaderPlatform::Quilt => {
             let version_id = install_fabric_like(
@@ -162,7 +165,7 @@ pub async fn create_instance_with_platform(
                 loader_version,
             )
             .await?;
-            create_instance(instances_dir, name, &version_id, template)
+            create_instance(database, instances_dir, name, &version_id, template).await
         }
         LoaderPlatform::Forge => {
             let version_id = install_forge_like(
@@ -174,7 +177,7 @@ pub async fn create_instance_with_platform(
                 loader_version,
             )
             .await?;
-            create_instance(instances_dir, name, &version_id, template)
+            create_instance(database, instances_dir, name, &version_id, template).await
         }
         LoaderPlatform::NeoForge => {
             let version_id = install_forge_like(
@@ -186,7 +189,7 @@ pub async fn create_instance_with_platform(
                 loader_version,
             )
             .await?;
-            create_instance(instances_dir, name, &version_id, template)
+            create_instance(database, instances_dir, name, &version_id, template).await
         }
     }
 }
