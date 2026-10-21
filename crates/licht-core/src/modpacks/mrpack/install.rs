@@ -1,42 +1,46 @@
 use std::fs;
 use std::path::Path;
 
-use reqwest::Client;
-use serde_json::Value;
-
-use super::MODPACK_INDEX_FILE;
-use super::index::{MRPACK_DOWNLOAD_HOSTS, index_files};
+use super::index::MRPACK_DOWNLOAD_HOSTS;
 use crate::download::{DEFAULT_RETRY, DownloadProgress};
 use crate::modpacks::file_hashes::{ensure_sha512, prepare_download};
 use crate::modpacks::secure_download::allowlisted_download_client;
 use crate::settings::{download_concurrency, write_concurrency};
 use crate::{CoreError, Result, SharedCache, shared_transfer_limits};
+use reqwest::Client;
 
-/// Downloads every client-required file from [`MODPACK_INDEX_FILE`] into the instance.
+/// Downloads every client-required file from the stored Modrinth index into the instance.
 ///
-/// No-op when the index is missing (vanilla / CurseForge without mrpack files).
+/// No-op when no files are stored (vanilla / CurseForge without mrpack files).
 /// A redirect is followed only when that hop is HTTPS and the host is
 /// `cdn.modrinth.com`.
 pub async fn install_mrpack_files(
+    database: &crate::DatabaseClient,
     game: &SharedCache,
     settings: &SharedCache,
     instance_dir: &Path,
     progress: impl Into<crate::InstallationContext>,
 ) -> Result<()> {
     let progress = progress.into().component(crate::DownloadComponent::Modpack);
-    let index_path = instance_dir.join(MODPACK_INDEX_FILE);
-    if !index_path.is_file() {
+    let instances = instance_dir.parent().ok_or(CoreError::CachePath)?;
+    let folder = instance_dir
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or(CoreError::InstanceName)?;
+    if database.modpack_header(instances, folder).await?.is_none() {
+        return Ok(());
+    }
+    let files = database.modpack_files(instances, folder).await?;
+    if files.is_empty() {
         return Ok(());
     }
     progress.stage(crate::DownloadPhase::Verifying).await?;
-    let body = fs::read_to_string(&index_path)?;
-    let index: Value = serde_json::from_str(&body).map_err(CoreError::LoaderJson)?;
-    let files = index_files(&index, instance_dir)?;
     let mut pending = Vec::new();
     for file in &files {
+        let task = file.task(instance_dir)?;
         if !prepare_download(
-            &file.task.destination,
-            &file.task.sha1,
+            &task.destination,
+            &task.sha1,
             &file.sha512,
             &progress.control,
         )
@@ -44,10 +48,10 @@ pub async fn install_mrpack_files(
         {
             continue;
         }
-        if let Some(parent) = file.task.destination.parent() {
+        if let Some(parent) = task.destination.parent() {
             fs::create_dir_all(parent)?;
         }
-        pending.push(file.task.clone());
+        pending.push(task);
     }
     if pending.is_empty() {
         let _ = progress.try_send(DownloadProgress {
@@ -75,7 +79,12 @@ pub async fn install_mrpack_files(
         .await?;
     progress.stage(crate::DownloadPhase::Verifying).await?;
     for file in &files {
-        ensure_sha512(&file.task.destination, &file.sha512, &progress.control).await?;
+        ensure_sha512(
+            &file.task(instance_dir)?.destination,
+            &file.sha512,
+            &progress.control,
+        )
+        .await?;
     }
     Ok(())
 }

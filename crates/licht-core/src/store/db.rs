@@ -8,7 +8,7 @@ use super::repositories::metadata::MetadataRepository;
 use crate::{CoreError, Result, SharedCache};
 
 const DB_FILE: &str = "licht.db";
-const SCHEMA_VERSION: u32 = 5;
+const SCHEMA_VERSION: u32 = 6;
 pub(super) const META_LAST_PLAYED: &str = "last_played_folder";
 
 pub fn db_path(cache: &SharedCache) -> PathBuf {
@@ -157,6 +157,31 @@ async fn migrate(connection: &mut SqliteConnection) -> Result<()> {
         )
         .execute(&mut *transaction)
         .await?;
+    }
+    if version < 6 {
+        sqlx::raw_sql(
+            "CREATE TABLE modpack_indexes (
+                instances_directory TEXT NOT NULL, instance_folder TEXT NOT NULL,
+                format_version INTEGER, game TEXT, version_id TEXT, name TEXT, summary TEXT,
+                PRIMARY KEY (instances_directory, instance_folder)
+            );
+            CREATE TABLE modpack_dependencies (
+                instances_directory TEXT NOT NULL, instance_folder TEXT NOT NULL,
+                name TEXT NOT NULL, version TEXT NOT NULL,
+                PRIMARY KEY (instances_directory, instance_folder, name),
+                FOREIGN KEY (instances_directory, instance_folder) REFERENCES modpack_indexes (instances_directory, instance_folder)
+            );
+            CREATE TABLE modpack_files (
+                instances_directory TEXT NOT NULL, instance_folder TEXT NOT NULL,
+                position INTEGER NOT NULL CHECK(position >= 0), relative_path TEXT NOT NULL,
+                sha1 TEXT NOT NULL, sha512 TEXT NOT NULL, url TEXT NOT NULL,
+                size INTEGER NOT NULL CHECK(size >= 0),
+                PRIMARY KEY (instances_directory, instance_folder, position),
+                UNIQUE (instances_directory, instance_folder, relative_path),
+                FOREIGN KEY (instances_directory, instance_folder) REFERENCES modpack_indexes (instances_directory, instance_folder)
+            );
+            PRAGMA user_version = 6;",
+        ).execute(&mut *transaction).await?;
     }
     transaction.commit().await?;
     Ok(())

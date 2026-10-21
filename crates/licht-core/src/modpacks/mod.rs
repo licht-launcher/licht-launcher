@@ -4,7 +4,7 @@ mod archive;
 mod curseforge;
 mod file_hashes;
 mod modrinth;
-mod mrpack;
+pub(crate) mod mrpack;
 mod path_safety;
 mod secure_download;
 mod types;
@@ -48,6 +48,7 @@ pub async fn list_modpack_versions(
 
 #[allow(clippy::too_many_arguments)]
 pub async fn create_instance_from_modpack(
+    database: &crate::DatabaseClient,
     client: &Client,
     cache: &SharedCache,
     instances_dir: &Path,
@@ -66,6 +67,7 @@ pub async fn create_instance_from_modpack(
     };
     let entry = crate::create_pending_instance(instances_dir, name, selection.clone(), template)?;
     prepare_modpack_instance(
+        database,
         client,
         cache,
         instances_dir,
@@ -77,6 +79,7 @@ pub async fn create_instance_from_modpack(
 }
 
 pub(crate) async fn prepare_modpack_instance(
+    database: &crate::DatabaseClient,
     client: &Client,
     cache: &SharedCache,
     instances_dir: &Path,
@@ -117,9 +120,16 @@ pub(crate) async fn prepare_modpack_instance(
     let bytes = std::fs::read(&archive)?;
     let entry = match source {
         ModpackSource::Modrinth => {
-            let entry = mrpack::import_mrpack_into(instances_dir, entry, &bytes)?;
-            mrpack::apply_mrpack_loader_with_context(client, cache, instances_dir, &entry, &context)
-                .await?
+            let entry = mrpack::import_mrpack_into(database, instances_dir, entry, &bytes).await?;
+            mrpack::apply_mrpack_loader_with_context(
+                database,
+                client,
+                cache,
+                instances_dir,
+                &entry,
+                &context,
+            )
+            .await?
         }
         ModpackSource::Curseforge => {
             curseforge::import_curseforge_into(

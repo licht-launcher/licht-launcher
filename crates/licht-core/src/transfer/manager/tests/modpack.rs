@@ -4,7 +4,7 @@ use std::task::Poll;
 use sha2::{Digest, Sha512};
 
 use super::*;
-use crate::{DownloadComponent, DownloadProgress};
+use crate::DownloadComponent;
 
 fn verifying_executor(
     _runtime: DownloadRuntime,
@@ -65,27 +65,44 @@ async fn modpack_cached_verification_yields_and_observes_cancellation() {
     let body = vec![b'x'; 2 * 1024 * 1024];
     let file = mods.join("cached.jar");
     std::fs::write(&file, &body).expect("cached mod");
-    let index = serde_json::json!({ "files": [{
+    let index = serde_json::json!({ "dependencies": {"minecraft": "1.20.1"}, "files": [{
         "path": "mods/cached.jar", "fileSize": body.len(),
         "hashes": { "sha1": crate::hashes::sha1_hex(&body), "sha512": crate::hashes::hex_encode(Sha512::digest(&body).as_slice()) },
         "downloads": ["https://cdn.modrinth.com/data/fixture/cached.jar"]
     }] });
-    std::fs::write(
-        directory.join(crate::MODPACK_INDEX_FILE),
-        serde_json::to_vec(&index).expect("index JSON"),
-    )
-    .expect("index file");
+    let stored =
+        crate::modpacks::mrpack::storage::StoredModpack::parse(&index, &directory).expect("index");
+    let database = fixture.database();
+    database
+        .replace_modpack(
+            &fixture.game.instances_dir().expect("instances"),
+            &instance.folder,
+            stored,
+        )
+        .await
+        .expect("store index");
     let control = DownloadControl::new();
-    let (sender, _receiver) = tokio::sync::mpsc::channel::<DownloadProgress>(8);
-    let mut context: InstallationContext = sender.into();
-    context.control = control.clone();
+    let (events, mut incoming) = tokio::sync::mpsc::channel(8);
+    let context = InstallationContext::for_job(
+        fixture.settings.clone(),
+        fixture.game.clone(),
+        "cached-verification".to_string(),
+        control.clone(),
+        events,
+        database.clone(),
+    );
     let mut installation = Box::pin(crate::install_mrpack_files(
+        &database,
         &fixture.game,
         &fixture.settings,
         &directory,
         context,
     ));
-    // The existing stage announcement yields once before inspecting cached files.
+    // Finish the SQLite reads before checking that cached hashing yields.
+    tokio::select! {
+        result = &mut installation => panic!("installation ended before verification: {result:?}"),
+        event = incoming.recv() => assert!(matches!(event, Some(crate::transfer::installation::InstallationEvent::Stage(DownloadComponent::Modpack, DownloadPhase::Verifying)))),
+    }
     std::future::poll_fn(|cx| {
         assert!(installation.as_mut().poll(cx).is_pending());
         Poll::Ready(())
@@ -119,6 +136,115 @@ fn write_workspace(
     std::fs::write(archive.with_file_name("pack.zip.part"), b"partial")?;
     std::fs::write(directory.join("save.dat"), b"world")?;
     Ok(archive)
+}
+
+#[tokio::test]
+async fn modpack_repair_uses_sqlite_even_when_the_legacy_backup_is_invalid() {
+    let fixture = Fixture::new("http://127.0.0.1:1/unused").await;
+    let instance = fixture.instance("Database repair");
+    let directory = fixture
+        .game
+        .instance_dir(&instance.folder)
+        .expect("directory");
+    let body = b"cached mod fixture";
+    std::fs::create_dir_all(directory.join("mods")).expect("mods");
+    std::fs::write(directory.join("mods/cached.jar"), body).expect("file");
+    let index = serde_json::json!({ "dependencies":{"minecraft":"1.20.1"}, "files":[{
+        "path":"mods/cached.jar", "fileSize":body.len(),
+        "hashes":{"sha1":crate::hashes::sha1_hex(body), "sha512":crate::hashes::hex_encode(Sha512::digest(body).as_slice())},
+        "downloads":["https://cdn.modrinth.com/data/fixture/cached.jar"]
+    }]});
+    let database = fixture.database();
+    let stored =
+        crate::modpacks::mrpack::storage::StoredModpack::parse(&index, &directory).expect("index");
+    database
+        .replace_modpack(
+            &fixture.game.instances_dir().expect("instances"),
+            &instance.folder,
+            stored,
+        )
+        .await
+        .expect("index");
+    std::fs::write(
+        directory.join(crate::MODPACK_INDEX_FILE),
+        b"invalid preserved backup",
+    )
+    .expect("backup");
+    for _ in 0..2 {
+        crate::install_mrpack_files(
+            &database,
+            &fixture.game,
+            &fixture.settings,
+            &directory,
+            InstallationContext::default(),
+        )
+        .await
+        .expect("verify cached files without network");
+    }
+    assert_eq!(
+        std::fs::read(directory.join("mods/cached.jar")).expect("file"),
+        body
+    );
+    assert_eq!(
+        std::fs::read(directory.join(crate::MODPACK_INDEX_FILE)).expect("backup"),
+        b"invalid preserved backup"
+    );
+    fixture.close().await;
+}
+
+#[tokio::test]
+async fn modpack_cancellation_removes_new_indexes_but_preserves_repair_indexes() {
+    let fixture = Fixture::new("http://127.0.0.1:1/unused").await;
+    let manager = fixture.manager_with(verifying_executor, reqwest::Client::new());
+    let instances = fixture.game.instances_dir().expect("instances");
+    for (name, operation) in [
+        ("New pack", DownloadJobOperation::Install),
+        ("Existing pack", DownloadJobOperation::Repair),
+    ] {
+        let instance = fixture.instance(name);
+        let directory = instances.join(&instance.folder);
+        let index = serde_json::json!({"dependencies":{"minecraft":"1.20.1"},"files":[]});
+        let stored = crate::modpacks::mrpack::storage::StoredModpack::parse(&index, &directory)
+            .expect("index");
+        fixture
+            .database()
+            .replace_modpack(&instances, &instance.folder, stored)
+            .await
+            .expect("store");
+        let job = manager
+            .start(&instance.folder, operation)
+            .await
+            .expect("start");
+        finish(async {
+            loop {
+                if fixture
+                    .database()
+                    .get_download_job(&fixture.game, &job.id)
+                    .await
+                    .expect("job")
+                    .phase
+                    == DownloadPhase::Verifying
+                {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await;
+        manager.cancel(&job.id).await.expect("cancel");
+        let preserved = operation == DownloadJobOperation::Repair;
+        assert_eq!(directory.exists(), preserved);
+        assert_eq!(
+            fixture
+                .database()
+                .modpack_header(&instances, &instance.folder)
+                .await
+                .expect("index")
+                .is_some(),
+            preserved
+        );
+    }
+    fixture.close().await;
 }
 
 fn workspace_executor(

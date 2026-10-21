@@ -172,8 +172,8 @@ fn a_minecraft_child_is_not_its_own_instance() {
     let _ = fs::remove_dir_all(root);
 }
 
-#[test]
-fn create_rename_duplicate_and_delete_keep_the_folder_stable() {
+#[tokio::test]
+async fn create_rename_duplicate_and_delete_keep_the_folder_stable() {
     let root = scratch("crud");
     let instances = root.join("instances");
 
@@ -222,7 +222,12 @@ fn create_rename_duplicate_and_delete_keep_the_folder_stable() {
     )
     .expect("save");
 
-    let copy = duplicate_instance(&instances, "My-World", "Survival copy").expect("duplicate");
+    let service = licht_core::DatabaseService::start(licht_core::SharedCache::at(&root))
+        .await
+        .expect("database");
+    let copy = duplicate_instance(&service.client(), &instances, "My-World", "Survival copy")
+        .await
+        .expect("duplicate");
     assert_eq!(copy.folder, "Survival-copy");
     assert_eq!(copy.name, "Survival copy");
     assert_eq!(copy.version_id.as_deref(), Some("1.20.1"));
@@ -243,9 +248,12 @@ fn create_rename_duplicate_and_delete_keep_the_folder_stable() {
     assert_eq!(instance_launch(&stored), plain_template());
     assert_eq!(stored.min_memory_mb, 512);
 
-    delete_instance(&instances, "Survival-copy").expect("delete");
+    delete_instance(&service.client(), &instances, "Survival-copy")
+        .await
+        .expect("delete");
     assert!(!instances.join("Survival-copy").exists());
     assert!(instances.join("My-World").is_dir());
+    service.shutdown().await.expect("shutdown");
     let _ = fs::remove_dir_all(root);
 }
 
@@ -432,8 +440,8 @@ fn update_instance_version_changes_only_the_game_version() {
     let _ = fs::remove_dir_all(root);
 }
 
-#[test]
-fn touch_last_opened_writes_rfc3339_and_duplicate_clears_it() {
+#[tokio::test]
+async fn touch_last_opened_writes_rfc3339_and_duplicate_clears_it() {
     let root = scratch("opened");
     let instances = root.join("instances");
     let created =
@@ -449,7 +457,18 @@ fn touch_last_opened_writes_rfc3339_and_duplicate_clears_it() {
     let again = load_instance(&instances.join(&created.folder)).expect("reload");
     assert_eq!(again.last_opened_at.as_deref(), Some(stamp.as_str()));
 
-    let copy = duplicate_instance(&instances, &created.folder, "Classic Copy").expect("dup");
+    let service = licht_core::DatabaseService::start(licht_core::SharedCache::at(&root))
+        .await
+        .expect("database");
+    let copy = duplicate_instance(
+        &service.client(),
+        &instances,
+        &created.folder,
+        "Classic Copy",
+    )
+    .await
+    .expect("dup");
+    service.shutdown().await.expect("shutdown");
     assert_eq!(copy.last_opened_at, None);
     let _ = fs::remove_dir_all(root);
 }

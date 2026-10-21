@@ -56,6 +56,7 @@ pub(crate) fn execute(
                 source @ InstanceSource::Modpack { .. } => {
                     let entry = instance_entry(&dir, &folder)?;
                     let imported = crate::modpacks::prepare_modpack_instance(
+                        &runtime.database,
                         &runtime.client,
                         &runtime.game,
                         &root,
@@ -93,7 +94,14 @@ pub(crate) fn execute(
             context.clone(),
         )
         .await?;
-        install_mrpack_files(&runtime.game, &runtime.settings, &dir, context.clone()).await?;
+        install_mrpack_files(
+            &runtime.database,
+            &runtime.game,
+            &runtime.settings,
+            &dir,
+            context.clone(),
+        )
+        .await?;
         install_curseforge_files(&runtime.game, &runtime.settings, &dir, context.clone()).await?;
         context.checkpoint().await?;
         complete_instance_preparation(&root, &folder)?;

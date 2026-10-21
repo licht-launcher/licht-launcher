@@ -5,6 +5,7 @@ mod index;
 mod install;
 mod loader;
 mod overrides;
+pub(crate) mod storage;
 
 pub use index::mrpack_download_tasks;
 pub use install::install_mrpack_files;

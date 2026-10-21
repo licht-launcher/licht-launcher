@@ -573,8 +573,13 @@ async fn explicit_instance_deletion_cancels_downloads_without_deleting_the_folde
                 .status,
             DownloadJobStatus::Cancelled
         );
-        crate::delete_instance(&fixture.game.instances_dir().expect("root"), &entry.folder)
-            .expect("delete once");
+        crate::delete_instance(
+            &fixture.database(),
+            &fixture.game.instances_dir().expect("root"),
+            &entry.folder,
+        )
+        .await
+        .expect("delete once");
         assert!(
             !fixture
                 .game

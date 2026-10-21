@@ -97,6 +97,10 @@ impl DownloadManager {
         {
             return Err(error.into());
         }
+        self.runtime
+            .database
+            .delete_modpack(&self.runtime.game.instances_dir()?, folder)
+            .await?;
         job.status = DownloadJobStatus::Cancelled;
         job.error = None;
         self.persist(&mut job).await?;

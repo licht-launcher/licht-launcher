@@ -88,7 +88,7 @@ async fn concurrent_first_opens_share_a_complete_migrated_schema() {
     futures_util::future::join_all((0..4).map(|_| async {
         barrier.wait().await;
         let mut connection = open_db(&cache).await.expect("concurrent open");
-        assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 5);
+        assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 6);
         assert_eq!(scalar(&mut connection, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('meta', 'download_jobs', 'download_job_artifacts')").await, 3);
         assert_artifact_path_lookup_is_indexed(&mut connection).await;
         connection.close().await.expect("close");
@@ -160,7 +160,7 @@ async fn a_version_one_database_gains_download_jobs_without_losing_existing_meta
         last_played_folder(&cache).await.expect("metadata"),
         Some("survival".into())
     );
-    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 5);
+    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 6);
     connection.close().await.expect("close");
 }
 
@@ -168,15 +168,15 @@ async fn a_version_one_database_gains_download_jobs_without_losing_existing_meta
 async fn a_newer_database_schema_is_rejected_without_downgrading_it() {
     let cache = cache("future-schema");
     let mut connection = raw_database(&cache).await;
-    sqlx::query("PRAGMA user_version = 6")
+    sqlx::query("PRAGMA user_version = 7")
         .execute(&mut connection)
         .await
         .expect("future schema");
     assert!(matches!(
         open_db(&cache).await,
-        Err(CoreError::DatabaseSchema { schema: 6 })
+        Err(CoreError::DatabaseSchema { schema: 7 })
     ));
-    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 6);
+    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 7);
     let journal: String = sqlx::query_scalar("PRAGMA journal_mode")
         .fetch_one(&mut connection)
         .await
@@ -288,7 +288,7 @@ async fn version_three_gains_indexed_artifact_lookup_without_changing_stored_dat
     connection.close().await.expect("close");
     let mut connection = open_db(&cache).await.expect("migrate");
     assert_artifact_path_lookup_is_indexed(&mut connection).await;
-    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 5);
+    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 6);
     let associations: Vec<(i64, String)> =
         sqlx::query_as("SELECT job_id, path FROM download_job_artifacts ORDER BY path")
             .fetch_all(&mut connection)
@@ -329,7 +329,7 @@ async fn version_four_gains_content_fingerprints_without_losing_metadata() {
 
     for _ in 0..2 {
         let mut connection = open_db(&cache).await.expect("open migrated database");
-        assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 5);
+        assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 6);
         assert_eq!(
             scalar(&mut connection, "SELECT COUNT(*) FROM content_fingerprints").await,
             0
@@ -342,4 +342,31 @@ async fn version_four_gains_content_fingerprints_without_losing_metadata() {
         assert_eq!(folder, "Survival");
         connection.close().await.expect("close");
     }
+}
+
+#[tokio::test]
+async fn version_five_gains_modpack_tables_and_preserves_fingerprints() {
+    let cache = cache("version-five-modpacks");
+    let mut connection = open_db(&cache).await.expect("database");
+    sqlx::raw_sql("DROP TABLE modpack_files; DROP TABLE modpack_dependencies; DROP TABLE modpack_indexes; PRAGMA user_version = 5;
+        INSERT INTO meta VALUES ('fixture', 'preserved');")
+        .execute(&mut connection).await.expect("version five fixture");
+    sqlx::query(
+        "INSERT INTO content_fingerprints VALUES ('data', 'First', 'mods/a.jar', 10, '100:0', ?1)",
+    )
+    .bind("a".repeat(40))
+    .execute(&mut connection)
+    .await
+    .expect("fingerprint");
+    connection.close().await.expect("close");
+    let mut connection = open_db(&cache).await.expect("migrate");
+    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 6);
+    assert_eq!(scalar(&mut connection, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('modpack_indexes', 'modpack_dependencies', 'modpack_files')").await, 3);
+    assert_eq!(scalar(&mut connection, "SELECT COUNT(*) FROM content_fingerprints WHERE instance_folder = 'First' AND relative_path = 'mods/a.jar' AND size = 10").await, 1);
+    let value: String = sqlx::query_scalar("SELECT value FROM meta WHERE key = 'fixture'")
+        .fetch_one(&mut connection)
+        .await
+        .expect("metadata");
+    assert_eq!(value, "preserved");
+    connection.close().await.expect("close");
 }

@@ -179,8 +179,8 @@ mod tests {
         assert!(!second.join(ICON_FILE).exists());
     }
 
-    #[test]
-    fn duplication_skips_install_workspace_and_preserves_cached_instance_icons() {
+    #[tokio::test]
+    async fn duplication_skips_install_workspace_and_preserves_cached_instance_icons() {
         let root = std::env::temp_dir().join(format!(
             "licht-icon-duplicate-{}",
             std::time::SystemTime::now()
@@ -209,8 +209,13 @@ mod tests {
             b"user data",
         )
         .expect("nested user file");
+        let service = crate::DatabaseService::start(crate::SharedCache::at(&root))
+            .await
+            .expect("database");
         let copied =
-            crate::duplicate_instance(&instances, &entry.folder, "Copy").expect("duplicate");
+            crate::duplicate_instance(&service.client(), &instances, &entry.folder, "Copy")
+                .await
+                .expect("duplicate");
         let destination = instances.join(&copied.folder);
         assert!(!destination.join(".install").exists());
         assert_eq!(
@@ -223,5 +228,7 @@ mod tests {
             b"custom icon"
         );
         assert!(cached.is_file());
+        service.shutdown().await.expect("shutdown");
+        fs::remove_dir_all(root).expect("cleanup");
     }
 }
