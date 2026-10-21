@@ -483,7 +483,7 @@ describe("InstancesPage", () => {
     expect(names()).toEqual(["Classic", "Zeta", "Alpha"]);
   });
 
-  it("shows the sidebar empty state and opens settings", async () => {
+  it("keeps the empty sidebar clear and opens settings", async () => {
     invoke.mockImplementation((command: string) => {
       if (command === "list_instances") {
         return Promise.resolve([]);
@@ -517,10 +517,12 @@ describe("InstancesPage", () => {
 
     await renderAt("/");
 
-    expect(await screen.findByText("No instances yet.")).toBeInTheDocument();
     expect(
-      screen.getByText("Create an instance to get started."),
+      await screen.findByRole("heading", {
+        name: "Create your first instance",
+      }),
     ).toBeInTheDocument();
+    expect(screen.queryByText("No instances yet.")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "New instance" })).toBeEnabled();
     expect(screen.getByText("Licht Launcher")).toBeInTheDocument();
     expect(
@@ -537,6 +539,59 @@ describe("InstancesPage", () => {
         current: "page",
       }),
     ).toBeInTheDocument();
+  });
+
+  it("replaces instance tabs with a welcome state and opens the creation wizard", async () => {
+    mockContextMenuCommands((command) => {
+      if (command === "list_instances") return Promise.resolve([]);
+    });
+
+    await renderAt("/");
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "Create your first instance",
+      }),
+    ).toBeVisible();
+    expect(
+      screen.getByText(
+        "Choose a Minecraft version or install a modpack to start playing.",
+      ),
+    ).toBeVisible();
+    expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("textbox", { name: "Search content" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Create instance" }));
+
+    expect(
+      await screen.findByRole("heading", { name: "How do you want to start?" }),
+    ).toBeVisible();
+  });
+
+  it("waits for the instance list before showing the welcome state", async () => {
+    let finishLoading: (entries: InstanceEntry[]) => void = () => {};
+    const pendingInstances = new Promise<InstanceEntry[]>((resolve) => {
+      finishLoading = resolve;
+    });
+    mockContextMenuCommands((command) => {
+      if (command === "list_instances") return pendingInstances;
+    });
+
+    await renderAt("/");
+
+    expect(
+      screen.queryByRole("heading", { name: "Create your first instance" }),
+    ).not.toBeInTheDocument();
+
+    await act(async () => finishLoading([]));
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "Create your first instance",
+      }),
+    ).toBeVisible();
   });
 
   it("lists instances in the sidebar and plays an installed version", async () => {
@@ -1401,7 +1456,9 @@ describe("InstancesPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Back" }));
     expect(
-      await screen.findByText("Create an instance to get started."),
+      await screen.findByRole("heading", {
+        name: "Create your first instance",
+      }),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Back" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Forward" })).toBeEnabled();
