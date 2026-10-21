@@ -102,6 +102,11 @@ impl DownloadManager {
         if matches!(result, Err(CoreError::DownloadCancelled)) {
             self.cleanup_artifacts(&id).await?;
         }
+        if result.is_ok()
+            && let Some(folder) = &snapshot.instance_folder
+        {
+            crate::modpacks::workspace::cleanup(&self.runtime.game.instance_dir(folder)?)?;
+        }
         snapshot.status = match &result {
             Ok(()) => DownloadJobStatus::Completed,
             Err(CoreError::DownloadCancelled)

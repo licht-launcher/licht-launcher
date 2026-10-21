@@ -1,4 +1,4 @@
-import { relaunch } from "@tauri-apps/plugin-process";
+import { useMutation } from "@tanstack/react-query";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import {
   CircleCheckIcon,
@@ -7,14 +7,14 @@ import {
   RefreshCwIcon,
   XIcon,
 } from "lucide-react";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { useStartupProgress } from "@/features/startup/hooks/use-startup-progress";
 import { APP_VERSION, appReleaseLabel } from "@/lib/app-release";
-import { getSettings } from "@/lib/commands";
+import { openStartupPreview, requestUpdateRestart } from "@/lib/commands";
 
-const DEFERRED_UPDATE_KEY = "licht-launcher.deferred-update";
 export const LATEST_VERSION_KEY = "licht-launcher.latest-version";
 export const LATEST_VERSION_EVENT = "licht-launcher:latest-version";
 export const MANUAL_UPDATE_CHECK_EVENT = "licht-launcher:manual-update-check";
@@ -123,29 +123,36 @@ function showCheckToast(
 }
 
 export function UpdateCheck() {
+  const startup = useStartupProgress(true);
+  const manualStarted = useRef(false);
+  const warningShown = useRef(false);
+  const { mutateAsync: beginUpdate } = useMutation({
+    mutationFn: (preview: boolean) =>
+      preview
+        ? openStartupPreview("updateAndMigration")
+        : requestUpdateRestart(),
+  });
   const showUpdateError = useCallback((message: string) => {
     showCheckToast("failed", message);
   }, []);
 
   const installUpdate = useCallback(
-    async (available: Update) => {
+    async (preview = false) => {
       try {
-        await available.downloadAndInstall();
-        localStorage.removeItem(DEFERRED_UPDATE_KEY);
-        await relaunch();
+        await beginUpdate(preview);
       } catch (error) {
         showUpdateError(
-          `Could not install the update: ${
+          `Could not start the update: ${
             error instanceof Error ? error.message : String(error)
           }`,
         );
       }
     },
-    [showUpdateError],
+    [beginUpdate, showUpdateError],
   );
 
   const showUpdateToast = useCallback(
-    (available: Update) => {
+    (available: Pick<Update, "version">) => {
       const toastId = toast.custom(
         (id) => (
           <div
@@ -191,7 +198,6 @@ export function UpdateCheck() {
                 className="min-w-0 flex-1 cursor-pointer"
                 onClick={(event) => {
                   event.stopPropagation();
-                  localStorage.setItem(DEFERRED_UPDATE_KEY, available.version);
                   toast.dismiss(id);
                 }}
               >
@@ -204,7 +210,7 @@ export function UpdateCheck() {
                 onClick={(event) => {
                   event.stopPropagation();
                   toast.dismiss(id);
-                  void installUpdate(available);
+                  void installUpdate();
                 }}
               >
                 <DownloadIcon data-icon="inline-start" aria-hidden />
@@ -227,24 +233,50 @@ export function UpdateCheck() {
   );
 
   useEffect(() => {
+    const snapshot = startup.data;
+    if (!snapshot || snapshot.preview || manualStarted.current) return;
+    const status: UpdateCheckStatus =
+      snapshot.phase === "checkingUpdates"
+        ? "checking"
+        : snapshot.updateStatus === "upToDate"
+          ? "up-to-date"
+          : snapshot.updateStatus === "available"
+            ? "available"
+            : snapshot.updateStatus === "failed"
+              ? "failed"
+              : "not-checked";
+    setUpdateCheckStatus(status);
+    if (snapshot.updateStatus === "upToDate")
+      localStorage.removeItem(LATEST_VERSION_KEY);
+    if (snapshot.updateStatus === "available" && snapshot.version) {
+      localStorage.setItem(LATEST_VERSION_KEY, snapshot.version);
+      showUpdateToast({ version: snapshot.version });
+    }
+    window.dispatchEvent(new Event(LATEST_VERSION_EVENT));
+    if (snapshot.warning && !warningShown.current) {
+      warningShown.current = true;
+      toast.warning("Launcher startup warning", {
+        id: "startup-warning",
+        description: snapshot.warning,
+      });
+    }
+  }, [startup.data, showUpdateToast]);
+
+  useEffect(() => {
     let cancelled = false;
     let checking = false;
     let availableUpdate: Update | null = null;
     let simulatedUpdate = false;
 
-    async function checkForUpdate(manual = false) {
+    async function checkForUpdate() {
       if (checking) {
         return;
       }
       checking = true;
       let status: UpdateCheckStatus = "not-checked";
       setUpdateCheckStatus("checking");
-      const toastId = manual ? showCheckToast("checking") : undefined;
+      const toastId = showCheckToast("checking");
       try {
-        const snapshot = await getSettings();
-        if (!manual && !snapshot.settings.checkForUpdates) {
-          return;
-        }
         const available = await check();
         if (cancelled) {
           return;
@@ -253,9 +285,7 @@ export function UpdateCheck() {
           status = "up-to-date";
           localStorage.removeItem(LATEST_VERSION_KEY);
           window.dispatchEvent(new Event(LATEST_VERSION_EVENT));
-          if (manual) {
-            showCheckToast("up-to-date");
-          }
+          showCheckToast("up-to-date");
           return;
         }
 
@@ -266,23 +296,6 @@ export function UpdateCheck() {
         }
         localStorage.setItem(LATEST_VERSION_KEY, available.version);
         window.dispatchEvent(new Event(LATEST_VERSION_EVENT));
-        const deferredVersion = localStorage.getItem(DEFERRED_UPDATE_KEY);
-        if (
-          deferredVersion === available.version &&
-          snapshot.settings.installUpdatesOnRestart
-        ) {
-          await installUpdate(available);
-          return;
-        }
-
-        if (!manual) {
-          await new Promise<void>((resolve) => {
-            setTimeout(resolve, 0);
-          });
-          if (cancelled) {
-            return;
-          }
-        }
         showUpdateToast(available);
       } catch (error) {
         status = "failed";
@@ -305,18 +318,19 @@ export function UpdateCheck() {
       }
     }
 
-    void checkForUpdate();
     const onManualCheck = () => {
-      void checkForUpdate(true);
+      manualStarted.current = true;
+      void checkForUpdate();
     };
     const onInstallUpdate = () => {
-      if (availableUpdate !== null) {
-        void installUpdate(availableUpdate);
-      } else if (simulatedUpdate) {
-        showCheckToast(
-          "failed",
-          "Development update simulation has no downloadable release.",
-        );
+      manualStarted.current = true;
+      if (simulatedUpdate) {
+        void installUpdate(true);
+      } else if (
+        availableUpdate !== null ||
+        getUpdateCheckStatus() === "available"
+      ) {
+        void installUpdate();
       }
     };
     const onSimulateUpdate = () => {
@@ -324,6 +338,7 @@ export function UpdateCheck() {
         return;
       }
       simulatedUpdate = true;
+      manualStarted.current = true;
       const version = `${APP_VERSION}-dev`;
       localStorage.setItem(LATEST_VERSION_KEY, version);
       window.dispatchEvent(new Event(LATEST_VERSION_EVENT));

@@ -64,20 +64,22 @@ pub fn duplicate_instance(instances_dir: &Path, folder: &str, name: &str) -> Res
     let _guard = profile_guard()?;
     let name = display_name(name)?;
     let source = instance_dir(instances_dir, folder)?;
-    let _ = load_instance(&source)?;
+    let original = load_instance(&source)?;
     let new_folder = folder_id(&name)?;
     let destination = instances_dir.join(&new_folder);
     if destination.exists() {
         return Err(CoreError::InstanceExists);
     }
-    if let Err(error) = copy_tree(&source, &destination) {
+    if let Err(error) = copy_tree(&source, &destination, true) {
         let _ = fs::remove_dir_all(&destination);
         return Err(error);
     }
     let mut instance = load_instance(&destination)?;
     instance.name = name;
     instance.last_opened_at = None;
-    if let Err(error) = write_instance(&destination, &instance) {
+    if let Err(error) = write_instance(&destination, &instance)
+        .and_then(|_| super::icon::duplicate_cached_icon(&source, &destination, &original))
+    {
         let _ = fs::remove_dir_all(&destination);
         return Err(error);
     }

@@ -216,14 +216,16 @@ pub fn resolved_java_path(instance: &Instance) -> Option<PathBuf> {
     Some(PathBuf::from(path))
 }
 
-/// Builds an [`InstanceEntry`] from the profile and optional `icon.png` on disk.
+/// Builds an [`InstanceEntry`] from the profile and optional cached icon.
 pub fn instance_entry(dir: &Path, folder: &str) -> Result<InstanceEntry> {
     let instance = load_instance(dir)?;
     Ok(entry_from(dir, folder.to_string(), instance))
 }
 
 fn entry_from(dir: &Path, folder: String, instance: Instance) -> InstanceEntry {
-    let icon = dir.join(ICON_FILE);
+    let icon = icon::cached_icon_path(dir, icon::source_icon_url(&instance))
+        .filter(|path| path.is_file())
+        .unwrap_or_else(|| dir.join(ICON_FILE));
     let icon_path = icon.is_file().then(|| icon.to_string_lossy().into_owned());
     InstanceEntry {
         folder,
@@ -317,14 +319,21 @@ fn folder_id(name: &str) -> Result<String> {
     Ok(folder)
 }
 
-fn copy_tree(source: &Path, destination: &Path) -> Result<()> {
+fn copy_tree(source: &Path, destination: &Path, skip_install: bool) -> Result<()> {
     fs::create_dir(destination)?;
     for entry in fs::read_dir(source)? {
         let entry = entry?;
+        if skip_install
+            && entry.file_name().to_str().is_some_and(|name| {
+                name.eq_ignore_ascii_case(crate::modpacks::workspace::INSTALL_DIRECTORY)
+            })
+        {
+            continue;
+        }
         let file_type = entry.file_type()?;
         let target = destination.join(entry.file_name());
         if file_type.is_dir() {
-            copy_tree(&entry.path(), &target)?;
+            copy_tree(&entry.path(), &target, false)?;
         } else if file_type.is_file() {
             fs::copy(entry.path(), target)?;
         } else {

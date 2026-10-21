@@ -4,13 +4,15 @@ use std::path::Path;
 
 use sha1::{Digest, Sha1};
 
+use super::progress::StartupReporter;
 use crate::{CoreError, Result};
 
-fn digest(path: &Path) -> Result<Vec<u8>> {
+fn digest(path: &Path, reporter: &StartupReporter) -> Result<Vec<u8>> {
     let mut file = fs::File::open(path)?;
     let mut hash = Sha1::new();
     let mut buffer = [0_u8; 64 * 1024];
     loop {
+        reporter.checkpoint()?;
         let read = file.read(&mut buffer)?;
         if read == 0 {
             break;
@@ -20,8 +22,13 @@ fn digest(path: &Path) -> Result<Vec<u8>> {
     Ok(hash.finalize().to_vec())
 }
 
-pub(super) fn copy_tree(source: &Path, destination: &Path) -> Result<()> {
+pub(super) fn copy_tree_with_progress(
+    source: &Path,
+    destination: &Path,
+    reporter: &StartupReporter,
+) -> Result<()> {
     let mut progress = CopyProgress {
+        reporter: reporter.clone(),
         files: 0,
         bytes: 0,
         last: std::time::Instant::now(),
@@ -38,6 +45,7 @@ pub(super) fn copy_tree(source: &Path, destination: &Path) -> Result<()> {
 }
 
 struct CopyProgress {
+    reporter: StartupReporter,
     files: u64,
     bytes: u64,
     last: std::time::Instant,
@@ -58,7 +66,7 @@ fn copy_tree_inner(source: &Path, destination: &Path, progress: &mut CopyProgres
             copy_tree_inner(&item.path(), &destination.join(item.file_name()), progress)?;
         }
     } else if metadata.is_file() {
-        copy_file(source, destination)?;
+        copy_file_with_progress(source, destination, &progress.reporter)?;
         progress.files += 1;
         progress.bytes += metadata.len();
         if progress.last.elapsed() >= std::time::Duration::from_secs(1) {
@@ -75,14 +83,25 @@ fn copy_tree_inner(source: &Path, destination: &Path, progress: &mut CopyProgres
     Ok(())
 }
 
+#[cfg(test)]
 pub(super) fn copy_file(source: &Path, destination: &Path) -> Result<()> {
+    copy_file_with_progress(source, destination, &StartupReporter::default())
+}
+
+pub(super) fn copy_file_with_progress(
+    source: &Path,
+    destination: &Path,
+    reporter: &StartupReporter,
+) -> Result<()> {
     let before = fs::symlink_metadata(source)?;
     if !before.is_file() {
         return Err(CoreError::CachePath);
     }
     if destination.exists() {
-        let expected = digest(source)?;
-        if !fs::symlink_metadata(destination)?.is_file() || digest(destination)? != expected {
+        let expected = digest(source, reporter)?;
+        if !fs::symlink_metadata(destination)?.is_file()
+            || digest(destination, reporter)? != expected
+        {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::AlreadyExists,
                 "launcher migration destination contains different data",
@@ -98,7 +117,7 @@ pub(super) fn copy_file(source: &Path, destination: &Path) -> Result<()> {
                 .set_times(fs::FileTimes::new().set_modified(before.modified()?))?;
         }
         fs::set_permissions(destination, before.permissions())?;
-        return Ok(());
+        return reporter.file(before.len());
     }
     if let Some(parent) = destination.parent() {
         fs::create_dir_all(parent)?;
@@ -121,6 +140,7 @@ pub(super) fn copy_file(source: &Path, destination: &Path) -> Result<()> {
         let mut expected = Sha1::new();
         let mut buffer = [0_u8; 64 * 1024];
         loop {
+            reporter.checkpoint()?;
             let read = input.read(&mut buffer)?;
             if read == 0 {
                 break;
@@ -135,7 +155,7 @@ pub(super) fn copy_file(source: &Path, destination: &Path) -> Result<()> {
         let after = fs::metadata(source)?;
         if before.len() != after.len()
             || before.modified()? != after.modified()?
-            || digest(&temporary)? != expected.finalize().to_vec()
+            || digest(&temporary, reporter)? != expected.finalize().to_vec()
         {
             return Err(
                 std::io::Error::other("launcher migration copy verification failed").into(),
@@ -153,5 +173,6 @@ pub(super) fn copy_file(source: &Path, destination: &Path) -> Result<()> {
         }
         tracing::warn!("Could not remove a failed migration temporary copy");
     }
-    result
+    result?;
+    reporter.file(before.len())
 }

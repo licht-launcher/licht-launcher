@@ -46,7 +46,7 @@
         "style-src": "'self' 'unsafe-inline'",
         "style-src-attr": "'unsafe-inline'"
       },
-      "capabilities": ["default"]
+      "capabilities": ["default", "startup"]
     }
   },
   "bundle": {

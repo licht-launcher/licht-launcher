@@ -8,6 +8,7 @@ mod mrpack;
 mod path_safety;
 mod secure_download;
 mod types;
+pub(crate) mod workspace;
 
 pub use curseforge::{CURSEFORGE_API_KEY_ENV, CURSEFORGE_INDEX_FILE, install_curseforge_files};
 pub use mrpack::{
@@ -87,7 +88,7 @@ pub(crate) async fn prepare_modpack_instance(
         source,
         project_id,
         version_id,
-        icon_url,
+        icon_url: _,
     } = selection
     else {
         return Err(CoreError::InstancePreparing);
@@ -96,26 +97,8 @@ pub(crate) async fn prepare_modpack_instance(
     let context = context.component(crate::DownloadComponent::Modpack);
     context.stage(crate::DownloadPhase::Preparing).await?;
     let dir = instances_dir.join(&entry.folder);
-    if let Some(url) = icon_url {
-        match context
-            .metadata(crate::download_instance_icon(client, &dir, url))
-            .await
-        {
-            Ok(()) => {}
-            Err(CoreError::DownloadCancelled) => return Err(CoreError::DownloadCancelled),
-            Err(error) => tracing::warn!(error = %error, "instance icon download failed"),
-        }
-    }
-    let archive = cache
-        .root()
-        .join("modpacks")
-        .join(match source {
-            ModpackSource::Modrinth => "modrinth",
-            ModpackSource::Curseforge => "curseforge",
-        })
-        .join(project_id)
-        .join(version_id)
-        .join("pack.zip");
+    restore_instance_icon(client, &dir, selection, &context).await?;
+    let archive = workspace::archive_path(&dir)?;
     match source {
         ModpackSource::Modrinth => {
             modrinth::download_modrinth_mrpack_to(
@@ -152,4 +135,27 @@ pub(crate) async fn prepare_modpack_instance(
     };
     context.checkpoint().await?;
     instance_entry(&dir, &entry.folder)
+}
+
+pub(crate) async fn restore_instance_icon(
+    client: &Client,
+    dir: &Path,
+    source: &InstanceSource,
+    context: &crate::InstallationContext,
+) -> Result<()> {
+    if let InstanceSource::Modpack {
+        icon_url: Some(url),
+        ..
+    } = source
+    {
+        match context
+            .metadata(crate::download_instance_icon(client, dir, url))
+            .await
+        {
+            Ok(()) => {}
+            Err(CoreError::DownloadCancelled) => return Err(CoreError::DownloadCancelled),
+            Err(error) => tracing::warn!(error = %error, "instance icon download failed"),
+        }
+    }
+    Ok(())
 }

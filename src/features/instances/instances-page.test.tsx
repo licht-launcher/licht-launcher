@@ -21,6 +21,7 @@ import {
   downloadJob,
 } from "@/features/downloads/fixtures/job";
 import { snapshot } from "@/features/settings/fixtures/snapshot";
+import { startupProgress } from "@/features/startup/fixtures/progress";
 import type { DownloadJobSnapshot } from "@/lib/generated/DownloadJobSnapshot";
 import type { GameLogEvent } from "@/lib/generated/GameLogEvent";
 import type { InstallProgress } from "@/lib/generated/InstallProgress";
@@ -78,6 +79,8 @@ async function renderAt(path: string) {
 
 function defaultCommandResponse(command: string): Promise<unknown> {
   switch (command) {
+    case "get_startup_progress":
+      return Promise.resolve(startupProgress());
     case "custom_title_bar_active":
       return Promise.resolve(true);
     case "list_instance_content":

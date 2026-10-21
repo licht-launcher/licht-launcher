@@ -158,6 +158,7 @@ pub fn complete_instance_preparation(instances_dir: &Path, folder: &str) -> Resu
         }
         installation.state = InstancePreparationState::Ready;
     }
+    crate::modpacks::workspace::cleanup(&dir)?;
     write_instance(&dir, &instance)?;
     Ok(entry_from(&dir, folder.to_string(), instance))
 }

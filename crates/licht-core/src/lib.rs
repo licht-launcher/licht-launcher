@@ -107,7 +107,18 @@ pub use settings::{
     global_launch, load_settings, memory_slider_max, recommended_max_memory_mb, save_settings,
     set_java_path, settings_snapshot, total_memory_mb, write_concurrency,
 };
-pub use store::layout::initialize_launcher;
+pub use store::layout::progress::{
+    StartupPhase, StartupPreviewScenario, StartupProgress, StartupReporter, StartupUpdateStatus,
+};
+pub use store::layout::requests::{
+    StartupUpdatePolicy, clear_startup_update_request, mark_startup_update_attempt,
+    read_startup_update_intent, request_startup_preview, request_startup_update,
+    startup_update_policy, take_startup_preview,
+};
+pub use store::layout::{
+    initialize_launcher, initialize_launcher_with_progress, run_startup_migration_preview,
+    startup_settings,
+};
 pub use store::service::{DatabaseClient, DatabaseService};
 pub use transfer::checksum::DownloadChecksum;
 pub use transfer::control::{DownloadControl, DownloadState};

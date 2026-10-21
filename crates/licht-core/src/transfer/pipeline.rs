@@ -69,6 +69,14 @@ pub(crate) fn execute(
             };
             context.checkpoint().await?;
             configure_instance_version(&root, &folder, &version)?;
+        } else if let Some(installation) = &profile.installation {
+            crate::modpacks::restore_instance_icon(
+                &runtime.client,
+                &dir,
+                &installation.source,
+                &context,
+            )
+            .await?;
         }
         let profile = load_instance(&dir)?;
         let version = profile

@@ -6,6 +6,7 @@ use licht_core::{
     InstanceSettings, JavaDetections, JavaPaths, JavaStatus, Settings, SettingsSnapshot,
     VersionSummary,
 };
+use licht_core::{StartupPreviewScenario, StartupProgress};
 use ts_rs::TS;
 
 fn generated_dir() -> PathBuf {
@@ -57,6 +58,8 @@ fn the_committed_bindings_match_ts_rs() {
     JavaDetections::export_all(&config).expect("java detections");
     JavaPaths::export_all(&config).expect("java paths");
     JavaStatus::export_all(&config).expect("java status");
+    StartupProgress::export_all(&config).expect("startup progress");
+    StartupPreviewScenario::export_all(&config).expect("startup preview scenarios");
 
     let expected = generated_dir();
     let expected_names = file_names(&expected);
