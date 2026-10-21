@@ -4,17 +4,22 @@ use std::path::{Component, Path, PathBuf};
 use sqlx::Connection;
 
 use super::files;
+use super::progress::StartupReporter;
 use crate::store::repositories::metadata::MetadataRepository;
 use crate::{CoreError, Result, SharedCache};
 
-pub(super) async fn migrate(home: &SharedCache, game: &SharedCache) -> Result<()> {
+pub(super) async fn migrate(
+    home: &SharedCache,
+    game: &SharedCache,
+    reporter: &StartupReporter,
+) -> Result<()> {
     let key = format!("installation-storage-v1:{}", game.root().display());
     let mut connection = super::db::open_db(home).await?;
     let result = async {
         if MetadataRepository::get(&mut connection, &key).await?.as_deref() == Some("1") {
             return Ok(());
         }
-        migrate_icons(&game.instances_dir()?)?;
+        migrate_icons(&game.instances_dir()?, reporter)?;
         let legacy = game.root().join("modpacks");
         let artifacts: Vec<(i64, String, Option<String>)> = sqlx::query_as(
             "SELECT artifact.job_id, artifact.path, job.instance_folder FROM download_job_artifacts artifact
@@ -31,8 +36,8 @@ pub(super) async fn migrate(home: &SharedCache, game: &SharedCache) -> Result<()
             { return Err(CoreError::CachePath); }
             let folder = folder.ok_or(CoreError::CachePath)?;
             let destination = crate::modpacks::workspace::archive_path(&game.instance_dir(&folder)?)?;
-            files::copy_tree(&source, &destination)?;
-            files::copy_tree(&source.with_file_name("pack.zip.part"), &destination.with_file_name("pack.zip.part"))?;
+            files::copy_tree_with_progress(&source, &destination, reporter)?;
+            files::copy_tree_with_progress(&source.with_file_name("pack.zip.part"), &destination.with_file_name("pack.zip.part"), reporter)?;
             updates.push((id, source, destination));
         }
         let mut transaction = connection.begin().await?;
@@ -50,11 +55,12 @@ pub(super) async fn migrate(home: &SharedCache, game: &SharedCache) -> Result<()
     super::db::complete_operation(connection, result).await
 }
 
-fn migrate_icons(instances: &Path) -> Result<()> {
+fn migrate_icons(instances: &Path, reporter: &StartupReporter) -> Result<()> {
     if !instances.exists() {
         return Ok(());
     }
     for item in fs::read_dir(instances)? {
+        reporter.checkpoint()?;
         let item = item?;
         if !item.file_type()?.is_dir() {
             continue;
@@ -76,7 +82,7 @@ fn migrate_icons(instances: &Path) -> Result<()> {
         let destination =
             crate::instance::icon::cached_icon_path(&dir, url).ok_or(CoreError::CachePath)?;
         if !destination.is_file() {
-            files::copy_file(&source, &destination)?;
+            files::copy_file_with_progress(&source, &destination, reporter)?;
         }
         fs::remove_file(source)?;
     }
