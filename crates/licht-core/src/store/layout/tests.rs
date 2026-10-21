@@ -400,3 +400,76 @@ fn migration_copies_preserve_modification_time_and_executable_permissions() {
         b"executable fixture"
     );
 }
+
+#[tokio::test]
+async fn startup_progress_can_stop_migration_before_publishing_and_retry() {
+    let (legacy, home) = fixture("progress-cancellation");
+    fs::create_dir_all(legacy.root().join("versions")).expect("versions");
+    fs::write(
+        legacy.root().join("versions").join("fixture.json"),
+        b"fixture",
+    )
+    .expect("fixture");
+    let stopped = StartupReporter::new(|progress| {
+        if progress.phase == StartupPhase::MigratingInstances {
+            return Err(std::io::Error::other("stopped").into());
+        }
+        Ok(())
+    });
+    assert!(
+        super::initialize_at_with_progress(&legacy, &home, &stopped)
+            .await
+            .is_err()
+    );
+    assert!(!db::db_path(&home).exists());
+    assert_eq!(
+        fs::read(legacy.root().join("versions").join("fixture.json")).expect("original"),
+        b"fixture"
+    );
+    initialize_at(&legacy, &home).await.expect("retry");
+    assert!(db::db_path(&home).exists());
+}
+
+#[tokio::test]
+async fn startup_migration_previews_use_temporary_fixtures_for_success_and_conflict() {
+    let snapshots = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let output = std::sync::Arc::clone(&snapshots);
+    let reporter = StartupReporter::new(move |snapshot| {
+        output.lock().expect("snapshots").push(snapshot);
+        Ok(())
+    });
+    crate::run_startup_migration_preview(false, reporter)
+        .await
+        .expect("preview migration");
+    assert!(
+        snapshots
+            .lock()
+            .expect("snapshots")
+            .iter()
+            .any(|snapshot| snapshot.phase == StartupPhase::MigratingInstances)
+    );
+    assert!(
+        crate::run_startup_migration_preview(true, StartupReporter::default())
+            .await
+            .is_err()
+    );
+}
+
+#[test]
+fn startup_reads_update_preferences_before_migration_and_prefers_the_current_settings() {
+    let (legacy, home) = fixture("startup-preferences");
+    let mut old = crate::load_settings(&legacy).expect("defaults");
+    old.check_for_updates = false;
+    old.install_updates_on_restart = false;
+    crate::save_settings(&legacy, &old).expect("legacy preferences");
+    let loaded = super::startup_settings_at(&home, &legacy).expect("legacy fallback");
+    assert!(!loaded.check_for_updates && !loaded.install_updates_on_restart);
+    assert!(
+        !home.root().exists(),
+        "reading preferences must not start migration"
+    );
+    let current = crate::load_settings(&home).expect("current defaults");
+    crate::save_settings(&home, &current).expect("current preferences");
+    let loaded = super::startup_settings_at(&home, &legacy).expect("current settings");
+    assert!(loaded.check_for_updates && loaded.install_updates_on_restart);
+}

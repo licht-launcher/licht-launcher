@@ -1,6 +1,7 @@
 use std::fs;
 use std::path::Path;
 
+use super::progress::{StartupPhase, StartupReporter};
 use super::{Relocation, database, files, relocate};
 use crate::{CoreError, Result, SharedCache, load_settings, save_settings};
 
@@ -13,7 +14,12 @@ const GAME_DIRECTORIES: &[&str] = &[
     "modpacks",
 ];
 
-pub(super) async fn migrate(legacy: &SharedCache, home: &SharedCache) -> Result<()> {
+pub(super) async fn migrate(
+    legacy: &SharedCache,
+    home: &SharedCache,
+    reporter: &StartupReporter,
+) -> Result<()> {
+    reporter.phase(StartupPhase::MigratingDatabase)?;
     tracing::info!(
         phase = "database-snapshot",
         "Starting launcher storage migration"
@@ -65,31 +71,36 @@ pub(super) async fn migrate(legacy: &SharedCache, home: &SharedCache) -> Result<
         scopes.push((&old_game, &new_game));
     }
     for (index, (source, destination)) in scopes.into_iter().enumerate() {
+        reporter.phase(StartupPhase::MigratingData)?;
         tracing::info!(
             phase = "shared-files",
             scope = index + 1,
             "Migrating launcher storage"
         );
         for directory in GAME_DIRECTORIES {
-            files::copy_tree(
+            files::copy_tree_with_progress(
                 &source.root().join(directory),
                 &destination.root().join(directory),
+                reporter,
             )?;
         }
-        files::copy_tree(
+        files::copy_tree_with_progress(
             &source.root().join("content-metadata"),
             &destination.cache_dir()?.join("content-metadata"),
+            reporter,
         )?;
         tracing::info!(
             phase = "instances",
             scope = index + 1,
             "Migrating launcher storage"
         );
+        reporter.phase(StartupPhase::MigratingInstances)?;
         copy_instances(
             &source.instances_dir()?,
             &destination.instances_dir()?,
             &staging.root().join(format!("profiles-{index}")),
             &mappings,
+            reporter,
         )?;
     }
     for path in [
@@ -106,6 +117,7 @@ pub(super) async fn migrate(legacy: &SharedCache, home: &SharedCache) -> Result<
             .into_owned();
     }
     tracing::info!(phase = "settings", "Migrating launcher storage");
+    reporter.phase(StartupPhase::MigratingSettings)?;
     let staged_settings = save_settings(&staging, &settings)?;
     let settings_file = home.root().join("settings.json");
     if settings_file.exists() && settings_file != legacy.root().join("settings.json") {
@@ -131,6 +143,7 @@ fn copy_instances(
     destination: &Path,
     staging: &Path,
     mappings: &[Relocation],
+    reporter: &StartupReporter,
 ) -> Result<()> {
     if !source.exists() {
         return Ok(());
@@ -140,7 +153,7 @@ fn copy_instances(
         let item = item?;
         let target = destination.join(item.file_name());
         if !item.file_type()?.is_dir() {
-            files::copy_tree(&item.path(), &target)?;
+            files::copy_tree_with_progress(&item.path(), &target, reporter)?;
             continue;
         }
         if target.exists() && fs::symlink_metadata(&target)?.file_type().is_symlink() {
@@ -152,7 +165,7 @@ fn copy_instances(
             let source = entry.path();
             let destination = target.join(entry.file_name());
             if entry.file_name() != "instance.json" {
-                files::copy_tree(&source, &destination)?;
+                files::copy_tree_with_progress(&source, &destination, reporter)?;
                 continue;
             }
             if !entry.file_type()?.is_file() {
@@ -170,9 +183,9 @@ fn copy_instances(
                     &staged,
                     serde_json::to_vec_pretty(&instance).map_err(CoreError::Instance)?,
                 )?;
-                files::copy_file(&staged, &destination)?;
+                files::copy_file_with_progress(&staged, &destination, reporter)?;
             } else {
-                files::copy_file(&source, &destination)?;
+                files::copy_file_with_progress(&source, &destination, reporter)?;
             }
         }
     }

@@ -18,6 +18,7 @@ import {
   duplicateInstance,
   getLastPlayedFolder,
   getSettings,
+  getStartupProgress,
   installModpackFiles,
   installRecommendedJava,
   installVersion,
@@ -36,11 +37,14 @@ import {
   logoutMicrosoftAccount,
   openInstanceFolder,
   openRepository,
+  openStartupPreview,
   pauseDownloadJob,
   prepareInstanceDownload,
   renameInstance,
   repairInstance,
+  requestUpdateRestart,
   restartApp,
+  restartStartupPreview,
   resumeDownloadJob,
   runtimeJava,
   saveInstance,
@@ -93,6 +97,21 @@ describe("launcher commands", () => {
   it("lists instances without arguments", async () => {
     await listInstances();
     expect(invoke).toHaveBeenCalledWith("list_instances");
+  });
+
+  it("routes startup status, isolated previews and update restart to the native coordinator", async () => {
+    await getStartupProgress();
+    expect(invoke).toHaveBeenCalledWith("get_startup_progress");
+    await openStartupPreview("migration");
+    expect(invoke).toHaveBeenCalledWith("open_startup_preview", {
+      scenario: "migration",
+    });
+    await restartStartupPreview("updateAndMigration");
+    expect(invoke).toHaveBeenCalledWith("restart_startup_preview", {
+      scenario: "updateAndMigration",
+    });
+    await requestUpdateRestart();
+    expect(invoke).toHaveBeenCalledWith("request_update_restart");
   });
 
   it("returns persisted download snapshots without requesting a new transfer", async () => {
