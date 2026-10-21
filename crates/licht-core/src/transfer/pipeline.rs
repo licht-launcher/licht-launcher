@@ -1,8 +1,8 @@
 use futures_util::future::BoxFuture;
 
 use crate::{
-    CoreError, InstallationContext, InstancePreparationState, InstanceSource, Result,
-    complete_instance_preparation, configure_instance_version, install_curseforge_files,
+    CoreError, DownloadJobOperation, InstallationContext, InstancePreparationState, InstanceSource,
+    Result, complete_instance_preparation, configure_instance_version, install_curseforge_files,
     install_game_version, install_mrpack_files, instance_entry, load_instance,
 };
 
@@ -31,6 +31,11 @@ pub(crate) fn execute(
         let root = runtime.game.instances_dir()?;
         let dir = runtime.game.instance_dir(&folder)?;
         let profile = load_instance(&runtime.database, &dir).await?;
+        let verify_modpack = job.operation == DownloadJobOperation::Repair
+            || profile
+                .installation
+                .as_ref()
+                .is_some_and(|installation| installation.state != InstancePreparationState::Ready);
         if let Some(installation) = &profile.installation
             && installation.state == InstancePreparationState::Preparing
         {
@@ -94,15 +99,18 @@ pub(crate) fn execute(
             context.clone(),
         )
         .await?;
-        install_mrpack_files(
-            &runtime.database,
-            &runtime.game,
-            &runtime.settings,
-            &dir,
-            context.clone(),
-        )
-        .await?;
-        install_curseforge_files(&runtime.game, &runtime.settings, &dir, context.clone()).await?;
+        if verify_modpack {
+            install_mrpack_files(
+                &runtime.database,
+                &runtime.game,
+                &runtime.settings,
+                &dir,
+                context.clone(),
+            )
+            .await?;
+            install_curseforge_files(&runtime.game, &runtime.settings, &dir, context.clone())
+                .await?;
+        }
         context.checkpoint().await?;
         complete_instance_preparation(&runtime.database, &root, &folder).await?;
         Ok(())

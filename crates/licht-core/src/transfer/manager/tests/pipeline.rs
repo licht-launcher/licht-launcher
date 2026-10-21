@@ -61,6 +61,135 @@ async fn pending(fixture: &Fixture) -> InstanceEntry {
     .expect("pending instance")
 }
 
+async fn check_modpack_verification(
+    state: InstancePreparationState,
+    operation: DownloadJobOperation,
+    expected: DownloadJobStatus,
+) {
+    for source in [
+        crate::ModpackSource::Modrinth,
+        crate::ModpackSource::Curseforge,
+    ] {
+        let server = Server::new().await;
+        let fixture = Fixture::new(&server.url).await;
+        let manager = prepare_cache(&fixture, &server);
+        std::fs::write(
+            fixture.game.version_jar(VERSION).expect("client path"),
+            BODY,
+        )
+        .expect("cached client");
+        let instance = pending(&fixture).await;
+        let root = fixture.game.instances_dir().expect("instances");
+        let database = fixture.database();
+        if state != InstancePreparationState::Preparing {
+            crate::configure_instance_version(&database, &root, &instance.folder, VERSION)
+                .await
+                .expect("configured version");
+        }
+        if state == InstancePreparationState::Ready {
+            crate::complete_instance_preparation(&database, &root, &instance.folder)
+                .await
+                .expect("ready instance");
+        }
+        let directory = root.join(&instance.folder);
+        let blocked = directory.join("mods/blocked.jar");
+        // A directory cannot be hashed as a mod file, so verification fails before any download.
+        std::fs::create_dir_all(&blocked).expect("unreadable mod fixture");
+        std::fs::write(blocked.join("user.txt"), BODY).expect("preserved user file");
+        match source {
+            crate::ModpackSource::Modrinth => {
+                let index = serde_json::json!({
+                    "dependencies": {"minecraft": VERSION},
+                    "files": [{
+                        "path": "mods/blocked.jar", "fileSize": BODY.len(),
+                        "hashes": {"sha1": SHA1, "sha512": "b".repeat(128)},
+                        "downloads": ["https://cdn.modrinth.com/data/fixture/blocked.jar"]
+                    }]
+                });
+                let stored =
+                    crate::modpacks::mrpack::storage::StoredModpack::parse(&index, &directory)
+                        .expect("Modrinth index");
+                database
+                    .replace_modpack(&root, &instance.folder, stored)
+                    .await
+                    .expect("stored index");
+            }
+            crate::ModpackSource::Curseforge => {
+                let index = serde_json::json!({
+                    "source": "curseforge",
+                    "files": [{
+                        "path": "mods/blocked.jar", "fileSize": BODY.len(),
+                        "hashes": {"sha1": SHA1},
+                        "downloads": ["https://mediafilez.forgecdn.net/files/1/2/blocked.jar"],
+                        "projectId": 1, "fileId": 2, "fileName": "blocked.jar",
+                        "name": "Blocked fixture", "required": true
+                    }]
+                });
+                std::fs::write(
+                    directory.join(crate::CURSEFORGE_INDEX_FILE),
+                    serde_json::to_vec(&index).expect("index JSON"),
+                )
+                .expect("CurseForge index");
+            }
+        }
+        let outcome = finish(manager.prepare(&instance.folder, operation))
+            .await
+            .expect("pipeline outcome");
+        assert_eq!(outcome.status, expected, "{source:?}: {:?}", outcome.error);
+        if expected == DownloadJobStatus::Failed {
+            assert_eq!(outcome.component, Some(crate::DownloadComponent::Modpack));
+            assert_eq!(outcome.phase, DownloadPhase::Verifying);
+            assert!(outcome.error.is_some());
+        }
+        assert_eq!(
+            std::fs::read(blocked.join("user.txt")).expect("preserved file"),
+            BODY
+        );
+        assert!(server.requests.is_empty());
+        fixture.close().await;
+    }
+}
+
+#[tokio::test]
+async fn ready_instance_preparation_skips_modpack_verification() {
+    check_modpack_verification(
+        InstancePreparationState::Ready,
+        DownloadJobOperation::Install,
+        DownloadJobStatus::Completed,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn first_installation_still_verifies_modpack_files() {
+    check_modpack_verification(
+        InstancePreparationState::Preparing,
+        DownloadJobOperation::Install,
+        DownloadJobStatus::Failed,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn incomplete_installation_still_verifies_modpack_files() {
+    check_modpack_verification(
+        InstancePreparationState::Installing,
+        DownloadJobOperation::Install,
+        DownloadJobStatus::Failed,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn manual_repair_still_verifies_ready_modpack_files() {
+    check_modpack_verification(
+        InstancePreparationState::Ready,
+        DownloadJobOperation::Repair,
+        DownloadJobStatus::Failed,
+    )
+    .await;
+}
+
 #[tokio::test]
 async fn real_vanilla_pipeline_pauses_resumes_and_publishes_a_ready_instance() {
     let mut server = Server::new().await;
