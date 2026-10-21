@@ -21,7 +21,11 @@ pub async fn install_mrpack_files(
     instance_dir: &Path,
     progress: impl Into<crate::InstallationContext>,
 ) -> Result<()> {
-    let progress = progress.into().component(crate::DownloadComponent::Modpack);
+    // Pack indexes can contain stale sizes; downloaded content must still match both hashes.
+    let progress = progress
+        .into()
+        .component(crate::DownloadComponent::Modpack)
+        .with_size_hints();
     let instances = instance_dir.parent().ok_or(CoreError::CachePath)?;
     let folder = instance_dir
         .file_name()

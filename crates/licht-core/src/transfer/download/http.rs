@@ -1,7 +1,7 @@
 use reqwest::StatusCode;
 use reqwest::header::{ACCEPT_ENCODING, CONTENT_ENCODING, CONTENT_RANGE, RANGE};
 
-use super::TransferJob;
+use super::{SizePolicy, TransferJob};
 use crate::{CoreError, Result};
 
 pub(super) async fn request(job: &TransferJob<'_>, offset: u64) -> Result<reqwest::Response> {
@@ -21,6 +21,7 @@ pub(super) fn response_total(
     response: &reqwest::Response,
     offset: u64,
     published_size: u64,
+    size_policy: SizePolicy,
 ) -> Result<Option<u64>> {
     if let Some(encoding) = response.headers().get(CONTENT_ENCODING)
         && !encoding.as_bytes().eq_ignore_ascii_case(b"identity")
@@ -71,7 +72,7 @@ pub(super) fn response_total(
         _ => return Err(invalid_response("expected a full or partial file response")),
     };
 
-    if published_size > 0 {
+    if size_policy == SizePolicy::Exact && published_size > 0 {
         if total.is_some_and(|total| total != published_size) {
             return Err(invalid_response(
                 "response size does not match published size",

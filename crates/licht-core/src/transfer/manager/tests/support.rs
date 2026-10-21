@@ -200,6 +200,19 @@ struct Reply {
     tail: Option<oneshot::Receiver<Vec<u8>>>,
 }
 impl Request {
+    pub(super) fn reply_chunked(self, body: &[u8]) {
+        let mut bytes = format!(
+            "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n{:x}\r\n",
+            body.len()
+        )
+        .into_bytes();
+        bytes.extend_from_slice(body);
+        bytes.extend_from_slice(b"\r\n0\r\n\r\n");
+        self.response
+            .send(Reply { bytes, tail: None })
+            .expect("response receiver");
+    }
+
     pub(super) fn reply(self, status: u16, headers: &str, body: &[u8], length: usize) {
         self.response
             .send(Reply::new(status, headers, body, length))
