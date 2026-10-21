@@ -202,11 +202,6 @@ export function HomeSidebar({
                 Loading…
               </p>
             ) : null}
-            {!loading && instances.length === 0 ? (
-              <p className="border border-transparent px-1 text-sm text-muted-foreground">
-                No instances yet.
-              </p>
-            ) : null}
             {!loading && ordered.length > 0 ? (
               <ScrollArea className="min-h-0 flex-1">
                 <ul className="flex w-full min-w-0 flex-col px-px">
