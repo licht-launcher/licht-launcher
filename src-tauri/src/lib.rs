@@ -1,9 +1,10 @@
 use anyhow::Context;
-use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{WebviewUrl, WebviewWindowBuilder};
 
 mod commands;
 mod logging;
 mod progress;
+mod startup;
 
 /// Logical height of the custom title bar strip (matches frontend `h-9`).
 #[cfg(windows)]
@@ -17,26 +18,8 @@ pub fn run() -> anyhow::Result<()> {
         "Starting Licht Launcher"
     );
 
-    let paths = tauri::async_runtime::block_on(commands::LauncherPaths::load())
-        .context("Failed to resolve Licht folders")?;
-    let database =
-        tauri::async_runtime::block_on(licht_core::DatabaseService::start(paths.settings.clone()))
-            .context("Failed to start the database service")?;
-    tauri::async_runtime::block_on(database.client().recover_download_jobs(&paths.game))
-        .context("Failed to recover download jobs")?;
-    let client = reqwest::Client::builder()
-        .connect_timeout(licht_core::MANIFEST_REQUEST_TIMEOUT)
-        .read_timeout(licht_core::MANIFEST_REQUEST_TIMEOUT)
-        .build()
-        .context("Failed to create the download client")?;
-    let downloads = std::sync::Arc::new(licht_core::DownloadManager::new(
-        paths.settings.clone(),
-        paths.game.clone(),
-        commands::host_environment()?,
-        client,
-        database.client(),
-    ));
-    let shutdown_downloads = std::sync::Arc::clone(&downloads);
+    let runtime = startup::state::StartupRuntime::new();
+    let startup_runtime = std::sync::Arc::clone(&runtime);
 
     let application = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -44,28 +27,17 @@ pub fn run() -> anyhow::Result<()> {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_window_controls::init())
-        .manage(database.client())
-        .manage(paths)
-        .manage(downloads)
+        .manage(std::sync::Arc::clone(&runtime))
         .manage(commands::LaunchSessions::new())
-        .setup(|app| {
-            commands::downloads::forward_events(
-                app.handle().clone(),
-                app.state::<std::sync::Arc<licht_core::DownloadManager>>()
-                    .inner()
-                    .clone(),
-            );
-            let paths = app.state::<commands::LauncherPaths>();
-            let settings =
-                licht_core::load_settings(&paths.settings).map_err(|error| error.to_string())?;
-            let custom_title_bar = !settings.disable_custom_title_bar;
-            app.manage(commands::shell::TitleBarMode {
-                custom: custom_title_bar,
-            });
-            create_main_window(app, custom_title_bar)?;
+        .setup(move |app| {
+            startup::start(app.handle().clone(), startup_runtime)?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            startup::commands::get_startup_progress,
+            startup::commands::open_startup_preview,
+            startup::commands::restart_startup_preview,
+            startup::commands::request_update_restart,
             commands::downloads::list_download_jobs,
             commands::downloads::prepare_instance_download,
             commands::downloads::pause_download_job,
@@ -120,33 +92,42 @@ pub fn run() -> anyhow::Result<()> {
         .build(tauri::generate_context!())
         .context("Failed to build Licht Launcher")?;
     let mut closing = false;
-    let mut database = Some(database);
     application.run(move |app, event| {
-        if let tauri::RunEvent::ExitRequested { api, code, .. } = event
-            && !closing
+        if let tauri::RunEvent::ExitRequested { ref api, code, .. } = event
+            && !runtime
+                .shutdown_complete
+                .load(std::sync::atomic::Ordering::SeqCst)
         {
-            closing = true;
             api.prevent_exit();
+            if closing {
+                return;
+            }
+            closing = true;
             let app = app.clone();
-            let downloads = std::sync::Arc::clone(&shutdown_downloads);
-            let database = database.take();
+            let runtime = std::sync::Arc::clone(&runtime);
             tauri::async_runtime::spawn(async move {
-                if downloads.suspend_all().await.is_err() {
-                    tracing::error!("Failed to persist all download states during shutdown");
-                }
-                if let Some(database) = database
-                    && database.shutdown().await.is_err()
-                {
-                    tracing::error!("Failed to close the database service during shutdown");
-                }
+                runtime.shutdown().await;
+                runtime
+                    .shutdown_complete
+                    .store(true, std::sync::atomic::Ordering::SeqCst);
                 app.exit(code.unwrap_or(0));
             });
+        } else if let tauri::RunEvent::WindowEvent {
+            label,
+            event: tauri::WindowEvent::Destroyed,
+            ..
+        } = event
+            && label.starts_with("startup-preview-")
+            && let Ok(mut sessions) = runtime.sessions.lock()
+            && let Some(session) = sessions.remove(&label)
+        {
+            session.stop();
         }
     });
     Ok(())
 }
 
-fn create_main_window(app: &tauri::App, custom_title_bar: bool) -> tauri::Result<()> {
+fn create_main_window(app: &tauri::AppHandle, custom_title_bar: bool) -> tauri::Result<()> {
     let builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::default())
         .title("Licht Launcher")
         .inner_size(1200.0, 800.0)

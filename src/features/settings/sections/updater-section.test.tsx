@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Toaster } from "@/components/ui/sonner";
+import { invoke } from "@/features/settings/fixtures/invoke";
 import {
   mockSettingsCommands,
   snapshot,
@@ -20,14 +21,33 @@ import { promptTitleBarRestart } from "@/features/settings/lib/title-bar-restart
 import { fromSnapshot } from "@/features/settings/model/draft";
 import { UpdaterSection } from "@/features/settings/sections/updater-section";
 import { SettingsDialog } from "@/features/settings/settings-dialog";
+import { startupProgress } from "@/features/startup/fixtures/progress";
 import {
   LATEST_VERSION_KEY,
   UpdateCheck,
 } from "@/features/updater/components/update-check";
 import { APP_VERSION } from "@/lib/app-release";
+import type { StartupProgress } from "@/lib/generated/StartupProgress";
 
-const { check } = vi.hoisted(() => ({
+const { check, startupListeners } = vi.hoisted(() => ({
   check: vi.fn<() => Promise<Update | null>>(),
+  startupListeners: new Map<
+    string,
+    (event: { payload: StartupProgress }) => void
+  >(),
+}));
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn(
+    async (
+      name: string,
+      handler: (event: { payload: StartupProgress }) => void,
+    ) => {
+      startupListeners.set(name, handler);
+      return () => {
+        startupListeners.delete(name);
+      };
+    },
+  ),
 }));
 
 vi.mock("@tauri-apps/api/core", async (importOriginal) => {
@@ -46,10 +66,13 @@ const settings = {
   ...snapshot,
   settings: { ...snapshot.settings, checkForUpdates: false },
 };
+const startupClient = new QueryClient({
+  defaultOptions: { queries: { retry: false } },
+});
 
 function updaterView(showSection = true) {
   return (
-    <>
+    <QueryClientProvider client={startupClient}>
       <UpdateCheck />
       {showSection ? (
         <UpdaterSection
@@ -58,7 +81,7 @@ function updaterView(showSection = true) {
         />
       ) : null}
       <Toaster />
-    </>
+    </QueryClientProvider>
   );
 }
 
@@ -78,13 +101,20 @@ describe("UpdaterSection", () => {
     sessionStorage.clear();
     check.mockReset();
     check.mockResolvedValue(null);
+    startupClient.clear();
+    startupListeners.clear();
     mockSettingsCommands((command) =>
-      command === "get_settings" ? Promise.resolve(settings) : undefined,
+      command === "get_settings"
+        ? Promise.resolve(settings)
+        : command === "get_startup_progress"
+          ? Promise.resolve(startupProgress())
+          : undefined,
     );
   });
 
   afterEach(() => {
     toast.dismiss();
+    vi.restoreAllMocks();
   });
 
   it("shows an up-to-date result and a toast after a manual check", async () => {
@@ -217,7 +247,9 @@ describe("UpdaterSection", () => {
 
   it("shows the result of an automatic check without a success toast", async () => {
     mockSettingsCommands((command) =>
-      command === "get_settings" ? Promise.resolve(snapshot) : undefined,
+      command === "get_startup_progress"
+        ? Promise.resolve(startupProgress({ updateStatus: "upToDate" }))
+        : undefined,
     );
     await renderUpdater();
 
@@ -225,43 +257,36 @@ describe("UpdaterSection", () => {
     expect(
       screen.queryByText("Licht Launcher is up to date."),
     ).not.toBeInTheDocument();
-    expect(check).toHaveBeenCalledTimes(1);
+    expect(check).not.toHaveBeenCalled();
   });
 
   it("shows an automatic check already in progress when the section mounts", async () => {
-    let completeCheck: (value: Update | null) => void = () => {};
-    check.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          completeCheck = resolve;
-        }),
-    );
     mockSettingsCommands((command) =>
-      command === "get_settings" ? Promise.resolve(snapshot) : undefined,
+      command === "get_startup_progress"
+        ? Promise.resolve(startupProgress({ phase: "checkingUpdates" }))
+        : undefined,
     );
     render(updaterView());
 
     expect(
       await screen.findByRole("button", { name: "Checking…" }),
     ).toBeDisabled();
-    await waitFor(() => {
-      expect(check).toHaveBeenCalledTimes(1);
-    });
-    completeCheck(null);
+    expect(check).not.toHaveBeenCalled();
+    act(() =>
+      startupListeners.get("startup-progress")?.({
+        payload: startupProgress({ updateStatus: "upToDate" }),
+      }),
+    );
     expect(await screen.findByText("Up to date")).toBeVisible();
   });
 
   it("shows the update action when an automatic check finds a newer version", async () => {
-    check.mockResolvedValueOnce(
-      new Update({
-        rid: 1,
-        currentVersion: APP_VERSION,
-        version: "0.2.2",
-        rawJson: {},
-      }),
-    );
     mockSettingsCommands((command) =>
-      command === "get_settings" ? Promise.resolve(snapshot) : undefined,
+      command === "get_startup_progress"
+        ? Promise.resolve(
+            startupProgress({ updateStatus: "available", version: "0.2.2" }),
+          )
+        : undefined,
     );
 
     render(updaterView());
@@ -275,6 +300,24 @@ describe("UpdaterSection", () => {
     expect(
       await screen.findByRole("button", { name: "Update now" }),
     ).toBeEnabled();
+  });
+
+  it("restarts through the native startup flow instead of installing inside the launcher", async () => {
+    const download = vi.spyOn(Update.prototype, "downloadAndInstall");
+    mockSettingsCommands((command) =>
+      command === "get_startup_progress"
+        ? Promise.resolve(
+            startupProgress({ updateStatus: "available", version: "0.2.2" }),
+          )
+        : undefined,
+    );
+    await renderUpdater();
+    const button = await screen.findByRole("button", { name: "Update now" });
+    fireEvent.click(button);
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("request_update_restart"),
+    );
+    expect(download).not.toHaveBeenCalled();
   });
 
   it("closes only the updater toast without dismissing settings or another alert", async () => {

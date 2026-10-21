@@ -163,13 +163,13 @@ export function UpdaterSection({
             htmlFor="install-updates-on-restart"
             className="text-sm font-medium"
           >
-            Install deferred updates on restart
+            Install updates on startup
           </label>
           <p
             id="install-updates-on-restart-hint"
             className="text-sm text-muted-foreground"
           >
-            Install an update automatically the next time the launcher opens.
+            Download and install available updates before opening the launcher.
           </p>
         </div>
         <Switch

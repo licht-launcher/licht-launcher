@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Toaster } from "@/components/ui/sonner";
 import { snapshot } from "@/features/settings/fixtures/snapshot";
+import { startupProgress } from "@/features/startup/fixtures/progress";
 import { routeTree } from "@/routeTree.gen";
 
 const { invoke } = vi.hoisted(() => ({
@@ -82,6 +83,8 @@ describe("NewInstancePage", () => {
   beforeEach(() => {
     invoke.mockReset();
     invoke.mockImplementation((command: string) => {
+      if (command === "get_startup_progress")
+        return Promise.resolve(startupProgress());
       if (command === "list_instances") {
         return Promise.resolve([]);
       }
@@ -344,6 +347,8 @@ describe("NewInstancePage", () => {
 
   it("shows retry when the version list fails", async () => {
     invoke.mockImplementation((command: string) => {
+      if (command === "get_startup_progress")
+        return Promise.resolve(startupProgress());
       if (command === "list_versions") {
         return Promise.reject(new Error("offline"));
       }
@@ -378,6 +383,8 @@ describe("NewInstancePage", () => {
     ).toBeInTheDocument();
 
     invoke.mockImplementation((command: string) => {
+      if (command === "get_startup_progress")
+        return Promise.resolve(startupProgress());
       if (command === "list_versions") {
         return Promise.resolve([
           { id: "1.20.1", versionType: "release", installed: false },
