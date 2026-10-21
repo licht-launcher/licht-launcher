@@ -157,15 +157,22 @@ impl DownloadJobRepository {
         version: &str,
     ) -> Result<()> {
         game.version_json(version)?;
-        Self::get(connection, game, id).await?;
+        let mut transaction = connection.begin_with("BEGIN IMMEDIATE").await?;
+        Self::get(&mut transaction, game, id).await?;
         sqlx::query(
             "UPDATE download_jobs SET version_id = ?1 WHERE id = ?2 AND data_directory = ?3",
         )
         .bind(version)
         .bind(parse_id(id)?)
         .bind(data_directory(game)?)
-        .execute(connection)
+        .execute(&mut *transaction)
         .await?;
+        sqlx::query("DELETE FROM download_job_checkpoints WHERE job_id = ?1 AND version_id != ?2")
+            .bind(parse_id(id)?)
+            .bind(version)
+            .execute(&mut *transaction)
+            .await?;
+        transaction.commit().await?;
         Ok(())
     }
 

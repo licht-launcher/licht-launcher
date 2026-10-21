@@ -7,3 +7,4 @@ pub(crate) mod installation;
 pub(crate) mod jobs;
 pub(crate) mod manager;
 mod pipeline;
+pub(crate) mod verification;

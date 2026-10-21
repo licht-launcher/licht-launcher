@@ -5,8 +5,10 @@ use tokio::sync::oneshot;
 
 use super::{DatabaseClient, respond, unavailable};
 use crate::store::repositories::{
-    download_artifacts::DownloadArtifactRepository, download_jobs::DownloadJobRepository,
+    download_artifacts::DownloadArtifactRepository,
+    download_checkpoints::DownloadCheckpointRepository, download_jobs::DownloadJobRepository,
 };
+use crate::transfer::jobs::model::DownloadCheckpoint;
 use crate::{DownloadJobOperation, DownloadJobSnapshot, DownloadJobUpdate, Result, SharedCache};
 
 type Reply<T> = oneshot::Sender<Result<T>>;
@@ -32,9 +34,49 @@ pub(super) enum Request {
     Java(SharedCache, u32, Reply<DownloadJobSnapshot>),
     Register(SharedCache, String, Vec<PathBuf>, Reply<()>),
     Cleanup(SharedCache, String, Reply<Vec<PathBuf>>),
+    Checkpoint(SharedCache, String, String, DownloadCheckpoint, Reply<bool>),
+    RecordCheckpoint(SharedCache, String, String, DownloadCheckpoint, Reply<()>),
 }
 
 impl DatabaseClient {
+    pub(crate) async fn has_download_checkpoint(
+        &self,
+        game: &SharedCache,
+        id: &str,
+        version: &str,
+        stage: DownloadCheckpoint,
+    ) -> Result<bool> {
+        self.download_request(|reply| {
+            Request::Checkpoint(
+                game.clone(),
+                id.to_string(),
+                version.to_string(),
+                stage,
+                reply,
+            )
+        })
+        .await
+    }
+
+    pub(crate) async fn record_download_checkpoint(
+        &self,
+        game: &SharedCache,
+        id: &str,
+        version: &str,
+        stage: DownloadCheckpoint,
+    ) -> Result<()> {
+        self.download_request(|reply| {
+            Request::RecordCheckpoint(
+                game.clone(),
+                id.to_string(),
+                version.to_string(),
+                stage,
+                reply,
+            )
+        })
+        .await
+    }
+
     pub async fn create_pending_download_job(
         &self,
         game: &SharedCache,
@@ -133,6 +175,14 @@ impl DatabaseClient {
 
 pub(super) async fn execute(connection: &mut SqliteConnection, request: Request) {
     match request {
+        Request::Checkpoint(game, id, version, stage, reply) => respond(
+            reply,
+            DownloadCheckpointRepository::contains(connection, &game, &id, &version, stage).await,
+        ),
+        Request::RecordCheckpoint(game, id, version, stage, reply) => respond(
+            reply,
+            DownloadCheckpointRepository::record(connection, &game, &id, &version, stage).await,
+        ),
         Request::Create {
             game,
             folder,
