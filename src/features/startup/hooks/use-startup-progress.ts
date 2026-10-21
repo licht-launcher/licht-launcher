@@ -6,13 +6,14 @@ import type { StartupProgress } from "@/lib/generated/StartupProgress";
 
 const key = ["startup-progress"] as const;
 
-export function useStartupProgress(ignorePreview = false) {
+export function useStartupProgress(ignorePreview = false, enabled = true) {
   const client = useQueryClient();
   const [ready, setReady] = useState(false);
   const [eventError, setEventError] = useState<string | null>(null);
   const latest = useRef<StartupProgress | null>(null);
   const sequence = useRef(0);
   useEffect(() => {
+    if (!enabled) return;
     let stopped = false;
     let unsubscribe: (() => void) | undefined;
     void listen<StartupProgress>("startup-progress", ({ payload }) => {
@@ -38,10 +39,10 @@ export function useStartupProgress(ignorePreview = false) {
       stopped = true;
       unsubscribe?.();
     };
-  }, [client, ignorePreview]);
+  }, [client, ignorePreview, enabled]);
   const query = useQuery({
     queryKey: key,
-    enabled: ready,
+    enabled: enabled && ready,
     retry: false,
     staleTime: Number.POSITIVE_INFINITY,
     refetchInterval: (query) =>
