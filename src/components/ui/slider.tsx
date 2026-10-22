@@ -32,6 +32,9 @@ function Slider({
       {children}
       <SliderPrimitive.Thumb
         data-slot="slider-thumb"
+        aria-labelledby={props["aria-labelledby"]}
+        aria-describedby={props["aria-describedby"]}
+        aria-valuetext={props["aria-valuetext"]}
         className="relative z-20 block size-4 rounded-full border border-primary bg-white outline-none focus-visible:ring-3 focus-visible:ring-white/80"
       />
     </SliderPrimitive.Root>

@@ -200,7 +200,7 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
       <ResizablePanelGroup
         id={SIDEBAR_LAYOUT_ID}
         orientation="horizontal"
-        className="min-h-0 h-full w-full flex-1 overflow-hidden bg-popover text-popover-foreground"
+        className="min-h-0 h-full w-full flex-1 overflow-hidden bg-launcher-chrome text-popover-foreground"
         defaultLayout={defaultLayout}
         onLayoutChanged={onLayoutChanged}
         disableCursor
@@ -264,8 +264,11 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
             onOpenSettings={() => dialogs.openGlobalSettings("account")}
           />
         </ResizablePanel>
-        <ResizableHandle aria-label="Resize sidebar" />
-        <ResizablePanel id={MAIN_PANEL_ID} minSize={480}>
+        <ResizableHandle
+          aria-label="Resize sidebar"
+          className="w-0 bg-transparent hover:scale-x-100 hover:bg-transparent focus-visible:scale-x-100 focus-visible:bg-transparent active:scale-x-100 active:bg-transparent"
+        />
+        <ResizablePanel id={MAIN_PANEL_ID} minSize={480} className="bg-popover">
           <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-muted/30">
             {customTitleBar ? <TitleBar /> : null}
             <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">

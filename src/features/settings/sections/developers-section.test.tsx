@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DevelopersSection } from "@/features/settings/sections/developers-section";
 import {
@@ -32,6 +32,75 @@ describe("DevelopersSection", () => {
   beforeEach(() => {
     openPreview.mockReset();
     restartPreview.mockReset();
+  });
+  afterEach(() => {
+    document.getElementById("developer-acrylic-preview")?.remove();
+  });
+
+  it("previews opacity, lightness and hue with keyboard controls", () => {
+    view();
+    for (const [label, token, initial, unit] of [
+      ["Sidebar opacity", "opacity", 45, "%"],
+      ["Sidebar lightness", "lightness", 15, "%"],
+      ["Sidebar hue", "hue", 260, ""],
+    ] as const) {
+      const slider = screen.getByRole("slider", { name: label });
+      expect(slider).toHaveAttribute("aria-valuenow", String(initial));
+      fireEvent.keyDown(slider, { key: "ArrowRight" });
+      expect(slider).toHaveAttribute("aria-valuenow", String(initial + 1));
+      expect(
+        getComputedStyle(document.documentElement)
+          .getPropertyValue(`--acrylic-${token}`)
+          .trim(),
+      ).toBe(`${initial + 1}${unit}`);
+    }
+    expect(screen.getByText("46%")).toBeVisible();
+    expect(screen.getByText("16%")).toBeVisible();
+    expect(screen.getByText("261°")).toBeVisible();
+  });
+
+  it("keeps previews when reopening the section and resets all adjustments", () => {
+    const first = view();
+    fireEvent.keyDown(screen.getByRole("slider", { name: "Sidebar opacity" }), {
+      key: "End",
+    });
+    fireEvent.keyDown(
+      screen.getByRole("slider", { name: "Sidebar lightness" }),
+      { key: "ArrowRight" },
+    );
+    fireEvent.keyDown(screen.getByRole("slider", { name: "Sidebar hue" }), {
+      key: "Home",
+    });
+    first.unmount();
+    view();
+    expect(
+      screen.getByRole("slider", { name: "Sidebar opacity" }),
+    ).toHaveAttribute("aria-valuenow", "100");
+    expect(
+      screen.getByRole("slider", { name: "Sidebar lightness" }),
+    ).toHaveAttribute("aria-valuenow", "16");
+    expect(screen.getByRole("slider", { name: "Sidebar hue" })).toHaveAttribute(
+      "aria-valuenow",
+      "0",
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Reset Acrylic preview" }),
+    );
+    expect(
+      screen.getByRole("slider", { name: "Sidebar opacity" }),
+    ).toHaveAttribute("aria-valuenow", "45");
+    expect(
+      screen.getByRole("slider", { name: "Sidebar lightness" }),
+    ).toHaveAttribute("aria-valuenow", "15");
+    expect(screen.getByRole("slider", { name: "Sidebar hue" })).toHaveAttribute(
+      "aria-valuenow",
+      "260",
+    );
+    expect(
+      getComputedStyle(document.documentElement).getPropertyValue(
+        "--acrylic-opacity",
+      ),
+    ).toBe("");
   });
   it("toggles update simulation", () => {
     const simulateListener = vi.fn();

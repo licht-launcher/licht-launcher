@@ -18,6 +18,7 @@ export type Draft = {
   writeConcurrency: number;
   dataDirectory: string;
   disableCustomTitleBar: boolean;
+  disableTransparency: boolean;
   checkForUpdates: boolean;
   installUpdatesOnRestart: boolean;
 };
@@ -63,6 +64,7 @@ export function fromSnapshot(
     writeConcurrency: settings.writeConcurrency,
     dataDirectory: snapshot.applicationDirectory,
     disableCustomTitleBar: settings.disableCustomTitleBar,
+    disableTransparency: settings.disableTransparency,
     checkForUpdates: settings.checkForUpdates,
     installUpdatesOnRestart: settings.installUpdatesOnRestart,
   };
@@ -112,6 +114,7 @@ export function toSettings(
     writeConcurrency: draft.writeConcurrency,
     dataDirectory: emptyToNull(draft.dataDirectory),
     disableCustomTitleBar: draft.disableCustomTitleBar,
+    disableTransparency: draft.disableTransparency,
     checkForUpdates: draft.checkForUpdates,
     installUpdatesOnRestart: draft.installUpdatesOnRestart,
   };
