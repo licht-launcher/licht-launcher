@@ -3,12 +3,46 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use super::artifacts::{failure, valid_sha1};
 use crate::hashes::{file_matches_sha1, sha1_hex};
 use crate::{Result, SharedCache};
 
 const RECEIPT: &str = "licht-loader-install.json";
+
+pub(super) fn prepared_profile(
+    cache: &SharedCache,
+    id: &str,
+    request: &super::ForgeRequest,
+) -> Result<Option<Value>> {
+    let profile = cache.version_json(id)?;
+    let checksum = profile.with_extension("sha1");
+    if !profile.is_file() || !checksum.is_file() {
+        return Ok(None);
+    }
+    let expected = fs::read_to_string(checksum)?;
+    if !valid_sha1(expected.trim()) || !file_matches_sha1(&profile, expected.trim())? {
+        return Ok(None);
+    }
+    let value: Value =
+        serde_json::from_slice(&fs::read(profile)?).map_err(crate::CoreError::LoaderJson)?;
+    let expected_request = serde_json::to_value(request).map_err(crate::CoreError::LoaderJson)?;
+    if value.get("lichtLoader") != Some(&expected_request)
+        || value.get("id").and_then(Value::as_str) != Some(id)
+        || value.get("inheritsFrom").and_then(Value::as_str) != Some(request.game_version.as_str())
+    {
+        return Ok(None);
+    }
+    Ok(Some(value))
+}
+
+pub(super) fn record_prepared_profile(cache: &SharedCache, id: &str, value: &Value) -> Result<()> {
+    let path = cache.version_json(id)?;
+    let bytes = serde_json::to_vec_pretty(value).map_err(crate::CoreError::LoaderJson)?;
+    atomic_write(&path, &bytes)?;
+    atomic_write(&path.with_extension("sha1"), sha1_hex(&bytes).as_bytes())
+}
 
 #[derive(Serialize, Deserialize)]
 struct Receipt {
@@ -27,7 +61,15 @@ fn path(cache: &SharedCache, id: &str) -> Result<PathBuf> {
 }
 
 pub(super) fn ready(cache: &SharedCache, id: &str) -> bool {
-    match check(cache, id) {
+    checked(cache, id, true)
+}
+
+pub(super) fn launchable(cache: &SharedCache, id: &str) -> bool {
+    checked(cache, id, false)
+}
+
+fn checked(cache: &SharedCache, id: &str, verify_contents: bool) -> bool {
+    match check(cache, id, verify_contents) {
         Ok(ready) => ready,
         Err(error) => {
             tracing::warn!(error = %error, "Loader installation receipt is invalid");
@@ -36,7 +78,7 @@ pub(super) fn ready(cache: &SharedCache, id: &str) -> bool {
     }
 }
 
-fn check(cache: &SharedCache, id: &str) -> Result<bool> {
+fn check(cache: &SharedCache, id: &str, verify_contents: bool) -> Result<bool> {
     let receipt_path = path(cache, id)?;
     if !receipt_path.is_file() {
         return Ok(false);
@@ -45,13 +87,32 @@ fn check(cache: &SharedCache, id: &str) -> Result<bool> {
         serde_json::from_slice(&fs::read(receipt_path)?).map_err(crate::CoreError::LoaderJson)?;
     if receipt.schema != 1
         || receipt.files.is_empty()
+        || !valid_sha1(&receipt.profile_sha1)
+        || !valid_sha1(&receipt.client_sha1)
         || !file_matches_sha1(&cache.version_json(id)?, &receipt.profile_sha1)?
-        || !file_matches_sha1(&cache.version_jar(id)?, &receipt.client_sha1)?
     {
         return Ok(false);
     }
+    let client = cache.version_jar(id)?;
+    let client_matches = if verify_contents {
+        file_matches_sha1(&client, &receipt.client_sha1)?
+    } else {
+        client.is_file()
+    };
+    if !client_matches {
+        return Ok(false);
+    }
     for (relative, hash) in receipt.files {
-        if !valid_sha1(&hash) || !file_matches_sha1(&cache.library(&relative)?, &hash)? {
+        if !valid_sha1(&hash) {
+            return Ok(false);
+        }
+        let library = cache.library(&relative)?;
+        let matches = if verify_contents {
+            file_matches_sha1(&library, &hash)?
+        } else {
+            library.is_file()
+        };
+        if !matches {
             return Ok(false);
         }
     }

@@ -39,8 +39,8 @@ pub(crate) async fn prepare_platform_profile(
         LoaderPlatform::Vanilla => return Ok(game_version.to_string()),
         LoaderPlatform::Fabric => DownloadComponent::Fabric,
         LoaderPlatform::Quilt => DownloadComponent::Quilt,
-        LoaderPlatform::Forge => DownloadComponent::Forge,
-        LoaderPlatform::NeoForge => DownloadComponent::NeoForge,
+        LoaderPlatform::Forge => DownloadComponent::ForgeProfile,
+        LoaderPlatform::NeoForge => DownloadComponent::NeoForgeProfile,
     };
     let context = context.component(component);
     context.stage(DownloadPhase::Preparing).await?;

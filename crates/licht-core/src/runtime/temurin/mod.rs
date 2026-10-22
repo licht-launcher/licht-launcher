@@ -40,7 +40,6 @@ pub async fn install_temurin(
 ) -> Result<PathBuf> {
     let progress = progress.into().component(DownloadComponent::Java);
     progress.checkpoint().await?;
-    progress.stage(DownloadPhase::Preparing).await?;
     if let Some(root) = find_temurin(cache, major, environment)? {
         return Ok(java_executable(&root, environment.os));
     }
@@ -120,6 +119,60 @@ mod tests {
         Arch, CoreError, DownloadControl, DownloadProgress, InstallationContext, LaunchEnvironment,
         OsName, SharedCache,
     };
+
+    #[tokio::test]
+    async fn an_existing_java_runtime_does_not_announce_preparation() {
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("licht-java-cached-{stamp}"));
+        let cache = SharedCache::at(root.join("data"));
+        let home = SharedCache::at(root.join("settings"));
+        let runtime = super::layout::runtime_folder(
+            &cache,
+            &super::temurin_folder_name(21, "jre", "21.0.4", environment().os, environment().arch)
+                .expect("runtime name"),
+        )
+        .expect("runtime");
+        let executable = crate::runtime::archive::java_executable(&runtime, environment().os);
+        std::fs::create_dir_all(executable.parent().expect("bin")).expect("runtime directory");
+        std::fs::write(&executable, b"installed Java").expect("runtime");
+        let service = crate::DatabaseService::start(home.clone())
+            .await
+            .expect("database");
+        let job = service
+            .client()
+            .create_java_download_job(&cache, 21)
+            .await
+            .expect("job");
+        let (events, mut incoming) = tokio::sync::mpsc::channel(8);
+        let context = InstallationContext::for_job(
+            home,
+            cache.clone(),
+            job.id,
+            DownloadControl::new(),
+            events,
+            service.client(),
+        );
+        let installed = install_temurin(
+            &reqwest::Client::new(),
+            &cache,
+            21,
+            &environment(),
+            "http://127.0.0.1:1/unused",
+            context,
+        )
+        .await
+        .expect("reuse runtime");
+        assert_eq!(installed, executable);
+        assert!(
+            incoming.try_recv().is_err(),
+            "cached Java must not emit preparation or download events"
+        );
+        service.shutdown().await.expect("shutdown");
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
 
     #[tokio::test]
     async fn a_paused_java_installation_does_not_block_other_runtime_directories() {

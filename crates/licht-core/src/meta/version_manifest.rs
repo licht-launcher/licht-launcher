@@ -5,7 +5,6 @@ use std::time::{Duration, SystemTime};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::hashes::file_matches_sha1;
 use crate::meta::version_resolve::{local_inherits_from, local_version_exists};
 use crate::{CoreError, Result, SharedCache, parse_version};
 
@@ -82,13 +81,13 @@ pub fn version_manifest_cache_path(cache: &SharedCache) -> PathBuf {
     cache.root().join("versions").join(MANIFEST_CACHE_FILE)
 }
 
-/// True when this version can be launched without downloading any required file.
+/// Lightweight launch readiness. Installation and Repair validate payload hashes.
 pub fn is_version_ready(cache: &SharedCache, id: &str) -> bool {
     if !local_version_exists(cache, id) {
         return false;
     }
     match crate::loaders::forge::request(cache, id) {
-        Ok(Some(_)) => return crate::loaders::forge::installation_ready(cache, id),
+        Ok(Some(_)) => return crate::loaders::forge::installation_launchable(cache, id),
         Err(error) => {
             tracing::warn!(error = %error, "Loader profile is invalid");
             return false;
@@ -107,7 +106,11 @@ pub fn is_version_ready(cache: &SharedCache, id: &str) -> bool {
     let Ok(client_path) = cache.version_jar(&client_id) else {
         return false;
     };
-    if !file_matches_sha1(&client_path, &version.downloads.client.sha1).unwrap_or(false) {
+    if crate::DownloadChecksum::Sha1(version.downloads.client.sha1.clone())
+        .validate()
+        .is_err()
+        || !client_path.is_file()
+    {
         return false;
     }
     version
@@ -120,10 +123,13 @@ pub fn is_version_ready(cache: &SharedCache, id: &str) -> bool {
                 .and_then(|downloads| downloads.artifact.as_ref())
         })
         .all(|artifact| {
-            cache
-                .library(&artifact.path)
-                .ok()
-                .is_some_and(|path| file_matches_sha1(&path, &artifact.sha1).unwrap_or(false))
+            crate::DownloadChecksum::Sha1(artifact.sha1.clone())
+                .validate()
+                .is_ok()
+                && cache
+                    .library(&artifact.path)
+                    .ok()
+                    .is_some_and(|path| path.is_file())
         })
 }
 
@@ -479,6 +485,76 @@ mod tests {
         std::fs::write(loader_jar, b"loader").unwrap();
         assert!(is_version_ready(&cache, loader));
         let _ = std::fs::remove_dir_all(cache.root());
+    }
+
+    #[test]
+    fn readiness_checks_presence_instead_of_rehashing_installed_payloads() {
+        let cache = temp_cache("lightweight-readiness");
+        let id = "1.20.1";
+        let profile = cache.version_json(id).expect("profile");
+        std::fs::create_dir_all(profile.parent().expect("parent")).expect("version directory");
+        let mut version: serde_json::Value =
+            serde_json::from_str(&minimal_version_json(id, b"original client")).expect("version");
+        version["libraries"] = serde_json::json!([{"name":"demo:library:1","downloads":{"artifact":{
+            "path":"demo/library/1/library-1.jar", "sha1":sha1_hex(b"original library"), "size":16, "url":"https://example.invalid/library.jar"
+        }}}]);
+        std::fs::write(&profile, serde_json::to_vec(&version).expect("JSON")).expect("profile");
+        let client = cache.version_jar(id).expect("client");
+        let library = cache
+            .library("demo/library/1/library-1.jar")
+            .expect("library");
+        std::fs::create_dir_all(library.parent().expect("parent")).expect("library directory");
+        std::fs::write(&client, b"changed client").expect("client");
+        std::fs::write(&library, b"changed library").expect("library");
+        assert!(
+            is_version_ready(&cache, id),
+            "Play readiness must not perform full content verification"
+        );
+        assert!(list_installed_version_summaries(&cache)[0].installed);
+        std::fs::remove_file(&library).expect("remove library");
+        assert!(!is_version_ready(&cache, id));
+        std::fs::create_dir(&library).expect("directory instead of library");
+        assert!(!is_version_ready(&cache, id));
+        std::fs::remove_dir(&library).expect("remove directory");
+        std::fs::write(&library, b"library").expect("restore library");
+        std::fs::remove_file(&client).expect("remove client");
+        assert!(!is_version_ready(&cache, id));
+        std::fs::write(&client, b"client").expect("restore client");
+        std::fs::write(&profile, b"invalid metadata").expect("invalid profile");
+        assert!(!is_version_ready(&cache, id));
+        std::fs::remove_dir_all(cache.root()).expect("cleanup");
+    }
+
+    #[test]
+    fn lightweight_readiness_rejects_invalid_published_hash_metadata() {
+        let cache = temp_cache("readiness-hash-metadata");
+        let id = "1.20.1";
+        let profile = cache.version_json(id).expect("profile");
+        std::fs::create_dir_all(profile.parent().expect("parent")).expect("directory");
+        std::fs::write(cache.version_jar(id).expect("client"), b"client").expect("client");
+        let original: serde_json::Value =
+            serde_json::from_str(&minimal_version_json(id, b"client")).expect("version");
+        for hash in ["".to_string(), "invalid".to_string(), "z".repeat(40)] {
+            let mut invalid = original.clone();
+            invalid["downloads"]["client"]["sha1"] = serde_json::json!(hash);
+            std::fs::write(&profile, serde_json::to_vec(&invalid).expect("JSON")).expect("profile");
+            assert!(
+                !is_version_ready(&cache, id),
+                "readiness still requires valid checksum metadata"
+            );
+        }
+        let library = cache
+            .library("demo/library/1/library-1.jar")
+            .expect("library");
+        std::fs::create_dir_all(library.parent().expect("parent")).expect("directory");
+        std::fs::write(&library, b"library").expect("library");
+        let mut invalid = original;
+        invalid["libraries"] = serde_json::json!([{"name":"demo:library:1","downloads":{"artifact":{
+            "path":"demo/library/1/library-1.jar","sha1":"invalid","size":7,"url":"https://example.invalid/library.jar"
+        }}}]);
+        std::fs::write(&profile, serde_json::to_vec(&invalid).expect("JSON")).expect("profile");
+        assert!(!is_version_ready(&cache, id));
+        std::fs::remove_dir_all(cache.root()).expect("cleanup");
     }
 
     #[tokio::test]

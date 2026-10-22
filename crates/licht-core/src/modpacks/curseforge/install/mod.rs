@@ -16,11 +16,12 @@ use self::overrides::{extract_override_files, list_override_files, override_pref
 use self::plan::{Plan, format_blocked, resolve_plan};
 use super::cdn::cdn_client;
 use super::{CURSEFORGE_INDEX_FILE, curseforge_api_key};
-use crate::download::{DEFAULT_RETRY, DownloadProgress};
+use crate::download::DEFAULT_RETRY;
 use crate::instance::InstanceEntry;
 use crate::modpacks::MODPACK_INDEX_FILE;
 use crate::modpacks::file_hashes::ensure_md5;
 use crate::settings::{download_concurrency, write_concurrency};
+use crate::transfer::verification::VerificationProgress;
 use crate::{CoreError, Result, SharedCache, shared_transfer_limits};
 
 /// Names that must not be overwritten at the instance root by pack content.
@@ -50,20 +51,15 @@ pub async fn install_curseforge_files(
     progress.stage(crate::DownloadPhase::Verifying).await?;
     let body = fs::read_to_string(&index_path)?;
     let index: CurseforgeIndex = serde_json::from_str(&body).map_err(CoreError::LoaderJson)?;
+    let mut verification = VerificationProgress::start(&progress, index.files.len()).await?;
     let mut pending = Vec::new();
     for file in &index.files {
         if let Some(item) = pending_task(file, instance_dir)? {
             pending.push(item);
         }
+        verification.checked().await?;
     }
     if pending.is_empty() {
-        let _ = progress.try_send(DownloadProgress {
-            finished: 0,
-            failed: 0,
-            total: 0,
-            bytes_done: 0,
-            bytes_total: 0,
-        });
         return Ok(());
     }
     let key = curseforge_api_key()?;
@@ -96,11 +92,12 @@ pub async fn install_curseforge_files(
             },
         )
         .await?;
-    progress.stage(crate::DownloadPhase::Verifying).await?;
+    let mut verification = VerificationProgress::start(&progress, pending.len()).await?;
     for item in &pending {
         if let Some(expected) = &item.md5 {
             ensure_md5(&item.task.destination, expected)?;
         }
+        verification.checked().await?;
     }
     Ok(())
 }

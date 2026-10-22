@@ -52,8 +52,11 @@ pub enum DownloadComponent {
     Fabric,
     Quilt,
     Forge,
+    ForgeProfile,
     NeoForge,
+    NeoForgeProfile,
     Modpack,
+    ModpackArchive,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
@@ -96,6 +99,21 @@ pub struct DownloadJobUpdate {
     pub phase: DownloadPhase,
     pub progress: DownloadProgress,
     pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum DownloadCheckpoint {
+    Game,
+    Modpack,
+}
+
+impl DownloadCheckpoint {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Game => "game",
+            Self::Modpack => "modpack",
+        }
+    }
 }
 
 pub(crate) fn validate_progress(progress: DownloadProgress) -> Result<()> {

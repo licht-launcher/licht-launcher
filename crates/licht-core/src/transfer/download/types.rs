@@ -14,6 +14,13 @@ pub const DEFAULT_RETRY: Retry = Retry {
     initial_backoff: Duration::from_millis(200),
 };
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) enum SizePolicy {
+    #[default]
+    Exact,
+    Hint,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Retry {
     pub attempts: u32,

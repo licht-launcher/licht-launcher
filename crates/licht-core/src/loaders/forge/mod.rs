@@ -127,6 +127,10 @@ pub(crate) fn installation_ready(cache: &SharedCache, id: &str) -> bool {
     receipt::ready(cache, id)
 }
 
+pub(crate) fn installation_launchable(cache: &SharedCache, id: &str) -> bool {
+    receipt::launchable(cache, id)
+}
+
 async fn installer(
     client: &Client,
     cache: &SharedCache,
@@ -192,6 +196,17 @@ async fn write_profile(
     if installer.profile.minecraft != request.game_version {
         return Err(failure("installer targets a different Minecraft version"));
     }
+    if let Some(profile) = receipt::prepared_profile(cache, id, request)? {
+        let mut libraries = profile
+            .get("libraries")
+            .and_then(Value::as_array)
+            .cloned()
+            .ok_or_else(|| failure("loader profile has no libraries"))?;
+        // Resolved SHA1s are already stored; embedded libraries still need local validation.
+        let artifacts = normalize_libraries(client, &mut libraries, installer, cache).await?;
+        installer.version = profile;
+        return Ok(artifacts);
+    }
     let mut libraries = installer
         .version
         .get("libraries")
@@ -212,10 +227,7 @@ async fn write_profile(
     if main == "net.minecraft.client.main.Main" {
         return Err(failure("installer contains a vanilla placeholder"));
     }
-    receipt::atomic_write(
-        &cache.version_json(id)?,
-        &serde_json::to_vec_pretty(&installer.version).map_err(CoreError::LoaderJson)?,
-    )?;
+    receipt::record_prepared_profile(cache, id, &installer.version)?;
     Ok(artifacts)
 }
 
@@ -250,8 +262,8 @@ pub(crate) async fn install_forge_like_with_context(
     context: &InstallationContext,
 ) -> Result<String> {
     let context = context.component(match family {
-        ForgeFamily::Forge => DownloadComponent::Forge,
-        ForgeFamily::NeoForge => DownloadComponent::NeoForge,
+        ForgeFamily::Forge => DownloadComponent::ForgeProfile,
+        ForgeFamily::NeoForge => DownloadComponent::NeoForgeProfile,
     });
     context.stage(DownloadPhase::Preparing).await?;
     let build = match loader_version.filter(|value| !value.is_empty()) {

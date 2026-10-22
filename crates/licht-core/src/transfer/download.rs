@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::Ordering;
 use std::sync::{Arc, LazyLock, Mutex as StdMutex};
 
 use futures_util::TryStreamExt;
@@ -15,6 +14,7 @@ mod limits;
 mod progress;
 mod queue;
 mod types;
+pub(crate) use types::SizePolicy;
 
 pub use limits::{TransferLimits, shared_transfer_limits};
 pub(crate) use queue::download_verified_all_with_cleanup;
@@ -48,6 +48,7 @@ struct TransferJob<'a> {
     destination: &'a Path,
     checksum: DownloadChecksum,
     published_size: u64,
+    size_policy: SizePolicy,
     limits: &'a TransferLimits,
     download_concurrency: usize,
     write_concurrency: usize,
@@ -93,6 +94,7 @@ pub async fn download_file_with_control(
         destination,
         checksum: DownloadChecksum::legacy_sha1(expected_sha1),
         published_size: 0,
+        size_policy: SizePolicy::Exact,
         limits: &shared_transfer_limits(),
         download_concurrency: DEFAULT_CONCURRENCY,
         write_concurrency: DEFAULT_CONCURRENCY,
@@ -106,6 +108,11 @@ pub async fn download_file_with_control(
 
 async fn download_one(job: TransferJob<'_>) -> Result<()> {
     job.checksum.validate()?;
+    if job.size_policy == SizePolicy::Hint && job.checksum.expected().is_none() {
+        return Err(invalid_response(
+            "estimated download sizes require a checksum",
+        ));
+    }
     if job.retry.attempts == 0 {
         return Err(CoreError::DownloadAttempts);
     }
@@ -139,27 +146,25 @@ async fn download_one(job: TransferJob<'_>) -> Result<()> {
 async fn download_locked(job: &TransferJob<'_>, part: &Path) -> Result<()> {
     job.control.ready().await?;
 
-    if job.checksum.matches_file(job.destination)? {
-        if let Some(progress) = job.progress {
-            let size = if job.published_size == 0 {
-                std::fs::metadata(job.destination)?.len()
-            } else {
-                job.published_size
-            };
-            if job.published_size == 0 {
-                progress.total.fetch_add(size, Ordering::Relaxed);
-            }
-            progress.add(size);
-        }
-        return Ok(());
-    }
-
     let mut credited = Attempt {
         progress: job.progress,
         added: 0,
         committed: false,
         known_total: job.published_size,
     };
+
+    if job.checksum.matches_file(job.destination)? {
+        let size = if job.published_size == 0 || job.size_policy == SizePolicy::Hint {
+            std::fs::metadata(job.destination)?.len()
+        } else {
+            job.published_size
+        };
+        credited.set_total(size);
+        credited.set(size);
+        credited.committed = true;
+        return Ok(());
+    }
+
     let mut backoff = job.retry.initial_backoff;
     let mut attempt = 1;
 
@@ -216,6 +221,9 @@ async fn transfer_partial(
     credited: &mut Attempt<'_>,
 ) -> Result<()> {
     let (mut offset, mut hasher) = read_prefix(job, part).await?;
+    if job.size_policy == SizePolicy::Hint && offset > credited.known_total {
+        credited.set_total(offset);
+    }
     credited.set(offset);
 
     if offset > 0 && job.checksum.matches(&hasher.clone().finish()) {
@@ -248,7 +256,7 @@ async fn transfer_partial(
         credited.set(0);
     }
 
-    let total = match response_total(&response, offset, job.published_size) {
+    let total = match response_total(&response, offset, job.published_size, job.size_policy) {
         Ok(total) => total,
         Err(error) => {
             remove_partial(part).await?;
@@ -306,6 +314,9 @@ async fn transfer_partial(
 
         hasher.update(&buffer[..read]);
         offset += read as u64;
+        if job.size_policy == SizePolicy::Hint && total.is_none() && offset > credited.known_total {
+            credited.set_total(offset);
+        }
         credited.set(offset);
     }
 
@@ -314,6 +325,9 @@ async fn transfer_partial(
 
     if total.is_some_and(|total| offset != total) {
         return Err(invalid_response("body is shorter than its declared size"));
+    }
+    if job.size_policy == SizePolicy::Hint {
+        credited.set_total(offset);
     }
 
     if job.checksum.expected().is_none() {
@@ -344,7 +358,10 @@ async fn read_prefix(job: &TransferJob<'_>, part: &Path) -> Result<(u64, Transfe
         Err(error) => return Err(error.into()),
     };
 
-    if job.published_size > 0 && file.metadata().await?.len() > job.published_size {
+    if job.size_policy == SizePolicy::Exact
+        && job.published_size > 0
+        && file.metadata().await?.len() > job.published_size
+    {
         drop(file);
         remove_partial(part).await?;
         return Ok((0, hasher));
