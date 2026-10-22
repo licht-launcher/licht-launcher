@@ -180,6 +180,8 @@ export function usePlaySession({
         downloads.data?.some((job) => job.instanceFolder === instance.folder) ??
         false;
       const ready =
+        !pending &&
+        !hasJob &&
         instance.versionId !== null &&
         (await isVersionReady(instance.versionId));
       if (pending || hasJob || !ready) {
