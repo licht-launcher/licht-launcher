@@ -64,7 +64,7 @@ function DownloadRow({
       />
       {known && (
         <p className="text-xs tabular-nums text-muted-foreground">
-          {progressText(job.progress)}
+          {progressText(job.progress, job.phase)}
         </p>
       )}
       {job.error && (

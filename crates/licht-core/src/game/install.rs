@@ -32,8 +32,13 @@ pub async fn install_version(
     write_asset_index(cache, plan.version, plan.asset_index_json)?;
 
     let mut pending = Vec::new();
-    for task in download_tasks(cache, &plan)? {
-        if file_matches_sha1(&task.destination, &task.sha1)? {
+    let tasks = download_tasks(cache, &plan)?;
+    let mut verification =
+        crate::transfer::verification::VerificationProgress::start(&progress, tasks.len()).await?;
+    for task in tasks {
+        let matches = file_matches_sha1(&task.destination, &task.sha1)?;
+        verification.checked().await?;
+        if matches {
             continue;
         }
         if let Some(parent) = task.destination.parent() {

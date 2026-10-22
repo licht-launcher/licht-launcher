@@ -202,7 +202,7 @@ export function PlaySection({
           <span className="text-xs text-muted-foreground">
             <span className="font-medium">
               {progress !== null && !isPreparingProgress(progress)
-                ? progressText(progress)
+                ? progressText(progress, downloadJob?.phase)
                 : "Preparing…"}
             </span>
             <span className="ml-2">{downloadDetail}</span>

@@ -8,7 +8,7 @@ use super::repositories::metadata::MetadataRepository;
 use crate::{CoreError, Result, SharedCache};
 
 const DB_FILE: &str = "licht.db";
-const SCHEMA_VERSION: u32 = 7;
+const SCHEMA_VERSION: u32 = 8;
 pub(super) const META_LAST_PLAYED: &str = "last_played_folder";
 
 pub fn db_path(cache: &SharedCache) -> PathBuf {
@@ -204,6 +204,18 @@ async fn migrate(connection: &mut SqliteConnection) -> Result<()> {
             );
             PRAGMA user_version = 7;",
         ).execute(&mut *transaction).await?;
+    }
+    if version < 8 {
+        sqlx::raw_sql(
+            "CREATE TABLE download_job_checkpoints (
+            job_id INTEGER NOT NULL REFERENCES download_jobs(id) ON DELETE CASCADE,
+            stage TEXT NOT NULL CHECK(stage IN ('game', 'modpack')),
+            version_id TEXT NOT NULL,
+            PRIMARY KEY (job_id, stage)
+        ); PRAGMA user_version = 8;",
+        )
+        .execute(&mut *transaction)
+        .await?;
     }
     transaction.commit().await?;
     Ok(())

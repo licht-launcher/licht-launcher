@@ -101,6 +101,21 @@ pub struct DownloadJobUpdate {
     pub error: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum DownloadCheckpoint {
+    Game,
+    Modpack,
+}
+
+impl DownloadCheckpoint {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Game => "game",
+            Self::Modpack => "modpack",
+        }
+    }
+}
+
 pub(crate) fn validate_progress(progress: DownloadProgress) -> Result<()> {
     if progress
         .finished

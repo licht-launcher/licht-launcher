@@ -12,6 +12,7 @@ use tokio::sync::{Mutex, broadcast, watch};
 
 mod cancellation;
 mod progress;
+mod repair;
 mod worker;
 
 #[derive(Clone)]
@@ -32,6 +33,7 @@ struct ActiveJob {
     stopped: watch::Sender<bool>,
     worker: Mutex<Option<tokio::task::AbortHandle>>,
     suspending: AtomicBool,
+    restarting: AtomicBool,
     dirty: AtomicBool,
 }
 pub struct DownloadManager {
@@ -115,6 +117,9 @@ impl DownloadManager {
             .into_iter()
             .find(|job| job.instance_folder.as_deref() == Some(folder))
         {
+            if operation == DownloadJobOperation::Repair {
+                return self.restart_repair(job).await;
+            }
             drop(starts);
             return match job.status {
                 DownloadJobStatus::Paused
@@ -142,6 +147,7 @@ impl DownloadManager {
         Ok(job)
     }
     pub async fn pause(&self, id: &str) -> Result<DownloadJobSnapshot> {
+        let _starts = self.starts.lock().await;
         let Some(slot) = self.active_job(id).await else {
             let snapshot = self.stored_job(id).await?;
             return if matches!(
