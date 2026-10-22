@@ -127,6 +127,10 @@ pub(crate) fn installation_ready(cache: &SharedCache, id: &str) -> bool {
     receipt::ready(cache, id)
 }
 
+pub(crate) fn installation_launchable(cache: &SharedCache, id: &str) -> bool {
+    receipt::launchable(cache, id)
+}
+
 async fn installer(
     client: &Client,
     cache: &SharedCache,

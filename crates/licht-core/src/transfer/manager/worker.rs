@@ -19,6 +19,7 @@ impl DownloadManager {
             stopped,
             worker: Mutex::new(None),
             suspending: AtomicBool::new(false),
+            restarting: AtomicBool::new(false),
             dirty: AtomicBool::new(false),
         });
         self.active
@@ -44,10 +45,14 @@ impl DownloadManager {
                 Ok(Err(error)) => error.to_string(),
                 Err(_) => "download worker stopped unexpectedly".to_string(),
             };
-            if slot.suspending.load(Ordering::SeqCst) {
+            if slot.suspending.load(Ordering::SeqCst) || slot.restarting.load(Ordering::SeqCst) {
                 let id = slot.snapshot.lock().await.id.clone();
-                slot.completion
-                    .send_replace(Some(Err("download suspended for shutdown".to_string())));
+                let message = if slot.restarting.load(Ordering::SeqCst) {
+                    "download restarted as a full repair"
+                } else {
+                    "download suspended for shutdown"
+                };
+                slot.completion.send_replace(Some(Err(message.to_string())));
                 manager.active.lock().await.remove(&id);
                 slot.stopped.send_replace(true);
                 return;
@@ -94,6 +99,12 @@ impl DownloadManager {
                 .await?;
         }
         let mut snapshot = slot.snapshot.lock().await;
+        if slot.restarting.load(Ordering::SeqCst) {
+            slot.completion
+                .send_replace(Some(Err("download restarted as a full repair".to_string())));
+            self.active.lock().await.remove(&id);
+            return Ok(());
+        }
         let result = if slot.control.state() == DownloadState::Cancelled {
             Err(CoreError::DownloadCancelled)
         } else {

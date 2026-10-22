@@ -176,6 +176,52 @@ impl DownloadJobRepository {
         Ok(())
     }
 
+    pub async fn restart_as_repair(
+        connection: &mut SqliteConnection,
+        game: &SharedCache,
+        id: &str,
+        version: Option<&str>,
+    ) -> Result<DownloadJobSnapshot> {
+        if let Some(version) = version {
+            game.version_json(version)?;
+        }
+        let mut transaction = connection.begin_with("BEGIN IMMEDIATE").await?;
+        let job = Self::get(&mut transaction, game, id).await?;
+        if job.instance_folder.is_none()
+            || job.java_major.is_some()
+            || matches!(
+                job.status,
+                DownloadJobStatus::Cancelling
+                    | DownloadJobStatus::Cancelled
+                    | DownloadJobStatus::Completed
+            )
+        {
+            return Err(CoreError::DownloadJobTransition);
+        }
+        sqlx::query(
+            "UPDATE download_jobs SET operation = ?1, status = ?2, component = NULL,
+            phase = ?3, progress = ?4, error = NULL, version_id = ?5, updated_at = ?6
+            WHERE id = ?7 AND data_directory = ?8",
+        )
+        .bind(encode(&DownloadJobOperation::Repair)?)
+        .bind(encode(&DownloadJobStatus::Queued)?)
+        .bind(encode(&DownloadPhase::Preparing)?)
+        .bind(encode(&empty_progress())?)
+        .bind(version)
+        .bind(timestamp()?.max(job.updated_at))
+        .bind(parse_id(id)?)
+        .bind(data_directory(game)?)
+        .execute(&mut *transaction)
+        .await?;
+        sqlx::query("DELETE FROM download_job_checkpoints WHERE job_id = ?1")
+            .bind(parse_id(id)?)
+            .execute(&mut *transaction)
+            .await?;
+        let restarted = Self::get(&mut transaction, game, id).await?;
+        transaction.commit().await?;
+        Ok(restarted)
+    }
+
     pub async fn create_java(
         connection: &mut SqliteConnection,
         game: &SharedCache,

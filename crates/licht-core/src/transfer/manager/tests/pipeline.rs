@@ -302,6 +302,74 @@ async fn a_new_repair_does_not_inherit_a_completed_jobs_checkpoints() {
 }
 
 #[tokio::test]
+async fn explicit_repair_rechecks_game_setup_after_a_pack_failure() {
+    let server = Server::new().await;
+    let fixture = Fixture::new(&server.url).await;
+    let manager = prepare_cache(&fixture, &server);
+    std::fs::write(fixture.game.version_jar(VERSION).expect("client"), BODY)
+        .expect("cached client");
+    let instance = pending(&fixture).await;
+    let directory = fixture
+        .game
+        .instance_dir(&instance.folder)
+        .expect("directory");
+    let index = directory.join(crate::CURSEFORGE_INDEX_FILE);
+    std::fs::write(&index, b"invalid pack metadata").expect("pack failure");
+    let failed = finish(manager.prepare(&instance.folder, DownloadJobOperation::Install))
+        .await
+        .expect("failed install");
+    assert_eq!(failed.status, DownloadJobStatus::Failed);
+    assert!(
+        fixture
+            .database()
+            .has_download_checkpoint(
+                &fixture.game,
+                &failed.id,
+                VERSION,
+                crate::transfer::jobs::model::DownloadCheckpoint::Game
+            )
+            .await
+            .expect("completed game")
+    );
+    std::fs::write(
+        fixture.game.version_json(VERSION).expect("profile"),
+        b"invalid game profile",
+    )
+    .expect("requires game verification");
+    std::fs::write(&index, br#"{"source":"curseforge","files":[]}"#).expect("fixed pack");
+    let repaired = finish(manager.prepare(&instance.folder, DownloadJobOperation::Repair))
+        .await
+        .expect("repair");
+    assert_eq!(repaired.id, failed.id);
+    assert_eq!(repaired.operation, DownloadJobOperation::Repair);
+    assert_eq!(
+        repaired.status,
+        DownloadJobStatus::Failed,
+        "Repair must re-read the game profile instead of reusing its checkpoint"
+    );
+    assert!(
+        repaired
+            .error
+            .as_deref()
+            .is_some_and(|error| error.contains("version JSON is invalid"))
+    );
+    assert!(
+        !fixture
+            .database()
+            .has_download_checkpoint(
+                &fixture.game,
+                &failed.id,
+                VERSION,
+                crate::transfer::jobs::model::DownloadCheckpoint::Game
+            )
+            .await
+            .expect("old checkpoint cleared")
+    );
+    assert!(server.requests.is_empty());
+    fixture.close().await;
+}
+
+#[tokio::test]
 async fn resuming_finalization_reuses_a_completed_modpack_stage() {
     let server = Server::new().await;
     let fixture = Fixture::new(&server.url).await;

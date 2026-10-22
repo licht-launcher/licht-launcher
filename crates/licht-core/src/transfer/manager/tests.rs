@@ -5,6 +5,7 @@ use super::*;
 mod modpack;
 mod persistence;
 mod pipeline;
+mod repair;
 mod support;
 use crate::{
     InstancePreparationState, create_pending_download_job, get_download_job, list_download_jobs,

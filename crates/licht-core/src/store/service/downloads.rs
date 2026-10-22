@@ -36,9 +36,31 @@ pub(super) enum Request {
     Cleanup(SharedCache, String, Reply<Vec<PathBuf>>),
     Checkpoint(SharedCache, String, String, DownloadCheckpoint, Reply<bool>),
     RecordCheckpoint(SharedCache, String, String, DownloadCheckpoint, Reply<()>),
+    RestartRepair(
+        SharedCache,
+        String,
+        Option<String>,
+        Reply<DownloadJobSnapshot>,
+    ),
 }
 
 impl DatabaseClient {
+    pub(crate) async fn restart_download_as_repair(
+        &self,
+        game: &SharedCache,
+        id: &str,
+        version: Option<&str>,
+    ) -> Result<DownloadJobSnapshot> {
+        self.download_request(|reply| {
+            Request::RestartRepair(
+                game.clone(),
+                id.to_string(),
+                version.map(str::to_string),
+                reply,
+            )
+        })
+        .await
+    }
     pub(crate) async fn has_download_checkpoint(
         &self,
         game: &SharedCache,
@@ -175,6 +197,11 @@ impl DatabaseClient {
 
 pub(super) async fn execute(connection: &mut SqliteConnection, request: Request) {
     match request {
+        Request::RestartRepair(game, id, version, reply) => respond(
+            reply,
+            DownloadJobRepository::restart_as_repair(connection, &game, &id, version.as_deref())
+                .await,
+        ),
         Request::Checkpoint(game, id, version, stage, reply) => respond(
             reply,
             DownloadCheckpointRepository::contains(connection, &game, &id, &version, stage).await,
