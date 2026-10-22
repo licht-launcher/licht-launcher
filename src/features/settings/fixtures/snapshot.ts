@@ -16,6 +16,7 @@ export const snapshot = {
     writeConcurrency: 8,
     dataDirectory: null,
     disableCustomTitleBar: false,
+    disableTransparency: false,
     checkForUpdates: true,
     installUpdatesOnRestart: true,
   },

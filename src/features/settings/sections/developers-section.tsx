@@ -8,6 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import {
   DEV_CLEAR_SIMULATED_UPDATE_EVENT,
@@ -16,7 +17,45 @@ import {
 import { openStartupPreview, restartStartupPreview } from "@/lib/commands";
 import type { StartupPreviewScenario } from "@/lib/generated/StartupPreviewScenario";
 
+const ACRYLIC_PREVIEW_STYLE_ID = "developer-acrylic-preview";
+const acrylicControls = [
+  { key: "opacity", label: "Sidebar opacity", max: 100, unit: "%" },
+  { key: "lightness", label: "Sidebar lightness", max: 100, unit: "%" },
+  { key: "hue", label: "Sidebar hue", max: 360, unit: "" },
+] as const;
+
+type AcrylicPreview = Record<(typeof acrylicControls)[number]["key"], number>;
+
+function readAcrylicPreview(): AcrylicPreview {
+  const tokens = getComputedStyle(document.documentElement);
+  const read = (key: keyof AcrylicPreview, fallback: number) => {
+    const value = Number.parseFloat(
+      tokens.getPropertyValue(`--acrylic-${key}`),
+    );
+    return Number.isFinite(value) ? value : fallback;
+  };
+  return {
+    opacity: read("opacity", 60),
+    lightness: read("lightness", 15),
+    hue: read("hue", 260),
+  };
+}
+
+function applyAcrylicPreview(preview: AcrylicPreview) {
+  let stylesheet = document.getElementById(ACRYLIC_PREVIEW_STYLE_ID);
+  if (!stylesheet) {
+    stylesheet = document.createElement("style");
+    stylesheet.id = ACRYLIC_PREVIEW_STYLE_ID;
+    document.head.append(stylesheet);
+  }
+  // A separate stylesheet keeps the preview alive when this section unmounts.
+  stylesheet.textContent = `:root { ${acrylicControls
+    .map(({ key, unit }) => `--acrylic-${key}: ${preview[key]}${unit};`)
+    .join(" ")} }`;
+}
+
 export function DevelopersSection() {
+  const [acrylic, setAcrylic] = useState(readAcrylicPreview);
   const [simulateUpdate, setSimulateUpdate] = useState(false);
   const [scenario, setScenario] = useState<StartupPreviewScenario>("noUpdate");
   const scenarios: { value: StartupPreviewScenario; label: string }[] = [
@@ -62,6 +101,53 @@ export function DevelopersSection() {
             );
           }}
         />
+      </div>
+      <div className="mt-6 flex flex-col gap-4 border-t border-border/60 pt-4">
+        <h3 className="text-sm font-medium">Sidebar Acrylic preview</h3>
+        <p id="acrylic-preview-hint" className="text-sm text-muted-foreground">
+          Adjust the overlay on Windows with transparency enabled. Changes apply
+          immediately and last until the launcher closes. This does not change
+          the native blur strength.
+        </p>
+        {acrylicControls.map(({ key, label, max, unit }) => (
+          <div key={key} className="flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <span id={`acrylic-${key}-label`}>{label}</span>
+              <span className="text-muted-foreground">
+                {acrylic[key]}
+                {unit || "°"}
+              </span>
+            </div>
+            <Slider
+              aria-labelledby={`acrylic-${key}-label`}
+              aria-describedby="acrylic-preview-hint"
+              aria-valuetext={`${acrylic[key]}${unit || "°"}`}
+              min={0}
+              max={max}
+              step={1}
+              value={[acrylic[key]]}
+              onValueChange={([value]) => {
+                if (value === undefined || !Number.isFinite(value)) return;
+                const next = {
+                  ...acrylic,
+                  [key]: Math.min(max, Math.max(0, value)),
+                };
+                setAcrylic(next);
+                applyAcrylicPreview(next);
+              }}
+            />
+          </div>
+        ))}
+        <Button
+          variant="outline"
+          className="self-start"
+          onClick={() => {
+            document.getElementById(ACRYLIC_PREVIEW_STYLE_ID)?.remove();
+            setAcrylic(readAcrylicPreview());
+          }}
+        >
+          Reset Acrylic preview
+        </Button>
       </div>
       <div className="mt-6 flex flex-col gap-3 border-t border-border/60 pt-4">
         <h3 className="text-sm font-medium">Startup window tests</h3>

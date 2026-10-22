@@ -40,12 +40,18 @@ export function useSettingsDraft(open: boolean) {
   const schemaRef = useRef(1);
   const persistRef = useRef<(current: Draft) => void>(() => {});
   const appliedDisableCustomTitleBar = useRef<boolean | null>(null);
+  const appliedDisableTransparency = useRef<boolean | null>(null);
 
   const save = useMutation({
     mutationFn: saveSettings,
     onSuccess: async (saved: Settings) => {
       await queryClient.invalidateQueries({ queryKey: ["settings"] });
       if (
+        appliedDisableTransparency.current !== null &&
+        saved.disableTransparency !== appliedDisableTransparency.current
+      ) {
+        promptTitleBarRestart("Apply the appearance changes now?");
+      } else if (
         appliedDisableCustomTitleBar.current !== null &&
         saved.disableCustomTitleBar !== appliedDisableCustomTitleBar.current
       ) {
@@ -74,6 +80,8 @@ export function useSettingsDraft(open: boolean) {
       schemaRef.current = settings.data.settings.schema;
       appliedDisableCustomTitleBar.current =
         settings.data.settings.disableCustomTitleBar;
+      appliedDisableTransparency.current =
+        settings.data.settings.disableTransparency;
       const next = fromSnapshot(settings.data, runtime.data ?? null);
       draftRef.current = next;
       setDraft(next);
@@ -102,9 +110,12 @@ export function useSettingsDraft(open: boolean) {
     setDraft(next);
 
     if (
-      patch.disableCustomTitleBar !== undefined &&
+      (patch.disableCustomTitleBar !== undefined ||
+        patch.disableTransparency !== undefined) &&
       appliedDisableCustomTitleBar.current !== null &&
-      patch.disableCustomTitleBar === appliedDisableCustomTitleBar.current
+      appliedDisableTransparency.current !== null &&
+      next.disableCustomTitleBar === appliedDisableCustomTitleBar.current &&
+      next.disableTransparency === appliedDisableTransparency.current
     ) {
       dismissTitleBarRestartToast();
     }

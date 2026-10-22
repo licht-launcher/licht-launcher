@@ -38,6 +38,36 @@ export function AppearanceSection({
 
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">
+          <label htmlFor="disable-transparency" className="text-sm font-medium">
+            Disable transparency
+          </label>
+          <div
+            id="disable-transparency-hint"
+            className="flex flex-col gap-1 text-sm"
+          >
+            <p className="text-muted-foreground">
+              Use an opaque sidebar instead of Acrylic on Windows. Linux always
+              uses an opaque sidebar.
+            </p>
+            <p className="text-destructive">
+              This change applies after restart.
+            </p>
+          </div>
+        </div>
+        <Switch
+          id="disable-transparency"
+          className="shrink-0"
+          aria-label="Disable transparency"
+          aria-describedby="disable-transparency-hint"
+          checked={draft.disableTransparency}
+          onCheckedChange={(disableTransparency) =>
+            onChange({ disableTransparency })
+          }
+        />
+      </div>
+
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-col gap-1">
           <label
             htmlFor="disable-custom-title-bar"
             className="text-sm font-medium"

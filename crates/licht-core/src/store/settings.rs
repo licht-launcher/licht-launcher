@@ -38,6 +38,8 @@ pub struct Settings {
     pub write_concurrency: u32,
     pub data_directory: Option<String>,
     pub disable_custom_title_bar: bool,
+    #[serde(default)]
+    pub disable_transparency: bool,
     pub check_for_updates: bool,
     pub install_updates_on_restart: bool,
 }
@@ -100,6 +102,8 @@ struct StoredSettings {
     data_directory: Option<String>,
     #[serde(default)]
     disable_custom_title_bar: bool,
+    #[serde(default)]
+    disable_transparency: bool,
     #[serde(default = "default_true")]
     check_for_updates: bool,
     #[serde(default = "default_true")]
@@ -257,6 +261,7 @@ pub(super) fn validated(cache: &SharedCache, settings: Settings) -> Result<Setti
         write_concurrency: settings.write_concurrency,
         data_directory: normalize_directory(cache, settings.data_directory.as_deref())?,
         disable_custom_title_bar: settings.disable_custom_title_bar,
+        disable_transparency: settings.disable_transparency,
         check_for_updates: settings.check_for_updates,
         install_updates_on_restart: settings.install_updates_on_restart,
     })
@@ -291,6 +296,7 @@ fn from_stored(cache: &SharedCache, stored: StoredSettings) -> Result<Settings> 
             write_concurrency: stored.write_concurrency,
             data_directory: stored.data_directory,
             disable_custom_title_bar: stored.disable_custom_title_bar,
+            disable_transparency: stored.disable_transparency,
             check_for_updates: stored.check_for_updates,
             install_updates_on_restart: stored.install_updates_on_restart,
         },
@@ -325,6 +331,7 @@ pub fn load_settings(cache: &SharedCache) -> Result<Settings> {
                 write_concurrency: default_concurrency_value(),
                 data_directory: None,
                 disable_custom_title_bar: false,
+                disable_transparency: false,
                 check_for_updates: true,
                 install_updates_on_restart: true,
             },

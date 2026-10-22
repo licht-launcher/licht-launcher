@@ -445,6 +445,7 @@ describe("launcher commands", () => {
       downloadConcurrency: 4,
       writeConcurrency: 8,
       disableCustomTitleBar: false,
+      disableTransparency: false,
       dataDirectory: null,
       checkForUpdates: true,
       installUpdatesOnRestart: true,

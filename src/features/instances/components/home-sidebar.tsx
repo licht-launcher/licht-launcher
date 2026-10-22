@@ -44,11 +44,11 @@ const sidebarOrbWrapClassName =
   "inline-flex transition-transform duration-200 ease-out hover:-translate-y-2";
 
 const sidebarOrbBaseClassName =
-  "size-10 rounded-full shadow-[0_4px_12px_0_rgb(0_0_0/0.28)] [&_svg:not([class*='size-'])]:size-5";
+  "size-10 rounded-full border-foreground/10 bg-secondary/35 hover:border-foreground/20 hover:bg-secondary/50 [&_svg:not([class*='size-'])]:size-5";
 
 const sidebarOrbClassName = cn(
   sidebarOrbBaseClassName,
-  "transition-shadow duration-200 ease-out hover:shadow-[0_6px_16px_0_rgb(0_0_0/0.38)] disabled:pointer-events-auto disabled:shadow-[0_4px_12px_0_rgb(0_0_0/0.28)]",
+  "disabled:pointer-events-auto",
 );
 
 function SortLabel({
@@ -142,7 +142,7 @@ export function HomeSidebar({
   const ordered = sortInstances(instances, sort);
 
   return (
-    <div className="flex h-full w-full min-w-0 flex-col overflow-hidden bg-black/20">
+    <div className="relative flex h-full w-full min-w-0 flex-col overflow-hidden bg-home-sidebar after:pointer-events-none after:absolute after:inset-y-0 after:right-0 after:w-px after:bg-foreground/10">
       <div className="flex h-9 shrink-0 items-center justify-between gap-2 px-2">
         <div
           data-tauri-drag-region
@@ -225,6 +225,8 @@ export function HomeSidebar({
                             variant={selected ? "secondary" : "ghost"}
                             className={cn(
                               "grid w-full min-w-0 max-w-full grid-cols-[auto_minmax(0,1fr)_auto] gap-2 overflow-hidden px-1 text-[0.8rem]",
+                              selected &&
+                                "border-foreground/10 bg-secondary/35 hover:border-foreground/20 hover:bg-secondary/50",
                               !selected && "text-muted-foreground/70",
                             )}
                             aria-current={selected ? "page" : undefined}

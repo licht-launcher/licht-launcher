@@ -78,7 +78,8 @@ async fn initialize(
         client,
         database_client.clone(),
     ));
-    let custom_title_bar = !licht_core::load_settings(&paths.settings)?.disable_custom_title_bar;
+    let settings = licht_core::load_settings(&paths.settings)?;
+    let custom_title_bar = !settings.disable_custom_title_bar;
     app.manage(database_client);
     app.manage(paths);
     app.manage(Arc::clone(&downloads));
@@ -90,7 +91,7 @@ async fn initialize(
     if session.is_stopped() {
         anyhow::bail!("startup closed");
     }
-    crate::create_main_window(app, custom_title_bar)?;
+    crate::create_main_window(app, custom_title_bar, !settings.disable_transparency)?;
     session.update(app, |state| state.phase = StartupPhase::Ready)?;
     if let Some(window) = app.get_webview_window("startup") {
         window.close()?;

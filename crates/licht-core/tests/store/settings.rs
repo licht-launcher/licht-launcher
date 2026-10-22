@@ -34,6 +34,7 @@ fn sample(download_concurrency: u32) -> Settings {
         write_concurrency: 8,
         data_directory: None,
         disable_custom_title_bar: false,
+        disable_transparency: false,
         check_for_updates: true,
         install_updates_on_restart: true,
     }
@@ -58,6 +59,7 @@ fn a_missing_file_returns_defaults_and_is_not_created() {
     assert_eq!(settings.schema, 1);
     assert_eq!(settings.theme, "dark");
     assert!(!settings.fullscreen);
+    assert!(!settings.disable_transparency);
     assert_eq!(settings.width, Some(854));
     assert_eq!(settings.height, Some(480));
     assert_eq!(settings.download_concurrency, 8);
@@ -122,6 +124,30 @@ fn an_explicit_null_window_stays_empty() {
 
     assert!(loaded.width.is_none());
     assert!(loaded.height.is_none());
+}
+
+#[test]
+fn transparency_defaults_to_enabled_for_existing_settings() {
+    let cache = cache("transparency-old");
+    std::fs::create_dir_all(cache.root()).expect("root");
+    std::fs::write(settings_file(&cache), r#"{"schema":1}"#).expect("write");
+    let loaded = load_settings(&cache).expect("load");
+    let json = serde_json::to_value(loaded).expect("serialize");
+    assert_eq!(json["disableTransparency"], false);
+}
+
+#[test]
+fn transparency_preference_survives_save_and_reload() {
+    let cache = cache("transparency-roundtrip");
+    for disabled in [true, false] {
+        let mut json = serde_json::to_value(sample(8)).expect("serialize");
+        json["disableTransparency"] = disabled.into();
+        let settings = serde_json::from_value(json).expect("deserialize");
+        save_settings(&cache, &settings).expect("save");
+        let loaded = load_settings(&cache).expect("reload");
+        let json = serde_json::to_value(loaded).expect("serialize");
+        assert_eq!(json["disableTransparency"], disabled);
+    }
 }
 
 #[test]
