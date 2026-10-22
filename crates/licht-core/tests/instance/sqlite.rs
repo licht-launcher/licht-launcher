@@ -258,7 +258,7 @@ async fn version_six_gains_an_empty_instances_table_and_preserves_existing_data(
     let root = scratch("sqlite-schema-six");
     let cache = SharedCache::at(&root);
     let mut connection = open_db(&cache).await.expect("database");
-    sqlx::raw_sql("DROP TABLE download_job_checkpoints; DROP TABLE instances; INSERT INTO meta VALUES ('fixture', 'preserved'); PRAGMA user_version = 6;")
+    sqlx::raw_sql("DROP TABLE native_outputs; DROP TABLE native_generations; DROP TABLE download_job_checkpoints; DROP TABLE instances; INSERT INTO meta VALUES ('fixture', 'preserved'); PRAGMA user_version = 6;")
         .execute(&mut connection).await.expect("version six fixture");
     connection.close().await.expect("close");
     let old = root.join("instances").join("Legacy");
@@ -276,7 +276,7 @@ async fn version_six_gains_an_empty_instances_table_and_preserves_existing_data(
         .fetch_one(&mut connection)
         .await
         .expect("schema");
-    assert_eq!(version, 8);
+    assert_eq!(version, 9);
     let value: String = sqlx::query_scalar("SELECT value FROM meta WHERE key = 'fixture'")
         .fetch_one(&mut connection)
         .await

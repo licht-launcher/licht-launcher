@@ -106,6 +106,12 @@ pub(crate) fn execute(
                 context.clone(),
             )
             .await?;
+            if job.operation == DownloadJobOperation::Repair {
+                runtime
+                    .database
+                    .invalidate_native_generations(&runtime.game, version)
+                    .await?;
+            }
             context.checkpoint().await?;
             runtime
                 .database

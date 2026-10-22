@@ -97,19 +97,24 @@ async fn launch_one(
     let launch = resolved_launch(&profile, &global_launch(&settings));
     let http = http_client()?;
     let prepared = match session_for_launch(&http, settings_home).await {
-        Ok(session) => prepare_microsoft_launch(
-            &java,
-            &cache,
-            &version_id,
-            &version,
-            &environment,
-            &session,
-            &dir,
-            &launch,
-        )?,
+        Ok(session) => {
+            prepare_microsoft_launch(
+                database,
+                &java,
+                &cache,
+                &version_id,
+                &version,
+                &environment,
+                &session,
+                &dir,
+                &launch,
+            )
+            .await?
+        }
         Err(CoreError::AuthNotSignedIn) => {
             let account = offline_account(username)?;
             prepare_offline_launch(
+                database,
                 &java,
                 &cache,
                 &version_id,
@@ -118,7 +123,8 @@ async fn launch_one(
                 &account,
                 &dir,
                 &launch,
-            )?
+            )
+            .await?
         }
         Err(error) => return Err(error),
     };
