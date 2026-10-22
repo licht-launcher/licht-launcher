@@ -184,41 +184,48 @@ async fn launch(args: &[String]) -> licht_core::Result<i32> {
             return Err(error);
         }
     };
-    database.shutdown().await?;
-    let profile_java = profile.as_ref().and_then(resolved_java_path);
-    let custom_java = args.java.is_some() || profile_java.is_some();
-    let java = match args.java {
-        Some(path) => path,
-        None => match profile_java {
+    let launch_result: licht_core::Result<_> = async {
+        let profile_java = profile.as_ref().and_then(resolved_java_path);
+        let custom_java = args.java.is_some() || profile_java.is_some();
+        let java = match args.java {
             Some(path) => path,
-            None => match configured_java(&settings, required) {
+            None => match profile_java {
                 Some(path) => path,
-                None => installed_java(&cache, &args.version_id, &version, &environment)?,
+                None => match configured_java(&settings, required) {
+                    Some(path) => path,
+                    None => installed_java(&cache, &args.version_id, &version, &environment)?,
+                },
             },
-        },
-    };
-    let major = if custom_java {
-        probe_java_major(&java)?
-    } else {
-        required
-    };
-    let codec = log_codec(major);
-    let account = offline_account(&args.username)?;
-    let global = global_launch(&settings);
-    let launch_options = profile
-        .as_ref()
-        .map(|profile| resolved_launch(profile, &global))
-        .unwrap_or(global);
-    let launch = prepare_offline_launch(
-        &java,
-        &cache,
-        &args.version_id,
-        &version,
-        &environment,
-        &account,
-        &instance,
-        &launch_options,
-    )?;
+        };
+        let major = if custom_java {
+            probe_java_major(&java)?
+        } else {
+            required
+        };
+        let codec = log_codec(major);
+        let account = offline_account(&args.username)?;
+        let global = global_launch(&settings);
+        let launch_options = profile
+            .as_ref()
+            .map(|profile| resolved_launch(profile, &global))
+            .unwrap_or(global);
+        let launch = prepare_offline_launch(
+            &database.client(),
+            &java,
+            &cache,
+            &args.version_id,
+            &version,
+            &environment,
+            &account,
+            &instance,
+            &launch_options,
+        )
+        .await?;
+        Ok((launch, codec))
+    }
+    .await;
+    database.shutdown().await?;
+    let (launch, codec) = launch_result?;
 
     let (output, mut incoming) = mpsc::channel(32);
     let appdata = launch.appdata.map(|path| path.display().to_string());

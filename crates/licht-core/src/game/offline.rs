@@ -6,8 +6,7 @@ use md5::Digest;
 use crate::settings::GlobalLaunch;
 use crate::{
     CoreError, LaunchEnvironment, Result, SharedCache, Version, apply_global_launch,
-    create_natives_directory, extract_natives, launch_command, parse_asset_index,
-    reconstruct_assets,
+    launch_command, parse_asset_index, reconstruct_assets,
 };
 
 #[derive(Debug)]
@@ -110,11 +109,12 @@ fn uses_launchwrapper(version: &Version) -> bool {
             .any(|library| library.name.starts_with("net.minecraft:launchwrapper:"))
 }
 
-/// Extracts natives, then builds the command for an offline account.
+/// Prepares cached natives, then builds the command for an offline account.
 /// Does not start the process and does not print the command.
 /// `global` is applied to every launch, ahead of the main class.
 #[allow(clippy::too_many_arguments)]
-pub fn prepare_offline_launch(
+pub async fn prepare_offline_launch(
+    database: &crate::DatabaseClient,
     java: &Path,
     cache: &SharedCache,
     version_id: &str,
@@ -124,8 +124,8 @@ pub fn prepare_offline_launch(
     game_directory: &Path,
     global: &GlobalLaunch,
 ) -> Result<OfflineLaunch> {
-    let natives_directory = create_natives_directory(cache, version_id)?;
-    extract_natives(cache, version, environment, &natives_directory)?;
+    let natives_directory =
+        super::natives::cache::prepare(database, cache, version_id, version, environment).await?;
 
     // LaunchWrapper reads `%APPDATA%/.minecraft` or `user.home/.minecraft` before
     // it applies `--gameDir`. The folder name makes both paths the same place.

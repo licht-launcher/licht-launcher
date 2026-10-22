@@ -302,6 +302,68 @@ async fn a_new_repair_does_not_inherit_a_completed_jobs_checkpoints() {
 }
 
 #[tokio::test]
+async fn repair_invalidates_native_cache_references_without_removing_existing_binaries() {
+    let server = Server::new().await;
+    let fixture = Fixture::new(&server.url).await;
+    let manager = prepare_cache(&fixture, &server);
+    std::fs::write(fixture.game.version_jar(VERSION).expect("jar"), BODY).expect("client");
+    let instance = pending(&fixture).await;
+    assert_eq!(
+        finish(manager.prepare(&instance.folder, DownloadJobOperation::Install))
+            .await
+            .expect("install")
+            .status,
+        DownloadJobStatus::Completed
+    );
+    let generation = "a".repeat(32);
+    let fingerprint = "b".repeat(64);
+    let directory = fixture
+        .game
+        .natives_dir(VERSION)
+        .expect("natives")
+        .join("linux-x86_64")
+        .join(&generation);
+    std::fs::create_dir_all(&directory).expect("generation");
+    std::fs::write(directory.join("libnative.so"), b"in-use native").expect("existing binary");
+    fixture
+        .database()
+        .store_native_generation(
+            &fixture.game,
+            VERSION,
+            &fingerprint,
+            crate::store::repositories::natives::NativeGeneration {
+                generation,
+                files: Vec::new(),
+            },
+        )
+        .await
+        .expect("native reference");
+    let repaired = finish(manager.prepare(&instance.folder, DownloadJobOperation::Repair))
+        .await
+        .expect("repair");
+    assert_eq!(
+        repaired.status,
+        DownloadJobStatus::Completed,
+        "{:?}",
+        repaired.error
+    );
+    assert!(
+        fixture
+            .database()
+            .native_generation(&fixture.game, VERSION, &fingerprint)
+            .await
+            .expect("native cache")
+            .is_none()
+    );
+    assert_eq!(
+        std::fs::read(directory.join("libnative.so")).expect("old binary preserved"),
+        b"in-use native"
+    );
+    assert!(server.requests.is_empty());
+    fixture.close().await;
+}
+
+#[tokio::test]
 async fn explicit_repair_rechecks_game_setup_after_a_pack_failure() {
     let server = Server::new().await;
     let fixture = Fixture::new(&server.url).await;
