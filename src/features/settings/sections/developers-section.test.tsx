@@ -40,7 +40,7 @@ describe("DevelopersSection", () => {
   it("previews opacity, lightness and hue with keyboard controls", () => {
     view();
     for (const [label, token, initial, unit] of [
-      ["Sidebar opacity", "opacity", 45, "%"],
+      ["Sidebar opacity", "opacity", 60, "%"],
       ["Sidebar lightness", "lightness", 15, "%"],
       ["Sidebar hue", "hue", 260, ""],
     ] as const) {
@@ -54,7 +54,7 @@ describe("DevelopersSection", () => {
           .trim(),
       ).toBe(`${initial + 1}${unit}`);
     }
-    expect(screen.getByText("46%")).toBeVisible();
+    expect(screen.getByText("61%")).toBeVisible();
     expect(screen.getByText("16%")).toBeVisible();
     expect(screen.getByText("261°")).toBeVisible();
   });
@@ -88,7 +88,7 @@ describe("DevelopersSection", () => {
     );
     expect(
       screen.getByRole("slider", { name: "Sidebar opacity" }),
-    ).toHaveAttribute("aria-valuenow", "45");
+    ).toHaveAttribute("aria-valuenow", "60");
     expect(
       screen.getByRole("slider", { name: "Sidebar lightness" }),
     ).toHaveAttribute("aria-valuenow", "15");

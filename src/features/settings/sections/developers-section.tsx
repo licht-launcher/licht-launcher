@@ -35,7 +35,7 @@ function readAcrylicPreview(): AcrylicPreview {
     return Number.isFinite(value) ? value : fallback;
   };
   return {
-    opacity: read("opacity", 45),
+    opacity: read("opacity", 60),
     lightness: read("lightness", 15),
     hue: read("hue", 260),
   };

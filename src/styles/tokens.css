@@ -69,7 +69,7 @@
   --window-background: #111214;
   --launcher-chrome: var(--popover);
   --home-sidebar: color-mix(in srgb, black 20%, var(--popover));
-  --acrylic-opacity: 45%;
+  --acrylic-opacity: 60%;
   --acrylic-lightness: 15%;
   --acrylic-hue: 260;
   /* Three native caption buttons × 46 logical px (tauri-plugin-window-controls). */
