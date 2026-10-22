@@ -8,6 +8,14 @@ use support::*;
 
 const BODY: &[u8] = b"hello world";
 const SHA1: &str = "2aae6c35c94fcfb415dbe95f408b9ce91ee846ed";
+const SHA512: &str = "309ecc489c12d6eb4cc40f50c902f2b4d0ed77ee511a7c7a9bcd3ca86d4cd86f989dd35bc5ff499670da34255b45b0cfd830e81f605dcf7dc5542e93ae9cd76f";
+
+fn dual_checksum() -> DownloadChecksum {
+    DownloadChecksum::Sha1AndSha512 {
+        sha1: SHA1.into(),
+        sha512: SHA512.into(),
+    }
+}
 
 #[tokio::test]
 async fn every_published_checksum_can_resume_and_report_a_previously_unknown_size() {
@@ -16,6 +24,7 @@ async fn every_published_checksum_can_resume_and_report_a_previously_unknown_siz
         DownloadChecksum::Sha256("b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9".into()),
         DownloadChecksum::Sha512("309ecc489c12d6eb4cc40f50c902f2b4d0ed77ee511a7c7a9bcd3ca86d4cd86f989dd35bc5ff499670da34255b45b0cfd830e81f605dcf7dc5542e93ae9cd76f".into()),
         DownloadChecksum::Md5("5eb63bbbe01eeed093cb22bb8f5acdc3".into()),
+        DownloadChecksum::Sha1AndSha512 { sha1: SHA1.to_uppercase(), sha512: SHA512.to_uppercase() },
     ].into_iter().enumerate() {
         let mut server = Server::start().await;
         let destination = Destination::new(&format!("checksum-{index}"));
@@ -42,6 +51,18 @@ async fn checksum_failures_keep_their_algorithm_and_never_publish_the_file() {
         DownloadChecksum::Sha256("0".repeat(64)),
         DownloadChecksum::Sha512("0".repeat(128)),
         DownloadChecksum::Md5("0".repeat(32)),
+        DownloadChecksum::Sha1AndSha512 {
+            sha1: "0".repeat(40),
+            sha512: SHA512.into(),
+        },
+        DownloadChecksum::Sha1AndSha512 {
+            sha1: SHA1.into(),
+            sha512: "0".repeat(128),
+        },
+        DownloadChecksum::Sha1AndSha512 {
+            sha1: "0".repeat(40),
+            sha512: "0".repeat(128),
+        },
     ]
     .into_iter()
     .enumerate()
@@ -71,6 +92,10 @@ async fn checksum_failures_keep_their_algorithm_and_never_publish_the_file() {
             DownloadChecksum::Sha256(_) => matches!(error, CoreError::Sha256Mismatch { .. }),
             DownloadChecksum::Sha512(_) => matches!(error, CoreError::Sha512Mismatch { .. }),
             DownloadChecksum::Md5(_) => matches!(error, CoreError::Md5Mismatch { .. }),
+            DownloadChecksum::Sha1AndSha512 { sha1, .. } if sha1 != SHA1 =>
+                matches!(error, CoreError::Sha1Mismatch { .. }),
+            DownloadChecksum::Sha1AndSha512 { .. } =>
+                matches!(error, CoreError::Sha512Mismatch { .. }),
             _ => false,
         });
         assert!(!destination.path.exists());
@@ -242,6 +267,245 @@ async fn a_complete_verified_partial_is_published_without_another_request() {
     assert!(server.incoming.is_empty());
     assert_eq!(std::fs::read(&destination.path).expect("file"), BODY);
     assert!(!destination.part().exists());
+}
+
+#[tokio::test]
+async fn dual_checksums_accept_cached_and_complete_partial_files_without_requests() {
+    for cached in [false, true] {
+        let server = Server::start().await;
+        let destination = Destination::new(&format!("dual-complete-{cached}"));
+        std::fs::write(
+            if cached {
+                destination.path.clone()
+            } else {
+                destination.part()
+            },
+            BODY,
+        )
+        .expect("cached bytes");
+        let task = VerifiedDownloadTask {
+            url: server.url.clone(),
+            destination: destination.path.clone(),
+            checksum: dual_checksum(),
+            size: 11,
+        };
+        let (sender, mut incoming) = mpsc::channel(64);
+        download_verified_all(
+            &reqwest::Client::new(),
+            &[task],
+            &options(),
+            &DownloadControl::new(),
+            sender,
+        )
+        .await
+        .expect("both hashes match");
+        assert!(server.incoming.is_empty());
+        assert_eq!(std::fs::read(&destination.path).expect("file"), BODY);
+        assert!(!destination.part().exists());
+        let progress = last_progress(&mut incoming).await;
+        assert_eq!(
+            (progress.finished, progress.bytes_done, progress.bytes_total),
+            (1, 11, 11)
+        );
+    }
+}
+
+#[tokio::test]
+async fn dual_checksums_do_not_accept_cached_or_partial_content_matching_only_sha1() {
+    for cached in [false, true] {
+        let mut server = Server::start().await;
+        let destination = Destination::new(&format!("dual-cached-mismatch-{cached}"));
+        std::fs::write(
+            if cached {
+                destination.path.clone()
+            } else {
+                destination.part()
+            },
+            BODY,
+        )
+        .expect("existing file");
+        let task = VerifiedDownloadTask {
+            url: server.url.clone(),
+            destination: destination.path.clone(),
+            checksum: DownloadChecksum::Sha1AndSha512 {
+                sha1: SHA1.into(),
+                sha512: "0".repeat(128),
+            },
+            size: 11,
+        };
+        let (sender, mut incoming) = mpsc::channel(64);
+        let running = tokio::spawn(async move {
+            download_verified_all(
+                &reqwest::Client::new(),
+                &[task],
+                &options(),
+                &DownloadControl::new(),
+                sender,
+            )
+            .await
+        });
+        let mut request = server.request().await;
+        if !cached {
+            assert_range(&request, 11);
+            request.respond(Reply::new(416, "", b"", 0));
+            request = server.request().await;
+            assert!(!request.headers.to_ascii_lowercase().contains("range:"));
+        }
+        request.respond(Reply::full());
+        assert!(matches!(
+            finish(running).await,
+            Err(CoreError::Sha512Mismatch { .. })
+        ));
+        assert!(!destination.part().exists());
+        if !cached {
+            assert!(!destination.path.exists());
+        }
+        let progress = last_progress(&mut incoming).await;
+        assert_eq!((progress.finished, progress.failed), (0, 1));
+    }
+}
+
+#[tokio::test]
+async fn dual_checksums_reject_invalid_metadata_before_requesting_content() {
+    for (index, checksum) in [
+        DownloadChecksum::Sha1AndSha512 {
+            sha1: String::new(),
+            sha512: SHA512.into(),
+        },
+        DownloadChecksum::Sha1AndSha512 {
+            sha1: "z".repeat(40),
+            sha512: SHA512.into(),
+        },
+        DownloadChecksum::Sha1AndSha512 {
+            sha1: SHA1.into(),
+            sha512: String::new(),
+        },
+        DownloadChecksum::Sha1AndSha512 {
+            sha1: SHA1.into(),
+            sha512: "z".repeat(128),
+        },
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let server = Server::start().await;
+        let destination = Destination::new(&format!("dual-invalid-{index}"));
+        let task = VerifiedDownloadTask {
+            url: server.url.clone(),
+            destination: destination.path.clone(),
+            checksum,
+            size: 11,
+        };
+        let (sender, _) = mpsc::channel(64);
+        assert!(matches!(
+            download_verified_all(
+                &reqwest::Client::new(),
+                &[task],
+                &options(),
+                &DownloadControl::new(),
+                sender
+            )
+            .await,
+            Err(CoreError::DownloadResponse {
+                detail: "invalid published checksum"
+            })
+        ));
+        assert!(server.incoming.is_empty());
+        assert!(!destination.path.exists());
+        assert!(!destination.part().exists());
+    }
+}
+
+#[tokio::test]
+async fn dual_checksum_state_is_reset_when_a_range_request_restarts_from_zero() {
+    for unsatisfiable in [false, true] {
+        let mut server = Server::start().await;
+        let destination = Destination::new(&format!("dual-restart-{unsatisfiable}"));
+        std::fs::write(destination.part(), b"hello").expect("partial");
+        let task = VerifiedDownloadTask {
+            url: server.url.clone(),
+            destination: destination.path.clone(),
+            checksum: dual_checksum(),
+            size: 11,
+        };
+        let (sender, _) = mpsc::channel(64);
+        let running = tokio::spawn(async move {
+            download_verified_all(
+                &reqwest::Client::new(),
+                &[task],
+                &options(),
+                &DownloadControl::new(),
+                sender,
+            )
+            .await
+        });
+        let mut request = server.request().await;
+        assert_range(&request, 5);
+        if unsatisfiable {
+            request.respond(Reply::new(416, "", b"", 0));
+            request = server.request().await;
+            assert!(!request.headers.to_ascii_lowercase().contains("range:"));
+        }
+        request.respond(Reply::full());
+        finish(running)
+            .await
+            .expect("fresh hash state for the full response");
+        assert_eq!(std::fs::read(&destination.path).expect("file"), BODY);
+    }
+}
+
+#[tokio::test]
+async fn dual_checksums_survive_pause_and_resume() {
+    let mut server = Server::start().await;
+    let destination = Destination::new("dual-pause");
+    let control = DownloadControl::new();
+    let worker_control = control.clone();
+    let options = options();
+    let worker_options = options.clone();
+    let task = VerifiedDownloadTask {
+        url: server.url.clone(),
+        destination: destination.path.clone(),
+        checksum: dual_checksum(),
+        size: 11,
+    };
+    let (sender, _) = mpsc::channel(64);
+    let running = tokio::spawn(async move {
+        download_verified_all(
+            &reqwest::Client::new(),
+            &[task],
+            &worker_options,
+            &worker_control,
+            sender,
+        )
+        .await
+    });
+    let mut reply = Reply::new(200, "", b"hello", 11);
+    let (tail, receiver) = oneshot::channel();
+    reply.tail = Some(receiver);
+    server.request().await.respond(reply);
+    destination.wait_for_partial(5).await;
+    control.pause();
+    let idle = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        options.limits.download.acquire(1),
+    )
+    .await
+    .expect("pause must release the network slot");
+    assert_eq!(control.state(), DownloadState::Paused);
+    assert_eq!(
+        std::fs::read(destination.part()).expect("partial"),
+        b"hello"
+    );
+    drop(idle);
+    control.resume();
+    let request = server.request().await;
+    assert_range(&request, 5);
+    request.respond(Reply::suffix());
+    finish(running)
+        .await
+        .expect("resumed content matches both hashes");
+    assert_eq!(std::fs::read(&destination.path).expect("file"), BODY);
+    drop(tail);
 }
 
 #[tokio::test]
