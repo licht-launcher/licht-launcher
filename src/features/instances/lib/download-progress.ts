@@ -1,3 +1,4 @@
+import type { DownloadPhase } from "@/lib/generated/DownloadPhase";
 import type { DownloadProgress } from "@/lib/generated/DownloadProgress";
 
 function ratio(done: number, total: number): number {
@@ -23,7 +24,15 @@ function megabytes(bytes: number): string {
   return oneDecimal(tenths / 10, tenths % 10);
 }
 
-export function progressText(progress: DownloadProgress): string {
+export function progressText(
+  progress: DownloadProgress,
+  phase?: DownloadPhase,
+): string {
+  if (progress.bytesTotal === 0 && progress.total > 0) {
+    const percentage = Math.floor(barValue(progress) * 10);
+    const files = `${progress.finished}/${progress.total} files`;
+    return `${oneDecimal(percentage / 10, percentage % 10)}% · ${files}${phase === "verifying" ? " checked" : ""}`;
+  }
   const tenths =
     progress.bytesTotal === 0
       ? 0

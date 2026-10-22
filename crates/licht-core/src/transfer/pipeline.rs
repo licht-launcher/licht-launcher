@@ -6,6 +6,7 @@ use crate::{
     install_game_version, install_mrpack_files, instance_entry, load_instance,
 };
 
+use super::jobs::model::DownloadCheckpoint;
 use super::manager::DownloadRuntime;
 
 pub(crate) fn execute(
@@ -90,16 +91,43 @@ pub(crate) fn execute(
             .as_deref()
             .ok_or(CoreError::InstancePreparing)?;
         context.resolved_version(version).await?;
-        install_game_version(
-            &runtime.client,
-            &runtime.game,
-            &runtime.settings,
-            version,
-            &runtime.environment,
-            context.clone(),
-        )
-        .await?;
-        if verify_modpack {
+        if !runtime
+            .database
+            .has_download_checkpoint(&runtime.game, &job.id, version, DownloadCheckpoint::Game)
+            .await?
+            || !runtime.game.version_json(version)?.is_file()
+        {
+            install_game_version(
+                &runtime.client,
+                &runtime.game,
+                &runtime.settings,
+                version,
+                &runtime.environment,
+                context.clone(),
+            )
+            .await?;
+            context.checkpoint().await?;
+            runtime
+                .database
+                .record_download_checkpoint(
+                    &runtime.game,
+                    &job.id,
+                    version,
+                    DownloadCheckpoint::Game,
+                )
+                .await?;
+        }
+        if verify_modpack
+            && !runtime
+                .database
+                .has_download_checkpoint(
+                    &runtime.game,
+                    &job.id,
+                    version,
+                    DownloadCheckpoint::Modpack,
+                )
+                .await?
+        {
             install_mrpack_files(
                 &runtime.database,
                 &runtime.game,
@@ -109,6 +137,16 @@ pub(crate) fn execute(
             )
             .await?;
             install_curseforge_files(&runtime.game, &runtime.settings, &dir, context.clone())
+                .await?;
+            context.checkpoint().await?;
+            runtime
+                .database
+                .record_download_checkpoint(
+                    &runtime.game,
+                    &job.id,
+                    version,
+                    DownloadCheckpoint::Modpack,
+                )
                 .await?;
         }
         context.checkpoint().await?;

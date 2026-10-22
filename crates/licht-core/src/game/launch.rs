@@ -70,7 +70,7 @@ pub fn launch_command(
     values: &BTreeMap<String, String>,
 ) -> Result<Vec<String>> {
     if crate::loaders::forge::request(cache, version_id)?.is_some()
-        && !crate::loaders::forge::installation_ready(cache, version_id)
+        && !crate::loaders::forge::installation_launchable(cache, version_id)
     {
         return Err(crate::CoreError::LoaderInstall {
             detail: "install or repair the loader before launching".to_string(),

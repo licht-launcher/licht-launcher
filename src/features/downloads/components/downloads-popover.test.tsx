@@ -86,6 +86,35 @@ describe("DownloadsPopover", () => {
     vi.mocked(toast.error).mockReset();
   });
 
+  it("shows file verification progress before download byte totals exist", async () => {
+    backend([
+      downloadJob({
+        phase: "verifying",
+        component: "modpack",
+        progress: {
+          finished: 3,
+          failed: 0,
+          total: 10,
+          bytesDone: 0,
+          bytesTotal: 0,
+        },
+      }),
+    ]);
+    renderDownloads();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Downloads: 30%" }),
+    );
+    const row = await screen.findByRole("region", {
+      name: "Download for My Survival",
+    });
+    expect(within(row).getByText("Verifying · Modpack files")).toBeVisible();
+    expect(within(row).getByText("30.0% · 3/10 files checked")).toBeVisible();
+    expect(within(row).getByRole("progressbar")).toHaveAttribute(
+      "aria-valuenow",
+      "30",
+    );
+  });
+
   it.each([
     ["modpackarchive", "downloading", "Downloading · Modpack archive"],
     ["modpack", "downloading", "Downloading · Modpack files"],

@@ -6,7 +6,7 @@ use tokio::sync::mpsc;
 
 use super::{
     ByteProgress, CancellationCleanup, DownloadOptions, DownloadProgress, DownloadTask, Retry,
-    TransferJob, TransferLimits, VerifiedDownloadTask, download_one,
+    SizePolicy, TransferJob, TransferLimits, VerifiedDownloadTask, download_one,
 };
 use crate::{CoreError, DownloadChecksum, DownloadControl, Result};
 
@@ -65,6 +65,7 @@ pub async fn download_verified_all(
         control,
         progress,
         CancellationCleanup::RemovePartial,
+        SizePolicy::Exact,
     )
     .await
 }
@@ -76,6 +77,7 @@ pub(crate) async fn download_verified_all_with_cleanup(
     control: &DownloadControl,
     progress: mpsc::Sender<DownloadProgress>,
     cancellation_cleanup: CancellationCleanup,
+    size_policy: SizePolicy,
 ) -> Result<()> {
     control.ready().await?;
 
@@ -112,6 +114,7 @@ pub(crate) async fn download_verified_all_with_cleanup(
             destination: &task.destination,
             checksum: task.checksum.clone(),
             published_size: task.size,
+            size_policy,
             limits: &options.limits,
             download_concurrency: options.download_concurrency,
             write_concurrency: options.write_concurrency,

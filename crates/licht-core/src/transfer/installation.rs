@@ -2,7 +2,7 @@ use std::future::Future;
 
 use tokio::sync::mpsc;
 
-use super::download::{CancellationCleanup, download_verified_all_with_cleanup};
+use super::download::{CancellationCleanup, SizePolicy, download_verified_all_with_cleanup};
 use crate::{
     CoreError, DatabaseClient, DownloadComponent, DownloadControl, DownloadOptions, DownloadPhase,
     DownloadProgress, DownloadTask, Result, SharedCache, VerifiedDownloadTask,
@@ -22,6 +22,7 @@ pub struct InstallationContext {
     legacy: Option<mpsc::Sender<DownloadProgress>>,
     events: Option<mpsc::Sender<InstallationEvent>>,
     job: Option<InstallationJob>,
+    size_policy: SizePolicy,
 }
 
 #[derive(Clone)]
@@ -40,6 +41,7 @@ impl Default for InstallationContext {
             legacy: None,
             events: None,
             job: None,
+            size_policy: SizePolicy::Exact,
         }
     }
 }
@@ -54,6 +56,13 @@ impl From<mpsc::Sender<DownloadProgress>> for InstallationContext {
 }
 
 impl InstallationContext {
+    pub(crate) fn with_size_hints(&self) -> Self {
+        Self {
+            size_policy: SizePolicy::Hint,
+            ..self.clone()
+        }
+    }
+
     pub(crate) fn options(&self) -> Result<DownloadOptions> {
         match &self.job {
             Some(job) => Ok(DownloadOptions {
@@ -199,6 +208,7 @@ impl InstallationContext {
             &self.control,
             progress,
             cleanup,
+            self.size_policy,
         );
         tokio::pin!(download);
         let mut observing = true;

@@ -6,6 +6,289 @@ use sha2::{Digest, Sha512};
 use super::*;
 use crate::DownloadComponent;
 
+fn estimated_download(
+    fixture: &Fixture,
+    url: &str,
+    size: u64,
+) -> (
+    tokio::task::JoinHandle<Result<()>>,
+    tokio::sync::mpsc::Receiver<crate::DownloadProgress>,
+) {
+    let task = crate::DownloadTask {
+        url: url.to_string(),
+        destination: fixture.game.root().join("payload.bin"),
+        sha1: SHA1.to_string(),
+        size,
+    };
+    let (sender, incoming) = tokio::sync::mpsc::channel(64);
+    let context = InstallationContext::from(sender).with_size_hints();
+    let running = tokio::spawn(async move {
+        context
+            .queue(
+                &reqwest::Client::new(),
+                &[task],
+                crate::DownloadOptions {
+                    retry: crate::Retry {
+                        attempts: 1,
+                        initial_backoff: Duration::from_millis(1),
+                    },
+                    ..crate::DownloadOptions::default()
+                },
+            )
+            .await
+    });
+    (running, incoming)
+}
+
+async fn final_estimated_progress(
+    mut incoming: tokio::sync::mpsc::Receiver<crate::DownloadProgress>,
+) -> crate::DownloadProgress {
+    let mut last = None;
+    while let Some(progress) = incoming.recv().await {
+        assert!(
+            progress.bytes_done <= progress.bytes_total,
+            "estimated progress must not exceed its total: {progress:?}"
+        );
+        last = Some(progress);
+    }
+    last.expect("progress")
+}
+
+#[tokio::test]
+async fn modpack_size_hints_accept_verified_files_and_correct_progress_in_both_directions() {
+    for size in [10, 12] {
+        let mut server = Server::new().await;
+        let fixture = Fixture::new(&server.url).await;
+        let (running, incoming) = estimated_download(&fixture, &server.url, size);
+        server.request().await.reply(200, "", BODY, BODY.len());
+        finish(async { running.await.expect("worker") })
+            .await
+            .expect("verified file despite stale size");
+        assert_eq!(
+            std::fs::read(fixture.game.root().join("payload.bin")).expect("file"),
+            BODY
+        );
+        let progress = final_estimated_progress(incoming).await;
+        assert_eq!(
+            (
+                progress.finished,
+                progress.failed,
+                progress.bytes_done,
+                progress.bytes_total
+            ),
+            (1, 0, 11, 11)
+        );
+        fixture.close().await;
+    }
+}
+
+#[tokio::test]
+async fn modpack_size_hints_preserve_and_resume_partials_larger_than_the_estimate() {
+    for size in [4, 12] {
+        let mut server = Server::new().await;
+        let fixture = Fixture::new(&server.url).await;
+        std::fs::create_dir_all(fixture.game.root()).expect("directory");
+        std::fs::write(fixture.part(), b"hello").expect("partial");
+        let (running, incoming) = estimated_download(&fixture, &server.url, size);
+        let request = server.request().await;
+        assert!(
+            request
+                .headers
+                .to_ascii_lowercase()
+                .contains("range: bytes=5-\r\n")
+        );
+        request.reply(206, "Content-Range: bytes 5-10/11\r\n", b" world", 6);
+        finish(async { running.await.expect("worker") })
+            .await
+            .expect("resumed file");
+        assert_eq!(
+            std::fs::read(fixture.game.root().join("payload.bin")).expect("file"),
+            BODY
+        );
+        let progress = final_estimated_progress(incoming).await;
+        assert_eq!((progress.bytes_done, progress.bytes_total), (11, 11));
+        assert!(!fixture.part().exists());
+        fixture.close().await;
+    }
+}
+
+#[tokio::test]
+async fn modpack_size_hints_still_reject_corrupt_content() {
+    let mut server = Server::new().await;
+    let fixture = Fixture::new(&server.url).await;
+    let (running, incoming) = estimated_download(&fixture, &server.url, 12);
+    server.request().await.reply(200, "", b"wrong bytes", 11);
+    let result = finish(async { running.await.expect("worker") }).await;
+    assert!(matches!(result, Err(CoreError::Sha1Mismatch { .. })));
+    assert!(!fixture.game.root().join("payload.bin").exists());
+    assert!(!fixture.part().exists());
+    let progress = final_estimated_progress(incoming).await;
+    assert_eq!(
+        (progress.finished, progress.failed, progress.bytes_done),
+        (0, 1, 0)
+    );
+    fixture.close().await;
+}
+
+#[tokio::test]
+async fn modpack_size_hints_still_reject_invalid_ranges() {
+    let mut server = Server::new().await;
+    let fixture = Fixture::new(&server.url).await;
+    std::fs::create_dir_all(fixture.game.root()).expect("directory");
+    std::fs::write(fixture.part(), b"hello").expect("partial");
+    let (running, _) = estimated_download(&fixture, &server.url, 12);
+    server
+        .request()
+        .await
+        .reply(206, "Content-Range: bytes 4-10/11\r\n", b" world", 6);
+    assert!(matches!(
+        finish(async { running.await.expect("worker") }).await,
+        Err(CoreError::DownloadResponse { .. })
+    ));
+    assert!(!fixture.game.root().join("payload.bin").exists());
+    assert!(!fixture.part().exists());
+    fixture.close().await;
+}
+
+#[tokio::test]
+async fn modpack_size_hints_use_actual_size_for_verified_cached_files() {
+    let server = Server::new().await;
+    let fixture = Fixture::new(&server.url).await;
+    std::fs::create_dir_all(fixture.game.root()).expect("directory");
+    std::fs::write(fixture.game.root().join("payload.bin"), BODY).expect("cached file");
+    let (running, incoming) = estimated_download(&fixture, &server.url, 12);
+    finish(async { running.await.expect("worker") })
+        .await
+        .expect("cached file");
+    let progress = final_estimated_progress(incoming).await;
+    assert_eq!((progress.bytes_done, progress.bytes_total), (11, 11));
+    assert!(server.requests.is_empty());
+    fixture.close().await;
+}
+
+#[tokio::test]
+async fn modpack_size_hints_publish_complete_verified_partials_without_a_request() {
+    let mut server = Server::new().await;
+    let fixture = Fixture::new(&server.url).await;
+    std::fs::create_dir_all(fixture.game.root()).expect("directory");
+    std::fs::write(fixture.part(), BODY).expect("complete partial");
+    let (mut running, incoming) = estimated_download(&fixture, &server.url, 4);
+    finish(async {
+        tokio::select! {
+            result = &mut running => result.expect("worker").expect("verified partial"),
+            _ = server.request() => panic!("a verified complete partial must not be downloaded again"),
+        }
+    }).await;
+    let progress = final_estimated_progress(incoming).await;
+    assert_eq!((progress.bytes_done, progress.bytes_total), (11, 11));
+    assert_eq!(
+        std::fs::read(fixture.game.root().join("payload.bin")).expect("file"),
+        BODY
+    );
+    fixture.close().await;
+}
+
+#[tokio::test]
+async fn modpack_size_hints_support_chunked_bodies_without_content_length() {
+    for size in [4, 12] {
+        let mut server = Server::new().await;
+        let fixture = Fixture::new(&server.url).await;
+        let (running, incoming) = estimated_download(&fixture, &server.url, size);
+        server.request().await.reply_chunked(BODY);
+        finish(async { running.await.expect("worker") })
+            .await
+            .expect("verified chunked response");
+        let progress = final_estimated_progress(incoming).await;
+        assert_eq!((progress.bytes_done, progress.bytes_total), (11, 11));
+        assert_eq!(
+            std::fs::read(fixture.game.root().join("payload.bin")).expect("file"),
+            BODY
+        );
+        fixture.close().await;
+    }
+}
+
+#[tokio::test]
+async fn modpack_size_hints_require_a_published_checksum_before_any_request() {
+    let mut server = Server::new().await;
+    let fixture = Fixture::new(&server.url).await;
+    let task = crate::VerifiedDownloadTask {
+        url: server.url.clone(),
+        destination: fixture.game.root().join("payload.bin"),
+        checksum: crate::DownloadChecksum::Unverified,
+        size: 12,
+    };
+    let mut running = tokio::spawn(async move {
+        InstallationContext::default()
+            .with_size_hints()
+            .verified_queue(
+                &reqwest::Client::new(),
+                &[task],
+                crate::DownloadOptions::default(),
+            )
+            .await
+    });
+    let result = finish(async {
+        tokio::select! {
+            result = &mut running => result.expect("worker"),
+            _ = server.request() => panic!("size hints must not download content without a checksum"),
+        }
+    }).await;
+    assert!(matches!(
+        result,
+        Err(CoreError::DownloadResponse {
+            detail: "estimated download sizes require a checksum"
+        })
+    ));
+    assert!(!fixture.game.root().join("payload.bin").exists());
+    fixture.close().await;
+}
+
+#[tokio::test]
+async fn modpack_size_hints_enforce_sha512_checksums() {
+    for valid in [true, false] {
+        let mut server = Server::new().await;
+        let fixture = Fixture::new(&server.url).await;
+        let hash = if valid {
+            crate::hashes::hex_encode(Sha512::digest(BODY).as_slice())
+        } else {
+            "a".repeat(128)
+        };
+        let task = crate::VerifiedDownloadTask {
+            url: server.url.clone(),
+            destination: fixture.game.root().join("payload.bin"),
+            checksum: crate::DownloadChecksum::Sha512(hash),
+            size: 12,
+        };
+        let running = tokio::spawn(async move {
+            InstallationContext::default()
+                .with_size_hints()
+                .verified_queue(
+                    &reqwest::Client::new(),
+                    &[task],
+                    crate::DownloadOptions {
+                        retry: crate::Retry {
+                            attempts: 1,
+                            initial_backoff: Duration::from_millis(1),
+                        },
+                        ..crate::DownloadOptions::default()
+                    },
+                )
+                .await
+        });
+        server.request().await.reply(200, "", BODY, BODY.len());
+        let result = finish(async { running.await.expect("worker") }).await;
+        if valid {
+            result.expect("matching SHA512");
+        } else {
+            assert!(matches!(result, Err(CoreError::Sha512Mismatch { .. })));
+        }
+        assert_eq!(fixture.game.root().join("payload.bin").exists(), valid);
+        assert!(!fixture.part().exists());
+        fixture.close().await;
+    }
+}
+
 fn verifying_executor(
     _runtime: DownloadRuntime,
     _job: DownloadJobSnapshot,

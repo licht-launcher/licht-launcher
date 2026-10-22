@@ -131,6 +131,23 @@ impl Fixture {
     pub(super) fn database(&self) -> crate::DatabaseClient {
         self.database.as_ref().expect("database owner").client()
     }
+    pub(super) async fn reopen_database(&mut self) {
+        self.database
+            .take()
+            .expect("database owner")
+            .shutdown()
+            .await
+            .expect("shutdown");
+        self.database = Some(
+            crate::DatabaseService::start(self.settings.clone())
+                .await
+                .expect("reopen"),
+        );
+        self.database()
+            .recover_download_jobs(&self.game)
+            .await
+            .expect("recover jobs");
+    }
     pub(super) async fn close(mut self) {
         if let Some(database) = self.database.take() {
             database.shutdown().await.expect("close database service");
@@ -200,6 +217,19 @@ struct Reply {
     tail: Option<oneshot::Receiver<Vec<u8>>>,
 }
 impl Request {
+    pub(super) fn reply_chunked(self, body: &[u8]) {
+        let mut bytes = format!(
+            "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n{:x}\r\n",
+            body.len()
+        )
+        .into_bytes();
+        bytes.extend_from_slice(body);
+        bytes.extend_from_slice(b"\r\n0\r\n\r\n");
+        self.response
+            .send(Reply { bytes, tail: None })
+            .expect("response receiver");
+    }
+
     pub(super) fn reply(self, status: u16, headers: &str, body: &[u8], length: usize) {
         self.response
             .send(Reply::new(status, headers, body, length))
