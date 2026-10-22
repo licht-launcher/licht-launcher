@@ -108,7 +108,7 @@ pub async fn download_file_with_control(
 
 async fn download_one(job: TransferJob<'_>) -> Result<()> {
     job.checksum.validate()?;
-    if job.size_policy == SizePolicy::Hint && job.checksum.expected().is_none() {
+    if job.size_policy == SizePolicy::Hint && !job.checksum.is_verified() {
         return Err(invalid_response(
             "estimated download sizes require a checksum",
         ));
@@ -330,7 +330,7 @@ async fn transfer_partial(
         credited.set_total(offset);
     }
 
-    if job.checksum.expected().is_none() {
+    if !job.checksum.is_verified() {
         warn!("download has no checksum; content is not verified");
     } else {
         let actual = hasher.finish();
@@ -348,7 +348,7 @@ async fn read_prefix(job: &TransferJob<'_>, part: &Path) -> Result<(u64, Transfe
     let mut hasher = job.checksum.hasher();
 
     // Without a checksum there is no stable content identity across calls.
-    if job.checksum.expected().is_none() {
+    if !job.checksum.is_verified() {
         return Ok((0, hasher));
     }
 
