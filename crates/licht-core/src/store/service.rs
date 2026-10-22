@@ -14,6 +14,7 @@ mod content;
 mod downloads;
 mod instances;
 mod modpacks;
+mod natives;
 
 enum Request {
     LastPlayed(oneshot::Sender<Result<Option<String>>>),
@@ -23,6 +24,7 @@ enum Request {
     Content(content::Request),
     Modpacks(modpacks::Request),
     Instances(instances::Request),
+    Natives(natives::Request),
     RememberAccount(String, bool, oneshot::Sender<Result<()>>),
     AccountUuids(oneshot::Sender<Result<Vec<String>>>),
     Stop,
@@ -195,6 +197,7 @@ async fn run(
             Request::Content(request) => content::execute(&mut connection, request).await,
             Request::Modpacks(request) => modpacks::execute(&mut connection, request).await,
             Request::Instances(request) => instances::execute(&mut connection, request).await,
+            Request::Natives(request) => natives::execute(&mut connection, request).await,
             Request::AccountUuids(reply) => {
                 let result = db::get_meta(&mut connection, "microsoft_account_uuids")
                     .await

@@ -5,8 +5,8 @@ use crate::auth::types::MicrosoftSession;
 use crate::offline::OfflineLaunch;
 use crate::settings::GlobalLaunch;
 use crate::{
-    LaunchEnvironment, Result, SharedCache, Version, apply_global_launch, create_natives_directory,
-    extract_natives, launch_command, parse_asset_index, reconstruct_assets,
+    LaunchEnvironment, Result, SharedCache, Version, apply_global_launch, launch_command,
+    parse_asset_index, reconstruct_assets,
 };
 
 fn uses_launchwrapper(version: &Version) -> bool {
@@ -17,9 +17,10 @@ fn uses_launchwrapper(version: &Version) -> bool {
             .any(|library| library.name.starts_with("net.minecraft:launchwrapper:"))
 }
 
-/// Extracts natives, then builds the command for a Microsoft account.
+/// Prepares cached natives, then builds the command for a Microsoft account.
 #[allow(clippy::too_many_arguments)]
-pub fn prepare_microsoft_launch(
+pub async fn prepare_microsoft_launch(
+    database: &crate::DatabaseClient,
     java: &Path,
     cache: &SharedCache,
     version_id: &str,
@@ -29,8 +30,9 @@ pub fn prepare_microsoft_launch(
     game_directory: &Path,
     global: &GlobalLaunch,
 ) -> Result<OfflineLaunch> {
-    let natives_directory = create_natives_directory(cache, version_id)?;
-    extract_natives(cache, version, environment, &natives_directory)?;
+    let natives_directory =
+        crate::game::natives::cache::prepare(database, cache, version_id, version, environment)
+            .await?;
 
     let launchwrapper = uses_launchwrapper(version);
     let played = if launchwrapper {

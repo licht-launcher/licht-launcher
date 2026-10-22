@@ -67,6 +67,9 @@ async fn an_installed_version_launches_offline_with_its_client_jar() {
     let directory = std::env::temp_dir().join(format!("licht-offline-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&directory);
     let cache = SharedCache::at(&directory);
+    let database = licht_core::DatabaseService::start(SharedCache::at(directory.join("settings")))
+        .await
+        .expect("database");
     let base = serve().await;
     let asset_hash = sha1_hex(ASSET);
     let index_json = index_json(&asset_hash);
@@ -99,6 +102,7 @@ async fn an_installed_version_launches_offline_with_its_client_jar() {
     let account = offline_account("Steve").expect("account");
     let game = directory.join("game");
     let launch = prepare_offline_launch(
+        &database.client(),
         PathBuf::from("java").as_path(),
         &cache,
         "demo",
@@ -108,6 +112,7 @@ async fn an_installed_version_launches_offline_with_its_client_jar() {
         &game,
         &plain_global(),
     )
+    .await
     .expect("command");
     let command = launch.command;
     assert_eq!(launch.game_directory, game);
@@ -126,20 +131,119 @@ async fn an_installed_version_launches_offline_with_its_client_jar() {
     );
     assert_eq!(std::fs::read(&jar).expect("jar still there"), CLIENT);
 
+    database.shutdown().await.expect("shutdown");
     let _ = std::fs::remove_dir_all(directory);
 }
 
-#[test]
-fn a_launchwrapper_version_uses_the_instance_as_its_default_folder() {
+#[tokio::test]
+async fn two_offline_instances_reuse_an_extraction_without_reopening_native_archives() {
+    use std::io::Write;
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let root = std::env::temp_dir().join(format!("licht-offline-native-cache-{stamp}"));
+    let cache = SharedCache::at(root.join("data"));
+    let database = licht_core::DatabaseService::start(SharedCache::at(root.join("settings")))
+        .await
+        .expect("database");
+    let source = cache
+        .library("demo/native-linux.jar")
+        .expect("native source");
+    std::fs::create_dir_all(source.parent().expect("parent")).expect("directory");
+    let mut archive = zip::ZipWriter::new(std::fs::File::create(&source).expect("archive"));
+    archive
+        .start_file(
+            "libnative.so",
+            zip::write::SimpleFileOptions::default()
+                .compression_method(zip::CompressionMethod::Stored),
+        )
+        .expect("entry");
+    archive.write_all(b"native body").expect("native bytes");
+    archive.finish().expect("zip");
+    let mut native = library(
+        "https://example.invalid/native.jar",
+        "demo/native-linux.jar",
+        &sha1_hex(&std::fs::read(&source).expect("archive")),
+    );
+    native.name = "demo:native:1:natives-linux".into();
+    native
+        .downloads
+        .as_mut()
+        .expect("downloads")
+        .artifact
+        .as_mut()
+        .expect("artifact")
+        .size = std::fs::metadata(&source).expect("metadata").len();
+    let mut version = wrapped("net.minecraft.client.main.Main", None);
+    version.libraries = vec![native];
+    version.arguments = GameArguments::Legacy("--natives ${natives_directory}".into());
+    let index = cache.asset_index("test").expect("index");
+    std::fs::create_dir_all(index.parent().expect("parent")).expect("directory");
+    std::fs::write(index, r#"{"objects":{}}"#).expect("index");
+    let account = offline_account("Steve").expect("account");
+    let first = prepare_offline_launch(
+        &database.client(),
+        PathBuf::from("java").as_path(),
+        &cache,
+        "demo",
+        &version,
+        &environment(),
+        &account,
+        &root.join("first"),
+        &plain_global(),
+    )
+    .await
+    .expect("first launch");
+    let position = first
+        .command
+        .iter()
+        .position(|argument| argument == "--natives")
+        .expect("native argument");
+    let natives = PathBuf::from(&first.command[position + 1]);
+    assert_eq!(
+        std::fs::read(natives.join("libnative.so")).expect("native"),
+        b"native body"
+    );
+    std::fs::remove_file(&source).expect("warm launch must not reopen the archive");
+    let second = prepare_offline_launch(
+        &database.client(),
+        PathBuf::from("java").as_path(),
+        &cache,
+        "demo",
+        &version,
+        &environment(),
+        &account,
+        &root.join("second"),
+        &plain_global(),
+    )
+    .await
+    .expect("reuse the complete generation");
+    let position = second
+        .command
+        .iter()
+        .position(|argument| argument == "--natives")
+        .expect("native argument");
+    assert_eq!(PathBuf::from(&second.command[position + 1]), natives);
+    database.shutdown().await.expect("shutdown");
+    std::fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[tokio::test]
+async fn a_launchwrapper_version_uses_the_instance_as_its_default_folder() {
     let directory = std::env::temp_dir().join(format!("licht-wrapper-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&directory);
     let cache = SharedCache::at(directory.join("data"));
+    let database = licht_core::DatabaseService::start(SharedCache::at(directory.join("settings")))
+        .await
+        .expect("database");
     let index = cache.asset_index("test").expect("index path");
     std::fs::create_dir_all(index.parent().expect("indexes")).expect("indexes");
     std::fs::write(&index, r#"{"objects":{}}"#).expect("index");
     let account = offline_account("Steve").expect("account");
     let game = cache.instance_dir("1.5.2").expect("instance");
     let launch = prepare_offline_launch(
+        &database.client(),
         PathBuf::from("java").as_path(),
         &cache,
         "1.5.2",
@@ -149,6 +253,7 @@ fn a_launchwrapper_version_uses_the_instance_as_its_default_folder() {
         &game,
         &plain_global(),
     )
+    .await
     .expect("launch");
     let played = game.join(".minecraft");
     assert_eq!(launch.game_directory, played);
@@ -170,6 +275,7 @@ fn a_launchwrapper_version_uses_the_instance_as_its_default_folder() {
 
     let library_game = cache.instance_dir("1.5.1").expect("1.5.1");
     let by_library = prepare_offline_launch(
+        &database.client(),
         PathBuf::from("java").as_path(),
         &cache,
         "1.5.1",
@@ -182,12 +288,14 @@ fn a_launchwrapper_version_uses_the_instance_as_its_default_folder() {
         &library_game,
         &plain_global(),
     )
+    .await
     .expect("library");
     assert!(by_library.appdata.is_some());
     assert_eq!(by_library.game_directory, library_game.join(".minecraft"));
 
     let plain_game = cache.instance_dir("1.8.9").expect("1.8.9");
     let plain = prepare_offline_launch(
+        &database.client(),
         PathBuf::from("java").as_path(),
         &cache,
         "1.8.9",
@@ -197,6 +305,7 @@ fn a_launchwrapper_version_uses_the_instance_as_its_default_folder() {
         &plain_game,
         &plain_global(),
     )
+    .await
     .expect("plain");
     assert!(plain.appdata.is_none());
     assert_eq!(plain.game_directory, plain_game);
@@ -208,15 +317,19 @@ fn a_launchwrapper_version_uses_the_instance_as_its_default_folder() {
             .all(|part| !part.starts_with("-Duser.home="))
     );
 
+    database.shutdown().await.expect("shutdown");
     let _ = std::fs::remove_dir_all(directory);
 }
 
-#[test]
-fn a_launchwrapper_game_copies_resources_and_keeps_auth_session_literal() {
+#[tokio::test]
+async fn a_launchwrapper_game_copies_resources_and_keeps_auth_session_literal() {
     let directory =
         std::env::temp_dir().join(format!("licht-assets-launch-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&directory);
     let cache = SharedCache::at(directory.join("data"));
+    let database = licht_core::DatabaseService::start(SharedCache::at(directory.join("settings")))
+        .await
+        .expect("database");
     let hash = "abababababababababababababababababababab";
     let object = cache.asset_object(hash).expect("object path");
     std::fs::create_dir_all(object.parent().expect("prefix")).expect("objects");
@@ -238,6 +351,7 @@ fn a_launchwrapper_game_copies_resources_and_keeps_auth_session_literal() {
 
     let game = cache.instance_dir("1.5.2").expect("instance");
     let launch = prepare_offline_launch(
+        &database.client(),
         PathBuf::from("java").as_path(),
         &cache,
         "1.5.2",
@@ -247,6 +361,7 @@ fn a_launchwrapper_game_copies_resources_and_keeps_auth_session_literal() {
         &game,
         &plain_global(),
     )
+    .await
     .expect("launch");
 
     let resources = game.join(".minecraft").join("resources");
@@ -266,6 +381,7 @@ fn a_launchwrapper_game_copies_resources_and_keeps_auth_session_literal() {
             .all(|part| !part.contains("${game_assets}"))
     );
 
+    database.shutdown().await.expect("shutdown");
     let _ = std::fs::remove_dir_all(directory);
 }
 
