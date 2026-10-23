@@ -24,6 +24,7 @@ import {
 import { listInstances } from "@/lib/commands";
 import type { DownloadJobSnapshot } from "@/lib/generated/DownloadJobSnapshot";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
+import { cn } from "@/lib/utils";
 
 function DownloadRow({
   job,
@@ -78,8 +79,12 @@ function DownloadRow({
 
 export function DownloadsPopover({
   triggerClassName,
+  side,
+  showLabel = false,
 }: {
   triggerClassName?: string;
+  side?: "top" | "bottom";
+  showLabel?: boolean;
 }) {
   const query = useDownloadJobs();
   const instances = useQuery({
@@ -91,6 +96,25 @@ export function DownloadsPopover({
     (job) => job.status === "running" || job.status === "queued",
   );
   const single = jobs.length === 1 ? jobs[0] : undefined;
+  const current =
+    jobs.find(
+      (job) => job.instanceFolder !== null && job.status === "running",
+    ) ??
+    jobs.find((job) => job.status === "running") ??
+    jobs.find((job) => job.status === "queued") ??
+    jobs[0];
+  const currentInstance = instances.data?.find(
+    (instance) => instance.folder === current?.instanceFolder,
+  );
+  const queued = jobs.filter(
+    (job) => job.status === "queued" && job.id !== current?.id,
+  ).length;
+  const currentProgress =
+    current !== undefined &&
+    current.status !== "queued" &&
+    !isPreparingProgress(current.progress)
+      ? barValue(current.progress)
+      : null;
   const label = query.isPending
     ? "Loading"
     : jobs.length === 0
@@ -106,18 +130,59 @@ export function DownloadsPopover({
         <Button
           type="button"
           variant="ghost"
-          className={triggerClassName}
+          className={cn(
+            triggerClassName,
+            showLabel &&
+              current !== undefined &&
+              "w-full max-w-lg justify-start",
+          )}
           aria-label={`Downloads: ${label}`}
         >
-          {active ? (
-            <Loader2 aria-hidden className="size-3.5 shrink-0 animate-spin" />
+          {showLabel && current !== undefined ? (
+            <>
+              {current.javaMajor !== undefined ? (
+                <Download aria-hidden className="size-6 shrink-0" />
+              ) : (
+                <InstanceIcon iconPath={currentInstance?.iconPath} />
+              )}
+              <span className="flex min-w-0 flex-1 flex-col gap-1">
+                <span className="flex min-w-0 items-center justify-between gap-2">
+                  <span className="truncate text-xs font-medium">
+                    {downloadStatusText(current)}
+                  </span>
+                  <span className="flex shrink-0 items-center gap-2 text-xs tabular-nums">
+                    {queued > 0 ? <span>{queued} queued</span> : null}
+                    {currentProgress !== null ? (
+                      <span>{Math.floor(currentProgress)}%</span>
+                    ) : null}
+                  </span>
+                </span>
+                <Progress
+                  aria-label="Current download progress"
+                  value={currentProgress}
+                  className="h-1"
+                />
+              </span>
+            </>
           ) : (
-            <Download aria-hidden className="size-3.5 shrink-0" />
+            <>
+              {active ? (
+                <Loader2
+                  aria-hidden
+                  className="size-3.5 shrink-0 animate-spin"
+                />
+              ) : (
+                <Download aria-hidden className="size-3.5 shrink-0" />
+              )}
+              {showLabel ? <span>Downloads</span> : null}
+              {showLabel && label === "Idle" ? null : (
+                <span className="tabular-nums">{label}</span>
+              )}
+            </>
           )}
-          <span className="tabular-nums">{label}</span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-96 p-3">
+      <PopoverContent side={side} align="end" className="w-96 p-3">
         <div className="flex flex-col gap-3">
           <p className="text-sm font-medium">Downloads</p>
           {query.isPending && (

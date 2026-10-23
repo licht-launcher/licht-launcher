@@ -17,6 +17,13 @@ pub fn open_repository(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn open_feedback(app: AppHandle) -> Result<(), String> {
+    app.opener()
+        .open_url(format!("{REPOSITORY_URL}/issues/new/choose"), None::<&str>)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 pub fn custom_title_bar_active(mode: State<'_, TitleBarMode>) -> bool {
     mode.custom
 }

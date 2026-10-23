@@ -62,6 +62,7 @@ pub fn run() -> anyhow::Result<()> {
             commands::instances::set_instance_content_enabled,
             commands::instances::remove_instance_content,
             commands::shell::open_repository,
+            commands::shell::open_feedback,
             commands::shell::custom_title_bar_active,
             commands::shell::restart_app,
             commands::instances::get_last_played_folder,

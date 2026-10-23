@@ -94,7 +94,7 @@ export function HomePanel({
   }
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-8 pt-6 pr-12 pb-8">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-4">
       <div className="shrink-0">
         <PlaySection
           instance={instance}
@@ -113,7 +113,7 @@ export function HomePanel({
       <Tabs
         value={tab}
         onValueChange={setTab}
-        className="mt-6 flex min-h-0 flex-1 flex-col gap-2"
+        className="mt-3 flex min-h-0 flex-1 flex-col gap-2"
       >
         <div className="flex shrink-0 items-center gap-2">
           <TabsList className="w-fit shrink-0">

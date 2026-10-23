@@ -1,4 +1,5 @@
 const FRIENDLY: Record<string, string> = {
+  "player skin image is invalid": "The player's skin could not be loaded.",
   "HTTP request failed":
     "The network request failed. Check your connection and try again.",
   "I/O operation failed":

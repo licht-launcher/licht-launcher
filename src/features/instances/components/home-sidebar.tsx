@@ -1,16 +1,5 @@
-import { useRouter, useRouterState } from "@tanstack/react-router";
 import { cn } from "cn";
-import {
-  ArrowDownAZIcon,
-  ArrowLeftIcon,
-  ArrowRightIcon,
-  CompassIcon,
-  DownloadIcon,
-  HistoryIcon,
-  Loader2Icon,
-  PlusIcon,
-  SettingsIcon,
-} from "lucide-react";
+import { ArrowDownAZIcon, HistoryIcon, Loader2Icon } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -23,12 +12,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import {
   InstanceContextMenu,
   type InstanceMenuAction,
 } from "@/features/instances/components/instance-context-menu";
@@ -39,17 +22,6 @@ import {
   sortInstances,
 } from "@/features/instances/lib/sort-instances";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
-
-const sidebarOrbWrapClassName =
-  "inline-flex transition-transform duration-200 ease-out hover:-translate-y-2";
-
-const sidebarOrbBaseClassName =
-  "size-10 rounded-full border-foreground/10 bg-secondary/35 hover:border-foreground/20 hover:bg-secondary/50 [&_svg:not([class*='size-'])]:size-5";
-
-const sidebarOrbClassName = cn(
-  sidebarOrbBaseClassName,
-  "disabled:pointer-events-auto",
-);
 
 function SortLabel({
   icon: Icon,
@@ -66,48 +38,6 @@ function SortLabel({
   );
 }
 
-function SidebarHistoryNav() {
-  const router = useRouter();
-  useRouterState({
-    select: (state) =>
-      `${String(state.location.state.__TSR_index)}:${state.location.href}`,
-  });
-  const canGoBack = router.history.canGoBack();
-  const canGoForward =
-    router.history.location.state.__TSR_index < router.history.length - 1;
-
-  return (
-    <div className="flex shrink-0 items-center gap-0.5">
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label="Back"
-        className="text-muted-foreground"
-        disabled={!canGoBack}
-        onClick={() => {
-          router.history.back();
-        }}
-      >
-        <ArrowLeftIcon aria-hidden />
-      </Button>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label="Forward"
-        className="text-muted-foreground"
-        disabled={!canGoForward}
-        onClick={() => {
-          router.history.forward();
-        }}
-      >
-        <ArrowRightIcon aria-hidden />
-      </Button>
-    </div>
-  );
-}
-
 export function HomeSidebar({
   instances,
   selectedFolder,
@@ -117,10 +47,7 @@ export function HomeSidebar({
   isInstalling,
   playBlocked,
   onInstanceAction,
-  showTitleband,
   onSelect,
-  onCreate,
-  onOpenSettings,
 }: {
   instances: InstanceEntry[];
   selectedFolder: string | null;
@@ -133,33 +60,14 @@ export function HomeSidebar({
     action: InstanceMenuAction,
     instance: InstanceEntry,
   ) => void;
-  showTitleband: boolean;
   onSelect: (folder: string) => void;
-  onCreate: () => void;
-  onOpenSettings: () => void;
 }) {
   const [sort, setSort] = useState<InstanceSort>("lastPlayed");
   const ordered = sortInstances(instances, sort);
 
   return (
-    <div className="relative flex h-full w-full min-w-0 flex-col overflow-hidden bg-home-sidebar after:pointer-events-none after:absolute after:inset-y-0 after:right-0 after:w-px after:bg-foreground/10">
-      <div className="flex h-9 shrink-0 items-center justify-between gap-2 px-2">
-        <div
-          data-tauri-drag-region
-          className="flex min-h-9 min-w-0 flex-1 items-center"
-        >
-          {showTitleband ? (
-            <span
-              data-tauri-drag-region
-              className="ml-px border border-transparent px-1 font-brand text-xs font-medium tracking-widest text-muted-foreground uppercase select-none"
-            >
-              Licht Launcher
-            </span>
-          ) : null}
-        </div>
-        <SidebarHistoryNav />
-      </div>
-      <div className="flex min-h-0 flex-1 flex-col gap-6 px-2 pt-1 pb-10">
+    <div className="flex h-full w-full min-w-0 flex-col overflow-hidden">
+      <div className="flex min-h-0 flex-1 flex-col px-2 py-2">
         <nav
           aria-label="Instances"
           className="flex min-h-0 flex-1 flex-col gap-2"
@@ -185,8 +93,10 @@ export function HomeSidebar({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent
+                  position="popper"
+                  side="bottom"
                   align="end"
-                  className="font-brand text-xs font-medium"
+                  className="z-100 font-brand text-xs font-medium data-open:animate-none data-closed:animate-none"
                 >
                   <SelectItem value="lastPlayed" className="text-xs">
                     <SortLabel icon={HistoryIcon} label="Last played" />
@@ -275,88 +185,6 @@ export function HomeSidebar({
               </ScrollArea>
             ) : null}
           </div>
-
-          <TooltipProvider delayDuration={300}>
-            <div className="mt-auto flex items-center justify-center gap-1.5 pt-2">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className={sidebarOrbWrapClassName}>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="icon-lg"
-                      className={sidebarOrbClassName}
-                      aria-label="New instance"
-                      disabled={busy}
-                      onClick={onCreate}
-                    >
-                      <PlusIcon aria-hidden />
-                    </Button>
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="top" align="center" sideOffset={2}>
-                  New instance
-                </TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="inline-flex">
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="icon-lg"
-                      className={sidebarOrbBaseClassName}
-                      aria-label="Downloads"
-                      disabled
-                    >
-                      <DownloadIcon aria-hidden />
-                    </Button>
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="top" align="center" sideOffset={2}>
-                  Downloads
-                </TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="inline-flex">
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="icon-lg"
-                      className={sidebarOrbBaseClassName}
-                      aria-label="Discover"
-                      disabled
-                    >
-                      <CompassIcon aria-hidden />
-                    </Button>
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="top" align="center" sideOffset={2}>
-                  Discover
-                </TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className={sidebarOrbWrapClassName}>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="icon-lg"
-                      className={sidebarOrbClassName}
-                      aria-label="Settings"
-                      onClick={onOpenSettings}
-                    >
-                      <SettingsIcon aria-hidden />
-                    </Button>
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="top" align="center" sideOffset={2}>
-                  Settings
-                </TooltipContent>
-              </Tooltip>
-            </div>
-          </TooltipProvider>
         </nav>
       </div>
     </div>

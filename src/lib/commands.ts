@@ -248,6 +248,10 @@ export function openRepository(): Promise<void> {
   return invoke("open_repository");
 }
 
+export function openFeedback(): Promise<void> {
+  return invoke("open_feedback");
+}
+
 export function getLastPlayedFolder(): Promise<string | null> {
   return invoke("get_last_played_folder");
 }

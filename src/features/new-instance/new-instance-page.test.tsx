@@ -8,7 +8,10 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Toaster } from "@/components/ui/sonner";
-import { snapshot } from "@/features/settings/fixtures/snapshot";
+import {
+  playerHeadPathFixture,
+  snapshot,
+} from "@/features/settings/fixtures/snapshot";
 import { startupProgress } from "@/features/startup/fixtures/progress";
 import { routeTree } from "@/routeTree.gen";
 
@@ -85,6 +88,8 @@ describe("NewInstancePage", () => {
     invoke.mockImplementation((command: string) => {
       if (command === "get_startup_progress")
         return Promise.resolve(startupProgress());
+      if (command === "get_player_head")
+        return Promise.resolve(playerHeadPathFixture);
       if (command === "list_instances") {
         return Promise.resolve([]);
       }
@@ -97,7 +102,10 @@ describe("NewInstancePage", () => {
       if (command === "get_settings") {
         return Promise.resolve(snapshot);
       }
-      if (command === "get_last_played_folder") {
+      if (
+        command === "get_last_played_folder" ||
+        command === "active_microsoft_account"
+      ) {
         return Promise.resolve(null);
       }
       if (command === "list_running_games") {
@@ -349,6 +357,8 @@ describe("NewInstancePage", () => {
     invoke.mockImplementation((command: string) => {
       if (command === "get_startup_progress")
         return Promise.resolve(startupProgress());
+      if (command === "get_player_head")
+        return Promise.resolve(playerHeadPathFixture);
       if (command === "list_versions") {
         return Promise.reject(new Error("offline"));
       }
@@ -358,7 +368,10 @@ describe("NewInstancePage", () => {
       if (command === "get_settings") {
         return Promise.resolve(snapshot);
       }
-      if (command === "get_last_played_folder") {
+      if (
+        command === "get_last_played_folder" ||
+        command === "active_microsoft_account"
+      ) {
         return Promise.resolve(null);
       }
       if (command === "list_running_games") {
@@ -385,6 +398,8 @@ describe("NewInstancePage", () => {
     invoke.mockImplementation((command: string) => {
       if (command === "get_startup_progress")
         return Promise.resolve(startupProgress());
+      if (command === "get_player_head")
+        return Promise.resolve(playerHeadPathFixture);
       if (command === "list_versions") {
         return Promise.resolve([
           { id: "1.20.1", versionType: "release", installed: false },
@@ -396,7 +411,10 @@ describe("NewInstancePage", () => {
       if (command === "get_settings") {
         return Promise.resolve(snapshot);
       }
-      if (command === "get_last_played_folder") {
+      if (
+        command === "get_last_played_folder" ||
+        command === "active_microsoft_account"
+      ) {
         return Promise.resolve(null);
       }
       if (command === "list_running_games") {
