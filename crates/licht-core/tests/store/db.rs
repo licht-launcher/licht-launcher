@@ -49,6 +49,54 @@ async fn open_creates_the_database_and_is_idempotent() {
 }
 
 #[tokio::test]
+async fn version_nine_downloads_gain_a_persistent_fifo_order_without_losing_state() {
+    let cache = cache("version-nine-queue");
+    let game = SharedCache::at(cache.root().join("data"));
+    open_db(&cache)
+        .await
+        .expect("schema")
+        .close()
+        .await
+        .expect("close");
+    let first = licht_core::create_pending_download_job(
+        &cache,
+        &game,
+        "First",
+        Some("1.21.1"),
+        licht_core::DownloadJobOperation::Install,
+    )
+    .await
+    .expect("first");
+    let second = licht_core::create_pending_download_job(
+        &cache,
+        &game,
+        "Second",
+        Some("1.21.1"),
+        licht_core::DownloadJobOperation::Install,
+    )
+    .await
+    .expect("second");
+    let mut connection = open_db(&cache).await.expect("legacy fixture");
+    sqlx::raw_sql("DROP INDEX download_jobs_queue; ALTER TABLE download_jobs DROP COLUMN queue_order; PRAGMA user_version = 9;")
+        .execute(&mut connection).await.expect("version nine schema");
+    connection.close().await.expect("close legacy");
+    let mut migrated = open_db(&cache).await.expect("migrate queue");
+    let order: Vec<(i64, i64)> =
+        sqlx::query_as("SELECT id, queue_order FROM download_jobs ORDER BY queue_order")
+            .fetch_all(&mut migrated)
+            .await
+            .expect("queue order");
+    assert_eq!(order, vec![(1, 1), (2, 2)]);
+    migrated.close().await.expect("close migrated");
+    assert_eq!(
+        licht_core::list_download_jobs(&cache, &game)
+            .await
+            .expect("preserved jobs"),
+        vec![first, second]
+    );
+}
+
+#[tokio::test]
 async fn opening_an_up_to_date_database_can_read_while_another_connection_is_writing() {
     let cache = cache("open-during-write");
     set_last_played_folder(&cache, "survival")
@@ -88,7 +136,7 @@ async fn concurrent_first_opens_share_a_complete_migrated_schema() {
     futures_util::future::join_all((0..4).map(|_| async {
         barrier.wait().await;
         let mut connection = open_db(&cache).await.expect("concurrent open");
-        assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 9);
+        assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 10);
         assert_eq!(scalar(&mut connection, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('meta', 'download_jobs', 'download_job_artifacts')").await, 3);
         assert_artifact_path_lookup_is_indexed(&mut connection).await;
         connection.close().await.expect("close");
@@ -160,7 +208,7 @@ async fn a_version_one_database_gains_download_jobs_without_losing_existing_meta
         last_played_folder(&cache).await.expect("metadata"),
         Some("survival".into())
     );
-    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 9);
+    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 10);
     connection.close().await.expect("close");
 }
 
@@ -168,15 +216,15 @@ async fn a_version_one_database_gains_download_jobs_without_losing_existing_meta
 async fn a_newer_database_schema_is_rejected_without_downgrading_it() {
     let cache = cache("future-schema");
     let mut connection = raw_database(&cache).await;
-    sqlx::query("PRAGMA user_version = 10")
+    sqlx::query("PRAGMA user_version = 11")
         .execute(&mut connection)
         .await
         .expect("future schema");
     assert!(matches!(
         open_db(&cache).await,
-        Err(CoreError::DatabaseSchema { schema: 10 })
+        Err(CoreError::DatabaseSchema { schema: 11 })
     ));
-    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 10);
+    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 11);
     let journal: String = sqlx::query_scalar("PRAGMA journal_mode")
         .fetch_one(&mut connection)
         .await
@@ -288,7 +336,7 @@ async fn version_three_gains_indexed_artifact_lookup_without_changing_stored_dat
     connection.close().await.expect("close");
     let mut connection = open_db(&cache).await.expect("migrate");
     assert_artifact_path_lookup_is_indexed(&mut connection).await;
-    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 9);
+    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 10);
     let associations: Vec<(i64, String)> =
         sqlx::query_as("SELECT job_id, path FROM download_job_artifacts ORDER BY path")
             .fetch_all(&mut connection)
@@ -323,13 +371,25 @@ async fn version_three_gains_indexed_artifact_lookup_without_changing_stored_dat
 async fn version_four_gains_content_fingerprints_without_losing_metadata() {
     let cache = cache("version-four-content");
     let mut connection = raw_database(&cache).await;
-    sqlx::raw_sql("CREATE TABLE meta (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL); INSERT INTO meta VALUES ('last_played_folder', 'Survival'); PRAGMA user_version = 4;")
-        .execute(&mut connection).await.expect("version four metadata");
+    sqlx::raw_sql(
+        "CREATE TABLE meta (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL);
+        INSERT INTO meta VALUES ('last_played_folder', 'Survival');
+        CREATE TABLE download_jobs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, data_directory TEXT NOT NULL,
+            instance_folder TEXT, version_id TEXT, operation TEXT NOT NULL,
+            status TEXT NOT NULL, component TEXT, phase TEXT NOT NULL,
+            progress TEXT NOT NULL, created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL, error TEXT, java_major INTEGER
+        ); PRAGMA user_version = 4;",
+    )
+    .execute(&mut connection)
+    .await
+    .expect("version four metadata");
     connection.close().await.expect("close legacy database");
 
     for _ in 0..2 {
         let mut connection = open_db(&cache).await.expect("open migrated database");
-        assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 9);
+        assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 10);
         assert_eq!(
             scalar(&mut connection, "SELECT COUNT(*) FROM content_fingerprints").await,
             0
@@ -360,7 +420,7 @@ async fn version_five_gains_modpack_tables_and_preserves_fingerprints() {
     .expect("fingerprint");
     connection.close().await.expect("close");
     let mut connection = open_db(&cache).await.expect("migrate");
-    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 9);
+    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 10);
     assert_eq!(scalar(&mut connection, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('modpack_indexes', 'modpack_dependencies', 'modpack_files')").await, 3);
     assert_eq!(scalar(&mut connection, "SELECT COUNT(*) FROM content_fingerprints WHERE instance_folder = 'First' AND relative_path = 'mods/a.jar' AND size = 10").await, 1);
     let value: String = sqlx::query_scalar("SELECT value FROM meta WHERE key = 'fixture'")
@@ -379,7 +439,7 @@ async fn version_seven_adds_empty_checkpoints_without_marking_old_jobs_complete(
         .execute(&mut connection).await.expect("version seven fixture");
     connection.close().await.expect("close");
     let mut connection = open_db(&cache).await.expect("upgrade");
-    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 9);
+    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 10);
     assert_eq!(
         scalar(
             &mut connection,
@@ -404,7 +464,7 @@ async fn version_eight_adds_native_cache_tables_without_changing_existing_data()
         .execute(&mut connection).await.expect("version eight fixture");
     connection.close().await.expect("close");
     let mut connection = open_db(&cache).await.expect("upgrade");
-    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 9);
+    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 10);
     assert_eq!(
         scalar(&mut connection, "SELECT COUNT(*) FROM native_generations").await,
         0

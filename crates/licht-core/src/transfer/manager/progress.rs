@@ -40,7 +40,11 @@ impl DownloadManager {
             }
         };
         snapshot.status = if slot.control.state() == DownloadState::Paused {
-            DownloadJobStatus::Paused
+            if *slot.enabled.borrow() {
+                DownloadJobStatus::Queued
+            } else {
+                DownloadJobStatus::Paused
+            }
         } else {
             DownloadJobStatus::Running
         };

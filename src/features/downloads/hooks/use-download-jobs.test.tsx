@@ -133,6 +133,34 @@ describe("download task activity", () => {
     expect(listen).toHaveBeenCalledTimes(2);
   });
 
+  it("refreshes persisted FIFO order when a paused installation rejoins the queue", async () => {
+    const first = downloadJob({ status: "paused" });
+    const second = downloadJob({
+      id: "2",
+      instanceFolder: "Second",
+      status: "queued",
+    });
+    let stored = [first, second];
+    invoke.mockImplementation(async () => stored);
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>
+        <DownloadJobsProvider>{children}</DownloadJobsProvider>
+      </QueryClientProvider>
+    );
+    const { result, unmount } = renderHook(() => useDownloadJobs(), {
+      wrapper,
+    });
+    await waitFor(() => expect(result.current.data).toEqual([first, second]));
+    const resumed = { ...first, status: "queued" as const };
+    stored = [second, resumed];
+    act(() => listeners.get("download-job-updated")?.({ payload: resumed }));
+    await waitFor(() => expect(result.current.data).toEqual([second, resumed]));
+    unmount();
+  });
+
   it.each([
     ["install", "completed"],
     ["install", "failed"],

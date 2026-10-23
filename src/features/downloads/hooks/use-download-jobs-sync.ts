@@ -37,6 +37,11 @@ export function useDownloadJobsSync() {
             DOWNLOAD_JOBS_QUERY_KEY,
             (current) => replaceDownloadSnapshot(current, payload),
           );
+          if (payload.status === "queued" && previous?.status !== "queued") {
+            void queryClient.invalidateQueries({
+              queryKey: DOWNLOAD_JOBS_QUERY_KEY,
+            });
+          }
           if (
             payload.instanceFolder !== null &&
             (isDownloadFinished(payload) || payload.status === "failed") &&
