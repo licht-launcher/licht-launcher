@@ -268,12 +268,20 @@ export function listMicrosoftAccounts(): Promise<AccountProfile[]> {
   return invoke("list_microsoft_accounts");
 }
 
+export function getPlayerHead(skinUrl: string | null): Promise<string> {
+  return invoke("get_player_head", { skinUrl });
+}
+
 export function activeMicrosoftAccount(): Promise<AccountProfile | null> {
   return invoke("active_microsoft_account");
 }
 
 export function beginMicrosoftLogin(): Promise<AccountProfile> {
   return invoke("begin_microsoft_login");
+}
+
+export function activateOfflineAccount(): Promise<void> {
+  return invoke("use_offline_account");
 }
 
 export function setActiveMicrosoftAccount(

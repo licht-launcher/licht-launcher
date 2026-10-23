@@ -39,9 +39,10 @@ pub use asset_index::{
     AssetIndexFile, AssetObject, fetch_asset_index, parse_asset_index, reconstruct_assets,
 };
 pub use auth::{
-    AccountProfile, EMBEDDED_MSA_CLIENT_ID, MSA_CLIENT_ID_ENV, MicrosoftSession,
-    get_active_profile, list_accounts, load_env_files, login_with_browser, logout_account,
-    msa_client_id, prepare_microsoft_launch, session_for_launch, set_active_account,
+    AccountProfile, DEFAULT_SKIN_URL, EMBEDDED_MSA_CLIENT_ID, MSA_CLIENT_ID_ENV, MicrosoftSession,
+    cached_player_head, get_active_profile, list_accounts, load_env_files, login_with_browser,
+    logout_account, msa_client_id, prepare_microsoft_launch, session_for_launch,
+    set_active_account, use_offline_account,
 };
 pub use cache::SharedCache;
 pub use db::{

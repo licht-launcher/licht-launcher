@@ -7,4 +7,5 @@ pub const XBL_USER_AUTH_URL: &str = "https://user.auth.xboxlive.com/user/authent
 pub const XSTS_AUTHORIZE_URL: &str = "https://xsts.auth.xboxlive.com/xsts/authorize";
 pub const MC_LOGIN_URL: &str = "https://api.minecraftservices.com/authentication/login_with_xbox";
 pub const MC_PROFILE_URL: &str = "https://api.minecraftservices.com/minecraft/profile";
+pub const DEFAULT_SKIN_URL: &str = "https://assets.mojang.com/SkinTemplates/steve.png";
 pub const MC_ENTITLEMENTS_URL: &str = "https://api.minecraftservices.com/entitlements/mcstore";

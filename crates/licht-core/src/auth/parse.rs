@@ -84,7 +84,36 @@ pub fn parse_minecraft_profile(status: u16, body: &str) -> Result<AccountProfile
     Ok(AccountProfile {
         uuid,
         name: raw.name,
+        skin_url: raw
+            .skins
+            .into_iter()
+            .find(|skin| skin.state == "ACTIVE")
+            .map(|skin| validate_skin_url(&skin.url))
+            .transpose()?,
     })
+}
+
+pub(super) fn validate_skin_url(value: &str) -> Result<String> {
+    let mut url = reqwest::Url::parse(value).map_err(|_| CoreError::AuthProfileMissing)?;
+    let hash = url
+        .path()
+        .strip_prefix("/texture/")
+        .ok_or(CoreError::AuthProfileMissing)?;
+    if !matches!(url.scheme(), "http" | "https")
+        || url.host_str() != Some("textures.minecraft.net")
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.port().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+        || hash.len() != 64
+        || !hash.bytes().all(|byte| byte.is_ascii_hexdigit())
+    {
+        return Err(CoreError::AuthProfileMissing);
+    }
+    url.set_scheme("https")
+        .map_err(|_| CoreError::AuthProfileMissing)?;
+    Ok(url.to_string())
 }
 
 pub fn parse_owns_minecraft(status: u16, body: &str) -> Result<bool> {
@@ -141,5 +170,68 @@ mod tests {
     fn entitlements_detect_game_pass() {
         let body = r#"{"items":[{"name":"product_game_pass_ultimate","signature":"x"}]}"#;
         assert!(parse_owns_minecraft(200, body).expect("ok"));
+    }
+
+    #[test]
+    fn minecraft_profile_exposes_only_the_active_skin_over_https() {
+        let hash = "a".repeat(64);
+        let body = serde_json::json!({
+            "id": "0123456789abcdef0123456789abcdef", "name": "Player",
+            "skins": [
+                {"state": "INACTIVE", "url": "invalid-unused-value"},
+                {"state": "ACTIVE", "url": format!("http://textures.minecraft.net/texture/{hash}")}
+            ]
+        })
+        .to_string();
+        let profile = parse_minecraft_profile(200, &body).expect("public profile");
+        assert_eq!(
+            profile.skin_url,
+            Some(format!("https://textures.minecraft.net/texture/{hash}"))
+        );
+        let saved = serde_json::to_string(&profile).expect("save public profile");
+        assert_eq!(
+            serde_json::from_str::<AccountProfile>(&saved).expect("reload"),
+            profile
+        );
+    }
+
+    #[test]
+    fn old_saved_profiles_and_profiles_without_skins_remain_usable() {
+        let saved = r#"{"uuid":"0123456789abcdef0123456789abcdef","name":"Player"}"#;
+        let old: AccountProfile = serde_json::from_str(saved).expect("old profile");
+        assert!(old.skin_url.is_none());
+        let profile = parse_minecraft_profile(
+            200,
+            r#"{"id":"0123456789abcdef0123456789abcdef","name":"Player"}"#,
+        )
+        .expect("profile without skins");
+        assert_eq!(profile, old);
+        assert!(
+            serde_json::to_value(profile)
+                .expect("public JSON")
+                .get("skinUrl")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn active_skin_urls_must_be_public_official_texture_urls() {
+        let hash = "a".repeat(64);
+        for url in [
+            format!("https://example.com/texture/{hash}"),
+            format!("https://textures.minecraft.net.evil.test/texture/{hash}"),
+            format!("https://user:password@textures.minecraft.net/texture/{hash}"),
+            format!("https://textures.minecraft.net:8443/texture/{hash}"),
+            format!("https://textures.minecraft.net/texture/{hash}?token=fixture"),
+            format!("https://textures.minecraft.net/texture/{hash}#fragment"),
+            "https://textures.minecraft.net/texture/not-a-hash".into(),
+            "file:///texture/fixture".into(),
+        ] {
+            let body = serde_json::json!({"id":"0123456789abcdef0123456789abcdef", "name":"Player", "skins":[{"state":"ACTIVE", "url":url}]}).to_string();
+            assert!(matches!(
+                parse_minecraft_profile(200, &body),
+                Err(CoreError::AuthProfileMissing)
+            ));
+        }
     }
 }
