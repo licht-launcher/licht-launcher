@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  activateOfflineAccount,
   activeMicrosoftAccount,
   beginMicrosoftLogin,
   browseApplicationDirectory,
@@ -17,6 +18,7 @@ import {
   detectJavaInstallations,
   duplicateInstance,
   getLastPlayedFolder,
+  getPlayerHead,
   getSettings,
   getStartupProgress,
   installModpackFiles,
@@ -35,6 +37,7 @@ import {
   listRunningGames,
   listVersions,
   logoutMicrosoftAccount,
+  openFeedback,
   openInstanceFolder,
   openRepository,
   openStartupPreview,
@@ -382,6 +385,27 @@ describe("launcher commands", () => {
   it("opens the repository", async () => {
     await openRepository();
     expect(invoke).toHaveBeenCalledWith("open_repository");
+  });
+
+  it("opens the feedback form through the native command", async () => {
+    await openFeedback();
+    expect(invoke).toHaveBeenCalledWith("open_feedback");
+  });
+
+  it("reads the cached player head through the native command", async () => {
+    const path = "C:\\Licht\\cache\\player-heads\\default.png";
+    vi.mocked(invoke).mockResolvedValueOnce(path);
+    await expect(getPlayerHead(null)).resolves.toBe(path);
+    expect(invoke).toHaveBeenCalledWith("get_player_head", { skinUrl: null });
+  });
+
+  it("selects offline mode through the native command without logging out saved accounts", async () => {
+    await activateOfflineAccount();
+    expect(invoke).toHaveBeenCalledWith("use_offline_account");
+    expect(invoke).not.toHaveBeenCalledWith(
+      "logout_microsoft_account",
+      expect.anything(),
+    );
   });
 
   it("reads and writes the last played folder", async () => {

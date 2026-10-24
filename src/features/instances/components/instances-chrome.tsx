@@ -1,13 +1,17 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useRouterState } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { PlusIcon } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef } from "react";
 import { useDefaultLayout } from "react-resizable-panels";
+import { LauncherNavigation } from "@/components/title-bar/launcher-navigation";
 import { TitleBar } from "@/components/title-bar/title-bar";
+import { Button } from "@/components/ui/button";
 import {
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
+import { DownloadsPopover } from "@/features/downloads/components/downloads-popover";
 import { HomeSidebar } from "@/features/instances/components/home-sidebar";
 import { InstanceDialogs } from "@/features/instances/components/instance-dialogs";
 import {
@@ -31,9 +35,13 @@ import {
   SIDEBAR_PANEL_IDS,
   sidebarLayoutStorage,
 } from "@/features/instances/lib/sidebar-layout";
+import { PlayerAccountButton } from "@/features/settings/components/player-account-button";
 import { useCustomTitleBar } from "@/hooks/use-custom-title-bar";
 import { getLastPlayedFolder } from "@/lib/commands";
 import type { HomeSearch } from "@/routes/_app/index";
+
+const footerActionClassName =
+  "h-8 gap-2 rounded-md p-0 text-xs text-muted-foreground hover:bg-transparent hover:text-foreground dark:hover:bg-transparent aria-expanded:bg-transparent aria-expanded:text-foreground";
 
 export function InstancesChrome({ children }: { children: ReactNode }) {
   const customTitleBar = useCustomTitleBar().data ?? true;
@@ -197,88 +205,136 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
 
   return (
     <>
-      <ResizablePanelGroup
-        id={SIDEBAR_LAYOUT_ID}
-        orientation="horizontal"
-        className="min-h-0 h-full w-full flex-1 overflow-hidden bg-launcher-chrome text-popover-foreground"
-        defaultLayout={defaultLayout}
-        onLayoutChanged={onLayoutChanged}
-        disableCursor
-      >
-        <ResizablePanel
-          id={SIDEBAR_PANEL_ID}
-          defaultSize={SIDEBAR_DEFAULT_SIZE_PX}
-          minSize={SIDEBAR_MIN_SIZE_PX}
-          maxSize={SIDEBAR_MAX_SIZE_PX}
+      <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-home-sidebar text-popover-foreground">
+        <TitleBar
+          windowControls={customTitleBar}
+          actions={
+            <PlayerAccountButton
+              onAddAccount={() => dialogs.openGlobalSettings("account")}
+            />
+          }
         >
-          <HomeSidebar
-            instances={instances.data ?? []}
-            selectedFolder={onWizard ? null : selectedFolder}
-            busy={busy}
-            loading={instances.isPending}
-            playPhase={playPhase}
-            isInstalling={isInstalling}
-            playBlocked={playBlocked}
-            onInstanceAction={(action, instance) => {
-              switch (action) {
-                case "play":
-                  void playInstance(instance);
-                  break;
-                case "stop":
-                  void stopInstance(instance.folder);
-                  break;
-                case "configure":
-                  dialogs.openConfigure(instance.folder);
-                  break;
-                case "open-folder":
-                  openFolder.mutate(instance.folder);
-                  break;
-                case "rename":
-                  dialogs.openRename(instance.folder, instance.name);
-                  break;
-                case "duplicate":
-                  dialogs.openDuplicate(instance.folder, instance.name);
-                  break;
-                case "delete":
-                  dialogs.openDelete(instance.folder, instance.name);
-                  break;
-              }
-            }}
-            showTitleband={customTitleBar}
-            onSelect={(folder) => {
-              if (!onWizard && folder === selectedFolder) {
-                return;
-              }
-              setSelectedFolder(folder);
+          <LauncherNavigation
+            libraryActive={
+              pathname === "/" &&
+              !(dialogs.settingsOpen && dialogs.settingsSection === "account")
+            }
+            onOpenLibrary={() => {
+              dialogs.setSettingsOpen(false);
+              if (!onWizard) return;
               void navigate({
                 to: "/",
-                search: { instance: folder },
+                search:
+                  selectedFolder === null ? {} : { instance: selectedFolder },
               });
             }}
-            onCreate={() => {
-              void navigate({
-                to: "/instances/new",
-                search: { step: "source" },
-              });
-            }}
-            onOpenSettings={() => dialogs.openGlobalSettings("account")}
+            onOpenSettings={dialogs.openGlobalSettings}
           />
-        </ResizablePanel>
-        <ResizableHandle
-          aria-label="Resize sidebar"
-          className="w-0 bg-transparent hover:scale-x-100 hover:bg-transparent focus-visible:scale-x-100 focus-visible:bg-transparent active:scale-x-100 active:bg-transparent"
-        />
-        <ResizablePanel id={MAIN_PANEL_ID} minSize={480} className="bg-popover">
-          <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-muted/30">
-            {customTitleBar ? <TitleBar /> : null}
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-              <ChromeContext.Provider value={context}>
-                {children}
-              </ChromeContext.Provider>
+        </TitleBar>
+        <ResizablePanelGroup
+          id={SIDEBAR_LAYOUT_ID}
+          orientation="horizontal"
+          className="min-h-0 w-full flex-1 overflow-hidden"
+          defaultLayout={defaultLayout}
+          onLayoutChanged={onLayoutChanged}
+          disableCursor
+        >
+          <ResizablePanel
+            id={SIDEBAR_PANEL_ID}
+            defaultSize={SIDEBAR_DEFAULT_SIZE_PX}
+            minSize={SIDEBAR_MIN_SIZE_PX}
+            maxSize={SIDEBAR_MAX_SIZE_PX}
+          >
+            <HomeSidebar
+              instances={instances.data ?? []}
+              selectedFolder={onWizard ? null : selectedFolder}
+              busy={busy}
+              loading={instances.isPending}
+              playPhase={playPhase}
+              isInstalling={isInstalling}
+              playBlocked={playBlocked}
+              onInstanceAction={(action, instance) => {
+                switch (action) {
+                  case "play":
+                    void playInstance(instance);
+                    break;
+                  case "stop":
+                    void stopInstance(instance.folder);
+                    break;
+                  case "configure":
+                    dialogs.openConfigure(instance.folder);
+                    break;
+                  case "open-folder":
+                    openFolder.mutate(instance.folder);
+                    break;
+                  case "rename":
+                    dialogs.openRename(instance.folder, instance.name);
+                    break;
+                  case "duplicate":
+                    dialogs.openDuplicate(instance.folder, instance.name);
+                    break;
+                  case "delete":
+                    dialogs.openDelete(instance.folder, instance.name);
+                    break;
+                }
+              }}
+              onSelect={(folder) => {
+                if (!onWizard && folder === selectedFolder) {
+                  return;
+                }
+                setSelectedFolder(folder);
+                void navigate({
+                  to: "/",
+                  search: { instance: folder },
+                });
+              }}
+            />
+          </ResizablePanel>
+          <ResizableHandle
+            aria-label="Resize sidebar"
+            className="w-0 bg-transparent hover:scale-x-100 hover:bg-transparent focus-visible:scale-x-100 focus-visible:bg-transparent active:scale-x-100 active:bg-transparent"
+          />
+          <ResizablePanel id={MAIN_PANEL_ID} minSize={480}>
+            <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
+              <div className="mx-2 mt-2 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border-t border-foreground/10 bg-popover">
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-muted/30">
+                  <ChromeContext.Provider value={context}>
+                    {children}
+                  </ChromeContext.Provider>
+                </div>
+              </div>
+            </div>
+          </ResizablePanel>
+        </ResizablePanelGroup>
+        <footer
+          role="contentinfo"
+          aria-label="Download status"
+          className="flex shrink-0 items-center justify-center px-3 pt-0.5 pb-1.5"
+        >
+          <div className="grid min-h-8 w-full grid-cols-4 items-center">
+            <div className="flex items-center justify-start">
+              <Button
+                asChild
+                variant="ghost"
+                size="sm"
+                className={footerActionClassName}
+              >
+                <Link to="/instances/new" search={{ step: "source" }}>
+                  <PlusIcon aria-hidden className="size-3.5" />
+                  Create instance
+                </Link>
+              </Button>
+            </div>
+            <div className="col-span-2 flex min-w-0 items-center justify-center">
+              <DownloadsPopover
+                side="top"
+                showLabel
+                triggerClassName={footerActionClassName}
+              />
             </div>
           </div>
-        </ResizablePanel>
-      </ResizablePanelGroup>
+        </footer>
+      </div>
 
       <InstanceDialogs
         configuring={configuring}

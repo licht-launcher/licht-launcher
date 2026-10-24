@@ -15,10 +15,29 @@ pub async fn list_microsoft_accounts(
 }
 
 #[tauri::command]
+pub async fn get_player_head(
+    paths: State<'_, LauncherPaths>,
+    skin_url: Option<String>,
+) -> Result<String, String> {
+    let client = http_client().map_err(failure)?;
+    let path = licht_core::cached_player_head(&paths.settings, &client, skin_url.as_deref())
+        .await
+        .map_err(failure)?;
+    path.into_os_string()
+        .into_string()
+        .map_err(|_| failure(licht_core::CoreError::CachePath))
+}
+
+#[tauri::command]
 pub fn active_microsoft_account(
     paths: State<'_, LauncherPaths>,
 ) -> Result<Option<AccountProfile>, String> {
     get_active_profile(&paths.settings).map_err(failure)
+}
+
+#[tauri::command]
+pub fn use_offline_account() -> Result<(), String> {
+    licht_core::use_offline_account().map_err(failure)
 }
 
 #[tauri::command]

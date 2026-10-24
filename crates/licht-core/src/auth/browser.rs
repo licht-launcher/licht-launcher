@@ -61,6 +61,8 @@ fn build_authorize_url(
         query.append_pair("response_type", "code");
         query.append_pair("redirect_uri", redirect_uri);
         query.append_pair("response_mode", "query");
+        // Adding an account must not silently reuse the browser's existing session.
+        query.append_pair("prompt", "select_account");
         query.append_pair("scope", MSA_SCOPE);
         query.append_pair("state", state);
         query.append_pair("code_challenge", code_challenge);
@@ -267,6 +269,7 @@ mod tests {
         assert!(url.contains("code_challenge=challenge-value"));
         assert!(url.contains("code_challenge_method=S256"));
         assert!(url.contains("response_type=code"));
+        assert!(url.contains("prompt=select_account"));
         assert!(url.contains("redirect_uri=http%3A%2F%2Flocalhost%3A1234%2F"));
     }
 

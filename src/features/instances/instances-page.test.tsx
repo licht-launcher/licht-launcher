@@ -20,7 +20,10 @@ import {
   completedDownload,
   downloadJob,
 } from "@/features/downloads/fixtures/job";
-import { snapshot } from "@/features/settings/fixtures/snapshot";
+import {
+  playerHeadPathFixture,
+  snapshot,
+} from "@/features/settings/fixtures/snapshot";
 import { startupProgress } from "@/features/startup/fixtures/progress";
 import type { DownloadJobSnapshot } from "@/lib/generated/DownloadJobSnapshot";
 import type { GameLogEvent } from "@/lib/generated/GameLogEvent";
@@ -28,8 +31,9 @@ import type { InstallProgress } from "@/lib/generated/InstallProgress";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 import { routeTree } from "@/routeTree.gen";
 
-const { invoke, listeners } = vi.hoisted(() => ({
+const { invoke, listeners, closeWindow } = vi.hoisted(() => ({
   invoke: vi.fn(),
+  closeWindow: vi.fn(),
   listeners: new Map<string, (event: { payload: unknown }) => void>(),
 }));
 
@@ -52,7 +56,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 vi.mock("@tauri-apps/api/window", () => ({
   getCurrentWindow: () => ({
     minimize: vi.fn(),
-    close: vi.fn(),
+    close: closeWindow,
     setDecorations: vi.fn(),
   }),
 }));
@@ -79,6 +83,8 @@ async function renderAt(path: string) {
 
 function defaultCommandResponse(command: string): Promise<unknown> {
   switch (command) {
+    case "get_player_head":
+      return Promise.resolve(playerHeadPathFixture);
     case "get_startup_progress":
       return Promise.resolve(startupProgress());
     case "custom_title_bar_active":
@@ -190,6 +196,7 @@ describe("InstancesPage", () => {
   beforeEach(() => {
     listeners.clear();
     invoke.mockReset();
+    closeWindow.mockReset().mockResolvedValue(undefined);
     vi.spyOn(console, "error");
   });
 
@@ -206,6 +213,424 @@ describe("InstancesPage", () => {
       );
     vi.mocked(console.error).mockRestore();
     expect(errors).toEqual([]);
+  });
+
+  it("opens the instance creator from the bottom bar shortcut", async () => {
+    mockContextMenuCommands();
+    const { router } = await renderAt("/");
+    const footer = screen.getByRole("contentinfo", { name: "Download status" });
+    const create = within(footer).getByRole("link", {
+      name: "Create instance",
+    });
+    expect(create).toBeVisible();
+    expect(
+      within(screen.getByRole("navigation", { name: "Instances" })).queryByRole(
+        "button",
+        { name: "New instance" },
+      ),
+    ).not.toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(create);
+      await router.load();
+    });
+    expect(
+      await screen.findByRole("heading", { name: "How do you want to start?" }),
+    ).toBeVisible();
+    expect(router.state.location.pathname).toBe("/instances/new");
+    expect(router.state.location.search).toMatchObject({ step: "source" });
+    expect(
+      invoke.mock.calls.some(
+        ([command]) => command === "create_instance_with_platform",
+      ),
+    ).toBe(false);
+  });
+
+  it("opens settings from the Licht menu using the keyboard", async () => {
+    mockContextMenuCommands((command) => {
+      if (command === "runtime_java")
+        return Promise.resolve({
+          java25: null,
+          java21: null,
+          java17: null,
+          java8: null,
+        });
+      return undefined;
+    });
+    await renderAt("/");
+    expect(
+      await screen.findByRole("heading", { name: "Classic" }),
+    ).toBeVisible();
+    const trigger = await screen.findByRole("button", {
+      name: "Licht Launcher",
+    });
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: "Enter" });
+    const menu = await screen.findByRole("menu", { name: "Licht menu" });
+    const settings = within(menu).getByRole("menuitem", { name: "Settings" });
+    const accounts = within(menu).getByRole("menuitem", {
+      name: "Manage accounts",
+    });
+    await waitFor(() => expect(accounts).toHaveFocus());
+    fireEvent.keyDown(accounts, { key: "ArrowDown" });
+    await waitFor(() => expect(settings).toHaveFocus());
+    fireEvent.keyDown(settings, { key: "Enter" });
+    expect(
+      await screen.findByRole("dialog", { name: "Settings" }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Appearance", current: "page" }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("menu", { name: "Licht menu" }),
+    ).not.toBeInTheDocument();
+    expect(closeWindow).not.toHaveBeenCalled();
+  });
+
+  it("requests normal window closure from Exit in the Licht menu", async () => {
+    mockContextMenuCommands();
+    await renderAt("/");
+    expect(
+      await screen.findByRole("heading", { name: "Classic" }),
+    ).toBeVisible();
+    const trigger = await screen.findByRole("button", {
+      name: "Licht Launcher",
+    });
+    // Avoid hitting jsdom's zero-sized resize handle at the origin.
+    fireEvent.pointerDown(trigger, {
+      button: 0,
+      ctrlKey: false,
+      pointerType: "mouse",
+      clientX: 50,
+      clientY: 20,
+    });
+    fireEvent.pointerUp(trigger, {
+      button: 0,
+      pointerType: "mouse",
+      clientX: 50,
+      clientY: 20,
+    });
+    const menu = await screen.findByRole("menu", { name: "Licht menu" });
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "Exit" }));
+    await waitFor(() => expect(closeWindow).toHaveBeenCalledOnce());
+  });
+
+  it("opens the feedback form from the titlebar menu and restores its closed state", async () => {
+    mockContextMenuCommands();
+    await renderAt("/");
+    const titlebar = screen.getByRole("banner");
+    const trigger = within(titlebar).getByRole("button", {
+      name: "Licht Launcher",
+    });
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: "Enter" });
+    const menu = await screen.findByRole("menu", { name: "Licht menu" });
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    fireEvent.click(
+      within(menu).getByRole("menuitem", { name: "Send feedback" }),
+    );
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith("open_feedback"));
+    await waitFor(() =>
+      expect(trigger).toHaveAttribute("aria-expanded", "false"),
+    );
+  });
+
+  it.each([
+    {
+      name: "OnlinePlayer",
+      profile: {
+        uuid: "0123456789abcdef0123456789abcdef",
+        name: "OnlinePlayer",
+        skinUrl: `https://textures.minecraft.net/texture/${"a".repeat(64)}`,
+      },
+    },
+    { name: "Steve", profile: null },
+  ])(
+    "shows $name on the right side of the titlebar with a cached head and an account menu",
+    async ({ name, profile }) => {
+      mockContextMenuCommands((command) => {
+        if (command === "active_microsoft_account")
+          return Promise.resolve(profile);
+        if (command === "list_microsoft_accounts")
+          return Promise.resolve(profile ? [profile] : []);
+        if (command === "runtime_java")
+          return Promise.resolve({
+            java25: null,
+            java21: null,
+            java17: null,
+            java8: null,
+          });
+        return undefined;
+      });
+      await renderAt("/");
+      const account = await screen.findByRole("button", {
+        name: `Account: ${name}`,
+      });
+      const footer = screen.getByRole("contentinfo", {
+        name: "Download status",
+      });
+      const titlebar = screen.getByRole("banner");
+      expect(titlebar).toContainElement(account);
+      expect(
+        within(footer).queryByRole("button", {
+          name: /^Account:/,
+        }),
+      ).not.toBeInTheDocument();
+      expect(
+        within(titlebar)
+          .getByRole("button", { name: "Library" })
+          .compareDocumentPosition(account) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+      expect(screen.getAllByRole("button", { name: /^Account:/ })).toHaveLength(
+        1,
+      );
+      await waitFor(() =>
+        expect(account.querySelector("img")).toHaveAttribute(
+          "src",
+          `asset://localhost/${playerHeadPathFixture}`,
+        ),
+      );
+      expect(invoke).toHaveBeenCalledWith("get_player_head", {
+        skinUrl: profile?.skinUrl ?? null,
+      });
+      expect(account).toHaveTextContent(name);
+      account.focus();
+      fireEvent.keyDown(account, { key: "Enter" });
+      const menu = await screen.findByRole("menu", { name: "Player accounts" });
+      expect(account).toHaveAttribute("aria-expanded", "true");
+      expect(
+        within(menu).getByRole("menuitem", { name: "Add account" }),
+      ).toBeVisible();
+      if (profile)
+        expect(
+          await within(menu).findByRole("menuitemradio", {
+            name: profile.name,
+          }),
+        ).toHaveAttribute("aria-checked", "true");
+      fireEvent.keyDown(menu, { key: "Escape" });
+      await waitFor(() =>
+        expect(
+          screen.queryByRole("menu", { name: "Player accounts" }),
+        ).not.toBeInTheDocument(),
+      );
+      expect(account).toHaveAttribute("aria-expanded", "false");
+    },
+  );
+
+  it("opens Account settings from Add account in the titlebar without starting login", async () => {
+    mockContextMenuCommands((command) => {
+      if (command === "runtime_java")
+        return Promise.resolve({
+          java25: null,
+          java21: null,
+          java17: null,
+          java8: null,
+        });
+      return undefined;
+    });
+    await renderAt("/");
+    const account = await within(screen.getByRole("banner")).findByRole(
+      "button",
+      { name: "Account: Steve" },
+    );
+    account.focus();
+    fireEvent.keyDown(account, { key: "Enter" });
+    const menu = await screen.findByRole("menu", { name: "Player accounts" });
+    fireEvent.click(
+      within(menu).getByRole("menuitem", { name: "Add account" }),
+    );
+    const settings = await screen.findByRole("dialog", { name: "Settings" });
+    expect(settings).toBeVisible();
+    expect(
+      within(settings).getByRole("button", {
+        name: "Account",
+        current: "page",
+      }),
+    ).toBeVisible();
+    expect(invoke).not.toHaveBeenCalledWith("begin_microsoft_login");
+    expect(
+      screen.queryByRole("menu", { name: "Player accounts" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it.each([true, false])(
+    "keeps sidebar actions and content usable with custom title bar %s",
+    async (customTitleBar) => {
+      mockContextMenuCommands((command) => {
+        if (command === "custom_title_bar_active")
+          return Promise.resolve(customTitleBar);
+        if (command === "runtime_java") {
+          return Promise.resolve({
+            java25: null,
+            java21: null,
+            java17: null,
+            java8: null,
+          });
+        }
+        return undefined;
+      });
+      await renderAt("/");
+      expect(
+        await screen.findByRole("heading", { name: "Classic" }),
+      ).toBeVisible();
+      expect(
+        screen.getByRole("navigation", { name: "Instances" }),
+      ).toBeVisible();
+      const footer = screen.getByRole("contentinfo", {
+        name: "Download status",
+      });
+      expect(
+        await within(footer).findByRole("button", { name: "Downloads: Idle" }),
+      ).toBeVisible();
+
+      const titleBar = screen.getByRole("banner");
+      expect(
+        within(titleBar).getByRole("button", { name: "Licht Launcher" }),
+      ).toBeVisible();
+      if (!customTitleBar) {
+        expect(
+          within(titleBar).queryByRole("button", { name: "Minimize" }),
+        ).not.toBeInTheDocument();
+        expect(
+          within(titleBar).queryByRole("button", { name: "Close" }),
+        ).not.toBeInTheDocument();
+      }
+      const launcher = within(titleBar).getByRole("button", {
+        name: "Licht Launcher",
+      });
+      launcher.focus();
+      fireEvent.keyDown(launcher, { key: "Enter" });
+      fireEvent.click(
+        within(
+          await screen.findByRole("menu", { name: "Licht menu" }),
+        ).getByRole("menuitem", { name: "Manage accounts" }),
+      );
+      const settings = await screen.findByRole("dialog", { name: "Settings" });
+      expect(
+        within(settings).getByRole("button", {
+          name: "Account",
+          current: "page",
+        }),
+      ).toBeVisible();
+      fireEvent.click(within(settings).getByRole("button", { name: "Close" }));
+      await waitFor(() =>
+        expect(
+          screen.queryByRole("dialog", { name: "Settings" }),
+        ).not.toBeInTheDocument(),
+      );
+      expect(screen.getByRole("heading", { name: "Classic" })).toBeVisible();
+    },
+  );
+
+  it("shows download progress in the footer and popover, then returns to idle", async () => {
+    mockContextMenuCommands();
+    await renderAt("/");
+    const footer = within(
+      screen.getByRole("contentinfo", { name: "Download status" }),
+    );
+    await footer.findByRole("button", { name: "Downloads: Idle" });
+    await waitFor(() =>
+      expect(listeners.has("download-job-updated")).toBe(true),
+    );
+    act(() =>
+      listeners.get("download-job-updated")?.({ payload: downloadJob() }),
+    );
+    const trigger = await footer.findByRole("button", {
+      name: "Downloads: 25%",
+    });
+    expect(trigger).not.toHaveTextContent("Downloads");
+    expect(within(trigger).getByText("Downloading · Minecraft")).toBeVisible();
+    expect(
+      within(trigger).getByRole("progressbar", {
+        name: "Current download progress",
+      }),
+    ).toHaveAttribute("aria-valuenow", "25");
+    fireEvent.click(trigger);
+    expect(await screen.findByText(/25\.0%/)).toBeInTheDocument();
+    act(() =>
+      listeners.get("download-job-updated")?.({ payload: completedDownload() }),
+    );
+    expect(
+      await footer.findByRole("button", { name: "Downloads: Idle" }),
+    ).toBeInTheDocument();
+  });
+
+  it("opens idle download details from the footer", async () => {
+    mockContextMenuCommands();
+    await renderAt("/");
+    const footer = within(
+      screen.getByRole("contentinfo", { name: "Download status" }),
+    );
+    const trigger = await footer.findByRole("button", {
+      name: "Downloads: Idle",
+    });
+    expect(trigger).toHaveTextContent(/^Downloads$/);
+    fireEvent.click(trigger);
+    expect(
+      await screen.findByText("No downloads in progress"),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("banner")).queryByRole("button", {
+        name: /^Downloads:/,
+      }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows preparing downloads in the footer before totals are known", async () => {
+    mockContextMenuCommands();
+    await renderAt("/");
+    await waitFor(() =>
+      expect(listeners.has("download-job-updated")).toBe(true),
+    );
+    act(() =>
+      listeners.get("download-job-updated")?.({
+        payload: downloadJob({
+          component: "fabric",
+          phase: "preparing",
+          progress: {
+            finished: 0,
+            failed: 0,
+            total: 0,
+            bytesDone: 0,
+            bytesTotal: 0,
+          },
+        }),
+      }),
+    );
+    const footer = within(
+      screen.getByRole("contentinfo", { name: "Download status" }),
+    );
+    expect(
+      await footer.findByRole("button", { name: "Downloads: Preparing" }),
+    ).toBeInTheDocument();
+  });
+
+  it("aggregates multiple installs in the footer and opens both download rows", async () => {
+    mockContextMenuCommands();
+    await renderAt("/");
+    await waitFor(() =>
+      expect(listeners.has("download-job-updated")).toBe(true),
+    );
+    act(() => {
+      listeners.get("download-job-updated")?.({
+        payload: downloadJob({ instanceFolder: "First" }),
+      });
+      listeners.get("download-job-updated")?.({
+        payload: downloadJob({ id: "2", instanceFolder: "Second" }),
+      });
+    });
+    const footer = within(
+      screen.getByRole("contentinfo", { name: "Download status" }),
+    );
+    fireEvent.click(
+      await footer.findByRole("button", { name: "Downloads: 2" }),
+    );
+    expect(
+      await screen.findByRole("region", { name: "Download for First" }),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByRole("region", { name: "Download for Second" }),
+    ).toBeInTheDocument();
   });
 
   it.each(["paused", "interrupted", "failed"] as const)(
@@ -400,7 +825,7 @@ describe("InstancesPage", () => {
       expect(invoke).not.toHaveBeenCalledWith("cancel_download_job", {
         jobId: "1",
       });
-      const sidebar = screen.getByRole("navigation", { hidden: true });
+      const sidebar = screen.getByLabelText("Instances", { selector: "nav" });
       expect(within(sidebar).getByText("Classic")).toBeInTheDocument();
       fireEvent.click(
         within(dialog).getByRole("button", { name: "Cancel download" }),
@@ -475,10 +900,18 @@ describe("InstancesPage", () => {
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("combobox", { name: "Sort instances" }));
+    expect(await screen.findByRole("listbox")).toHaveAttribute(
+      "data-side",
+      "bottom",
+    );
     fireEvent.click(await screen.findByRole("option", { name: "Name" }));
     expect(names()).toEqual(["Alpha", "Classic", "Zeta"]);
 
     fireEvent.click(screen.getByRole("combobox", { name: "Sort instances" }));
+    expect(await screen.findByRole("listbox")).toHaveAttribute(
+      "data-side",
+      "bottom",
+    );
     fireEvent.click(await screen.findByRole("option", { name: "Last played" }));
     expect(names()).toEqual(["Classic", "Zeta", "Alpha"]);
   });
@@ -523,8 +956,39 @@ describe("InstancesPage", () => {
       }),
     ).toBeInTheDocument();
     expect(screen.queryByText("No instances yet.")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "New instance" })).toBeEnabled();
-    expect(screen.getByText("Licht Launcher")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Create instance" }),
+    ).toHaveAttribute("href");
+    const appMenu = screen.getByRole("button", { name: "Licht Launcher" });
+    expect(appMenu).toBeVisible();
+    expect(appMenu).toHaveAttribute("aria-haspopup", "menu");
+    expect(appMenu.closest("[data-tauri-drag-region]")).toBeNull();
+    const mainNavigation = within(
+      screen.getByRole("navigation", { name: "Main navigation" }),
+    );
+    expect(
+      mainNavigation.getByRole("button", { name: "Library", current: "page" }),
+    ).toBeEnabled();
+    expect(
+      mainNavigation.getByRole("button", { name: "Discover" }),
+    ).toBeDisabled();
+    expect(appMenu.closest("[data-panel]")).toBeNull();
+    expect(screen.getByRole("banner")).toContainElement(appMenu);
+    expect(
+      screen.queryByRole("group", { name: "Sidebar actions" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Skins" }),
+    ).not.toBeInTheDocument();
+    const sidebar = within(
+      screen.getByRole("navigation", { name: "Instances" }),
+    );
+    expect(
+      sidebar.queryByRole("button", { name: "New instance" }),
+    ).not.toBeInTheDocument();
+    expect(
+      sidebar.getByRole("combobox", { name: "Sort instances" }),
+    ).toBeVisible();
     expect(
       screen.queryByRole("list", { name: "Versions" }),
     ).not.toBeInTheDocument();
@@ -532,13 +996,31 @@ describe("InstancesPage", () => {
       screen.queryByRole("combobox", { name: "Type" }),
     ).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    appMenu.focus();
+    fireEvent.keyDown(appMenu, { key: "Enter" });
+    fireEvent.click(
+      within(await screen.findByRole("menu", { name: "Licht menu" })).getByRole(
+        "menuitem",
+        { name: "Manage accounts" },
+      ),
+    );
     expect(
       await screen.findByRole("button", {
         name: "Account",
         current: "page",
       }),
     ).toBeInTheDocument();
+    fireEvent.click(
+      within(screen.getByRole("dialog", { name: "Settings" })).getByRole(
+        "button",
+        { name: "Close" },
+      ),
+    );
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("dialog", { name: "Settings" }),
+      ).not.toBeInTheDocument(),
+    );
   });
 
   it("replaces instance tabs with a welcome state and opens the creation wizard", async () => {
@@ -546,7 +1028,7 @@ describe("InstancesPage", () => {
       if (command === "list_instances") return Promise.resolve([]);
     });
 
-    await renderAt("/");
+    const { router } = await renderAt("/");
 
     expect(
       await screen.findByRole("heading", {
@@ -563,7 +1045,10 @@ describe("InstancesPage", () => {
       screen.queryByRole("textbox", { name: "Search content" }),
     ).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Create instance" }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Create instance" }));
+      await router.load();
+    });
 
     expect(
       await screen.findByRole("heading", { name: "How do you want to start?" }),
@@ -690,8 +1175,12 @@ describe("InstancesPage", () => {
     expect(
       screen.getByRole("button", { name: "Configure Classic" }),
     ).toBeEnabled();
-    expect(screen.getByRole("button", { name: "New instance" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Settings" })).toBeEnabled();
+    expect(
+      screen.getByRole("link", { name: "Create instance" }),
+    ).toHaveAttribute("href");
+    expect(
+      screen.getByRole("button", { name: "Licht Launcher" }),
+    ).toBeEnabled();
     expect(screen.queryByText("Preparing…")).not.toBeInTheDocument();
     expect(
       screen.queryByRole("progressbar", { name: "Install progress" }),
@@ -1262,7 +1751,7 @@ describe("InstancesPage", () => {
     );
   });
 
-  it("installs two versions in parallel without locking the sidebar", async () => {
+  it("submits two installation requests without locking the sidebar", async () => {
     const finishInstall: Record<string, (job: DownloadJobSnapshot) => void> =
       {};
     invoke.mockImplementation((command: string, args?: unknown) => {
@@ -1330,7 +1819,9 @@ describe("InstancesPage", () => {
         operation: "install",
       });
     });
-    expect(screen.getByRole("button", { name: "New instance" })).toBeEnabled();
+    expect(
+      screen.getByRole("link", { name: "Create instance" }),
+    ).toHaveAttribute("href");
     expect(
       within(sidebar).getByRole("button", { name: /^Fresh/ }),
     ).toBeEnabled();
@@ -1390,7 +1881,7 @@ describe("InstancesPage", () => {
     });
   });
 
-  it("opens the new instance wizard from the sidebar", async () => {
+  it("opens the new instance wizard from the footer", async () => {
     invoke.mockImplementation((command: string) => {
       if (command === "list_instances") {
         return Promise.resolve([]);
@@ -1410,12 +1901,48 @@ describe("InstancesPage", () => {
     });
 
     await renderAt("/");
-    fireEvent.click(
-      await screen.findByRole("button", { name: "New instance" }),
-    );
+    const createAction = await screen.findByRole("link", {
+      name: "Create instance",
+    });
+    expect(
+      screen.getByRole("button", { name: "Library", current: "page" }),
+    ).toBeEnabled();
+    fireEvent.click(createAction);
     expect(
       await screen.findByRole("heading", { name: "How do you want to start?" }),
     ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Library" })).not.toHaveAttribute(
+      "aria-current",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Library" })).toHaveAttribute(
+        "aria-current",
+        "page",
+      ),
+    );
+  });
+
+  it("returns to the selected instance through Library and preserves history", async () => {
+    mockContextMenuCommands();
+    const { router } = await renderAt("/?instance=next");
+    expect(await screen.findByRole("heading", { name: "Next" })).toBeVisible();
+    fireEvent.click(screen.getByRole("link", { name: "Create instance" }));
+    expect(
+      await screen.findByRole("heading", { name: "How do you want to start?" }),
+    ).toBeVisible();
+    const library = screen.getByRole("button", { name: "Library" });
+    expect(library).not.toHaveAttribute("aria-current");
+    fireEvent.click(library);
+    expect(await screen.findByRole("heading", { name: "Next" })).toBeVisible();
+    expect(library).toHaveAttribute("aria-current", "page");
+    expect(router.state.location.search).toMatchObject({ instance: "next" });
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(
+      await screen.findByRole("heading", { name: "How do you want to start?" }),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Forward" }));
+    expect(await screen.findByRole("heading", { name: "Next" })).toBeVisible();
   });
 
   it("navigates back and forward from the sidebar history buttons", async () => {
@@ -1447,7 +1974,7 @@ describe("InstancesPage", () => {
     expect(back).toBeDisabled();
     expect(forward).toBeDisabled();
 
-    fireEvent.click(screen.getByRole("button", { name: "New instance" }));
+    fireEvent.click(screen.getByRole("link", { name: "Create instance" }));
     expect(
       await screen.findByRole("heading", { name: "How do you want to start?" }),
     ).toBeInTheDocument();

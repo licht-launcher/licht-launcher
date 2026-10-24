@@ -3,8 +3,8 @@ use crate::auth::flow::{
     complete_microsoft_login, minecraft_token_needs_refresh, refresh_microsoft_session,
 };
 use crate::auth::keyring_store::{
-    delete_account, list_stored_profiles, load_account, load_active_account,
-    set_active_account_uuid, store_account,
+    clear_active_account_uuid, delete_account, list_stored_profiles, load_account,
+    load_active_account, set_active_account_uuid, store_account,
 };
 use crate::auth::types::{AccountProfile, MicrosoftSession};
 use crate::{DatabaseClient, Result, SharedCache};
@@ -18,6 +18,11 @@ pub async fn list_accounts(database: &DatabaseClient) -> Result<Vec<AccountProfi
 
 pub fn get_active_profile(_cache: &SharedCache) -> Result<Option<AccountProfile>> {
     Ok(load_active_account()?.map(|session| session.profile))
+}
+
+/// Select offline mode without deleting any saved account credentials.
+pub fn use_offline_account() -> Result<()> {
+    clear_active_account_uuid()
 }
 
 /// Browser authorization-code + PKCE login. `open_url` must open the system browser.

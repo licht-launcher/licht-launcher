@@ -1,17 +1,14 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { DownloadCloud, Minus, UserRound } from "lucide-react";
-import { useEffect, useState } from "react";
+import { DownloadCloud, Minus } from "lucide-react";
+import { type ReactNode, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { DownloadsPopover } from "@/features/downloads/components/downloads-popover";
 import {
   getUpdateCheckStatus,
   INSTALL_UPDATE_EVENT,
   UPDATE_CHECK_STATUS_EVENT,
 } from "@/features/updater/components/update-check";
-import { useTitleBarDecorations } from "@/hooks/use-title-bar-decorations";
 import { usesNativeCaptionButtons } from "@/lib/native-caption";
-import { requestOpenSettings } from "@/lib/shell-events";
 import { cn } from "@/lib/utils";
 
 const controlClass =
@@ -28,10 +25,17 @@ function currentWindow() {
   }
 }
 
-export function TitleBar() {
+export function TitleBar({
+  children,
+  actions,
+  windowControls = true,
+}: {
+  children?: ReactNode;
+  actions?: ReactNode;
+  windowControls?: boolean;
+}) {
   const windowApi = currentWindow();
-  const { username } = useTitleBarDecorations();
-  const nativeCaption = usesNativeCaptionButtons();
+  const nativeCaption = windowControls && usesNativeCaptionButtons();
   const [updateAvailable, setUpdateAvailable] = useState(
     () => getUpdateCheckStatus() === "available",
   );
@@ -57,6 +61,7 @@ export function TitleBar() {
           nativeCaption && "pr-[var(--native-caption-inset)]",
         )}
       >
+        {children}
         <div data-tauri-drag-region className="min-w-0 flex-1" aria-hidden />
         <div className="flex shrink-0 items-center gap-1.5 px-2 text-muted-foreground">
           {updateAvailable ? (
@@ -77,33 +82,9 @@ export function TitleBar() {
               Update
             </Button>
           ) : null}
-          <Button
-            type="button"
-            variant="ghost"
-            className={chipClass}
-            aria-label={`Account: ${username}`}
-            onPointerDownCapture={(event) => {
-              if (event.button === 0) {
-                event.preventDefault();
-                requestOpenSettings("account");
-              }
-            }}
-            onClick={(event) => {
-              if (event.detail === 0) {
-                requestOpenSettings("account");
-              }
-            }}
-          >
-            <UserRound
-              aria-hidden
-              className="size-3.5 shrink-0"
-              strokeWidth={2}
-            />
-            <span className="truncate">{username}</span>
-          </Button>
-          <DownloadsPopover triggerClassName={chipClass} />
+          {actions}
         </div>
-        {nativeCaption ? null : (
+        {!windowControls || nativeCaption ? null : (
           <div className="flex shrink-0 items-stretch text-muted-foreground">
             <Button
               type="button"
