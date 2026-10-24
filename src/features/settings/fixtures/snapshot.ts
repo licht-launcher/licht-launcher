@@ -1,3 +1,6 @@
+export const playerHeadPathFixture =
+  "C:\\Licht\\cache\\player-heads\\default.png";
+
 export const snapshot = {
   settings: {
     schema: 1,

@@ -37,6 +37,7 @@ import {
   listRunningGames,
   listVersions,
   logoutMicrosoftAccount,
+  openFeedback,
   openInstanceFolder,
   openRepository,
   openStartupPreview,
@@ -384,6 +385,11 @@ describe("launcher commands", () => {
   it("opens the repository", async () => {
     await openRepository();
     expect(invoke).toHaveBeenCalledWith("open_repository");
+  });
+
+  it("opens the feedback form through the native command", async () => {
+    await openFeedback();
+    expect(invoke).toHaveBeenCalledWith("open_feedback");
   });
 
   it("reads the cached player head through the native command", async () => {
