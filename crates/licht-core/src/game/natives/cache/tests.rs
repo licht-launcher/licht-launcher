@@ -632,6 +632,7 @@ async fn offline_and_microsoft_launches_share_the_verified_generation() {
         profile: crate::AccountProfile {
             uuid: "00000000000000000000000000000000".into(),
             name: "FixturePlayer".into(),
+            skin_url: None,
         },
         msa_access_token: String::new(),
         msa_refresh_token: None,

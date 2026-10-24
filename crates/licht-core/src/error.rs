@@ -148,6 +148,8 @@ pub enum CoreError {
     AuthMinecraft,
     #[error("Minecraft profile was not found for this account")]
     AuthProfileMissing,
+    #[error("player skin image is invalid")]
+    SkinImage,
     #[error("this Microsoft account does not own Minecraft: Java Edition")]
     AuthNoOwnership,
     #[error("no signed-in Microsoft account")]

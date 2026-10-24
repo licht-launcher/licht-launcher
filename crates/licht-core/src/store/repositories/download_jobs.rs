@@ -40,8 +40,9 @@ impl DownloadJobRepository {
         let id = sqlx::query(
             "INSERT INTO download_jobs
              (data_directory, instance_folder, version_id, operation, status, component,
-              phase, progress, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, NULL, ?6, ?7, ?8, ?8)",
+              phase, progress, created_at, updated_at, queue_order)
+              VALUES (?1, ?2, ?3, ?4, ?5, NULL, ?6, ?7, ?8, ?8,
+                      (SELECT COALESCE(MAX(queue_order), 0) + 1 FROM download_jobs))",
         )
         .bind(data_directory(game)?)
         .bind(folder)
@@ -67,7 +68,7 @@ impl DownloadJobRepository {
         let rows = sqlx::query_as::<_, StoredJob>(
             "SELECT id, instance_folder AS folder, version_id, operation, status, component,
                     phase, progress, created_at, updated_at, error, java_major
-             FROM download_jobs WHERE data_directory = ?1 AND status NOT IN (?2, ?3) ORDER BY id",
+             FROM download_jobs WHERE data_directory = ?1 AND status NOT IN (?2, ?3) ORDER BY queue_order, id",
         )
         .bind(data_directory(game)?)
         .bind(encode(&DownloadJobStatus::Completed)?)
@@ -110,6 +111,8 @@ impl DownloadJobRepository {
         if !job.status.can_transition_to(update.status) {
             return Err(CoreError::DownloadJobTransition);
         }
+        let requeued =
+            update.status == DownloadJobStatus::Queued && job.status != DownloadJobStatus::Queued;
         job.status = update.status;
         job.component = update.component;
         job.phase = update.phase;
@@ -118,7 +121,10 @@ impl DownloadJobRepository {
         job.updated_at = timestamp()?.max(job.updated_at);
         sqlx::query(
             "UPDATE download_jobs SET status = ?1, component = ?2, phase = ?3,
-             progress = ?4, updated_at = ?5, error = ?8 WHERE id = ?6 AND data_directory = ?7",
+             progress = ?4, updated_at = ?5, error = ?8,
+             queue_order = CASE WHEN ?9 THEN (SELECT COALESCE(MAX(queue_order), 0) + 1 FROM download_jobs)
+                                ELSE queue_order END
+             WHERE id = ?6 AND data_directory = ?7",
         )
         .bind(encode(&job.status)?)
         .bind(job.component.as_ref().map(encode).transpose()?)
@@ -128,6 +134,7 @@ impl DownloadJobRepository {
         .bind(parse_id(id)?)
         .bind(data_directory(game)?)
         .bind(&job.error)
+        .bind(requeued)
         .execute(&mut *transaction)
         .await?;
         transaction.commit().await?;
@@ -200,7 +207,8 @@ impl DownloadJobRepository {
         }
         sqlx::query(
             "UPDATE download_jobs SET operation = ?1, status = ?2, component = NULL,
-            phase = ?3, progress = ?4, error = NULL, version_id = ?5, updated_at = ?6
+            phase = ?3, progress = ?4, error = NULL, version_id = ?5, updated_at = ?6,
+            queue_order = (SELECT COALESCE(MAX(queue_order), 0) + 1 FROM download_jobs)
             WHERE id = ?7 AND data_directory = ?8",
         )
         .bind(encode(&DownloadJobOperation::Repair)?)
@@ -235,8 +243,9 @@ impl DownloadJobRepository {
         let id = sqlx::query(
             "INSERT INTO download_jobs
              (data_directory, instance_folder, version_id, operation, status, component,
-              phase, progress, created_at, updated_at, java_major)
-             VALUES (?1, NULL, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8, ?9)",
+              phase, progress, created_at, updated_at, java_major, queue_order)
+              VALUES (?1, NULL, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8, ?9,
+                      (SELECT COALESCE(MAX(queue_order), 0) + 1 FROM download_jobs))",
         )
         .bind(data_directory(game)?)
         .bind(format!("java-{major}"))

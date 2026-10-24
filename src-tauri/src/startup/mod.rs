@@ -87,10 +87,14 @@ async fn initialize(
         custom: custom_title_bar,
     });
     *runtime.downloads.lock().await = Some(Arc::clone(&downloads));
-    crate::commands::downloads::forward_events(app.clone(), downloads);
+    crate::commands::downloads::forward_events(app.clone(), Arc::clone(&downloads));
     if session.is_stopped() {
         anyhow::bail!("startup closed");
     }
+    downloads
+        .recover_pending()
+        .await
+        .context("Could not restore the installation queue")?;
     crate::create_main_window(app, custom_title_bar, !settings.disable_transparency)?;
     session.update(app, |state| state.phase = StartupPhase::Ready)?;
     if let Some(window) = app.get_webview_window("startup") {

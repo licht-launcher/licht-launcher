@@ -5,13 +5,14 @@ use crate::{
     load_instance, load_settings,
 };
 use futures_util::future::BoxFuture;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use tokio::sync::{Mutex, broadcast, watch};
+use tokio::sync::{Mutex, Notify, broadcast, watch};
 
 mod cancellation;
 mod progress;
+mod queue;
 mod repair;
 mod worker;
 
@@ -35,6 +36,12 @@ struct ActiveJob {
     suspending: AtomicBool,
     restarting: AtomicBool,
     dirty: AtomicBool,
+    enabled: watch::Sender<bool>,
+}
+#[derive(Default)]
+struct InstallationQueue {
+    waiting: VecDeque<String>,
+    current: Option<String>,
 }
 pub struct DownloadManager {
     runtime: DownloadRuntime,
@@ -43,6 +50,8 @@ pub struct DownloadManager {
     active: Mutex<HashMap<String, Arc<ActiveJob>>>,
     events: broadcast::Sender<DownloadJobSnapshot>,
     closing: AtomicBool,
+    installations: Mutex<InstallationQueue>,
+    queue_changed: Notify,
 }
 
 impl DownloadManager {
@@ -67,6 +76,8 @@ impl DownloadManager {
             active: Mutex::new(HashMap::new()),
             events,
             closing: AtomicBool::new(false),
+            installations: Mutex::new(InstallationQueue::default()),
+            queue_changed: Notify::new(),
         }
     }
     pub fn subscribe(&self) -> broadcast::Receiver<DownloadJobSnapshot> {
@@ -186,11 +197,13 @@ impl DownloadManager {
             return Err(CoreError::DownloadJobTransition);
         }
         slot.control.pause();
+        slot.enabled.send_replace(false);
         snapshot.status = DownloadJobStatus::Paused;
         self.persist(&mut snapshot).await?;
         self.emit(snapshot.clone());
         drop(snapshot);
         slot.control.wait_for_idle().await?;
+        self.release_turn(id).await;
         Ok(slot.snapshot.lock().await.clone())
     }
     pub async fn resume(self: &Arc<Self>, id: &str) -> Result<DownloadJobSnapshot> {
@@ -208,11 +221,27 @@ impl DownloadManager {
             if snapshot.status != DownloadJobStatus::Paused {
                 return Ok(snapshot.clone());
             }
-            slot.control.resume();
-            snapshot.status = DownloadJobStatus::Running;
+            let instance_job = snapshot.instance_folder.is_some();
+            snapshot.status = if instance_job {
+                DownloadJobStatus::Queued
+            } else {
+                DownloadJobStatus::Running
+            };
             snapshot.error = None;
             self.persist(&mut snapshot).await?;
             self.emit(snapshot.clone());
+            if instance_job {
+                self.installations
+                    .lock()
+                    .await
+                    .waiting
+                    .push_back(id.to_string());
+                slot.enabled.send_replace(true);
+                self.queue_changed.notify_waiters();
+            } else {
+                slot.control.resume();
+                slot.enabled.send_replace(true);
+            }
             return Ok(snapshot.clone());
         }
         let mut snapshot = self.stored_job(id).await?;

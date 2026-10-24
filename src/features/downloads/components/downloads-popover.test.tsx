@@ -6,6 +6,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
+import type { ComponentProps } from "react";
 import { toast } from "sonner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DownloadJobsProvider } from "@/features/downloads/components/download-jobs-provider";
@@ -67,14 +68,14 @@ function backend(initial: DownloadJobSnapshot[]) {
   );
 }
 
-function renderDownloads() {
+function renderDownloads(props: ComponentProps<typeof DownloadsPopover> = {}) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
     <QueryClientProvider client={client}>
       <DownloadJobsProvider>
-        <DownloadsPopover />
+        <DownloadsPopover {...props} />
       </DownloadJobsProvider>
     </QueryClientProvider>,
   );
@@ -84,6 +85,58 @@ describe("DownloadsPopover", () => {
   beforeEach(() => {
     invoke.mockReset();
     vi.mocked(toast.error).mockReset();
+  });
+
+  it("shows the running installation and queued count in the footer summary", async () => {
+    backend([
+      downloadJob({ id: "1", status: "queued", instanceFolder: "Waiting" }),
+      downloadJob({ id: "2", instanceFolder: instance.folder }),
+      downloadJob({ id: "3", status: "queued", instanceFolder: "Later" }),
+    ]);
+    renderDownloads({ showLabel: true, side: "top" });
+    const trigger = await screen.findByRole("button", { name: "Downloads: 3" });
+    expect(trigger).not.toHaveTextContent("Downloads");
+    expect(within(trigger).getByText("Downloading · Minecraft")).toBeVisible();
+    expect(within(trigger).getByText("2 queued")).toBeVisible();
+    expect(within(trigger).getByText("25%")).toBeVisible();
+    expect(
+      within(trigger).getByRole("progressbar", {
+        name: "Current download progress",
+      }),
+    ).toHaveAttribute("aria-valuenow", "25");
+    fireEvent.click(trigger);
+    expect(
+      await screen.findByRole("region", { name: "Download for My Survival" }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("region", { name: "Download for Waiting" }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("region", { name: "Download for Later" }),
+    ).toBeVisible();
+  });
+
+  it("keeps paused progress visible and does not invent progress for queued work", async () => {
+    backend([downloadJob({ status: "paused" })]);
+    const paused = renderDownloads({ showLabel: true });
+    const trigger = await screen.findByRole("button", {
+      name: "Downloads: Paused",
+    });
+    expect(within(trigger).getByText("Paused · Minecraft")).toBeVisible();
+    expect(within(trigger).getByText("25%")).toBeVisible();
+    paused.unmount();
+    backend([downloadJob({ status: "queued" })]);
+    renderDownloads({ showLabel: true });
+    const waiting = await screen.findByRole("button", {
+      name: "Downloads: Queued",
+    });
+    expect(within(waiting).getByText("Queued · Minecraft")).toBeVisible();
+    expect(within(waiting).queryByText("25%")).not.toBeInTheDocument();
+    expect(
+      within(waiting).getByRole("progressbar", {
+        name: "Current download progress",
+      }),
+    ).not.toHaveAttribute("aria-valuenow");
   });
 
   it("shows file verification progress before download byte totals exist", async () => {

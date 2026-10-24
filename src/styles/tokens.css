@@ -184,6 +184,10 @@
   --border-radius: var(--radius);
 }
 
+[data-slot="skin-head"] img {
+  image-rendering: pixelated;
+}
+
 @keyframes title-bar-restart-toast-progress {
   from {
     transform: scaleX(1);

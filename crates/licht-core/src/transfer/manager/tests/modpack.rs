@@ -640,9 +640,9 @@ async fn modpack_workspace_survives_pause_and_resume_and_is_removed_after_cancel
     assert!(directory.join(".install").join("pack.zip.part").is_file());
     assert_eq!(
         manager.resume(&job.id).await.expect("resume").status,
-        DownloadJobStatus::Running
+        DownloadJobStatus::Queued
     );
-    assert!(directory.join(".install").join("pack.zip").is_file());
+    wait_until(|| directory.join(".install").join("pack.zip").is_file()).await;
     assert_eq!(
         manager.cancel(&job.id).await.expect("cancel").status,
         DownloadJobStatus::Cancelled

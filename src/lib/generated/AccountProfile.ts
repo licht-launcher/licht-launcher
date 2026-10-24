@@ -3,4 +3,4 @@
 /**
  * Public Minecraft profile (never includes tokens).
  */
-export type AccountProfile = { uuid: string, name: string, };
+export type AccountProfile = { uuid: string, name: string, skinUrl?: string, };

@@ -5,6 +5,7 @@ use super::*;
 mod modpack;
 mod persistence;
 mod pipeline;
+mod queue;
 mod repair;
 mod support;
 use crate::{
@@ -59,16 +60,7 @@ async fn pause_resume_and_completion_use_the_persisted_job_and_block_early_launc
         .await
         .expect("resume did not acknowledge idle transfers")
         .expect("resume");
-    assert_eq!(resumed.status, DownloadJobStatus::Running, "{resumed:?}");
-    assert_eq!(
-        manager
-            .active_job(&job.id)
-            .await
-            .expect("active job")
-            .control
-            .state(),
-        DownloadState::Running
-    );
+    assert_eq!(resumed.status, DownloadJobStatus::Queued, "{resumed:?}");
     let request = tokio::time::timeout(Duration::from_secs(10), async { tokio::select! {
         request = server.requests.recv() => request.expect("resume request"),
         outcome = manager.wait(&job.id) => panic!("job ended before issuing its resume request: {outcome:?}"),
@@ -149,9 +141,15 @@ async fn shutdown_preserves_partial_bytes_and_a_new_manager_resumes_the_same_job
     let restarted = fixture.manager();
     assert!(
         server.requests.is_empty(),
-        "startup must not resume automatically"
+        "no manager has admitted recovery yet"
     );
-    restarted.resume(&job.id).await.expect("manual resume");
+    assert_eq!(
+        restarted
+            .recover_pending()
+            .await
+            .expect("automatic recovery"),
+        1
+    );
     let request = server.request().await;
     assert!(
         request
@@ -740,33 +738,23 @@ async fn cancelling_an_active_job_preserves_shared_cache_bytes_until_the_last_jo
             .start(&second_instance.folder, DownloadJobOperation::Install)
             .await
             .expect("second install");
-        finish(async {
-            loop {
-                let mut connection = crate::open_db(&fixture.settings).await.expect("database");
-                let registered: bool = sqlx::query_scalar(
-                    "SELECT EXISTS(SELECT 1 FROM download_job_artifacts WHERE job_id = ?1)",
-                )
-                .bind(&second.id)
-                .fetch_one(&mut connection)
-                .await
-                .expect("artifact registered");
-                sqlx::Connection::close(connection)
-                    .await
-                    .expect("close fixture connection");
-                if registered {
-                    break;
-                }
-                tokio::task::yield_now().await;
-            }
-        })
-        .await;
+        // Declare the shared fixture dependency without starting the queued pipeline.
+        fixture
+            .database()
+            .register_download_artifacts(
+                &fixture.game,
+                &second.id,
+                &[fixture.game.root().join("payload.bin")],
+            )
+            .await
+            .expect("queued artifact association");
         manager
             .pause(&second.id)
             .await
             .expect("pause the waiting install");
         assert!(
             server.requests.is_empty(),
-            "the second install must wait for the shared destination lock"
+            "the second install must wait in the installation queue"
         );
         assert_eq!(
             finish(manager.cancel(&first.id))

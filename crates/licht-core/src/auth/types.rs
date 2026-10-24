@@ -7,6 +7,9 @@ use ts_rs::TS;
 pub struct AccountProfile {
     pub uuid: String,
     pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub skin_url: Option<String>,
 }
 
 /// Full session kept in memory / keyring — not exported to TypeScript.
@@ -76,6 +79,14 @@ pub(crate) struct MinecraftLoginResponse {
 pub(crate) struct MinecraftProfileResponse {
     pub id: String,
     pub name: String,
+    #[serde(default)]
+    pub skins: Vec<MinecraftSkin>,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct MinecraftSkin {
+    pub state: String,
+    pub url: String,
 }
 
 #[derive(Debug, Deserialize)]

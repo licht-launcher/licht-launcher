@@ -276,7 +276,7 @@ async fn version_six_gains_an_empty_instances_table_and_preserves_existing_data(
         .fetch_one(&mut connection)
         .await
         .expect("schema");
-    assert_eq!(version, 9);
+    assert_eq!(version, 10);
     let value: String = sqlx::query_scalar("SELECT value FROM meta WHERE key = 'fixture'")
         .fetch_one(&mut connection)
         .await

@@ -8,7 +8,7 @@ use super::repositories::metadata::MetadataRepository;
 use crate::{CoreError, Result, SharedCache};
 
 const DB_FILE: &str = "licht.db";
-const SCHEMA_VERSION: u32 = 9;
+const SCHEMA_VERSION: u32 = 10;
 pub(super) const META_LAST_PLAYED: &str = "last_played_folder";
 
 pub fn db_path(cache: &SharedCache) -> PathBuf {
@@ -231,6 +231,27 @@ async fn migrate(connection: &mut SqliteConnection) -> Result<()> {
             FOREIGN KEY (data_directory, version_id, fingerprint)
                 REFERENCES native_generations(data_directory, version_id, fingerprint)
         ); PRAGMA user_version = 9;",
+        )
+        .execute(&mut *transaction)
+        .await?;
+    }
+    if version < 10 {
+        let has_order: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM pragma_table_info('download_jobs') WHERE name = 'queue_order')",
+        )
+        .fetch_one(&mut *transaction)
+        .await?;
+        if !has_order {
+            sqlx::raw_sql(
+                "ALTER TABLE download_jobs ADD COLUMN queue_order INTEGER NOT NULL DEFAULT 0;
+                 UPDATE download_jobs SET queue_order = id;",
+            )
+            .execute(&mut *transaction)
+            .await?;
+        }
+        sqlx::raw_sql(
+            "CREATE INDEX IF NOT EXISTS download_jobs_queue ON download_jobs (data_directory, queue_order, id);
+             PRAGMA user_version = 10;",
         )
         .execute(&mut *transaction)
         .await?;

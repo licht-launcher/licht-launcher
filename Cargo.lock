@@ -2326,6 +2326,7 @@ dependencies = [
  "getrandom 0.3.4",
  "keyring",
  "md-5",
+ "png 0.18.1",
  "regex",
  "reqwest",
  "serde",
