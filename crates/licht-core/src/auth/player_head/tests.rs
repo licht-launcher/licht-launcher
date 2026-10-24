@@ -38,12 +38,11 @@ impl Fixture {
 }
 impl Drop for Fixture {
     fn drop(&mut self) {
-        if self.0.root().exists() {
-            if let Err(error) = fs::remove_dir_all(self.0.root())
-                && !std::thread::panicking()
-            {
-                panic!("fixture cleanup failed: {error}");
-            }
+        if self.0.root().exists()
+            && let Err(error) = fs::remove_dir_all(self.0.root())
+            && !std::thread::panicking()
+        {
+            panic!("fixture cleanup failed: {error}");
         }
     }
 }
