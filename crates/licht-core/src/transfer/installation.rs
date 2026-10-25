@@ -66,7 +66,7 @@ impl InstallationContext {
     pub(crate) fn options(&self) -> Result<DownloadOptions> {
         match &self.job {
             Some(job) => Ok(DownloadOptions {
-                limits: crate::shared_transfer_limits(),
+                limits: crate::settings::configured_transfer_limits(&job.game, &job.settings)?,
                 download_concurrency: crate::download_concurrency(&job.game, &job.settings)?,
                 write_concurrency: crate::write_concurrency(&job.game, &job.settings)?,
                 retry: crate::DEFAULT_RETRY,

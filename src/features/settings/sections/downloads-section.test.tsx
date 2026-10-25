@@ -52,4 +52,48 @@ describe("DownloadsSection", () => {
       );
     });
   });
+
+  it("saves a global MiB/s limit and removes it when the input is cleared", async () => {
+    await renderSettings();
+    fireEvent.click(await screen.findByRole("button", { name: "Downloads" }));
+    const limit = screen.getByLabelText("Global download speed limit (MiB/s)");
+    fireEvent.change(limit, { target: { value: "3" } });
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith(
+        "save_settings",
+        expect.objectContaining({
+          settings: expect.objectContaining({ downloadSpeedLimitMiB: 3 }),
+        }),
+      ),
+    );
+    fireEvent.change(limit, { target: { value: "" } });
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith(
+        "save_settings",
+        expect.objectContaining({
+          settings: expect.objectContaining({ downloadSpeedLimitMiB: null }),
+        }),
+      ),
+    );
+  });
+
+  it("rejects a zero speed limit instead of saving an invalid setting", async () => {
+    await renderSettings();
+    fireEvent.click(await screen.findByRole("button", { name: "Downloads" }));
+    fireEvent.change(
+      screen.getByLabelText("Global download speed limit (MiB/s)"),
+      { target: { value: "0" } },
+    );
+    expect(
+      await screen.findByText(
+        "Download speed limit must be a positive whole number of MiB/s.",
+      ),
+    ).toBeVisible();
+    expect(invoke).not.toHaveBeenCalledWith(
+      "save_settings",
+      expect.objectContaining({
+        settings: expect.objectContaining({ downloadSpeedLimitMiB: 0 }),
+      }),
+    );
+  });
 });

@@ -52,7 +52,7 @@ pub async fn install_version(
             client,
             &pending,
             DownloadOptions {
-                limits: crate::shared_transfer_limits(),
+                limits: crate::settings::configured_transfer_limits(cache, settings)?,
                 download_concurrency: download_concurrency(cache, settings)?,
                 write_concurrency: crate::write_concurrency(cache, settings)?,
                 retry: DEFAULT_RETRY,

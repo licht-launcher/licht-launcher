@@ -30,6 +30,31 @@ export function DownloadsSection({
 
   return (
     <div className="flex flex-col gap-6">
+      <section className="flex flex-col gap-3">
+        <label htmlFor="download-speed-limit" className="text-sm font-medium">
+          Global download speed limit (MiB/s)
+        </label>
+        <p
+          id="download-speed-limit-hint"
+          className="text-sm text-muted-foreground"
+        >
+          Shared by all active downloads. Leave empty for unlimited speed.
+          Changes apply immediately.
+        </p>
+        <Input
+          id="download-speed-limit"
+          aria-describedby="download-speed-limit-hint"
+          type="number"
+          min={1}
+          max={4_294_967_295}
+          step={1}
+          placeholder="Unlimited"
+          value={draft.downloadSpeedLimitMiB}
+          onChange={(event) =>
+            onChange({ downloadSpeedLimitMiB: event.target.value })
+          }
+        />
+      </section>
       <section className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">
           <div className="flex items-baseline justify-between gap-3">

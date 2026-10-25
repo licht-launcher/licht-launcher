@@ -36,6 +36,8 @@ pub struct Settings {
     pub java8: Option<String>,
     pub download_concurrency: u32,
     pub write_concurrency: u32,
+    #[serde(default, rename = "downloadSpeedLimitMiB")]
+    pub download_speed_limit_mib: Option<u32>,
     pub data_directory: Option<String>,
     pub disable_custom_title_bar: bool,
     #[serde(default)]
@@ -98,6 +100,8 @@ struct StoredSettings {
     download_concurrency: u32,
     #[serde(default = "default_concurrency_value")]
     write_concurrency: u32,
+    #[serde(default, rename = "downloadSpeedLimitMiB")]
+    download_speed_limit_mib: Option<u32>,
     #[serde(default)]
     data_directory: Option<String>,
     #[serde(default)]
@@ -231,6 +235,9 @@ pub(super) fn validated(cache: &SharedCache, settings: Settings) -> Result<Setti
     if !(MIN_CONCURRENCY..=MAX_CONCURRENCY).contains(&settings.write_concurrency) {
         return Err(CoreError::SettingsWriteConcurrency);
     }
+    if settings.download_speed_limit_mib == Some(0) {
+        return Err(CoreError::SettingsDownloadSpeed);
+    }
     if settings.max_memory_mb < MIN_MEMORY_MB
         || settings.max_memory_mb > MAX_MEMORY_CAP_MB
         || !settings.max_memory_mb.is_multiple_of(MEMORY_STEP_MB)
@@ -259,6 +266,7 @@ pub(super) fn validated(cache: &SharedCache, settings: Settings) -> Result<Setti
         java8: clean_java(settings.java8.as_deref())?,
         download_concurrency: settings.download_concurrency,
         write_concurrency: settings.write_concurrency,
+        download_speed_limit_mib: settings.download_speed_limit_mib,
         data_directory: normalize_directory(cache, settings.data_directory.as_deref())?,
         disable_custom_title_bar: settings.disable_custom_title_bar,
         disable_transparency: settings.disable_transparency,
@@ -294,6 +302,7 @@ fn from_stored(cache: &SharedCache, stored: StoredSettings) -> Result<Settings> 
             java8: stored.java8,
             download_concurrency: stored.download_concurrency,
             write_concurrency: stored.write_concurrency,
+            download_speed_limit_mib: stored.download_speed_limit_mib,
             data_directory: stored.data_directory,
             disable_custom_title_bar: stored.disable_custom_title_bar,
             disable_transparency: stored.disable_transparency,
@@ -329,6 +338,7 @@ pub fn load_settings(cache: &SharedCache) -> Result<Settings> {
                 java8: None,
                 download_concurrency: default_concurrency_value(),
                 write_concurrency: default_concurrency_value(),
+                download_speed_limit_mib: None,
                 data_directory: None,
                 disable_custom_title_bar: false,
                 disable_transparency: false,
@@ -369,6 +379,9 @@ pub fn save_settings(cache: &SharedCache, settings: &Settings) -> Result<Setting
     }
     let json = serde_json::to_string_pretty(&settings).map_err(CoreError::Settings)?;
     std::fs::write(path, format!("{json}\n"))?;
+    crate::shared_transfer_limits()
+        .bandwidth
+        .set_limit(settings.download_speed_limit_mib)?;
     Ok(settings)
 }
 
@@ -402,6 +415,16 @@ pub fn download_concurrency(game: &SharedCache, settings: &SharedCache) -> Resul
 /// How many files may be written to disk at once across all installs.
 pub fn write_concurrency(game: &SharedCache, settings: &SharedCache) -> Result<usize> {
     Ok(load_settings(concurrency_source(game, settings))?.write_concurrency as usize)
+}
+
+pub(crate) fn configured_transfer_limits(
+    game: &SharedCache,
+    settings: &SharedCache,
+) -> Result<std::sync::Arc<crate::TransferLimits>> {
+    let saved = load_settings(concurrency_source(game, settings))?;
+    let limits = crate::shared_transfer_limits();
+    limits.bandwidth.set_limit(saved.download_speed_limit_mib)?;
+    Ok(limits)
 }
 
 /// Next process: game files go to `{dataDirectory}/Licht Launcher/data`.

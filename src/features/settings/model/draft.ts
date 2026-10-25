@@ -16,6 +16,7 @@ export type Draft = {
   java8: string;
   downloadConcurrency: number;
   writeConcurrency: number;
+  downloadSpeedLimitMiB: string;
   dataDirectory: string;
   disableCustomTitleBar: boolean;
   disableTransparency: boolean;
@@ -62,6 +63,10 @@ export function fromSnapshot(
     java8: installedPath(settings.java8, runtime?.java8),
     downloadConcurrency: settings.downloadConcurrency,
     writeConcurrency: settings.writeConcurrency,
+    downloadSpeedLimitMiB:
+      settings.downloadSpeedLimitMiB === null
+        ? ""
+        : String(settings.downloadSpeedLimitMiB),
     dataDirectory: snapshot.applicationDirectory,
     disableCustomTitleBar: settings.disableCustomTitleBar,
     disableTransparency: settings.disableTransparency,
@@ -112,6 +117,10 @@ export function toSettings(
     java8: emptyToNull(draft.java8),
     downloadConcurrency: draft.downloadConcurrency,
     writeConcurrency: draft.writeConcurrency,
+    downloadSpeedLimitMiB:
+      draft.downloadSpeedLimitMiB.trim() === ""
+        ? null
+        : Number(draft.downloadSpeedLimitMiB),
     dataDirectory: emptyToNull(draft.dataDirectory),
     disableCustomTitleBar: draft.disableCustomTitleBar,
     disableTransparency: draft.disableTransparency,

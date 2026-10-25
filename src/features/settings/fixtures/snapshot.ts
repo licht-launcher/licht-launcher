@@ -17,6 +17,7 @@ export const snapshot = {
     java8: null,
     downloadConcurrency: 8,
     writeConcurrency: 8,
+    downloadSpeedLimitMiB: null,
     dataDirectory: null,
     disableCustomTitleBar: false,
     disableTransparency: false,

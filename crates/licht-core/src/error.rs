@@ -46,6 +46,8 @@ pub enum CoreError {
     SettingsConcurrency,
     #[error("write concurrency must be from 1 to 16")]
     SettingsWriteConcurrency,
+    #[error("download speed limit must be a positive whole number of MiB/s")]
+    SettingsDownloadSpeed,
     #[error("color theme must be dark")]
     SettingsTheme,
     #[error("memory must be from 512 to 16384 in steps of 256")]
