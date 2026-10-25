@@ -25,6 +25,18 @@ pub async fn reorder_download_jobs(
 }
 
 #[tauri::command]
+pub async fn storage_summary(
+    paths: State<'_, LauncherPaths>,
+) -> Result<licht_core::StorageSummary, String> {
+    let game = paths.game.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        licht_core::storage_summary(&game).map_err(failure)
+    })
+    .await
+    .map_err(|_| "Storage check failed".to_string())?
+}
+
+#[tauri::command]
 pub async fn prepare_instance_download(
     downloads: State<'_, Arc<DownloadManager>>,
     folder: String,

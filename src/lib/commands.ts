@@ -25,6 +25,7 @@ import type { Settings } from "@/lib/generated/Settings";
 import type { SettingsSnapshot } from "@/lib/generated/SettingsSnapshot";
 import type { StartupPreviewScenario } from "@/lib/generated/StartupPreviewScenario";
 import type { StartupProgress } from "@/lib/generated/StartupProgress";
+import type { StorageSummary } from "@/lib/generated/StorageSummary";
 import type { VersionSummary } from "@/lib/generated/VersionSummary";
 
 export function listInstances(): Promise<InstanceEntry[]> {
@@ -60,6 +61,10 @@ export function reorderDownloadJobs(
 
 export function getDownloadTelemetry(): Promise<DownloadTelemetry> {
   return invoke("download_telemetry");
+}
+
+export function getStorageSummary(): Promise<StorageSummary> {
+  return invoke("storage_summary");
 }
 
 export function pauseAllDownloads(): Promise<void> {

@@ -41,6 +41,7 @@ pub fn run() -> anyhow::Result<()> {
             commands::downloads::list_download_jobs,
             commands::downloads::reorder_download_jobs,
             commands::downloads::download_telemetry,
+            commands::downloads::storage_summary,
             commands::downloads::pause_all_downloads,
             commands::downloads::resume_all_downloads,
             commands::downloads::prepare_instance_download,

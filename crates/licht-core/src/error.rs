@@ -38,6 +38,8 @@ pub enum CoreError {
     WriteConcurrency,
     #[error("could not resolve the Licht data directory")]
     DataDirectory,
+    #[error("storage information is unavailable for the game data directory")]
+    StorageUnavailable,
     #[error("settings JSON is invalid")]
     Settings(#[source] serde_json::Error),
     #[error("settings schema {schema} is not supported")]

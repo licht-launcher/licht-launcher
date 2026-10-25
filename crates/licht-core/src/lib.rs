@@ -121,6 +121,7 @@ pub use store::layout::{
     startup_settings,
 };
 pub use store::service::{DatabaseClient, DatabaseService};
+pub use store::storage::{StorageCategory, StorageSummary, StorageUsage, storage_summary};
 pub use transfer::checksum::DownloadChecksum;
 pub use transfer::control::{DownloadControl, DownloadState, DownloadTelemetry};
 pub use transfer::installation::InstallationContext;
