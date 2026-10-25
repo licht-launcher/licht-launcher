@@ -48,6 +48,8 @@ pub enum CoreError {
     SettingsWriteConcurrency,
     #[error("download speed limit must be a positive whole number of MiB/s")]
     SettingsDownloadSpeed,
+    #[error("download queue changed; refresh and try again")]
+    DownloadQueueChanged,
     #[error("color theme must be dark")]
     SettingsTheme,
     #[error("memory must be from 512 to 16384 in steps of 256")]

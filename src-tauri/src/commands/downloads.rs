@@ -17,6 +17,14 @@ pub async fn list_download_jobs(
 }
 
 #[tauri::command]
+pub async fn reorder_download_jobs(
+    downloads: State<'_, Arc<DownloadManager>>,
+    job_ids: Vec<String>,
+) -> Result<Vec<DownloadJobSnapshot>, String> {
+    downloads.reorder(job_ids).await.map_err(failure)
+}
+
+#[tauri::command]
 pub async fn prepare_instance_download(
     downloads: State<'_, Arc<DownloadManager>>,
     folder: String,
@@ -53,11 +61,40 @@ pub async fn cancel_download_job(
     downloads.cancel(&job_id).await.map_err(failure)
 }
 
+#[tauri::command]
+pub fn download_telemetry(
+    downloads: State<'_, Arc<DownloadManager>>,
+) -> licht_core::DownloadTelemetry {
+    downloads.telemetry()
+}
+
+#[tauri::command]
+pub async fn pause_all_downloads(downloads: State<'_, Arc<DownloadManager>>) -> Result<(), String> {
+    downloads.pause_all().await.map_err(failure)
+}
+
+#[tauri::command]
+pub async fn resume_all_downloads(
+    downloads: State<'_, Arc<DownloadManager>>,
+) -> Result<(), String> {
+    downloads.inner().resume_all().await.map_err(failure)
+}
+
 pub fn forward_events(app: AppHandle, downloads: Arc<DownloadManager>) {
     let mut events = downloads.subscribe();
     tauri::async_runtime::spawn(async move {
+        let mut ticks = tokio::time::interval(std::time::Duration::from_millis(100));
         loop {
-            match events.recv().await {
+            let event = tokio::select! {
+                event = events.recv() => event,
+                _ = ticks.tick() => {
+                    if app.emit("download-telemetry", downloads.telemetry()).is_err() {
+                        tracing::warn!("Failed to emit download telemetry");
+                    }
+                    continue;
+                }
+            };
+            match event {
                 Ok(snapshot) => {
                     if app.emit("download-job-updated", &snapshot).is_err() {
                         tracing::warn!("Failed to emit download job state");

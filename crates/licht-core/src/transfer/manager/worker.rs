@@ -14,7 +14,7 @@ impl DownloadManager {
         let (stopped, _) = watch::channel(false);
         let (enabled, _) = watch::channel(true);
         let slot = Arc::new(ActiveJob {
-            control: DownloadControl::new(),
+            control: DownloadControl::with_counters(Arc::clone(&self.counters)),
             snapshot: Mutex::new(snapshot.clone()),
             completion,
             stopped,
@@ -24,6 +24,9 @@ impl DownloadManager {
             dirty: AtomicBool::new(false),
             enabled,
         });
+        if self.all_paused.load(Ordering::SeqCst) {
+            slot.control.request_pause();
+        }
         if snapshot.instance_folder.is_some() {
             self.installations
                 .lock()

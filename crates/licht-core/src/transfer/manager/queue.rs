@@ -5,6 +5,82 @@ use super::{ActiveJob, DownloadManager};
 use crate::{CoreError, DownloadJobStatus, DownloadState, Result, load_instance};
 
 impl DownloadManager {
+    pub async fn reorder(&self, ids: Vec<String>) -> Result<Vec<crate::DownloadJobSnapshot>> {
+        let _starts = self.starts.lock().await;
+        self.accept_work()?;
+        let mut queue = self.installations.lock().await;
+        let stored = self.stored_jobs().await?;
+        let active = queue.current.as_deref().or_else(|| {
+            if stored
+                .iter()
+                .any(|job| job.status == DownloadJobStatus::Running)
+            {
+                None
+            } else {
+                stored
+                    .iter()
+                    .find(|job| job.status == DownloadJobStatus::Paused)
+                    .map(|job| job.id.as_str())
+            }
+        });
+        let pending: Vec<_> = stored
+            .iter()
+            .filter(|job| {
+                matches!(
+                    job.status,
+                    DownloadJobStatus::Queued | DownloadJobStatus::Paused
+                ) && Some(job.id.as_str()) != active
+            })
+            .collect();
+        let unique: std::collections::HashSet<_> = ids.iter().collect();
+        if ids.len() != pending.len()
+            || unique.len() != ids.len()
+            || ids
+                .iter()
+                .any(|id| !pending.iter().any(|job| &job.id == id))
+        {
+            return Err(CoreError::DownloadQueueChanged);
+        }
+        self.runtime
+            .database
+            .reorder_download_jobs(&self.runtime.game, &ids)
+            .await?;
+        // Paused items keep their persisted position without entering the runnable FIFO.
+        queue.waiting = ids
+            .into_iter()
+            .filter(|id| {
+                stored.iter().any(|job| {
+                    &job.id == id
+                        && job.status == DownloadJobStatus::Queued
+                        && job.instance_folder.is_some()
+                })
+            })
+            .collect();
+        drop(queue);
+        self.queue_changed.notify_waiters();
+        self.stored_jobs().await
+    }
+
+    pub(super) async fn restore_waiting_order(&self, order: &[String]) -> Result<()> {
+        let mut queue = self.installations.lock().await;
+        let mut waiting: Vec<_> = order
+            .iter()
+            .filter(|id| queue.waiting.contains(id))
+            .cloned()
+            .collect();
+        for id in &queue.waiting {
+            if !waiting.contains(id) {
+                waiting.push(id.clone());
+            }
+        }
+        self.runtime
+            .database
+            .reorder_download_jobs(&self.runtime.game, &waiting)
+            .await?;
+        queue.waiting = waiting.into();
+        Ok(())
+    }
+
     pub(super) async fn wait_turn(&self, id: &str, slot: &ActiveJob) -> Result<()> {
         let mut enabled = slot.enabled.subscribe();
         loop {
@@ -17,11 +93,14 @@ impl DownloadManager {
             let mut queue = self.installations.lock().await;
             if *enabled.borrow()
                 && !self.closing.load(Ordering::SeqCst)
+                && !self.all_paused.load(Ordering::SeqCst)
+                && !self.admission_blocked.load(Ordering::SeqCst)
                 && queue.current.is_none()
                 && queue.waiting.front().is_some_and(|first| first == id)
             {
                 queue.waiting.pop_front();
                 queue.current = Some(id.to_string());
+                queue.last_active = Some(id.to_string());
                 drop(queue);
                 let mut snapshot = slot.snapshot.lock().await;
                 if self.installations.lock().await.current.as_deref() != Some(id) {

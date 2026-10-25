@@ -17,6 +17,44 @@ const BODY: &[u8] = b"hello world";
 const SHA1: &str = "2aae6c35c94fcfb415dbe95f408b9ce91ee846ed";
 
 #[tokio::test]
+async fn telemetry_counts_only_new_transfer_bytes_and_keeps_totals_after_completion() {
+    let mut server = Server::new().await;
+    let fixture = Fixture::new(&server.url).await;
+    std::fs::create_dir_all(fixture.game.root()).expect("game directory");
+    std::fs::write(fixture.part(), b"hello").expect("existing partial");
+    let manager = fixture.manager();
+    let first = fixture.instance("Resumed transfer").await;
+    let job = manager
+        .start(&first.folder, DownloadJobOperation::Install)
+        .await
+        .expect("start");
+    let request = finish(server.requests.recv()).await.expect("request");
+    assert!(
+        request
+            .headers
+            .to_ascii_lowercase()
+            .contains("range: bytes=5-")
+    );
+    request.reply(206, "Content-Range: bytes 5-10/11\r\n", b" world", 6);
+    finish(manager.wait(&job.id)).await.expect("completed");
+    assert_eq!(manager.telemetry().received_bytes, 6);
+    assert_eq!(manager.telemetry().written_bytes, 6);
+    let second = fixture.instance("Cached transfer").await;
+    let cached = manager
+        .start(&second.folder, DownloadJobOperation::Install)
+        .await
+        .expect("cache job");
+    finish(manager.wait(&cached.id))
+        .await
+        .expect("cached completion");
+    assert!(server.requests.is_empty());
+    assert_eq!(manager.telemetry().received_bytes, 6);
+    assert_eq!(manager.telemetry().written_bytes, 6);
+    finish(manager.suspend_all()).await.expect("shutdown");
+    fixture.close().await;
+}
+
+#[tokio::test]
 async fn pause_resume_and_completion_use_the_persisted_job_and_block_early_launch() {
     let mut server = Server::new().await;
     let fixture = Fixture::new(&server.url).await;

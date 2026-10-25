@@ -48,6 +48,7 @@ fn the_committed_bindings_match_ts_rs() {
     InstanceContentUpdate::export_all(&config).expect("instance content update");
     InstanceSettings::export_all(&config).expect("instance settings");
     DownloadProgress::export_all(&config).expect("progress");
+    licht_core::DownloadTelemetry::export_all(&config).expect("download telemetry");
     DownloadJobSnapshot::export_all(&config).expect("download jobs");
     InstallProgress::export_all(&config).expect("install progress");
     GameLine::export_all(&config).expect("game line");

@@ -78,6 +78,56 @@ impl DownloadJobRepository {
         rows.into_iter().map(|row| decode_row(row, game)).collect()
     }
 
+    pub async fn reorder(
+        connection: &mut SqliteConnection,
+        game: &SharedCache,
+        ids: &[String],
+    ) -> Result<()> {
+        if ids.iter().collect::<std::collections::HashSet<_>>().len() != ids.len() {
+            return Err(CoreError::DownloadQueueChanged);
+        }
+        let mut transaction = connection.begin_with("BEGIN IMMEDIATE").await?;
+        let mut position: i64 =
+            sqlx::query_scalar("SELECT COALESCE(MAX(queue_order), 0) FROM download_jobs")
+                .fetch_one(&mut *transaction)
+                .await?;
+        for id in ids {
+            position = position
+                .checked_add(1)
+                .ok_or(CoreError::DownloadQueueChanged)?;
+            let updated = sqlx::query("UPDATE download_jobs SET queue_order = ?1 WHERE id = ?2 AND data_directory = ?3 AND status IN (?4, ?5)")
+                .bind(position).bind(parse_id(id)?).bind(data_directory(game)?).bind(encode(&DownloadJobStatus::Queued)?).bind(encode(&DownloadJobStatus::Paused)?)
+                .execute(&mut *transaction).await?;
+            if updated.rows_affected() != 1 {
+                return Err(CoreError::DownloadQueueChanged);
+            }
+        }
+        transaction.commit().await?;
+        Ok(())
+    }
+
+    pub async fn prioritize(
+        connection: &mut SqliteConnection,
+        game: &SharedCache,
+        id: &str,
+    ) -> Result<()> {
+        let mut transaction = connection.begin_with("BEGIN IMMEDIATE").await?;
+        let first: i64 = sqlx::query_scalar(
+            "SELECT COALESCE(MIN(queue_order), 0) FROM download_jobs WHERE data_directory = ?1",
+        )
+        .bind(data_directory(game)?)
+        .fetch_one(&mut *transaction)
+        .await?;
+        let position = first
+            .checked_sub(1)
+            .ok_or(CoreError::DownloadQueueChanged)?;
+        sqlx::query("UPDATE download_jobs SET queue_order = ?1 WHERE id = ?2 AND data_directory = ?3 AND status IN (?4, ?5, ?6)")
+            .bind(position).bind(parse_id(id)?).bind(data_directory(game)?).bind(encode(&DownloadJobStatus::Running)?).bind(encode(&DownloadJobStatus::Paused)?).bind(encode(&DownloadJobStatus::Queued)?)
+            .execute(&mut *transaction).await?;
+        transaction.commit().await?;
+        Ok(())
+    }
+
     pub async fn get(
         connection: &mut SqliteConnection,
         game: &SharedCache,

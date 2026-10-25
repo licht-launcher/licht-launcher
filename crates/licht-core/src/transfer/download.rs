@@ -308,6 +308,7 @@ async fn transfer_partial(
         if read == 0 {
             break;
         }
+        job.control.received(read as u64);
 
         if total.is_some_and(|total| offset.saturating_add(read as u64) > total) {
             drop(file);
@@ -326,6 +327,7 @@ async fn transfer_partial(
             // next Range offset describes bytes actually committed to the file.
             file.write_all(&buffer[..read]).await?;
             file.flush().await?;
+            job.control.written(read as u64);
         }
 
         hasher.update(&buffer[..read]);

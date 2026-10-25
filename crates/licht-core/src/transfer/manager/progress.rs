@@ -89,6 +89,7 @@ impl DownloadManager {
         last_emit: &mut Instant,
         last_save: &mut Instant,
     ) -> Result<()> {
+        self.acknowledge_pause(slot).await?;
         if !slot.dirty.load(Ordering::SeqCst) || last_emit.elapsed() < Duration::from_millis(100) {
             return Ok(());
         }

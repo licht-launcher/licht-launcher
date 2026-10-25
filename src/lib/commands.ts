@@ -10,6 +10,7 @@ import type {
 import type { AccountProfile } from "@/lib/generated/AccountProfile";
 import type { DownloadJobOperation } from "@/lib/generated/DownloadJobOperation";
 import type { DownloadJobSnapshot } from "@/lib/generated/DownloadJobSnapshot";
+import type { DownloadTelemetry } from "@/lib/generated/DownloadTelemetry";
 import type { GameExit } from "@/lib/generated/GameExit";
 import type { InstanceContentEntry } from "@/lib/generated/InstanceContentEntry";
 import type { InstanceContentKind } from "@/lib/generated/InstanceContentKind";
@@ -49,6 +50,24 @@ export function requestUpdateRestart(): Promise<void> {
 
 export function listDownloadJobs(): Promise<DownloadJobSnapshot[]> {
   return invoke("list_download_jobs");
+}
+
+export function reorderDownloadJobs(
+  jobIds: string[],
+): Promise<DownloadJobSnapshot[]> {
+  return invoke("reorder_download_jobs", { jobIds });
+}
+
+export function getDownloadTelemetry(): Promise<DownloadTelemetry> {
+  return invoke("download_telemetry");
+}
+
+export function pauseAllDownloads(): Promise<void> {
+  return invoke("pause_all_downloads");
+}
+
+export function resumeAllDownloads(): Promise<void> {
+  return invoke("resume_all_downloads");
 }
 
 export function prepareInstanceDownload(
