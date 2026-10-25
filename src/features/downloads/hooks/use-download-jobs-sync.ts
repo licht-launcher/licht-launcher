@@ -1,8 +1,13 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  type QueryClient,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
+  ACTIVE_DOWNLOAD_QUERY_KEY,
   DOWNLOAD_JOBS_QUERY_KEY,
   isDownloadFinished,
   replaceDownloadSnapshot,
@@ -11,6 +16,31 @@ import { VERSIONS_QUERY_KEY } from "@/features/instances/lib/versions-query";
 import { listDownloadJobs } from "@/lib/commands";
 import { friendlyError, messageOf } from "@/lib/errors";
 import type { DownloadJobSnapshot } from "@/lib/generated/DownloadJobSnapshot";
+
+function rememberActive(
+  client: QueryClient,
+  jobs: DownloadJobSnapshot[],
+  fromStoredOrder = false,
+) {
+  const running =
+    jobs.find(
+      (job) => job.status === "running" && job.instanceFolder !== null,
+    ) ?? jobs.find((job) => job.status === "running");
+  const selected =
+    running ??
+    (fromStoredOrder ? jobs.find((job) => job.status === "paused") : undefined);
+  const previous = client.getQueryData<string | null>(
+    ACTIVE_DOWNLOAD_QUERY_KEY,
+  );
+  if (selected && previous !== selected.id)
+    client.setQueryData(ACTIVE_DOWNLOAD_QUERY_KEY, selected.id);
+  else if (
+    !selected &&
+    previous != null &&
+    !jobs.some((job) => job.id === previous)
+  )
+    client.setQueryData(ACTIVE_DOWNLOAD_QUERY_KEY, null);
+}
 
 export function useDownloadJobsSync() {
   const queryClient = useQueryClient();
@@ -36,6 +66,12 @@ export function useDownloadJobsSync() {
           queryClient.setQueryData<DownloadJobSnapshot[]>(
             DOWNLOAD_JOBS_QUERY_KEY,
             (current) => replaceDownloadSnapshot(current, payload),
+          );
+          rememberActive(
+            queryClient,
+            queryClient.getQueryData<DownloadJobSnapshot[]>(
+              DOWNLOAD_JOBS_QUERY_KEY,
+            ) ?? [],
           );
           if (payload.status === "queued" && previous?.status !== "queued") {
             void queryClient.invalidateQueries({
@@ -120,6 +156,7 @@ export function useDownloadJobsSync() {
         if (event.sequence > before)
           result = replaceDownloadSnapshot(result, event.snapshot);
       }
+      rememberActive(queryClient, result, true);
       return result;
     },
   });
