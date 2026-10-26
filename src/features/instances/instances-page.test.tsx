@@ -229,6 +229,33 @@ describe("InstancesPage", () => {
     expect(errors).toEqual([]);
   });
 
+  it("opens Updater settings from the version and codename in the footer", async () => {
+    mockContextMenuCommands((command) =>
+      command === "runtime_java"
+        ? Promise.resolve({
+            java25: null,
+            java21: null,
+            java17: null,
+            java8: null,
+          })
+        : undefined,
+    );
+    await renderAt("/");
+    const footer = within(
+      screen.getByRole("contentinfo", { name: "Download status" }),
+    );
+    const version = footer.getByRole("button", { name: "0.3.0 · Rose" });
+    expect(version).toBeVisible();
+    fireEvent.click(version);
+    const settings = await screen.findByRole("dialog", { name: "Settings" });
+    expect(
+      within(settings).getByRole("button", {
+        name: "Updater",
+        current: "page",
+      }),
+    ).toBeVisible();
+  });
+
   it("opens full-width Downloads from the footer and restores the library sidebar", async () => {
     mockContextMenuCommands();
     const { router } = await renderAt("/");
