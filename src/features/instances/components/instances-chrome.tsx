@@ -12,6 +12,10 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { DownloadsPopover } from "@/features/downloads/components/downloads-popover";
+import {
+  STORAGE_LOADING_PREVIEW_EVENT,
+  STORAGE_LOADING_PREVIEW_QUERY_KEY,
+} from "@/features/downloads/hooks/use-storage-loading-preview";
 import { HomeSidebar } from "@/features/instances/components/home-sidebar";
 import { InstanceDialogs } from "@/features/instances/components/instance-dialogs";
 import {
@@ -83,7 +87,11 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
   }, [queryClient, selectedFolder]);
 
   useEffect(() => {
-    if (onWizard || instances.data === undefined || selectedFolder === null) {
+    if (
+      pathname !== "/" ||
+      instances.data === undefined ||
+      selectedFolder === null
+    ) {
       return;
     }
     if (homeSearch?.prepare !== undefined) {
@@ -102,7 +110,7 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
       replace: true,
     });
   }, [
-    onWizard,
+    pathname,
     instances.data,
     selectedFolder,
     instanceParam,
@@ -110,6 +118,17 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
     navigate,
   ]);
   const dialogs = useInstanceDialogs();
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    const preview = () => {
+      queryClient.setQueryData(STORAGE_LOADING_PREVIEW_QUERY_KEY, Date.now());
+      dialogs.setSettingsOpen(false);
+      void navigate({ to: "/downloads" });
+    };
+    window.addEventListener(STORAGE_LOADING_PREVIEW_EVENT, preview);
+    return () =>
+      window.removeEventListener(STORAGE_LOADING_PREVIEW_EVENT, preview);
+  }, [queryClient, dialogs.setSettingsOpen, navigate]);
   const markStartedRef = useRef<(folder: string) => void>(() => {});
   const {
     progressForVersion,
@@ -203,6 +222,18 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
     ],
   );
 
+  const content = (
+    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="mx-2 mt-2 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border-t border-foreground/10 bg-popover">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-muted/30">
+          <ChromeContext.Provider value={context}>
+            {children}
+          </ChromeContext.Provider>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <>
       <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-home-sidebar text-popover-foreground">
@@ -221,7 +252,7 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
             }
             onOpenLibrary={() => {
               dialogs.setSettingsOpen(false);
-              if (!onWizard) return;
+              if (pathname === "/") return;
               void navigate({
                 to: "/",
                 search:
@@ -231,81 +262,77 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
             onOpenSettings={dialogs.openGlobalSettings}
           />
         </TitleBar>
-        <ResizablePanelGroup
-          id={SIDEBAR_LAYOUT_ID}
-          orientation="horizontal"
-          className="min-h-0 w-full flex-1 overflow-hidden"
-          defaultLayout={defaultLayout}
-          onLayoutChanged={onLayoutChanged}
-          disableCursor
-        >
-          <ResizablePanel
-            id={SIDEBAR_PANEL_ID}
-            defaultSize={SIDEBAR_DEFAULT_SIZE_PX}
-            minSize={SIDEBAR_MIN_SIZE_PX}
-            maxSize={SIDEBAR_MAX_SIZE_PX}
+        {pathname === "/downloads" ? (
+          content
+        ) : (
+          <ResizablePanelGroup
+            id={SIDEBAR_LAYOUT_ID}
+            orientation="horizontal"
+            className="min-h-0 w-full flex-1 overflow-hidden"
+            defaultLayout={defaultLayout}
+            onLayoutChanged={onLayoutChanged}
+            disableCursor
           >
-            <HomeSidebar
-              instances={instances.data ?? []}
-              selectedFolder={onWizard ? null : selectedFolder}
-              busy={busy}
-              loading={instances.isPending}
-              playPhase={playPhase}
-              isInstalling={isInstalling}
-              playBlocked={playBlocked}
-              onInstanceAction={(action, instance) => {
-                switch (action) {
-                  case "play":
-                    void playInstance(instance);
-                    break;
-                  case "stop":
-                    void stopInstance(instance.folder);
-                    break;
-                  case "configure":
-                    dialogs.openConfigure(instance.folder);
-                    break;
-                  case "open-folder":
-                    openFolder.mutate(instance.folder);
-                    break;
-                  case "rename":
-                    dialogs.openRename(instance.folder, instance.name);
-                    break;
-                  case "duplicate":
-                    dialogs.openDuplicate(instance.folder, instance.name);
-                    break;
-                  case "delete":
-                    dialogs.openDelete(instance.folder, instance.name);
-                    break;
-                }
-              }}
-              onSelect={(folder) => {
-                if (!onWizard && folder === selectedFolder) {
-                  return;
-                }
-                setSelectedFolder(folder);
-                void navigate({
-                  to: "/",
-                  search: { instance: folder },
-                });
-              }}
+            <ResizablePanel
+              id={SIDEBAR_PANEL_ID}
+              defaultSize={SIDEBAR_DEFAULT_SIZE_PX}
+              minSize={SIDEBAR_MIN_SIZE_PX}
+              maxSize={SIDEBAR_MAX_SIZE_PX}
+            >
+              <HomeSidebar
+                instances={instances.data ?? []}
+                selectedFolder={pathname === "/" ? selectedFolder : null}
+                busy={busy}
+                loading={instances.isPending}
+                playPhase={playPhase}
+                isInstalling={isInstalling}
+                playBlocked={playBlocked}
+                onInstanceAction={(action, instance) => {
+                  switch (action) {
+                    case "play":
+                      void playInstance(instance);
+                      break;
+                    case "stop":
+                      void stopInstance(instance.folder);
+                      break;
+                    case "configure":
+                      dialogs.openConfigure(instance.folder);
+                      break;
+                    case "open-folder":
+                      openFolder.mutate(instance.folder);
+                      break;
+                    case "rename":
+                      dialogs.openRename(instance.folder, instance.name);
+                      break;
+                    case "duplicate":
+                      dialogs.openDuplicate(instance.folder, instance.name);
+                      break;
+                    case "delete":
+                      dialogs.openDelete(instance.folder, instance.name);
+                      break;
+                  }
+                }}
+                onSelect={(folder) => {
+                  if (pathname === "/" && folder === selectedFolder) {
+                    return;
+                  }
+                  setSelectedFolder(folder);
+                  void navigate({
+                    to: "/",
+                    search: { instance: folder },
+                  });
+                }}
+              />
+            </ResizablePanel>
+            <ResizableHandle
+              aria-label="Resize sidebar"
+              className="w-0 bg-transparent hover:scale-x-100 hover:bg-transparent focus-visible:scale-x-100 focus-visible:bg-transparent active:scale-x-100 active:bg-transparent"
             />
-          </ResizablePanel>
-          <ResizableHandle
-            aria-label="Resize sidebar"
-            className="w-0 bg-transparent hover:scale-x-100 hover:bg-transparent focus-visible:scale-x-100 focus-visible:bg-transparent active:scale-x-100 active:bg-transparent"
-          />
-          <ResizablePanel id={MAIN_PANEL_ID} minSize={480}>
-            <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
-              <div className="mx-2 mt-2 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border-t border-foreground/10 bg-popover">
-                <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-muted/30">
-                  <ChromeContext.Provider value={context}>
-                    {children}
-                  </ChromeContext.Provider>
-                </div>
-              </div>
-            </div>
-          </ResizablePanel>
-        </ResizablePanelGroup>
+            <ResizablePanel id={MAIN_PANEL_ID} minSize={480}>
+              {content}
+            </ResizablePanel>
+          </ResizablePanelGroup>
+        )}
         <footer
           role="contentinfo"
           aria-label="Download status"
@@ -330,6 +357,10 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
                 side="top"
                 showLabel
                 triggerClassName={footerActionClassName}
+                onOpen={() => {
+                  dialogs.setSettingsOpen(false);
+                  void navigate({ to: "/downloads" });
+                }}
               />
             </div>
           </div>

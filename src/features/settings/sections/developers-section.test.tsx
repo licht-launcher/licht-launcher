@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
+import { STORAGE_LOADING_PREVIEW_EVENT } from "@/features/downloads/hooks/use-storage-loading-preview";
 import { DevelopersSection } from "@/features/settings/sections/developers-section";
 import {
   DEV_CLEAR_SIMULATED_UPDATE_EVENT,
@@ -123,6 +123,31 @@ describe("DevelopersSection", () => {
 
     window.removeEventListener(DEV_SIMULATE_UPDATE_EVENT, simulateListener);
     window.removeEventListener(DEV_CLEAR_SIMULATED_UPDATE_EVENT, clearListener);
+  });
+
+  it("requests a repeatable Launcher Data loading preview", () => {
+    const listener = vi.fn();
+    window.addEventListener(STORAGE_LOADING_PREVIEW_EVENT, listener);
+    view();
+    const button = screen.getByRole("button", {
+      name: "Test Launcher Data loading",
+    });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    expect(listener).toHaveBeenCalledTimes(2);
+    window.removeEventListener(STORAGE_LOADING_PREVIEW_EVENT, listener);
+  });
+
+  it("does not expose the storage preview in production", () => {
+    vi.stubEnv("DEV", false);
+    try {
+      view();
+      expect(
+        screen.queryByRole("button", { name: "Test Launcher Data loading" }),
+      ).not.toBeInTheDocument();
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("opens the real startup preview with a predefined isolated scenario", async () => {

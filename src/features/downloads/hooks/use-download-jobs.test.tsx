@@ -14,6 +14,7 @@ import {
   downloadJob,
 } from "@/features/downloads/fixtures/job";
 import {
+  ACTIVE_DOWNLOAD_QUERY_KEY,
   isDownloadFinished,
   replaceDownloadSnapshot,
   useDownloadJobs,
@@ -130,7 +131,53 @@ describe("download task activity", () => {
     );
     await waitFor(() => expect(result.current.first.data).toEqual([]));
     expect(result.current.second.data).toEqual([]);
-    expect(listen).toHaveBeenCalledTimes(2);
+    expect(listen).toHaveBeenCalledTimes(3);
+    expect(listen).toHaveBeenCalledWith(
+      "download-telemetry",
+      expect.any(Function),
+    );
+  });
+
+  it("remembers the running owner while paused snapshots arrive", async () => {
+    const older = downloadJob({ id: "old", status: "paused" });
+    const owner = downloadJob({ id: "owner" });
+    invoke.mockResolvedValue([older, owner]);
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>
+        <DownloadJobsProvider>{children}</DownloadJobsProvider>
+      </QueryClientProvider>
+    );
+    const { result } = renderHook(() => useDownloadJobs(), { wrapper });
+    await waitFor(() => expect(result.current.data).toHaveLength(2));
+    expect(client.getQueryData(ACTIVE_DOWNLOAD_QUERY_KEY)).toBe("owner");
+    act(() =>
+      listeners.get("download-job-updated")?.({
+        payload: { ...owner, status: "paused" },
+      }),
+    );
+    expect(client.getQueryData(ACTIVE_DOWNLOAD_QUERY_KEY)).toBe("owner");
+  });
+
+  it("restores the paused owner from persisted queue priority", async () => {
+    invoke.mockResolvedValue([
+      downloadJob({ id: "owner", status: "paused" }),
+      downloadJob({ id: "older", status: "paused" }),
+    ]);
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    client.setQueryData(ACTIVE_DOWNLOAD_QUERY_KEY, "older");
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>
+        <DownloadJobsProvider>{children}</DownloadJobsProvider>
+      </QueryClientProvider>
+    );
+    const { result } = renderHook(() => useDownloadJobs(), { wrapper });
+    await waitFor(() => expect(result.current.data).toHaveLength(2));
+    expect(client.getQueryData(ACTIVE_DOWNLOAD_QUERY_KEY)).toBe("owner");
   });
 
   it("refreshes persisted FIFO order when a paused installation rejoins the queue", async () => {
@@ -330,9 +377,11 @@ describe("download task activity", () => {
   it("cleans up a partial subscription and keeps database recovery available", async () => {
     const subscribe = vi.mocked(listen).getMockImplementation();
     if (!subscribe) throw new Error("missing event mock");
-    vi.mocked(listen)
-      .mockImplementationOnce(subscribe)
-      .mockRejectedValueOnce(new Error("event bridge unavailable"));
+    vi.mocked(listen).mockImplementation((name, handler, options) => {
+      if (name === "download-jobs-invalidated")
+        return Promise.reject(new Error("event bridge unavailable"));
+      return subscribe(name, handler, options);
+    });
     invoke.mockResolvedValue([downloadJob({ status: "paused" })]);
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false } },
@@ -348,7 +397,9 @@ describe("download task activity", () => {
     await waitFor(() =>
       expect(result.current.data?.[0]?.status).toBe("paused"),
     );
-    expect(listeners.size).toBe(0);
+    expect(listeners.has("download-job-updated")).toBe(false);
+    expect(listeners.has("download-jobs-invalidated")).toBe(false);
+    expect(listeners.has("download-telemetry")).toBe(true);
     invoke.mockResolvedValue([downloadJob()]);
     await act(async () => {
       await result.current.refetch();
@@ -358,5 +409,6 @@ describe("download task activity", () => {
     );
     unmount();
     expect(listeners.size).toBe(0);
+    vi.mocked(listen).mockImplementation(subscribe);
   });
 });

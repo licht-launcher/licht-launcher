@@ -45,6 +45,10 @@ export function DownloadControls({
   const queryClient = useQueryClient();
   const actionPending =
     useIsMutating({ mutationKey: ["download-action", job.id] }) > 0;
+  const bulkPending =
+    useIsMutating({ mutationKey: ["download-bulk-action"] }) > 0;
+  const reorderPending =
+    useIsMutating({ mutationKey: ["download-reorder"] }) > 0;
   const [confirming, setConfirming] = useState(false);
   const mutation = useMutation({
     mutationKey: ["download-action", job.id],
@@ -62,6 +66,9 @@ export function DownloadControls({
         (current) => replaceDownloadSnapshot(current, snapshot),
       );
       setConfirming(false);
+      await queryClient.invalidateQueries({
+        queryKey: DOWNLOAD_JOBS_QUERY_KEY,
+      });
       await queryClient.invalidateQueries({ queryKey: ["instances"] });
       await queryClient.invalidateQueries({ queryKey: VERSIONS_QUERY_KEY });
     },
@@ -74,7 +81,7 @@ export function DownloadControls({
   const pausable =
     job.status === "queued" ||
     (job.status === "running" && job.phase === "downloading");
-  const pending = disabled || actionPending;
+  const pending = disabled || actionPending || bulkPending || reorderPending;
   const cancelling = job.status === "cancelling";
   const cancelLabel = cancelling ? "Retry cancellation" : "Cancel download";
 
@@ -88,7 +95,13 @@ export function DownloadControls({
       {!cancelling && (
         <Button
           type="button"
-          variant={resumable ? "warning" : compact ? "ghost" : "secondary"}
+          variant={
+            resumable && job.status !== "paused"
+              ? "warning"
+              : compact
+                ? "ghost"
+                : "secondary"
+          }
           size={compact ? "icon" : "default"}
           aria-label={`${resumable ? "Resume" : "Pause"} download for ${title}`}
           disabled={pending || (!resumable && !pausable)}

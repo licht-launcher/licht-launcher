@@ -87,6 +87,16 @@ describe("DownloadsPopover", () => {
     vi.mocked(toast.error).mockReset();
   });
 
+  it("opens the downloads screen from the footer shortcut", async () => {
+    backend([]);
+    const onOpen = vi.fn();
+    renderDownloads({ showLabel: true, onOpen });
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Downloads: Idle" }),
+    );
+    expect(onOpen).toHaveBeenCalledOnce();
+  });
+
   it("shows the running installation and queued count in the footer summary", async () => {
     backend([
       downloadJob({ id: "1", status: "queued", instanceFolder: "Waiting" }),
