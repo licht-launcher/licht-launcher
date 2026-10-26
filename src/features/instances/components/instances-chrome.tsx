@@ -373,7 +373,7 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
                 onClick={() => dialogs.openGlobalSettings("updater")}
               >
                 <span className="truncate">
-                  {APP_VERSION} · {APP_CODENAME}
+                  Early Release {APP_VERSION} · {APP_CODENAME}
                 </span>
               </Button>
             </div>

@@ -244,7 +244,9 @@ describe("InstancesPage", () => {
     const footer = within(
       screen.getByRole("contentinfo", { name: "Download status" }),
     );
-    const version = footer.getByRole("button", { name: "0.3.0 · Rose" });
+    const version = footer.getByRole("button", {
+      name: "Early Release 0.3.0 · Rose",
+    });
     expect(version).toBeVisible();
     fireEvent.click(version);
     const settings = await screen.findByRole("dialog", { name: "Settings" });
