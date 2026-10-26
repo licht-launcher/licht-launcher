@@ -7,7 +7,7 @@ use crate::modpacks::file_hashes::{ensure_sha512, prepare_download};
 use crate::modpacks::secure_download::allowlisted_download_client;
 use crate::settings::{download_concurrency, write_concurrency};
 use crate::transfer::verification::VerificationProgress;
-use crate::{CoreError, Result, SharedCache, shared_transfer_limits};
+use crate::{CoreError, Result, SharedCache};
 use reqwest::Client;
 
 /// Downloads every client-required file from the stored Modrinth index into the instance.
@@ -87,7 +87,7 @@ async fn install_files(
             client,
             &pending,
             crate::DownloadOptions {
-                limits: shared_transfer_limits(),
+                limits: crate::settings::configured_transfer_limits(game, settings)?,
                 download_concurrency: download_concurrency(game, settings)?,
                 write_concurrency: write_concurrency(game, settings)?,
                 retry: DEFAULT_RETRY,

@@ -9,6 +9,7 @@ use tokio::sync::Mutex;
 use tokio_util::io::StreamReader;
 use tracing::warn;
 
+mod bandwidth;
 mod http;
 mod limits;
 mod progress;
@@ -284,14 +285,30 @@ async fn transfer_partial(
     let mut buffer = vec![0_u8; CHUNK_SIZE];
 
     loop {
+        let requested = total
+            .map(|total| {
+                total
+                    .saturating_sub(offset)
+                    .saturating_add(1)
+                    .min(CHUNK_SIZE as u64) as usize
+            })
+            .unwrap_or(CHUNK_SIZE);
+        let mut budget = tokio::select! {
+            biased;
+            error = job.control.interrupted() => return Err(error),
+            permit = job.limits.bandwidth.acquire(requested) => permit,
+        };
         let read = tokio::select! {
             biased;
             error = job.control.interrupted() => return Err(error),
-            read = reader.read(&mut buffer) => read?,
+            read = reader.read(&mut buffer[..requested]) => read?,
         };
+        budget.consume(read);
+        drop(budget);
         if read == 0 {
             break;
         }
+        job.control.received(read as u64);
 
         if total.is_some_and(|total| offset.saturating_add(read as u64) > total) {
             drop(file);
@@ -310,6 +327,7 @@ async fn transfer_partial(
             // next Range offset describes bytes actually committed to the file.
             file.write_all(&buffer[..read]).await?;
             file.flush().await?;
+            job.control.written(read as u64);
         }
 
         hasher.update(&buffer[..read]);

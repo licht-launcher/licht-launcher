@@ -10,6 +10,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::{Mutex, Notify, broadcast, watch};
 
+mod bulk;
 mod cancellation;
 mod progress;
 mod queue;
@@ -42,6 +43,7 @@ struct ActiveJob {
 struct InstallationQueue {
     waiting: VecDeque<String>,
     current: Option<String>,
+    last_active: Option<String>,
 }
 pub struct DownloadManager {
     runtime: DownloadRuntime,
@@ -52,6 +54,9 @@ pub struct DownloadManager {
     closing: AtomicBool,
     installations: Mutex<InstallationQueue>,
     queue_changed: Notify,
+    all_paused: AtomicBool,
+    admission_blocked: AtomicBool,
+    counters: Arc<super::control::TransferCounters>,
 }
 
 impl DownloadManager {
@@ -78,6 +83,9 @@ impl DownloadManager {
             closing: AtomicBool::new(false),
             installations: Mutex::new(InstallationQueue::default()),
             queue_changed: Notify::new(),
+            all_paused: AtomicBool::new(false),
+            admission_blocked: AtomicBool::new(false),
+            counters: Arc::new(super::control::TransferCounters::default()),
         }
     }
     pub fn subscribe(&self) -> broadcast::Receiver<DownloadJobSnapshot> {
@@ -196,6 +204,7 @@ impl DownloadManager {
         ) {
             return Err(CoreError::DownloadJobTransition);
         }
+        let was_running = snapshot.status == DownloadJobStatus::Running;
         slot.control.pause();
         slot.enabled.send_replace(false);
         snapshot.status = DownloadJobStatus::Paused;
@@ -203,13 +212,63 @@ impl DownloadManager {
         self.emit(snapshot.clone());
         drop(snapshot);
         slot.control.wait_for_idle().await?;
+        if was_running {
+            let others_active = self.stored_jobs().await?.iter().any(|job| {
+                job.id != id
+                    && matches!(
+                        job.status,
+                        DownloadJobStatus::Running | DownloadJobStatus::Queued
+                    )
+            });
+            if others_active {
+                self.runtime
+                    .database
+                    .reorder_download_jobs(&self.runtime.game, &[id.to_string()])
+                    .await?;
+            } else {
+                self.runtime
+                    .database
+                    .prioritize_download_job(&self.runtime.game, id)
+                    .await?;
+            }
+        }
         self.release_turn(id).await;
         Ok(slot.snapshot.lock().await.clone())
     }
     pub async fn resume(self: &Arc<Self>, id: &str) -> Result<DownloadJobSnapshot> {
         let _starts = self.starts.lock().await;
         self.accept_work()?;
+        let was_paused = self.all_paused.load(Ordering::SeqCst);
+        self.admission_blocked.store(true, Ordering::SeqCst);
+        let result = async {
+            let order: Vec<_> = self
+                .stored_jobs()
+                .await?
+                .into_iter()
+                .filter(|job| {
+                    matches!(
+                        job.status,
+                        DownloadJobStatus::Queued | DownloadJobStatus::Paused
+                    )
+                })
+                .map(|job| job.id)
+                .collect();
+            let snapshot = self.resume_locked(id).await?;
+            self.restore_waiting_order(&order).await?;
+            Ok(snapshot)
+        }
+        .await;
+        self.all_paused
+            .store(result.is_err() && was_paused, Ordering::SeqCst);
+        self.admission_blocked.store(false, Ordering::SeqCst);
+        self.queue_changed.notify_waiters();
+        result
+    }
+
+    async fn resume_locked(self: &Arc<Self>, id: &str) -> Result<DownloadJobSnapshot> {
+        self.accept_work()?;
         if let Some(slot) = self.active_job(id).await {
+            slot.control.clear_pause_request();
             if slot.control.state() == DownloadState::Paused {
                 slot.control.wait_for_idle().await?;
             }
@@ -219,6 +278,12 @@ impl DownloadManager {
             }
             let mut snapshot = slot.snapshot.lock().await;
             if snapshot.status != DownloadJobStatus::Paused {
+                if matches!(
+                    snapshot.status,
+                    DownloadJobStatus::Running | DownloadJobStatus::Queued
+                ) {
+                    slot.control.resume();
+                }
                 return Ok(snapshot.clone());
             }
             let instance_job = snapshot.instance_folder.is_some();

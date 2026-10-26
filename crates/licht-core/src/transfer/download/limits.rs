@@ -1,5 +1,6 @@
 use std::sync::{Arc, LazyLock, Mutex as StdMutex};
 
+use super::bandwidth::BandwidthLimiter;
 use tokio::sync::Notify;
 
 static SHARED_TRANSFER_LIMITS: LazyLock<Arc<TransferLimits>> =
@@ -63,6 +64,7 @@ impl ConcurrencyGate {
 /// Pair of gates shared across installs (or isolated in tests).
 #[derive(Debug, Default)]
 pub struct TransferLimits {
+    pub bandwidth: BandwidthLimiter,
     pub download: ConcurrencyGate,
     pub write: ConcurrencyGate,
 }
@@ -70,6 +72,7 @@ pub struct TransferLimits {
 impl TransferLimits {
     pub fn new() -> Self {
         Self {
+            bandwidth: BandwidthLimiter::new(),
             download: ConcurrencyGate::new(),
             write: ConcurrencyGate::new(),
         }

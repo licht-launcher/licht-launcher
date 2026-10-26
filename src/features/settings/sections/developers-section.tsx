@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
+import { requestStorageLoadingPreview } from "@/features/downloads/hooks/use-storage-loading-preview";
 import {
   DEV_CLEAR_SIMULATED_UPDATE_EVENT,
   DEV_SIMULATE_UPDATE_EVENT,
@@ -102,6 +103,22 @@ export function DevelopersSection() {
           }}
         />
       </div>
+      {import.meta.env.DEV && (
+        <div className="mt-6 flex flex-col gap-3 border-t border-border/60 pt-4">
+          <h3 className="text-sm font-medium">Launcher Data loading test</h3>
+          <p className="text-sm text-muted-foreground">
+            Open Downloads with loading indicators for five seconds, then show
+            real launcher data.
+          </p>
+          <Button
+            variant="outline"
+            className="self-start"
+            onClick={requestStorageLoadingPreview}
+          >
+            Test Launcher Data loading
+          </Button>
+        </div>
+      )}
       <div className="mt-6 flex flex-col gap-4 border-t border-border/60 pt-4">
         <h3 className="text-sm font-medium">Sidebar Acrylic preview</h3>
         <p id="acrylic-preview-hint" className="text-sm text-muted-foreground">

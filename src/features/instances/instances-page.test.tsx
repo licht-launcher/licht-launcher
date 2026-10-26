@@ -20,6 +20,11 @@ import {
   completedDownload,
   downloadJob,
 } from "@/features/downloads/fixtures/job";
+import { storageSummary } from "@/features/downloads/fixtures/storage";
+import {
+  DOWNLOAD_SPEED_HISTORY_QUERY_KEY,
+  type SpeedHistory,
+} from "@/features/downloads/hooks/use-download-telemetry";
 import {
   playerHeadPathFixture,
   snapshot,
@@ -29,6 +34,7 @@ import type { DownloadJobSnapshot } from "@/lib/generated/DownloadJobSnapshot";
 import type { GameLogEvent } from "@/lib/generated/GameLogEvent";
 import type { InstallProgress } from "@/lib/generated/InstallProgress";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
+import { requestOpenSettings } from "@/lib/shell-events";
 import { routeTree } from "@/routeTree.gen";
 
 const { invoke, listeners, closeWindow } = vi.hoisted(() => ({
@@ -78,7 +84,7 @@ async function renderAt(path: string) {
       </QueryClientProvider>,
     ),
   );
-  return { ...view, router };
+  return { ...view, router, queryClient };
 }
 
 function defaultCommandResponse(command: string): Promise<unknown> {
@@ -87,8 +93,16 @@ function defaultCommandResponse(command: string): Promise<unknown> {
       return Promise.resolve(playerHeadPathFixture);
     case "get_startup_progress":
       return Promise.resolve(startupProgress());
+    case "download_telemetry":
+      return Promise.resolve({
+        receivedBytes: 0,
+        writtenBytes: 0,
+        paused: false,
+      });
     case "custom_title_bar_active":
       return Promise.resolve(true);
+    case "storage_summary":
+      return Promise.resolve(storageSummary);
     case "list_instance_content":
     case "list_download_jobs":
     case "list_microsoft_accounts":
@@ -213,6 +227,205 @@ describe("InstancesPage", () => {
       );
     vi.mocked(console.error).mockRestore();
     expect(errors).toEqual([]);
+  });
+
+  it("opens full-width Downloads from the footer and restores the library sidebar", async () => {
+    mockContextMenuCommands();
+    const { router } = await renderAt("/");
+    await screen.findByRole("heading", { name: "Classic" });
+    const navigation = within(
+      screen.getByRole("navigation", { name: "Main navigation" }),
+    );
+    expect(
+      navigation.queryByRole("button", { name: "Downloads" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "Instances" })).toBeVisible();
+    const footer = within(
+      screen.getByRole("contentinfo", { name: "Download status" }),
+    );
+    const downloads = await footer.findByRole("button", {
+      name: "Downloads: Idle",
+    });
+    await act(async () => {
+      fireEvent.click(downloads);
+      await router.load();
+    });
+    expect(
+      await screen.findByRole("heading", { name: "Downloads" }),
+    ).toBeVisible();
+    expect(router.state.location.pathname).toBe("/downloads");
+    expect(
+      screen.queryByRole("navigation", { name: "Instances" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("separator", { name: "Resize sidebar" }),
+    ).not.toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(navigation.getByRole("button", { name: "Library" }));
+      await router.load();
+    });
+    expect(
+      await screen.findByRole("heading", { name: "Classic" }),
+    ).toBeVisible();
+    expect(router.state.location.pathname).toBe("/");
+    expect(screen.getByRole("navigation", { name: "Instances" })).toBeVisible();
+  });
+
+  it("keeps the Downloads route open when the library restores its selection", async () => {
+    mockContextMenuCommands();
+    const { router } = await renderAt("/downloads");
+    expect(
+      await screen.findByRole("heading", { name: "Downloads" }),
+    ).toBeVisible();
+    expect(await screen.findByText("No downloads in progress")).toBeVisible();
+    expect(router.state.location.pathname).toBe("/downloads");
+    expect(
+      screen.queryByRole("navigation", { name: "Instances" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("continues collecting speed history in Library and restores it when returning to Downloads", async () => {
+    mockContextMenuCommands((command) =>
+      command === "list_download_jobs"
+        ? Promise.resolve([downloadJob({ instanceFolder: "classic" })])
+        : undefined,
+    );
+    const { router, queryClient } = await renderAt("/downloads");
+    await screen.findByRole("region", { name: "Download for Classic" });
+    await waitFor(() => expect(listeners.has("download-telemetry")).toBe(true));
+    act(() =>
+      listeners.get("download-telemetry")?.({
+        payload: {
+          receivedBytes: 1_000_000,
+          writtenBytes: 500_000,
+          paused: false,
+        },
+      }),
+    );
+    await waitFor(
+      () =>
+        expect(
+          queryClient.getQueryData<SpeedHistory>(
+            DOWNLOAD_SPEED_HISTORY_QUERY_KEY,
+          )?.received.length,
+        ).toBeGreaterThan(0),
+      { timeout: 3000 },
+    );
+    const first = queryClient.getQueryData<SpeedHistory>(
+      DOWNLOAD_SPEED_HISTORY_QUERY_KEY,
+    )?.received[0];
+    const before =
+      queryClient.getQueryData<SpeedHistory>(DOWNLOAD_SPEED_HISTORY_QUERY_KEY)
+        ?.received.length ?? 0;
+    await act(async () => {
+      fireEvent.click(
+        within(
+          screen.getByRole("navigation", { name: "Main navigation" }),
+        ).getByRole("button", { name: "Library" }),
+      );
+      await router.load();
+    });
+    expect(
+      await screen.findByRole("heading", { name: "Classic" }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("region", { name: "Transfer speed" }),
+    ).not.toBeInTheDocument();
+    act(() =>
+      listeners.get("download-telemetry")?.({
+        payload: {
+          receivedBytes: 2_000_000,
+          writtenBytes: 1_000_000,
+          paused: false,
+        },
+      }),
+    );
+    await waitFor(
+      () =>
+        expect(
+          queryClient.getQueryData<SpeedHistory>(
+            DOWNLOAD_SPEED_HISTORY_QUERY_KEY,
+          )?.received.length,
+        ).toBeGreaterThan(before),
+      { timeout: 3000 },
+    );
+    await act(async () => {
+      fireEvent.click(
+        within(
+          screen.getByRole("contentinfo", { name: "Download status" }),
+        ).getByRole("button", { name: /^Downloads:/ }),
+      );
+      await router.load();
+    });
+    expect(
+      await screen.findByRole("region", { name: "Transfer speed" }),
+    ).toBeVisible();
+    expect(
+      queryClient.getQueryData<SpeedHistory>(DOWNLOAD_SPEED_HISTORY_QUERY_KEY)
+        ?.received[0],
+    ).toEqual(first);
+    expect(
+      screen.getByLabelText("Download bars").querySelectorAll("rect").length,
+    ).toBeGreaterThanOrEqual(2);
+  });
+
+  it("opens the Downloads settings directly from the downloads screen", async () => {
+    mockContextMenuCommands((command) =>
+      command === "runtime_java"
+        ? Promise.resolve({
+            java25: null,
+            java21: null,
+            java17: null,
+            java8: null,
+          })
+        : undefined,
+    );
+    const { router } = await renderAt("/downloads");
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Download settings" }),
+    );
+    const settings = await screen.findByRole("dialog", { name: "Settings" });
+    expect(
+      within(settings).getByRole("button", {
+        name: "Downloads",
+        current: "page",
+      }),
+    ).toBeVisible();
+    expect(router.state.location.pathname).toBe("/downloads");
+  });
+
+  it("opens the developer loading test in Downloads and closes Settings", async () => {
+    mockContextMenuCommands((command) =>
+      command === "runtime_java"
+        ? Promise.resolve({
+            java25: null,
+            java21: null,
+            java17: null,
+            java8: null,
+          })
+        : undefined,
+    );
+    const { router } = await renderAt("/");
+    act(() => requestOpenSettings("developers"));
+    const settings = await screen.findByRole("dialog", { name: "Settings" });
+    const preview = await within(settings).findByRole("button", {
+      name: "Test Launcher Data loading",
+    });
+    await act(async () => {
+      fireEvent.click(preview);
+      await router.load();
+    });
+    expect(
+      await screen.findByRole("heading", { name: "Downloads" }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("dialog", { name: "Settings" }),
+    ).not.toBeInTheDocument();
+    expect(router.state.location.pathname).toBe("/downloads");
+    const data = within(screen.getByRole("region", { name: "Launcher Data" }));
+    expect(data.getAllByRole("status")).toHaveLength(6);
+    expect(data.getByText("Instances")).toBeVisible();
+    expect(invoke).not.toHaveBeenCalledWith("storage_summary");
   });
 
   it("opens the instance creator from the bottom bar shortcut", async () => {
@@ -522,7 +735,7 @@ describe("InstancesPage", () => {
     },
   );
 
-  it("shows download progress in the footer and popover, then returns to idle", async () => {
+  it("shows download progress in the footer and Downloads screen, then returns to idle", async () => {
     mockContextMenuCommands();
     await renderAt("/");
     const footer = within(
@@ -634,7 +847,7 @@ describe("InstancesPage", () => {
   });
 
   it.each(["paused", "interrupted", "failed"] as const)(
-    "offers an explicit warning-colored resume for a %s download",
+    "offers an explicit resume with appropriate styling for a %s download",
     async (status) => {
       let job = downloadJob({ instanceFolder: "classic", status });
       mockContextMenuCommands((command) => {
@@ -648,7 +861,10 @@ describe("InstancesPage", () => {
       const resume = await screen.findByRole("button", {
         name: "Resume download for Classic",
       });
-      expect(resume).toHaveAttribute("data-variant", "warning");
+      expect(resume).toHaveAttribute(
+        "data-variant",
+        status === "paused" ? "secondary" : "warning",
+      );
       expect(invoke).not.toHaveBeenCalledWith("resume_download_job", {
         jobId: "1",
       });
@@ -770,7 +986,7 @@ describe("InstancesPage", () => {
     ).toBe(false);
   });
 
-  it.each(["instance page", "downloads popover"])(
+  it.each(["instance page", "downloads screen"])(
     "removes a new instance only after confirming cancellation from the %s",
     async (location) => {
       let entries: InstanceEntry[] = [
@@ -797,7 +1013,7 @@ describe("InstancesPage", () => {
         }
       });
       await renderAt("/?instance=classic");
-      if (location === "downloads popover") {
+      if (location === "downloads screen") {
         fireEvent.click(
           await screen.findByRole("button", { name: "Downloads: 25%" }),
         );
@@ -825,11 +1041,26 @@ describe("InstancesPage", () => {
       expect(invoke).not.toHaveBeenCalledWith("cancel_download_job", {
         jobId: "1",
       });
-      const sidebar = screen.getByLabelText("Instances", { selector: "nav" });
-      expect(within(sidebar).getByText("Classic")).toBeInTheDocument();
+      const before = screen.getByLabelText(
+        location === "downloads screen" ? "Download for Classic" : "Instances",
+      );
+      expect(within(before).getByText("Classic")).toBeInTheDocument();
       fireEvent.click(
         within(dialog).getByRole("button", { name: "Cancel download" }),
       );
+      await waitFor(() =>
+        expect(
+          screen.queryByRole("dialog", {
+            name: "Cancel download for Classic?",
+          }),
+        ).not.toBeInTheDocument(),
+      );
+      if (location === "downloads screen") {
+        fireEvent.click(screen.getByRole("button", { name: "Library" }));
+      }
+      const sidebar = await screen.findByRole("navigation", {
+        name: "Instances",
+      });
       await waitFor(() =>
         expect(within(sidebar).queryByText("Classic")).not.toBeInTheDocument(),
       );

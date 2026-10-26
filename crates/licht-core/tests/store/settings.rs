@@ -32,6 +32,7 @@ fn sample(download_concurrency: u32) -> Settings {
         java8: None,
         download_concurrency,
         write_concurrency: 8,
+        download_speed_limit_mib: None,
         data_directory: None,
         disable_custom_title_bar: false,
         disable_transparency: false,
@@ -83,6 +84,39 @@ fn a_saved_value_roundtrips() {
     assert_eq!(saved.download_concurrency, 4);
     assert_eq!(loaded, saved);
     assert!(settings_file(&cache).is_file());
+}
+
+#[test]
+fn global_speed_limit_roundtrips_and_rejects_zero() {
+    let cache = cache("speed-limit");
+    let mut settings = sample(4);
+    assert_eq!(
+        load_settings(&cache)
+            .expect("defaults")
+            .download_speed_limit_mib,
+        None
+    );
+    settings.download_speed_limit_mib = Some(3);
+    save_settings(&cache, &settings).expect("save speed limit");
+    assert_eq!(
+        load_settings(&cache)
+            .expect("load speed limit")
+            .download_speed_limit_mib,
+        Some(3)
+    );
+    settings.download_speed_limit_mib = Some(0);
+    assert!(matches!(
+        save_settings(&cache, &settings),
+        Err(CoreError::SettingsDownloadSpeed)
+    ));
+    assert_eq!(
+        load_settings(&cache)
+            .expect("previous valid value")
+            .download_speed_limit_mib,
+        Some(3)
+    );
+    settings.download_speed_limit_mib = None;
+    save_settings(&cache, &settings).expect("remove limit");
 }
 
 #[test]

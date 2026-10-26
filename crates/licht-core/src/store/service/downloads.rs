@@ -22,6 +22,8 @@ pub(super) enum Request {
         reply: Reply<DownloadJobSnapshot>,
     },
     List(SharedCache, Reply<Vec<DownloadJobSnapshot>>),
+    Reorder(SharedCache, Vec<String>, Reply<()>),
+    Prioritize(SharedCache, String, Reply<()>),
     Get(SharedCache, String, Reply<DownloadJobSnapshot>),
     Update(
         SharedCache,
@@ -45,6 +47,18 @@ pub(super) enum Request {
 }
 
 impl DatabaseClient {
+    pub(crate) async fn prioritize_download_job(&self, game: &SharedCache, id: &str) -> Result<()> {
+        self.download_request(|reply| Request::Prioritize(game.clone(), id.to_string(), reply))
+            .await
+    }
+    pub(crate) async fn reorder_download_jobs(
+        &self,
+        game: &SharedCache,
+        ids: &[String],
+    ) -> Result<()> {
+        self.download_request(|reply| Request::Reorder(game.clone(), ids.to_vec(), reply))
+            .await
+    }
     pub(crate) async fn restart_download_as_repair(
         &self,
         game: &SharedCache,
@@ -197,6 +211,14 @@ impl DatabaseClient {
 
 pub(super) async fn execute(connection: &mut SqliteConnection, request: Request) {
     match request {
+        Request::Prioritize(game, id, reply) => respond(
+            reply,
+            DownloadJobRepository::prioritize(connection, &game, &id).await,
+        ),
+        Request::Reorder(game, ids, reply) => respond(
+            reply,
+            DownloadJobRepository::reorder(connection, &game, &ids).await,
+        ),
         Request::RestartRepair(game, id, version, reply) => respond(
             reply,
             DownloadJobRepository::restart_as_repair(connection, &game, &id, version.as_deref())

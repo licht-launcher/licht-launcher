@@ -6,3 +6,4 @@ pub(crate) mod layout;
 pub(crate) mod repositories;
 pub(crate) mod service;
 pub(crate) mod settings;
+pub(crate) mod storage;

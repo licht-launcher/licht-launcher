@@ -22,7 +22,7 @@ use crate::modpacks::MODPACK_INDEX_FILE;
 use crate::modpacks::file_hashes::ensure_md5;
 use crate::settings::{download_concurrency, write_concurrency};
 use crate::transfer::verification::VerificationProgress;
-use crate::{CoreError, Result, SharedCache, shared_transfer_limits};
+use crate::{CoreError, Result, SharedCache};
 
 /// Names that must not be overwritten at the instance root by pack content.
 const PROTECTED_ROOT_NAMES: [&str; 4] = [
@@ -85,7 +85,7 @@ pub async fn install_curseforge_files(
             &client,
             &tasks,
             crate::DownloadOptions {
-                limits: shared_transfer_limits(),
+                limits: crate::settings::configured_transfer_limits(game, settings)?,
                 download_concurrency: download_concurrency(game, settings)?,
                 write_concurrency: write_concurrency(game, settings)?,
                 retry: DEFAULT_RETRY,

@@ -72,6 +72,13 @@ export function useSettingsDraft(open: boolean) {
       toast.error("window size must be at least 1");
       return;
     }
+    const speed = optionalSize(current.downloadSpeedLimitMiB);
+    if (speed === "invalid" || (speed !== null && speed > 4_294_967_295)) {
+      toast.error(
+        "Download speed limit must be a positive whole number of MiB/s.",
+      );
+      return;
+    }
     save.mutate(toSettings(current, schemaRef.current, width, height));
   };
 

@@ -468,6 +468,7 @@ describe("launcher commands", () => {
       java8: null,
       downloadConcurrency: 4,
       writeConcurrency: 8,
+      downloadSpeedLimitMiB: null,
       disableCustomTitleBar: false,
       disableTransparency: false,
       dataDirectory: null,

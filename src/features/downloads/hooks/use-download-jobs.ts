@@ -1,8 +1,18 @@
-import type { UseQueryResult } from "@tanstack/react-query";
+import { type UseQueryResult, useQuery } from "@tanstack/react-query";
 import { createContext, useContext } from "react";
 import type { DownloadJobSnapshot } from "@/lib/generated/DownloadJobSnapshot";
 
 export const DOWNLOAD_JOBS_QUERY_KEY = ["download-jobs"] as const;
+export const ACTIVE_DOWNLOAD_QUERY_KEY = ["active-download-id"] as const;
+
+export function useActiveDownloadId() {
+  return useQuery({
+    queryKey: ACTIVE_DOWNLOAD_QUERY_KEY,
+    queryFn: (): string | null => null,
+    initialData: null,
+    enabled: false,
+  }).data;
+}
 export const DownloadJobsContext = createContext<UseQueryResult<
   DownloadJobSnapshot[],
   Error

@@ -1,6 +1,34 @@
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use tokio::sync::watch;
 
 use crate::{CoreError, Result};
+
+#[derive(Debug, Default)]
+pub(crate) struct TransferCounters {
+    received: AtomicU64,
+    written: AtomicU64,
+}
+
+#[derive(Debug, Clone, Copy, serde::Serialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+pub struct DownloadTelemetry {
+    #[ts(type = "number")]
+    pub received_bytes: u64,
+    #[ts(type = "number")]
+    pub written_bytes: u64,
+    pub paused: bool,
+}
+
+impl TransferCounters {
+    pub(crate) fn snapshot(&self, paused: bool) -> DownloadTelemetry {
+        DownloadTelemetry {
+            received_bytes: self.received.load(Ordering::Relaxed),
+            written_bytes: self.written.load(Ordering::Relaxed),
+            paused,
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DownloadState {
@@ -14,6 +42,8 @@ pub enum DownloadState {
 pub struct DownloadControl {
     state: watch::Sender<DownloadState>,
     transfers: watch::Sender<usize>,
+    counters: Arc<TransferCounters>,
+    pause_requested: Arc<AtomicBool>,
 }
 
 pub(crate) struct TransferActivity {
@@ -35,9 +65,34 @@ impl Default for DownloadControl {
 
 impl DownloadControl {
     pub fn new() -> Self {
+        Self::with_counters(Arc::new(TransferCounters::default()))
+    }
+
+    pub(crate) fn with_counters(counters: Arc<TransferCounters>) -> Self {
         let (state, _) = watch::channel(DownloadState::Running);
         let (transfers, _) = watch::channel(0);
-        Self { state, transfers }
+        Self {
+            state,
+            transfers,
+            counters,
+            pause_requested: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    pub(crate) fn received(&self, bytes: u64) {
+        self.counters.received.fetch_add(bytes, Ordering::Relaxed);
+    }
+
+    pub(crate) fn written(&self, bytes: u64) {
+        self.counters.written.fetch_add(bytes, Ordering::Relaxed);
+    }
+
+    pub(crate) fn request_pause(&self) {
+        self.pause_requested.store(true, Ordering::SeqCst);
+    }
+
+    pub(crate) fn clear_pause_request(&self) {
+        self.pause_requested.store(false, Ordering::SeqCst);
     }
 
     pub fn state(&self) -> DownloadState {
@@ -55,6 +110,7 @@ impl DownloadControl {
     }
 
     pub fn resume(&self) {
+        self.pause_requested.store(false, Ordering::SeqCst);
         self.state.send_if_modified(|state| {
             if *state != DownloadState::Paused {
                 return false;
@@ -69,6 +125,9 @@ impl DownloadControl {
     }
 
     pub(crate) async fn ready(&self) -> Result<()> {
+        if self.pause_requested.load(Ordering::SeqCst) {
+            self.pause();
+        }
         let mut receiver = self.state.subscribe();
         let state = *receiver
             .wait_for(|state| *state != DownloadState::Paused)
