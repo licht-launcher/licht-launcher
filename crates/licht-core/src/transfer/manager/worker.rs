@@ -114,13 +114,28 @@ impl DownloadManager {
                 loop {
                     tokio::select! {
                         biased;
-                        idle = slot.control.wait_for_idle() => { idle?; break; },
-                        result = &mut operation => return result,
                         event = incoming.recv(), if observing => {
                             if let Some(event) = event {
                                 self.apply_event(slot, event, &mut last_emit, &mut last_save).await?;
                             } else { observing = false; }
                         },
+                        result = &mut operation => return result,
+                        idle = slot.control.wait_for_idle() => { idle?; break; },
+                    }
+                }
+                // The final transfer poll can forward progress and become idle together.
+                while let Ok(event) = incoming.try_recv() {
+                    self.apply_event(slot, event, &mut last_emit, &mut last_save)
+                        .await?;
+                }
+                {
+                    let mut snapshot = slot.snapshot.lock().await;
+                    if snapshot.status == DownloadJobStatus::Paused
+                        && !self.closing.load(Ordering::SeqCst)
+                    {
+                        self.persist(&mut snapshot).await?;
+                        self.emit(snapshot.clone());
+                        slot.dirty.store(false, Ordering::SeqCst);
                     }
                 }
                 self.yield_turn(id).await;

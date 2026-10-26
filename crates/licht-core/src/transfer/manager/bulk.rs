@@ -119,7 +119,8 @@ impl DownloadManager {
             return Ok(());
         }
         let mut snapshot = slot.snapshot.lock().await;
-        if slot.control.state() != DownloadState::Paused {
+        // Shutdown owns the Interrupted transition; it is not an explicit user pause.
+        if self.closing.load(Ordering::SeqCst) || slot.control.state() != DownloadState::Paused {
             return Ok(());
         }
         if !matches!(
