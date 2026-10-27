@@ -14,7 +14,8 @@ use super::{LauncherPaths, failure, host_environment, http_client};
 pub async fn list_versions(paths: State<'_, LauncherPaths>) -> Result<Vec<VersionSummary>, String> {
     let cache = paths.game.clone();
     let client = http_client().map_err(failure)?;
-    list_version_summaries(&client, &cache)
+    let environment = host_environment().map_err(failure)?;
+    list_version_summaries(&client, &cache, &environment)
         .await
         .map_err(failure)
 }
@@ -24,7 +25,8 @@ pub async fn is_version_ready_cmd(
     paths: State<'_, LauncherPaths>,
     version_id: String,
 ) -> Result<bool, String> {
-    Ok(is_version_ready(&paths.game, &version_id))
+    let environment = host_environment().map_err(failure)?;
+    Ok(is_version_ready(&paths.game, &version_id, &environment))
 }
 
 #[tauri::command]

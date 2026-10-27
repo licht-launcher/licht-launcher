@@ -294,7 +294,6 @@ fn direct_forge_launch_does_not_rehash_installed_binaries() {
         b"changed library",
     )
     .expect("changed library");
-    assert!(crate::is_version_ready(&cache, "forge-fixture"));
     assert!(
         !receipt::ready(&cache, "forge-fixture"),
         "full installation/Repair validation must still detect tampering"
@@ -306,6 +305,11 @@ fn direct_forge_launch_does_not_rehash_installed_binaries() {
             os_version: String::new(),
             features: BTreeMap::new(),
         };
+        assert!(crate::is_version_ready(
+            &cache,
+            "forge-fixture",
+            &environment
+        ));
         let command = crate::launch_command(
             Path::new("java"),
             &cache,
@@ -333,7 +337,11 @@ fn direct_forge_launch_rejects_missing_outputs_or_changed_profile_metadata() {
         .library("demo/library/1/library-1.jar")
         .expect("library");
     fs::remove_file(&library).expect("missing library");
-    assert!(!crate::is_version_ready(&cache, "forge-fixture"));
+    assert!(!crate::is_version_ready(
+        &cache,
+        "forge-fixture",
+        &environment
+    ));
     assert!(matches!(
         crate::launch_command(
             Path::new("java"),
@@ -348,14 +356,22 @@ fn direct_forge_launch_rejects_missing_outputs_or_changed_profile_metadata() {
     fs::write(&library, b"library").expect("restore library");
     let client = cache.version_jar("forge-fixture").expect("client");
     fs::remove_file(&client).expect("missing client");
-    assert!(!crate::is_version_ready(&cache, "forge-fixture"));
+    assert!(!crate::is_version_ready(
+        &cache,
+        "forge-fixture",
+        &environment
+    ));
     fs::write(client, b"client").expect("restore client");
     let path = cache.version_json("forge-fixture").expect("profile");
     let mut profile: serde_json::Value =
         serde_json::from_slice(&fs::read(&path).expect("profile")).expect("JSON");
     profile["mainClass"] = serde_json::json!("changed.Main");
     fs::write(&path, serde_json::to_vec(&profile).expect("JSON")).expect("changed profile");
-    assert!(!crate::is_version_ready(&cache, "forge-fixture"));
+    assert!(!crate::is_version_ready(
+        &cache,
+        "forge-fixture",
+        &environment
+    ));
     assert!(matches!(
         crate::launch_command(
             Path::new("java"),
@@ -395,7 +411,11 @@ fn direct_forge_launch_requires_a_completed_installation_receipt() {
         } else {
             fs::remove_file(&receipt).expect("missing receipt");
         }
-        assert!(!crate::is_version_ready(&cache, "forge-fixture"));
+        assert!(!crate::is_version_ready(
+            &cache,
+            "forge-fixture",
+            &environment
+        ));
         assert!(matches!(
             crate::launch_command(
                 Path::new("java"),

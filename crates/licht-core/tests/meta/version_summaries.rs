@@ -1,6 +1,16 @@
 use licht_core::{
-    SharedCache, VersionType, is_version_ready, parse_version_manifest, version_summaries,
+    Arch, LaunchEnvironment, OsName, SharedCache, VersionType, is_version_ready,
+    parse_version_manifest, version_summaries,
 };
+
+fn environment() -> LaunchEnvironment {
+    LaunchEnvironment {
+        os: OsName::Windows,
+        arch: Arch::X86_64,
+        os_version: String::new(),
+        features: std::collections::BTreeMap::new(),
+    }
+}
 
 fn manifest() -> licht_core::VersionManifest {
     parse_version_manifest(
@@ -40,7 +50,7 @@ fn a_saved_version_json_is_installed_and_a_bad_id_is_not() {
     std::fs::create_dir_all(json.parent().expect("parent")).expect("version dir");
     std::fs::write(&json, "{}").expect("version json");
 
-    let summaries = version_summaries(&manifest(), &cache);
+    let summaries = version_summaries(&manifest(), &cache, &environment());
     assert_eq!(summaries.len(), 2);
     assert_eq!(summaries[0].id, "1.2");
     assert!(summaries[0].installed);
@@ -67,7 +77,7 @@ fn a_local_loader_profile_is_listed_and_needs_its_artifacts() {
     std::fs::create_dir_all(json.parent().expect("parent")).expect("version dir");
     std::fs::write(&json, r#"{"inheritsFrom":"1.20.1"}"#).expect("version json");
 
-    let summaries = version_summaries(&manifest(), &cache);
+    let summaries = version_summaries(&manifest(), &cache, &environment());
     let loader = summaries
         .iter()
         .find(|entry| entry.id == id)
@@ -77,7 +87,7 @@ fn a_local_loader_profile_is_listed_and_needs_its_artifacts() {
 
     let jar = cache.version_jar(id).expect("jar path");
     std::fs::write(&jar, b"client").expect("jar");
-    let summaries = version_summaries(&manifest(), &cache);
+    let summaries = version_summaries(&manifest(), &cache, &environment());
     let loader = summaries
         .iter()
         .find(|entry| entry.id == id)
@@ -110,7 +120,7 @@ fn provisional_forge_profiles_are_not_launch_ready() {
         });
         std::fs::write(path, profile.to_string()).expect("provisional profile");
         assert!(
-            !is_version_ready(&cache, &id),
+            !is_version_ready(&cache, &id, &environment()),
             "a vanilla parent is not a completed loader"
         );
     }
