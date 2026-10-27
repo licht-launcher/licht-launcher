@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { sortInstances } from "@/features/instances/lib/sort-instances";
+import {
+  type InstanceSort,
+  sortInstances,
+} from "@/features/instances/lib/sort-instances";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 
 function entry(
@@ -29,18 +32,27 @@ function entry(
 }
 
 describe("sortInstances", () => {
-  it("sorts by name", () => {
-    const instances = [
-      entry("zeta", "Zeta"),
-      entry("alpha", "Alpha"),
-      entry("classic", "Classic"),
-    ];
-    expect(sortInstances(instances, "name").map((item) => item.name)).toEqual([
-      "Alpha",
-      "Classic",
-      "Zeta",
-    ]);
-  });
+  it.each<{ sort: InstanceSort; names: string[] }>([
+    { sort: "name", names: ["Alpha", "Classic", "Zeta"] },
+    { sort: "nameDesc", names: ["Zeta", "Classic", "Alpha"] },
+  ])(
+    "sorts by $sort without modifying the original list",
+    ({ sort, names }) => {
+      const instances = [
+        entry("zeta", "Zeta"),
+        entry("alpha", "Alpha"),
+        entry("classic", "Classic"),
+      ];
+      expect(sortInstances(instances, sort).map((item) => item.name)).toEqual(
+        names,
+      );
+      expect(instances.map((item) => item.name)).toEqual([
+        "Zeta",
+        "Alpha",
+        "Classic",
+      ]);
+    },
+  );
 
   it("orders by last opened time, then never opened by name", () => {
     const instances = [

@@ -1,6 +1,6 @@
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 
-export type InstanceSort = "lastPlayed" | "name";
+export type InstanceSort = "lastPlayed" | "name" | "nameDesc";
 
 function openedAtMs(value: string | null): number | null {
   if (value === null) {
@@ -15,8 +15,12 @@ export function sortInstances(
   sort: InstanceSort,
 ): InstanceEntry[] {
   const sorted = [...instances];
-  if (sort === "name") {
-    sorted.sort((left, right) => left.name.localeCompare(right.name));
+  if (sort === "name" || sort === "nameDesc") {
+    sorted.sort((left, right) =>
+      sort === "nameDesc"
+        ? right.name.localeCompare(left.name)
+        : left.name.localeCompare(right.name),
+    );
     return sorted;
   }
 
