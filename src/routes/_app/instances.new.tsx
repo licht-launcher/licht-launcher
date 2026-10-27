@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { PageTransition } from "@/components/ui/page-transition";
 import {
   type NewInstanceSearch,
   parseNewInstanceSearch,
@@ -10,5 +11,13 @@ export type { NewInstanceSearch };
 export const Route = createFileRoute("/_app/instances/new")({
   validateSearch: (search: Record<string, unknown>): NewInstanceSearch =>
     parseNewInstanceSearch(search),
-  component: NewInstancePage,
+  component: NewInstanceRoute,
 });
+
+function NewInstanceRoute() {
+  return (
+    <PageTransition>
+      <NewInstancePage />
+    </PageTransition>
+  );
+}

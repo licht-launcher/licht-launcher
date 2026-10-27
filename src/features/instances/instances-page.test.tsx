@@ -1180,6 +1180,129 @@ describe("InstancesPage", () => {
     expect(names()).toEqual(["Classic", "Zeta", "Alpha"]);
   });
 
+  it("preserves content filters when selecting another instance in the sidebar", async () => {
+    mockContextMenuCommands();
+    await renderAt("/");
+    await screen.findByRole("heading", { name: "Classic" });
+    fireEvent.change(screen.getByRole("textbox", { name: "Search content" }), {
+      target: { value: "sodium" },
+    });
+    fireEvent.click(screen.getByRole("combobox", { name: "Filter content" }));
+    fireEvent.click(await screen.findByRole("option", { name: "Mods" }));
+    const sidebar = within(
+      screen.getByRole("navigation", { name: "Instances" }),
+    );
+    for (const name of ["Next", "Classic"]) {
+      fireEvent.click(sidebar.getByRole("button", { name }));
+      expect(await screen.findByRole("heading", { name })).toBeVisible();
+      expect(
+        screen.getByRole("textbox", { name: "Search content" }),
+      ).toHaveValue("sodium");
+      expect(
+        screen.getByRole("combobox", { name: "Filter content" }),
+      ).toHaveTextContent("Mods");
+    }
+  });
+
+  it("preserves filters and the file path when switching between instance tabs", async () => {
+    mockContextMenuCommands((command, args) => {
+      if (command !== "list_instance_entries") return undefined;
+      const relativePath =
+        args !== null && typeof args === "object" && "relativePath" in args
+          ? args.relativePath
+          : undefined;
+      return Promise.resolve(
+        relativePath === "saves"
+          ? [{ name: "readme.txt", isDir: false, size: 12, created: null }]
+          : [{ name: "saves", isDir: true, size: null, created: null }],
+      );
+    });
+    await renderAt("/");
+    await screen.findByRole("heading", { name: "Classic" });
+    fireEvent.change(screen.getByRole("textbox", { name: "Search content" }), {
+      target: { value: "sodium" },
+    });
+    fireEvent.click(screen.getByRole("combobox", { name: "Filter content" }));
+    fireEvent.click(await screen.findByRole("option", { name: "Mods" }));
+
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Files" }));
+    expect(
+      screen
+        .getByRole("tabpanel", { name: "Files" })
+        .querySelector("[data-slot='page-transition']"),
+    ).toHaveAttribute("data-direction", "left");
+    const files = within(screen.getByRole("tabpanel", { name: "Files" }));
+    fireEvent.click(
+      await files.findByRole("button", { name: "saves, folder" }),
+    );
+    expect(await files.findByText("readme.txt")).toBeVisible();
+
+    const filesTab = screen.getByRole("tab", { name: "Files" });
+    filesTab.focus();
+    fireEvent.keyDown(filesTab, { key: "ArrowRight" });
+    await waitFor(() =>
+      expect(screen.getByRole("tab", { name: "Console" })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      ),
+    );
+    expect(screen.getByRole("tabpanel", { name: "Console" })).toBeVisible();
+    expect(
+      screen
+        .getByRole("tabpanel", { name: "Console" })
+        .querySelector("[data-slot='page-transition']"),
+    ).toHaveAttribute("data-direction", "left");
+    fireEvent.click(screen.getByRole("button", { name: "Log level" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Warn" }));
+    fireEvent.click(screen.getByRole("button", { name: "Log level" }));
+
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Content" }));
+    expect(screen.getByRole("tabpanel", { name: "Content" })).toBeVisible();
+    expect(
+      screen
+        .getByRole("tabpanel", { name: "Content" })
+        .querySelector("[data-slot='page-transition']"),
+    ).toHaveAttribute("data-direction", "right");
+    expect(screen.getByRole("textbox", { name: "Search content" })).toHaveValue(
+      "sodium",
+    );
+    expect(
+      screen.getByRole("combobox", { name: "Filter content" }),
+    ).toHaveTextContent("Mods");
+
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Files" }));
+    expect(screen.getByRole("button", { name: "saves" })).toBeDisabled();
+    expect(
+      await within(screen.getByRole("tabpanel", { name: "Files" })).findByText(
+        "readme.txt",
+      ),
+    ).toBeVisible();
+    expect(invoke).toHaveBeenCalledWith("list_instance_entries", {
+      folder: "classic",
+      relativePath: "saves",
+    });
+
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Console" }));
+    expect(screen.getByRole("button", { name: "Log level" })).toHaveTextContent(
+      "Warn",
+    );
+    expect(screen.getByLabelText("Game log")).toBeVisible();
+    const consoleTab = screen.getByRole("tab", { name: "Console" });
+    consoleTab.focus();
+    fireEvent.keyDown(consoleTab, { key: "ArrowLeft" });
+    await waitFor(() =>
+      expect(screen.getByRole("tab", { name: "Files" })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      ),
+    );
+    expect(
+      screen
+        .getByRole("tabpanel", { name: "Files" })
+        .querySelector("[data-slot='page-transition']"),
+    ).toHaveAttribute("data-direction", "right");
+  });
+
   it("keeps the empty sidebar clear and opens settings", async () => {
     invoke.mockImplementation((command: string) => {
       if (command === "list_instances") {

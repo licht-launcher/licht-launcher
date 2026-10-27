@@ -52,6 +52,7 @@ describe("DropdownMenu", () => {
     await waitFor(() =>
       expect(screen.queryByRole("menu")).not.toBeInTheDocument(),
     );
+    await waitFor(() => expect(trigger).toHaveFocus());
   });
 
   it("opens with a pointer and returns focus after Escape", async () => {

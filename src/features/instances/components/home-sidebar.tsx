@@ -105,7 +105,7 @@ export function HomeSidebar({
                   position="popper"
                   side="bottom"
                   align="end"
-                  className="z-100 font-brand text-xs font-medium data-open:animate-none data-closed:animate-none"
+                  className="z-100 font-brand text-xs font-medium"
                 >
                   <SelectItem value="lastPlayed" className="text-xs">
                     <SortLabel icon={HistoryIcon} label="Last played" />

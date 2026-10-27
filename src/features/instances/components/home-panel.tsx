@@ -15,6 +15,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PageTransition } from "@/components/ui/page-transition";
 import {
   Select,
   SelectContent,
@@ -46,6 +47,8 @@ import type { DownloadJobSnapshot } from "@/lib/generated/DownloadJobSnapshot";
 import type { DownloadProgress } from "@/lib/generated/DownloadProgress";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 
+const INSTANCE_TABS = ["content", "files", "console"];
+
 export function HomePanel({
   instance,
   busy,
@@ -76,6 +79,7 @@ export function HomePanel({
   onClearLog: () => void;
 }) {
   const [tab, setTab] = useState("content");
+  const [tabDirection, setTabDirection] = useState<"left" | "right">("left");
   const [contentFilter, setContentFilter] = useState<ContentFilter>("all");
   const [contentSearch, setContentSearch] = useState("");
   const [logLevels, setLogLevels] = useState<LogLevelSelection>(
@@ -112,11 +116,18 @@ export function HomePanel({
       </div>
       <Tabs
         value={tab}
-        onValueChange={setTab}
+        onValueChange={(next) => {
+          const nextIndex = INSTANCE_TABS.indexOf(next);
+          if (nextIndex === -1 || next === tab) return;
+          setTabDirection(
+            nextIndex > INSTANCE_TABS.indexOf(tab) ? "left" : "right",
+          );
+          setTab(next);
+        }}
         className="mt-3 flex min-h-0 flex-1 flex-col gap-2"
       >
         <div className="flex shrink-0 items-center gap-2">
-          <TabsList className="w-fit shrink-0">
+          <TabsList variant="sliding" className="w-fit shrink-0">
             <TabsTrigger
               value="content"
               className="cursor-pointer gap-1.5 px-3"
@@ -248,27 +259,33 @@ export function HomePanel({
           value="files"
           className="mt-0 flex min-h-0 flex-1 flex-col outline-none"
         >
-          <FilesSection
-            folder={folder}
-            relativePath={filesPath}
-            onRelativePathChange={setFilesPath}
-          />
+          <PageTransition direction={tabDirection}>
+            <FilesSection
+              folder={folder}
+              relativePath={filesPath}
+              onRelativePathChange={setFilesPath}
+            />
+          </PageTransition>
         </TabsContent>
         <TabsContent
           value="console"
           className="mt-0 flex min-h-0 flex-1 flex-col outline-none"
         >
-          <ConsoleSection lines={lines} selected={logLevels} />
+          <PageTransition direction={tabDirection}>
+            <ConsoleSection lines={lines} selected={logLevels} />
+          </PageTransition>
         </TabsContent>
         <TabsContent
           value="content"
           className="mt-0 flex min-h-0 flex-1 flex-col outline-none"
         >
-          <ContentSection
-            folder={folder}
-            filter={contentFilter}
-            search={contentSearch}
-          />
+          <PageTransition direction={tabDirection}>
+            <ContentSection
+              folder={folder}
+              filter={contentFilter}
+              search={contentSearch}
+            />
+          </PageTransition>
         </TabsContent>
       </Tabs>
     </div>
