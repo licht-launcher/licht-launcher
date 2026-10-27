@@ -6,7 +6,9 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::meta::version_resolve::{local_inherits_from, local_version_exists};
-use crate::{CoreError, Result, SharedCache, parse_version};
+use crate::{
+    CoreError, LaunchEnvironment, Result, SharedCache, applicable_libraries, parse_version,
+};
 
 /// Primary Mojang host (Piston Meta).
 pub const VERSION_MANIFEST_URL: &str =
@@ -82,7 +84,7 @@ pub fn version_manifest_cache_path(cache: &SharedCache) -> PathBuf {
 }
 
 /// Lightweight launch readiness. Installation and Repair validate payload hashes.
-pub fn is_version_ready(cache: &SharedCache, id: &str) -> bool {
+pub fn is_version_ready(cache: &SharedCache, id: &str, environment: &LaunchEnvironment) -> bool {
     if !local_version_exists(cache, id) {
         return false;
     }
@@ -113,9 +115,8 @@ pub fn is_version_ready(cache: &SharedCache, id: &str) -> bool {
     {
         return false;
     }
-    version
-        .libraries
-        .iter()
+    applicable_libraries(&version, environment)
+        .into_iter()
         .filter_map(|library| {
             library
                 .downloads
@@ -147,7 +148,10 @@ fn inherited_root_id(cache: &SharedCache, id: &str) -> Result<String> {
 }
 
 /// Summaries built only from folders under `versions/` (no network, no cache file).
-pub fn list_installed_version_summaries(cache: &SharedCache) -> Vec<VersionSummary> {
+pub fn list_installed_version_summaries(
+    cache: &SharedCache,
+    environment: &LaunchEnvironment,
+) -> Vec<VersionSummary> {
     let mut summaries = Vec::new();
     let versions_dir = cache.root().join("versions");
     let Ok(entries) = std::fs::read_dir(versions_dir) else {
@@ -167,7 +171,7 @@ pub fn list_installed_version_summaries(cache: &SharedCache) -> Vec<VersionSumma
         if !json_path.is_file() {
             continue;
         }
-        let installed = is_version_ready(cache, &id);
+        let installed = is_version_ready(cache, &id, environment);
         summaries.push(VersionSummary {
             id,
             version_type: VersionType::OldAlpha,
@@ -190,7 +194,11 @@ pub fn list_installed_version_summaries(cache: &SharedCache) -> Vec<VersionSumma
 /// the same artifact checks used before launch.
 ///
 /// An id that cannot be a single path segment is listed and not installed.
-pub fn version_summaries(manifest: &VersionManifest, cache: &SharedCache) -> Vec<VersionSummary> {
+pub fn version_summaries(
+    manifest: &VersionManifest,
+    cache: &SharedCache,
+    environment: &LaunchEnvironment,
+) -> Vec<VersionSummary> {
     let mut summaries: Vec<VersionSummary> = manifest
         .versions
         .iter()
@@ -204,7 +212,7 @@ pub fn version_summaries(manifest: &VersionManifest, cache: &SharedCache) -> Vec
         .collect();
 
     let mut known: HashSet<String> = summaries.iter().map(|entry| entry.id.clone()).collect();
-    for local in list_installed_version_summaries(cache) {
+    for local in list_installed_version_summaries(cache, environment) {
         if known.contains(&local.id) {
             continue;
         }
@@ -219,11 +227,12 @@ pub fn version_summaries(manifest: &VersionManifest, cache: &SharedCache) -> Vec
 pub async fn list_version_summaries(
     client: &reqwest::Client,
     cache: &SharedCache,
+    environment: &LaunchEnvironment,
 ) -> Result<Vec<VersionSummary>> {
     match fetch_version_manifest(client, cache).await {
-        Ok(manifest) => Ok(version_summaries(&manifest, cache)),
+        Ok(manifest) => Ok(version_summaries(&manifest, cache, environment)),
         Err(_) => {
-            let installed = list_installed_version_summaries(cache);
+            let installed = list_installed_version_summaries(cache, environment);
             if installed.is_empty() {
                 Err(CoreError::VersionManifestUnavailable)
             } else {
@@ -397,6 +406,15 @@ mod tests {
     use super::*;
     use crate::hashes::sha1_hex;
 
+    fn environment() -> LaunchEnvironment {
+        LaunchEnvironment {
+            os: crate::OsName::Windows,
+            arch: crate::Arch::X86_64,
+            os_version: String::new(),
+            features: std::collections::BTreeMap::new(),
+        }
+    }
+
     fn temp_cache(label: &str) -> SharedCache {
         let stamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -444,7 +462,7 @@ mod tests {
         .unwrap();
         std::fs::write(dir.join(format!("{id}.jar")), b"jar").unwrap();
         // Ignore the cache file if present as a non-version folder name.
-        let summaries = list_installed_version_summaries(&cache);
+        let summaries = list_installed_version_summaries(&cache, &environment());
         assert_eq!(summaries.len(), 1);
         assert_eq!(summaries[0].id, id);
         assert!(summaries[0].installed);
@@ -462,9 +480,9 @@ mod tests {
             minimal_version_json(vanilla, b"jar"),
         )
         .unwrap();
-        assert!(!is_version_ready(&cache, vanilla));
+        assert!(!is_version_ready(&cache, vanilla, &environment()));
         std::fs::write(vanilla_dir.join(format!("{vanilla}.jar")), b"jar").unwrap();
-        assert!(is_version_ready(&cache, vanilla));
+        assert!(is_version_ready(&cache, vanilla, &environment()));
 
         let loader = "fabric-loader-0.16.0-1.20.1";
         let loader_dir = cache.root().join("versions").join(loader);
@@ -477,14 +495,103 @@ mod tests {
             ),
         )
         .unwrap();
-        assert!(!is_version_ready(&cache, loader));
+        assert!(!is_version_ready(&cache, loader, &environment()));
         let loader_jar = cache
             .library("net/fabricmc/fabric-loader/0.16.0/fabric-loader-0.16.0.jar")
             .unwrap();
         std::fs::create_dir_all(loader_jar.parent().expect("loader parent")).unwrap();
         std::fs::write(loader_jar, b"loader").unwrap();
-        assert!(is_version_ready(&cache, loader));
+        assert!(is_version_ready(&cache, loader, &environment()));
         let _ = std::fs::remove_dir_all(cache.root());
+    }
+
+    #[test]
+    fn readiness_ignores_libraries_excluded_by_the_launch_environment() {
+        let json = include_str!("../../tests/fixtures/version-1.21.11.json");
+        let version = parse_version(json).expect("Mojang version fixture");
+        for os in [crate::OsName::Windows, crate::OsName::Linux] {
+            for arch in [crate::Arch::X86, crate::Arch::X86_64] {
+                let environment = crate::LaunchEnvironment {
+                    os,
+                    arch,
+                    os_version: String::new(),
+                    features: std::collections::BTreeMap::new(),
+                };
+                let cache = temp_cache("platform-readiness");
+                let id = "1.21.11";
+                let profile = cache.version_json(id).expect("profile");
+                std::fs::create_dir_all(profile.parent().expect("parent"))
+                    .expect("version directory");
+                std::fs::write(&profile, json).expect("profile");
+                std::fs::write(cache.version_jar(id).expect("client"), b"installed client")
+                    .expect("client");
+                for library in crate::applicable_libraries(&version, &environment) {
+                    if let Some(artifact) = library
+                        .downloads
+                        .as_ref()
+                        .and_then(|downloads| downloads.artifact.as_ref())
+                    {
+                        let path = cache.library(&artifact.path).expect("library path");
+                        std::fs::create_dir_all(path.parent().expect("parent"))
+                            .expect("library directory");
+                        std::fs::write(path, b"installed library").expect("library");
+                    }
+                }
+                assert!(
+                    is_version_ready(&cache, id, &environment),
+                    "an installed version must be ready on {os:?}/{arch:?} without other platforms' libraries"
+                );
+                let loader = "fabric-loader-0.16.0-1.21.11";
+                let loader_profile = cache.version_json(loader).expect("loader profile");
+                std::fs::create_dir_all(loader_profile.parent().expect("parent"))
+                    .expect("loader directory");
+                std::fs::write(
+                    loader_profile,
+                    format!(
+                        r#"{{"id":"{loader}","inheritsFrom":"{id}","libraries":[{{"name":"net.fabricmc:fabric-loader:0.16.0","url":"https://example.invalid/","sha1":"{}","size":6}}]}}"#,
+                        sha1_hex(b"loader")
+                    ),
+                )
+                .expect("loader profile");
+                assert!(!is_version_ready(&cache, loader, &environment));
+                let loader_jar = cache
+                    .library("net/fabricmc/fabric-loader/0.16.0/fabric-loader-0.16.0.jar")
+                    .expect("loader library");
+                std::fs::create_dir_all(loader_jar.parent().expect("parent"))
+                    .expect("loader library directory");
+                std::fs::write(loader_jar, b"loader").expect("loader library");
+                assert!(is_version_ready(&cache, loader, &environment));
+                let manifest = VersionManifest {
+                    latest: LatestVersions {
+                        release: id.into(),
+                        snapshot: id.into(),
+                    },
+                    versions: Vec::new(),
+                };
+                let summaries = version_summaries(&manifest, &cache, &environment);
+                assert_eq!(summaries.len(), 2);
+                assert!(summaries.iter().all(|summary| summary.installed));
+                let required = applicable_libraries(&version, &environment)
+                    .into_iter()
+                    .find_map(|library| {
+                        library
+                            .downloads
+                            .as_ref()
+                            .and_then(|downloads| downloads.artifact.as_ref())
+                    })
+                    .expect("required library");
+                std::fs::remove_file(cache.library(&required.path).expect("library path"))
+                    .expect("remove required library");
+                assert!(!is_version_ready(&cache, id, &environment));
+                assert!(!is_version_ready(&cache, loader, &environment));
+                assert!(
+                    version_summaries(&manifest, &cache, &environment)
+                        .iter()
+                        .all(|summary| !summary.installed)
+                );
+                std::fs::remove_dir_all(cache.root()).expect("cleanup");
+            }
+        }
     }
 
     #[test]
@@ -507,21 +614,21 @@ mod tests {
         std::fs::write(&client, b"changed client").expect("client");
         std::fs::write(&library, b"changed library").expect("library");
         assert!(
-            is_version_ready(&cache, id),
+            is_version_ready(&cache, id, &environment()),
             "Play readiness must not perform full content verification"
         );
-        assert!(list_installed_version_summaries(&cache)[0].installed);
+        assert!(list_installed_version_summaries(&cache, &environment())[0].installed);
         std::fs::remove_file(&library).expect("remove library");
-        assert!(!is_version_ready(&cache, id));
+        assert!(!is_version_ready(&cache, id, &environment()));
         std::fs::create_dir(&library).expect("directory instead of library");
-        assert!(!is_version_ready(&cache, id));
+        assert!(!is_version_ready(&cache, id, &environment()));
         std::fs::remove_dir(&library).expect("remove directory");
         std::fs::write(&library, b"library").expect("restore library");
         std::fs::remove_file(&client).expect("remove client");
-        assert!(!is_version_ready(&cache, id));
+        assert!(!is_version_ready(&cache, id, &environment()));
         std::fs::write(&client, b"client").expect("restore client");
         std::fs::write(&profile, b"invalid metadata").expect("invalid profile");
-        assert!(!is_version_ready(&cache, id));
+        assert!(!is_version_ready(&cache, id, &environment()));
         std::fs::remove_dir_all(cache.root()).expect("cleanup");
     }
 
@@ -539,7 +646,7 @@ mod tests {
             invalid["downloads"]["client"]["sha1"] = serde_json::json!(hash);
             std::fs::write(&profile, serde_json::to_vec(&invalid).expect("JSON")).expect("profile");
             assert!(
-                !is_version_ready(&cache, id),
+                !is_version_ready(&cache, id, &environment()),
                 "readiness still requires valid checksum metadata"
             );
         }
@@ -553,7 +660,7 @@ mod tests {
             "path":"demo/library/1/library-1.jar","sha1":"invalid","size":7,"url":"https://example.invalid/library.jar"
         }}}]);
         std::fs::write(&profile, serde_json::to_vec(&invalid).expect("JSON")).expect("profile");
-        assert!(!is_version_ready(&cache, id));
+        assert!(!is_version_ready(&cache, id, &environment()));
         std::fs::remove_dir_all(cache.root()).expect("cleanup");
     }
 
@@ -707,7 +814,7 @@ mod tests {
         .await
         .expect_err("no cache file");
         assert!(matches!(error, CoreError::VersionManifestUnavailable));
-        let installed = list_installed_version_summaries(&cache);
+        let installed = list_installed_version_summaries(&cache, &environment());
         assert_eq!(installed.len(), 1);
         assert_eq!(installed[0].id, id);
         let _ = std::fs::remove_dir_all(cache.root());
