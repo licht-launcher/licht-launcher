@@ -41,6 +41,7 @@ import {
 } from "@/features/instances/lib/sidebar-layout";
 import { PlayerAccountButton } from "@/features/settings/components/player-account-button";
 import { useCustomTitleBar } from "@/hooks/use-custom-title-bar";
+import { APP_CODENAME, APP_VERSION } from "@/lib/app-release";
 import { getLastPlayedFolder } from "@/lib/commands";
 import type { HomeSearch } from "@/routes/_app/index";
 
@@ -362,6 +363,19 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
                   void navigate({ to: "/downloads" });
                 }}
               />
+            </div>
+            <div className="flex min-w-0 items-center justify-end">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className={`${footerActionClassName} min-w-0`}
+                onClick={() => dialogs.openGlobalSettings("updater")}
+              >
+                <span className="truncate">
+                  Early Release {APP_VERSION} · {APP_CODENAME}
+                </span>
+              </Button>
             </div>
           </div>
         </footer>
