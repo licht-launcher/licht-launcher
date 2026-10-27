@@ -1164,8 +1164,12 @@ describe("InstancesPage", () => {
       "data-side",
       "bottom",
     );
-    fireEvent.click(await screen.findByRole("option", { name: "Name" }));
+    fireEvent.click(await screen.findByRole("option", { name: "A–Z" }));
     expect(names()).toEqual(["Alpha", "Classic", "Zeta"]);
+
+    fireEvent.click(screen.getByRole("combobox", { name: "Sort instances" }));
+    fireEvent.click(await screen.findByRole("option", { name: "Z–A" }));
+    expect(names()).toEqual(["Zeta", "Classic", "Alpha"]);
 
     fireEvent.click(screen.getByRole("combobox", { name: "Sort instances" }));
     expect(await screen.findByRole("listbox")).toHaveAttribute(

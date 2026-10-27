@@ -1,5 +1,10 @@
 import { cn } from "cn";
-import { ArrowDownAZIcon, HistoryIcon, Loader2Icon } from "lucide-react";
+import {
+  ArrowDownAZIcon,
+  ArrowDownZAIcon,
+  HistoryIcon,
+  Loader2Icon,
+} from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -80,7 +85,11 @@ export function HomeSidebar({
               <Select
                 value={sort}
                 onValueChange={(value) => {
-                  if (value === "lastPlayed" || value === "name") {
+                  if (
+                    value === "lastPlayed" ||
+                    value === "name" ||
+                    value === "nameDesc"
+                  ) {
                     setSort(value);
                   }
                 }}
@@ -102,7 +111,10 @@ export function HomeSidebar({
                     <SortLabel icon={HistoryIcon} label="Last played" />
                   </SelectItem>
                   <SelectItem value="name" className="text-xs">
-                    <SortLabel icon={ArrowDownAZIcon} label="Name" />
+                    <SortLabel icon={ArrowDownAZIcon} label="A–Z" />
+                  </SelectItem>
+                  <SelectItem value="nameDesc" className="text-xs">
+                    <SortLabel icon={ArrowDownZAIcon} label="Z–A" />
                   </SelectItem>
                 </SelectContent>
               </Select>
