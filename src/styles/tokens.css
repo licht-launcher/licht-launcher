@@ -6,6 +6,10 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  --animate-page-enter: page-enter 180ms ease-out;
+  --animate-page-enter-alternate: page-enter-alternate 180ms ease-out;
+  --animate-menu-in: menu-in 120ms ease-out;
+  --animate-menu-out: menu-out 120ms ease-in;
   --font-heading: var(--font-sans);
   --font-sans: system-ui, "Segoe UI", Ubuntu, sans-serif;
   --font-brand: "Space Grotesk", var(--font-sans);
@@ -110,6 +114,9 @@
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
   --radius: 0.625rem;
+  --tabs-list-inset: 3px;
+  --tabs-indicator-duration: 220ms;
+  --tabs-indicator-easing: cubic-bezier(0.22, 1.12, 0.36, 1);
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -186,6 +193,94 @@
 
 [data-slot="skin-head"] img {
   image-rendering: pixelated;
+}
+
+[data-slot="tabs-list"][data-variant="sliding"] > [data-slot="tabs-indicator"] {
+  position: absolute;
+  top: var(--tabs-list-inset);
+  bottom: var(--tabs-list-inset);
+  left: 0;
+  width: var(--tabs-indicator-width, 0px);
+  transform: translateX(var(--tabs-indicator-x, 0px));
+  transition:
+    transform var(--tabs-indicator-duration) var(--tabs-indicator-easing),
+    width var(--tabs-indicator-duration) var(--tabs-indicator-easing);
+}
+
+[data-slot="tabs-list"][data-variant="sliding"]
+  > [data-slot="tabs-indicator"]:not([data-ready="true"]) {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-slot="tabs-list"][data-variant="sliding"]
+    > [data-slot="tabs-indicator"] {
+    transition: none;
+  }
+}
+
+/* Item-aligned selects measure their text position while opening. */
+[data-slot="select-content"][data-align-trigger="true"] {
+  --menu-scale: 1;
+}
+
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: scale(var(--menu-scale, 0.98));
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes menu-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(var(--menu-scale, 0.98));
+  }
+}
+
+[data-slot="page-transition"] {
+  --page-enter-x: 0px;
+  --page-enter-y: calc(var(--spacing) * 2);
+}
+
+[data-slot="page-transition"][data-direction="left"] {
+  --page-enter-x: calc(var(--spacing) * 4);
+  --page-enter-y: 0px;
+}
+
+[data-slot="page-transition"][data-direction="right"] {
+  --page-enter-x: calc(var(--spacing) * -4);
+  --page-enter-y: 0px;
+}
+
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translate(var(--page-enter-x), var(--page-enter-y));
+  }
+  to {
+    opacity: 1;
+    transform: translate(0, 0);
+  }
+}
+
+@keyframes page-enter-alternate {
+  from {
+    opacity: 0;
+    transform: translate(var(--page-enter-x), var(--page-enter-y));
+  }
+  to {
+    opacity: 1;
+    transform: translate(0, 0);
+  }
 }
 
 @keyframes title-bar-restart-toast-progress {

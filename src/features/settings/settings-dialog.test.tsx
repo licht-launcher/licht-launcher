@@ -32,6 +32,44 @@ describe("SettingsDialog", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("preserves edited fields and active input focus across section transitions", async () => {
+    mockSettingsCommands((command, args) => {
+      if (
+        command === "save_settings" &&
+        args !== null &&
+        typeof args === "object" &&
+        "settings" in args
+      ) {
+        return Promise.resolve(args.settings);
+      }
+      return undefined;
+    });
+    await renderSettings();
+    fireEvent.change(await screen.findByLabelText("Offline username"), {
+      target: { value: "Builder" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Downloads" }));
+    const limit = await screen.findByLabelText(
+      "Global download speed limit (MiB/s)",
+    );
+    limit.focus();
+    fireEvent.change(limit, { target: { value: "8" } });
+    expect(screen.getByLabelText("Global download speed limit (MiB/s)")).toBe(
+      limit,
+    );
+    expect(limit).toHaveFocus();
+    expect(limit).toHaveValue(8);
+
+    fireEvent.click(screen.getByRole("button", { name: "Account" }));
+    expect(await screen.findByLabelText("Offline username")).toHaveValue(
+      "Builder",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Downloads" }));
+    expect(
+      await screen.findByLabelText("Global download speed limit (MiB/s)"),
+    ).toHaveValue(8);
+  });
+
   it("does not save just by opening", async () => {
     await renderSettings();
     await screen.findByLabelText("Offline username");
