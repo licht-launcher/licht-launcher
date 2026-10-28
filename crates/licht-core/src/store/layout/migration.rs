@@ -138,7 +138,7 @@ pub(super) async fn migrate(
     Ok(())
 }
 
-fn copy_instances(
+pub(super) fn copy_instances(
     source: &Path,
     destination: &Path,
     staging: &Path,

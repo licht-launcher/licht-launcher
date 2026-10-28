@@ -7,7 +7,7 @@ use sha1::{Digest, Sha1};
 use super::progress::StartupReporter;
 use crate::{CoreError, Result};
 
-fn digest(path: &Path, reporter: &StartupReporter) -> Result<Vec<u8>> {
+pub(super) fn digest(path: &Path, reporter: &StartupReporter) -> Result<Vec<u8>> {
     let mut file = fs::File::open(path)?;
     let mut hash = Sha1::new();
     let mut buffer = [0_u8; 64 * 1024];
@@ -52,12 +52,16 @@ struct CopyProgress {
 }
 
 fn copy_tree_inner(source: &Path, destination: &Path, progress: &mut CopyProgress) -> Result<()> {
-    if !source.exists() {
-        return Ok(());
-    }
-    let metadata = fs::symlink_metadata(source)?;
-    if destination.exists() && fs::symlink_metadata(destination)?.file_type().is_symlink() {
-        return Err(CoreError::CachePath);
+    let metadata = match fs::symlink_metadata(source) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error.into()),
+    };
+    match fs::symlink_metadata(destination) {
+        Ok(metadata) if metadata.file_type().is_symlink() => return Err(CoreError::CachePath),
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error.into()),
     }
     if metadata.is_dir() {
         fs::create_dir_all(destination)?;
@@ -97,11 +101,14 @@ pub(super) fn copy_file_with_progress(
     if !before.is_file() {
         return Err(CoreError::CachePath);
     }
-    if destination.exists() {
+    let destination_metadata = match fs::symlink_metadata(destination) {
+        Ok(metadata) => Some(metadata),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(error) => return Err(error.into()),
+    };
+    if let Some(metadata) = destination_metadata {
         let expected = digest(source, reporter)?;
-        if !fs::symlink_metadata(destination)?.is_file()
-            || digest(destination, reporter)? != expected
-        {
+        if !metadata.is_file() || digest(destination, reporter)? != expected {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::AlreadyExists,
                 "launcher migration destination contains different data",

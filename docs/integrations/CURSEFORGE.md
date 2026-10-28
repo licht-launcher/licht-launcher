@@ -4,9 +4,9 @@ Licht can list and import CurseForge modpacks in the New Instance wizard when an
 
 ## Key
 
-Set `LICHT_CURSEFORGE_API_KEY` in a local `.env` (see `.env.example`). The value is never logged.
+Set `LICHT_CURSEFORGE_API_KEY` in the environment or a local `.env`. The value is never logged.
 
-Without the key, Modrinth search and `.mrpack` import still work; CurseForge results are skipped.
+Without the key, [Modrinth](MODRINTH.md) search and `.mrpack` import still work; CurseForge results are skipped.
 
 ## Terms
 
@@ -21,4 +21,4 @@ This project does **not** embed a CurseForge key in the repository. Forks and of
 - Read `manifest.json`: Minecraft version, overlays from `overrides/` (and `override/`), and the `files` list.
 - Resolve each file with `POST /v1/mods/files` and `POST /v1/mods`. SHA1 is checked when the API sends one; MD5 is checked when that is the hash available. The resolved list is stored in `licht-curseforge.json` and downloaded on install, in the same pass as `.mrpack` files.
 - A null or empty `downloadUrl` means the author disabled third-party distribution. Those files are not downloaded and the URL is not guessed. Import stops before the instance is created and the error names each blocked mod.
-- Mod loader install and Forge installer processors are still later work. The instance keeps the Minecraft version from the manifest.
+- The importer uses the Minecraft version and supported primary loader declared in the manifest to prepare the instance's version profile. Loader installation is documented in [Loaders](../internals/LOADERS.md).

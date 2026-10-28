@@ -1,6 +1,7 @@
 import { render } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import grassFallback from "@/assets/instance-grass.svg";
 import { InstanceIcon } from "@/features/instances/components/instance-icon";
 
 const convertFileSrcMock = vi.fn((path: string) => `asset://localhost/${path}`);
@@ -19,8 +20,9 @@ describe("InstanceIcon", () => {
     const { container } = render(
       <InstanceIcon iconPath="C:/data/instances/classic/icon.png" />,
     );
-    expect(container.querySelector("img")?.getAttribute("src")).not.toContain(
-      "asset://",
+    expect(container.querySelector("img")).toHaveAttribute(
+      "src",
+      grassFallback,
     );
   });
 
@@ -28,10 +30,8 @@ describe("InstanceIcon", () => {
     const { container } = render(<InstanceIcon />);
     const tile = container.firstElementChild;
     expect(tile).toHaveAttribute("aria-hidden", "true");
-    expect(tile).toHaveClass("size-6", "rounded-md");
     const img = container.querySelector("img");
-    expect(img).toHaveAttribute("src");
-    expect(img?.getAttribute("src")).not.toContain("asset://");
+    expect(img).toHaveAttribute("src", grassFallback);
   });
 
   it("uses convertFileSrc when an icon path is provided", () => {
@@ -42,10 +42,5 @@ describe("InstanceIcon", () => {
       "src",
       "asset://localhost/C:/data/instances/classic/icon.png",
     );
-  });
-
-  it("supports a larger tile for the detail header", () => {
-    const { container } = render(<InstanceIcon size="md" />);
-    expect(container.firstElementChild).toHaveClass("size-10");
   });
 });

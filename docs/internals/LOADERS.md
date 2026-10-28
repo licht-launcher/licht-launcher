@@ -1,11 +1,27 @@
-# Forge and NeoForge installation
+# Mod loaders
+
+Licht supports Fabric, Quilt, Forge, and NeoForge in the New Instance wizard.
+Modrinth packs can also select a loader through their index dependencies; see
+[Modrinth](../integrations/MODRINTH.md).
+
+## Fabric and Quilt
+
+Fabric uses `meta.fabricmc.net/v2`; Quilt uses `meta.quiltmc.org/v3`. Both list
+loaders for the selected Minecraft version and fetch the loader's profile JSON.
+The stable channel filters stable entries; latest/manual channels retain the
+returned list. An explicit version takes precedence over the first listed one.
+
+Profiles are stored in the shared versions cache. Missing Maven library SHA1s
+are resolved from their published `.sha1` sidecars before saving the profile.
+
+## Forge and NeoForge
 
 The New Instance wizard and `.mrpack` loader dependencies use the official
 Forge/NeoForge installer metadata. Selecting a loader writes its real version
 profile, not a vanilla placeholder. Client processors run during Install/Repair,
 before the profile is considered ready to launch.
 
-## Pipeline
+### Pipeline
 
 1. Download the installer JAR from the family's official Maven and verify its
    published `.sha1` sidecar. A verified cached installer can be reused.
@@ -32,7 +48,7 @@ before the profile is considered ready to launch.
 Minecraft files still come from Mojang. Loader installers and their libraries
 come from the sources declared by official installer metadata.
 
-## Cache and readiness
+### Cache and readiness
 
 Each loader version directory contains `installer.jar`, `installer.sha1`,
 extracted `processor-data`, its version JSON, and `licht-loader-install.json`.
@@ -49,7 +65,7 @@ can also be reused during repair. Missing or modified receipt files are repaired
 by running Install/Repair again. Different loader builds can share intermediate
 Minecraft libraries, so loader installation is serialized within the process.
 
-## Existing instances and launch
+### Existing instances and launch
 
 IDs remain `forge-<build>` and `neoforge-<build>`. Install/Repair replaces old
 `lichtLoader` vanilla placeholders with official profiles without changing the
@@ -65,7 +81,7 @@ The existing Tauri commands and progress events are retained. Byte/file progress
 uses the normal download pipeline; processors use the existing Preparing state.
 Installer orchestration is in `licht-core`, not in the Tauri adapter.
 
-## Verification
+### Verification
 
 Automated tests use installer JSON fixtures and synthetic JARs without accessing
 the network. They cover metadata formats, client-side selection, coordinates,
@@ -75,11 +91,11 @@ and receipt invalidation.
 Live Windows installation and offline launch checks used an isolated temporary
 cache and the same core pipeline invoked by Tauri:
 
-| Loader | Minecraft | Build | Result |
-| --- | --- | --- | --- |
-| Forge | 1.12.2 | 14.23.5.2860 | Forge Mod Loader, resources, and audio initialized |
-| Forge | 1.20.1 | 47.3.0 | ModLauncher, MinecraftForge, resources, and audio initialized |
-| NeoForge | 1.21.1 | 21.1.80 | ModLauncher, NeoForge, resources, and audio initialized |
+| Loader   | Minecraft | Build        | Result                                                        |
+| -------- | --------- | ------------ | ------------------------------------------------------------- |
+| Forge    | 1.12.2    | 14.23.5.2860 | Forge Mod Loader, resources, and audio initialized            |
+| Forge    | 1.20.1    | 47.3.0       | ModLauncher, MinecraftForge, resources, and audio initialized |
+| NeoForge | 1.21.1    | 21.1.80      | ModLauncher, NeoForge, resources, and audio initialized       |
 
 Each client remained running for 45 seconds before the validation process was
 stopped. A repeat verified install reused its cached results. A deliberately

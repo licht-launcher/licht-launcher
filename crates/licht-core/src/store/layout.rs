@@ -9,6 +9,7 @@ mod files;
 mod installation;
 mod migration;
 pub(crate) mod progress;
+mod relocation;
 pub(crate) mod requests;
 use progress::{StartupPhase, StartupReporter};
 
@@ -18,32 +19,39 @@ pub async fn initialize_launcher() -> Result<SharedCache> {
 
 pub async fn initialize_launcher_with_progress(reporter: StartupReporter) -> Result<SharedCache> {
     let home = SharedCache::system()?;
+    if std::env::var_os("LICHT_DATA_DIR").is_some() {
+        initialize_at_with_progress(None, &home, &reporter).await?;
+        return Ok(home);
+    }
     let legacy = directories::ProjectDirs::from("app.licht", "Licht", "Licht Launcher")
         .ok_or(CoreError::DataDirectory)?;
-    initialize_at_with_progress(&SharedCache::at(legacy.data_dir()), &home, &reporter).await?;
+    initialize_at_with_progress(Some(&SharedCache::at(legacy.data_dir())), &home, &reporter)
+        .await?;
     Ok(home)
 }
 
 #[cfg(test)]
 async fn initialize_at(legacy: &SharedCache, home: &SharedCache) -> Result<()> {
-    initialize_at_with_progress(legacy, home, &StartupReporter::default()).await
+    initialize_at_with_progress(Some(legacy), home, &StartupReporter::default()).await
 }
 
 async fn initialize_at_with_progress(
-    legacy: &SharedCache,
+    legacy: Option<&SharedCache>,
     home: &SharedCache,
     reporter: &StartupReporter,
 ) -> Result<()> {
     reporter.phase(StartupPhase::Preparing)?;
     let _lock = initialization_lock_with_progress(home, "layout.lock", reporter).await?;
 
-    if !db::db_path(home).exists()
+    if let Some(legacy) = legacy
+        && !db::db_path(home).exists()
         && (legacy.root().join("settings.json").exists()
             || legacy.root().join("licht.sqlite").exists()
             || legacy.root().join("versions").exists())
     {
         migration::migrate(legacy, home, reporter).await?;
     }
+    relocation::apply(home, reporter).await?;
     let game = settings::game_cache(home)?;
     tokio::fs::create_dir_all(game.root()).await?;
     tokio::fs::create_dir_all(game.cache_dir()?).await?;
@@ -58,6 +66,9 @@ async fn initialize_at_with_progress(
 
 pub fn startup_settings() -> Result<crate::Settings> {
     let home = SharedCache::system()?;
+    if std::env::var_os("LICHT_DATA_DIR").is_some() {
+        return settings::load_settings(&home);
+    }
     let legacy = directories::ProjectDirs::from("app.licht", "Licht", "Licht Launcher")
         .ok_or(CoreError::DataDirectory)?;
     startup_settings_at(&home, &SharedCache::at(legacy.data_dir()))
@@ -101,7 +112,7 @@ pub async fn run_startup_migration_preview(fail: bool, reporter: StartupReporter
                 b"conflict",
             )?;
         }
-        initialize_at_with_progress(&legacy, &home, &reporter).await
+        initialize_at_with_progress(Some(&legacy), &home, &reporter).await
     }
     .await;
     if root.exists() {

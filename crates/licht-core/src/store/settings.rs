@@ -207,7 +207,11 @@ fn normalize_directory(cache: &SharedCache, value: Option<&str>) -> Result<Optio
         return Err(CoreError::SettingsDirectory);
     }
     let path = PathBuf::from(value);
-    if !path.is_absolute() {
+    if !path.is_absolute()
+        || path
+            .components()
+            .any(|part| matches!(part, std::path::Component::ParentDir))
+    {
         return Err(CoreError::SettingsDirectory);
     }
     if path.components().eq(cache.root().components()) {
@@ -378,7 +382,14 @@ pub fn save_settings(cache: &SharedCache, settings: &Settings) -> Result<Setting
         std::fs::create_dir_all(parent)?;
     }
     let json = serde_json::to_string_pretty(&settings).map_err(CoreError::Settings)?;
-    std::fs::write(path, format!("{json}\n"))?;
+    // Directory moves must be able to retry after an interrupted settings update.
+    let temporary = path.with_extension("json.tmp");
+    let mut file = std::fs::File::create(&temporary)?;
+    use std::io::Write;
+    file.write_all(format!("{json}\n").as_bytes())?;
+    file.sync_all()?;
+    drop(file);
+    std::fs::rename(temporary, path)?;
     crate::shared_transfer_limits()
         .bandwidth
         .set_limit(settings.download_speed_limit_mib)?;

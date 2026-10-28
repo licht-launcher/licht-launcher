@@ -12,11 +12,11 @@ certificate sponsorship is claimed for current releases.
 
 Licht Launcher is currently a single-maintainer project:
 
-| Role | Responsible person |
-| --- | --- |
-| Author / committer | [Mateus Neiva (@mateusneiva)](https://github.com/mateusneiva) |
+| Role                               | Responsible person                                            |
+| ---------------------------------- | ------------------------------------------------------------- |
+| Author / committer                 | [Mateus Neiva (@mateusneiva)](https://github.com/mateusneiva) |
 | Reviewer of external contributions | [Mateus Neiva (@mateusneiva)](https://github.com/mateusneiva) |
-| Release and code-signing approver | [Mateus Neiva (@mateusneiva)](https://github.com/mateusneiva) |
+| Release and code-signing approver  | [Mateus Neiva (@mateusneiva)](https://github.com/mateusneiva) |
 
 These roles are held by the same person; the project does not currently have
 an independent reviewer.
@@ -33,6 +33,9 @@ an independent reviewer.
 - Signing is limited to Licht Launcher's own artifacts built from this
   repository. Downloaded Minecraft files, Java runtimes, mod loaders, and mods
   must not be submitted as the project's own binaries for signing.
+- Artifact restrictions must enforce the Licht Launcher product name and matching
+  product versions. Release/download pages for SignPath-signed builds must link
+  this policy and identify their actual signing status.
 
 If SignPath accepts the project and signing is integrated, the attribution for
 artifacts signed through that program will be:
@@ -40,12 +43,12 @@ artifacts signed through that program will be:
 > Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
 
 Data handling, automatic network requests, available controls, and third-party
-services are described in the [Privacy Policy](../PRIVACY.md).
+services are described in the [Privacy Policy](../../PRIVACY.md).
 SignPath's [conditions](https://signpath.org/terms) also require appropriate
 installation-time privacy disclosure and controls for covered data-transfer
 features; publication of these documents alone does not add those
 installer/application controls.
 
-See [contribution responsibilities](../CONTRIBUTING.md#releases-and-signing-responsibilities)
-for the review process and [Updates](UPDATES.md) for the current updater-signature
+See [contribution responsibilities](../../CONTRIBUTING.md#releases-and-signing-responsibilities)
+for the review process and [Releasing](RELEASING.md#updates) for the current updater-signature
 workflow.
