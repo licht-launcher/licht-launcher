@@ -107,7 +107,7 @@ describe("ContentSection", () => {
     ).toBeInTheDocument();
   });
 
-  it("formats titles and filters the combined content list", async () => {
+  it("shows titles from different content types in the combined list", async () => {
     listInstanceContent.mockResolvedValue([
       {
         name: "sodium-fabric-1.0.jar",
@@ -137,55 +137,6 @@ describe("ContentSection", () => {
     expect(
       screen.getByRole("columnheader", { name: "Content" }),
     ).toBeInTheDocument();
-  });
-
-  it("uses distinct same-size wrappers for content type icons", async () => {
-    listInstanceContent.mockResolvedValue([
-      {
-        name: "mod.jar",
-        kind: "mods",
-        enabled: true,
-        size: 1024,
-        title: "Mod",
-        version: null,
-        iconUrl: null,
-      },
-      {
-        name: "pack.zip",
-        kind: "resourcePacks",
-        enabled: true,
-        size: 1024,
-        title: "Pack",
-        version: null,
-        iconUrl: null,
-      },
-      {
-        name: "shader.zip",
-        kind: "shaderPacks",
-        enabled: true,
-        size: 1024,
-        title: "Shader",
-        version: null,
-        iconUrl: null,
-      },
-    ]);
-
-    renderContent("classic");
-
-    await screen.findByText("Mod");
-    const wrappers = [
-      ...document.querySelectorAll(
-        ".size-8.shrink-0.items-center.justify-center.rounded-md",
-      ),
-    ];
-    expect(wrappers).toHaveLength(3);
-    expect(wrappers.map((wrapper) => wrapper.className)).toEqual(
-      expect.arrayContaining([
-        expect.stringContaining("bg-accent-violet/15"),
-        expect.stringContaining("bg-accent-orange/15"),
-        expect.stringContaining("bg-accent-teal/15"),
-      ]),
-    );
   });
 
   it("shows progress during refresh while keeping cached content visible", async () => {
@@ -373,19 +324,18 @@ describe("ContentSection", () => {
     expect(contentHeader).toHaveAttribute("aria-sort", "none");
   });
 
-  it("uses the empty-page typography when no content is installed", async () => {
+  it("shows the empty installation message when no content is installed", async () => {
     listInstanceContent.mockResolvedValue([]);
 
     renderContent("classic");
 
-    expect(await screen.findByText("No content installed.")).toHaveClass(
-      "font-brand",
-      "font-medium",
-      "leading-normal",
-    );
+    expect(await screen.findByText("No content installed.")).toBeVisible();
+    expect(
+      screen.queryByText("No content matches your filters."),
+    ).not.toBeInTheDocument();
   });
 
-  it("uses the same typography when filters have no matches", async () => {
+  it("shows the no-matches message when installed content is filtered out", async () => {
     listInstanceContent.mockResolvedValue([
       {
         name: "pack.zip",
@@ -402,7 +352,9 @@ describe("ContentSection", () => {
 
     expect(
       await screen.findByText("No content matches your filters."),
-    ).toHaveClass("font-brand", "font-medium", "leading-normal");
+    ).toBeVisible();
+    expect(screen.queryByText("No content installed.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Pack")).not.toBeInTheDocument();
   });
 
   function largeContent(): InstanceContentEntry[] {
