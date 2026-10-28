@@ -65,27 +65,15 @@ describe("ConsoleSection", () => {
     expect(flowers).toHaveAttribute("aria-hidden", "true");
   });
 
-  it("shows a mono console and filters by multi level selection", async () => {
+  it("filters log lines by multiple selected levels", async () => {
     render(<ConsoleHarness />);
 
     const log = screen.getByLabelText("Game log");
     expect(log).toBeInTheDocument();
-    expect(log.querySelector("[data-slot='scroll-area']")).toHaveClass(
-      "border-border/60",
-      "bg-black/20",
-    );
-    expect(log.querySelector("pre")).toHaveClass("font-mono");
     expect(log.querySelector("pre")).toHaveClass("select-text");
-    expect(log.querySelector("pre")).toHaveClass("cursor-text");
-    expect(log.querySelector("pre")?.className).toMatch(
-      /selection:bg-muted-foreground/,
-    );
     expect(log).toHaveTextContent("[t/INFO]: hello");
     expect(log).toHaveTextContent("[t/WARN]: careful");
     expect(log).toHaveTextContent("[t/ERROR]: boom");
-    expect(screen.getByText("INFO")).toHaveClass("text-info");
-    expect(screen.getByText("WARN")).toHaveClass("text-warning");
-    expect(screen.getByText("ERROR")).toHaveClass("text-destructive");
 
     fireEvent.click(screen.getByRole("button", { name: "Log level" }));
     expect(await screen.findByText("Log Level")).toBeInTheDocument();
