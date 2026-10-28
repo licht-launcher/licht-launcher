@@ -19,12 +19,17 @@ describe("DownloadsSection", () => {
     mockSettingsCommands();
   });
 
-  it("saves the application directory and says the change waits for a restart", async () => {
+  it("saves the application directory and explains the move after restart", async () => {
     await renderSettings();
     fireEvent.click(await screen.findByRole("button", { name: "Downloads" }));
 
     expect(
-      screen.getByText(/This change applies after restart\./),
+      screen.getByText(/Existing data will be moved after restart\./),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /Launcher settings and the database stay in your profile directory\./,
+      ),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("heading", {
