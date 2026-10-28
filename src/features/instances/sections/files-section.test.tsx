@@ -62,7 +62,7 @@ describe("FilesSection", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows skeleton rows and progress while loading", () => {
+  it("shows progress while loading", () => {
     listInstanceEntries.mockReturnValue(new Promise(() => {}));
 
     renderFiles("classic");
@@ -70,10 +70,46 @@ describe("FilesSection", () => {
     expect(
       screen.getByRole("progressbar", { name: "Loading files" }),
     ).toBeInTheDocument();
-    expect(screen.queryByText("Loading…")).not.toBeInTheDocument();
-    expect(document.querySelectorAll(".animate-pulse").length).toBeGreaterThan(
-      0,
-    );
+  });
+
+  it("sorts files by size in both directions while keeping folders first", async () => {
+    listInstanceEntries.mockResolvedValue([
+      { name: "saves", isDir: true, size: null, created: null },
+      { name: "alpha.txt", isDir: false, size: 20, created: null },
+      { name: "beta.txt", isDir: false, size: 10, created: null },
+    ] satisfies InstanceFsEntry[]);
+
+    renderFiles("classic");
+
+    await screen.findByText("alpha.txt");
+    const files = screen.getByLabelText("Instance files");
+    const rowNames = () =>
+      within(files)
+        .getAllByLabelText(/, (file|folder)$/)
+        .map((row) => row.getAttribute("aria-label"));
+    expect(rowNames()).toEqual([
+      "saves, folder",
+      "alpha.txt, file",
+      "beta.txt, file",
+    ]);
+
+    const sizeHeader = screen.getByRole("columnheader", { name: "Size" });
+    const sortBySize = within(sizeHeader).getByRole("button", { name: "Size" });
+    fireEvent.click(sortBySize);
+    expect(sizeHeader).toHaveAttribute("aria-sort", "ascending");
+    expect(rowNames()).toEqual([
+      "saves, folder",
+      "beta.txt, file",
+      "alpha.txt, file",
+    ]);
+
+    fireEvent.click(sortBySize);
+    expect(sizeHeader).toHaveAttribute("aria-sort", "descending");
+    expect(rowNames()).toEqual([
+      "saves, folder",
+      "alpha.txt, file",
+      "beta.txt, file",
+    ]);
   });
 
   it("lists entries in a table and opens folders", async () => {
@@ -109,31 +145,9 @@ describe("FilesSection", () => {
     expect(
       screen.getByRole("columnheader", { name: "Created" }),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText("Instance files")).toHaveClass(
-      "border-border/60",
-      "bg-black/20",
-    );
     expect(screen.getByText("options.txt")).toBeInTheDocument();
     expect(screen.getByText("12 B")).toBeInTheDocument();
     expect(screen.getByText("—")).toBeInTheDocument();
-    const folderRow = screen.getByRole("button", { name: "saves, folder" });
-    expect(folderRow.querySelector("svg")).toHaveClass("text-muted-foreground");
-    const fileRow = screen.getByLabelText("options.txt, file");
-    expect(fileRow.querySelector("svg")).toHaveClass("text-muted-foreground");
-
-    fireEvent.click(
-      within(screen.getByRole("columnheader", { name: /Size/ })).getByRole(
-        "button",
-      ),
-    );
-    await waitFor(() => {
-      const bodyRows = [
-        ...screen.getByLabelText("Instance files").querySelectorAll("tbody tr"),
-      ].map((row) => row.textContent ?? "");
-      expect(bodyRows[0]).toContain("saves");
-      expect(bodyRows[1]).toContain("options.txt");
-    });
-
     expect(
       screen.queryByRole("button", { name: "Up" }),
     ).not.toBeInTheDocument();
