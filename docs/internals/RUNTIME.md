@@ -5,7 +5,9 @@
 download Java, and it does not search for a Java already installed on the
 machine. `--java <executable>` skips Temurin on install and launch.
 
-The game files still come from Mojang. Temurin is the runtime only.
+The game files still come from Mojang. Temurin is the runtime only. This document
+describes the CLI runtime path; loader installation can also use a configured
+global Java for the required major, as described in [Loaders](LOADERS.md).
 
 ## Which major
 
@@ -66,9 +68,8 @@ With `--java`, the major comes from `java -version`. Java 8 prints `1.8.0_…`.
 Java 9 and later print `21.0.7`. The text is read from stderr. That major is
 only for the log codec. Launch does not check it against `javaVersion`.
 
-Java 18 and newer logs are read as UTF-8. An older Java is read as the system
-code page. Details are in the log section of
-[COMPATIBILITY.md](../COMPATIBILITY.md).
+Log decoding and its code-page limitations are described in
+[Compatibility](COMPATIBILITY.md#log-encoding).
 
 ## Discovery of system Javas
 
