@@ -7,7 +7,7 @@ handles development, contribution review, and release decisions.
 ## Proposing a change
 
 Read [AGENTS.md](AGENTS.md), the [roadmap](docs/ROADMAP.md), and the
-[architecture](docs/ARCHITECTURE.md) before starting. Open an
+[architecture](docs/internals/ARCHITECTURE.md) before starting. Open an
 [issue](https://github.com/licht-launcher/licht-launcher/issues) to describe a bug
 or discuss a feature. Include reproduction steps, OS, launcher version, and
 the relevant game/loader version when applicable. Redact personal information
@@ -67,8 +67,9 @@ cargo run -p licht-core --features cli --bin licht -- launch --version 1.20.1 --
 
 `launch` does not download. `install` does. `--game-dir` replaces the instance
 root, `--cache` replaces the data directory, and `--java` selects another Java
-executable. See the [version](docs/core/VERSIONS.md), [runtime](docs/core/RUNTIME.md),
-and [compatibility](docs/COMPATIBILITY.md) documentation for details.
+executable. See the [runtime](docs/internals/RUNTIME.md),
+[storage](docs/internals/STORAGE.md), and
+[compatibility](docs/internals/COMPATIBILITY.md) documentation for details.
 
 ## Implementation and testing
 
@@ -127,22 +128,11 @@ third-party notices and licenses preserved.
 
 ## Releases and signing responsibilities
 
-The [Code signing policy](docs/CODE_SIGNING.md) identifies the current
-author/committer, reviewer, and release-signing approver. The sole maintainer
-currently fills all three roles; there is no separate independent reviewer.
+The [Code signing policy](docs/CODE_SIGNING.md) defines signing status,
+responsibilities, and requirements for a future SignPath integration.
 Contributing a PR does not grant repository write access or signing access.
-
-Before enabling a future SignPath integration, repository/signing account
-holders must meet its MFA requirements. Each SignPath signing request must be
-manually approved by the designated approver after reviewing the source commit,
-build provenance, successful checks, and intended artifacts. Signing access
-must never be used for unrelated projects or downloaded third-party binaries.
-SignPath artifact restrictions must enforce the Licht Launcher product name
-and matching product versions. Release/download pages for SignPath-signed builds
-must link the Code signing policy and identify their actual signing status.
-The current Tauri updater-signature workflow is documented in
-[docs/UPDATES.md](docs/UPDATES.md); SignPath has not yet been applied for or
-integrated.
+Version conventions and the current updater-signature workflow are documented
+in [Releasing](docs/RELEASING.md).
 
 ## Contact and project policies
 
