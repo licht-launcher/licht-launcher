@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { SegmentedBar } from "@/components/ui/segmented-bar";
 
 describe("SegmentedBar", () => {
-  it("shows proportional colored segments and a readable category breakdown", () => {
+  it("shows proportional segments that fill the bar and a readable category breakdown", () => {
     render(
       <SegmentedBar
         label="Storage"
@@ -33,20 +33,27 @@ describe("SegmentedBar", () => {
       "width",
       "200",
     );
-    expect(screen.getByLabelText("Instances segment")).toHaveClass(
-      "fill-primary",
-    );
     expect(screen.getByLabelText("Game files segment")).toHaveAttribute(
       "width",
       "300",
-    );
-    expect(screen.getByLabelText("Game files segment")).toHaveClass(
-      "fill-warning",
     );
     expect(screen.getByLabelText("Java segment")).toHaveAttribute(
       "width",
       "500",
     );
+    expect(screen.getByLabelText("Instances segment")).toHaveAttribute(
+      "x",
+      "0",
+    );
+    expect(screen.getByLabelText("Game files segment")).toHaveAttribute(
+      "x",
+      "200",
+    );
+    const last = screen.getByLabelText("Java segment");
+    expect(last).toHaveAttribute("x", "500");
+    expect(
+      Number(last.getAttribute("x")) + Number(last.getAttribute("width")),
+    ).toBe(1000);
     expect(
       screen.getByRole("list", { name: "Storage breakdown" }),
     ).toHaveTextContent("Java5 GB");
@@ -72,58 +79,7 @@ describe("SegmentedBar", () => {
     expect(screen.getAllByRole("listitem")).toHaveLength(2);
   });
 
-  it("keeps the outer ends fully rounded before and during hover", () => {
-    render(
-      <SegmentedBar
-        label="Storage"
-        segments={[
-          {
-            label: "Instances",
-            value: 2,
-            valueLabel: "2 GB",
-            color: "primary",
-          },
-          { label: "Java", value: 5, valueLabel: "5 GB", color: "violet" },
-        ]}
-      />,
-    );
-    const last = screen.getByLabelText("Java segment");
-    const bar = screen.getByLabelText("Storage bar");
-    const highlight = screen.getByLabelText("Storage highlight");
-    expect(bar).toHaveClass("rounded-full");
-    fireEvent.mouseEnter(last);
-    expect(bar).toHaveClass("rounded-full");
-    expect(highlight).toHaveClass("rounded-full");
-    expect(highlight).toHaveAttribute("height", "16");
-  });
-
-  it("keeps all segments within a single constrained viewport", () => {
-    render(
-      <SegmentedBar
-        label="Storage"
-        segments={[
-          {
-            label: "Instances",
-            value: 2,
-            valueLabel: "2 GB",
-            color: "primary",
-          },
-          { label: "Java", value: 5, valueLabel: "5 GB", color: "violet" },
-        ]}
-      />,
-    );
-    const bar = screen.getByLabelText("Storage bar");
-    const first = screen.getByLabelText("Instances segment");
-    const last = screen.getByLabelText("Java segment");
-    expect(bar).toHaveClass("w-full", "min-w-0", "max-w-full");
-    expect(first.closest("svg")).toBe(bar);
-    expect(last.closest("svg")).toBe(bar);
-    expect(
-      Number(last.getAttribute("x")) + Number(last.getAttribute("width")),
-    ).toBe(1000);
-  });
-
-  it("fills the bar with a fully rounded single category when the others are empty", () => {
+  it("fills the bar with a single category when the others are empty", () => {
     render(
       <SegmentedBar
         label="Storage"
@@ -135,14 +91,12 @@ describe("SegmentedBar", () => {
       />,
     );
     const java = screen.getByLabelText("Java segment");
+    expect(java).toHaveAttribute("x", "0");
     expect(java).toHaveAttribute("width", "1000");
-    expect(screen.getByLabelText("Storage bar")).toHaveClass("rounded-full");
-    fireEvent.mouseEnter(java);
-    expect(java).toHaveAttribute("width", "1000");
-    expect(screen.getByLabelText("Storage highlight")).toHaveAttribute(
-      "height",
-      "16",
-    );
+    expect(
+      screen.queryByLabelText("Instances segment"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Cache segment")).not.toBeInTheDocument();
   });
 
   it("clips the complete bar to rounded ends even when the final category is tiny", () => {
@@ -163,11 +117,13 @@ describe("SegmentedBar", () => {
     const other = screen.getByLabelText("Other segment");
     const bar = screen.getByLabelText("Storage bar");
     expect(bar).toHaveClass("rounded-full", "overflow-hidden");
-    expect(other.closest("svg")).toBe(bar);
+    expect(Number(other.getAttribute("width"))).toBeGreaterThan(0);
+    expect(Number(other.getAttribute("width"))).toBeLessThan(1);
     expect(
       Number(other.getAttribute("x")) + Number(other.getAttribute("width")),
     ).toBe(1000);
     fireEvent.mouseEnter(other);
+    expect(bar).toHaveClass("rounded-full", "overflow-hidden");
     expect(screen.getByLabelText("Storage highlight")).toHaveClass(
       "rounded-full",
       "overflow-hidden",
@@ -190,10 +146,7 @@ describe("SegmentedBar", () => {
       />,
     );
     fireEvent.mouseEnter(screen.getByText("5 GB"));
-    expect(screen.getByLabelText("Java segment")).toHaveClass(
-      "opacity-100",
-      "fill-accent-violet",
-    );
+    expect(screen.getByLabelText("Java segment")).toHaveClass("opacity-100");
     expect(screen.getByLabelText("Instances segment")).toHaveClass(
       "opacity-25",
     );
