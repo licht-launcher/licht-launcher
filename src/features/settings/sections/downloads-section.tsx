@@ -117,8 +117,9 @@ export function DownloadsSection({
         <div className="flex flex-col gap-1">
           <h3 className="text-sm font-medium">Application directory</h3>
           <p className="text-sm text-muted-foreground">
-            Where game data and launcher files are stored. This change applies
-            after restart.
+            Where instances, game files, and managed Java runtimes are stored.
+            Existing data will be moved after restart. Launcher settings and the
+            database stay in your profile directory.
           </p>
         </div>
         <div className="flex gap-2">

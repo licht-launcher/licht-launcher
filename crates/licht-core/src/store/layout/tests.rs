@@ -417,7 +417,7 @@ async fn startup_progress_can_stop_migration_before_publishing_and_retry() {
         Ok(())
     });
     assert!(
-        super::initialize_at_with_progress(&legacy, &home, &stopped)
+        super::initialize_at_with_progress(Some(&legacy), &home, &stopped)
             .await
             .is_err()
     );
