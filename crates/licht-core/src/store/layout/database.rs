@@ -34,10 +34,19 @@ pub(super) async fn remap(staging: &SharedCache, mappings: &[Relocation]) -> Res
     let mut connection = super::db::open_db(staging).await?;
     let result = async {
         let mut transaction = connection.begin().await?;
+        sqlx::query("PRAGMA defer_foreign_keys = ON")
+            .execute(&mut *transaction)
+            .await?;
         for mapping in mappings {
             for query in [
                 "UPDATE download_jobs SET data_directory = ?1 WHERE data_directory = ?2",
                 "UPDATE content_fingerprints SET data_directory = ?1 WHERE data_directory = ?2",
+                "UPDATE native_generations SET data_directory = ?1 WHERE data_directory = ?2",
+                "UPDATE native_outputs SET data_directory = ?1 WHERE data_directory = ?2",
+                "UPDATE instances SET instances_directory = ?1 WHERE instances_directory = ?2",
+                "UPDATE modpack_indexes SET instances_directory = ?1 WHERE instances_directory = ?2",
+                "UPDATE modpack_dependencies SET instances_directory = ?1 WHERE instances_directory = ?2",
+                "UPDATE modpack_files SET instances_directory = ?1 WHERE instances_directory = ?2",
             ] {
                 sqlx::query(query)
                     .bind(mapping.destination.to_str().ok_or(CoreError::CachePath)?)
@@ -45,6 +54,15 @@ pub(super) async fn remap(staging: &SharedCache, mappings: &[Relocation]) -> Res
                     .execute(&mut *transaction)
                     .await?;
             }
+        }
+        let java_paths: Vec<(String, String, String)> = sqlx::query_as(
+            "SELECT instances_directory, instance_folder, java_path FROM instances WHERE java_path IS NOT NULL",
+        ).fetch_all(&mut *transaction).await?;
+        for (directory, folder, path) in java_paths {
+            let relocated = relocate(Path::new(&path), mappings);
+            sqlx::query("UPDATE instances SET java_path = ?1 WHERE instances_directory = ?2 AND instance_folder = ?3")
+                .bind(relocated.to_str().ok_or(CoreError::CachePath)?)
+                .bind(directory).bind(folder).execute(&mut *transaction).await?;
         }
         let artifacts: Vec<(i64, String)> =
             sqlx::query_as("SELECT job_id, path FROM download_job_artifacts")

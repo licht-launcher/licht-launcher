@@ -14,8 +14,24 @@ impl SharedCache {
     }
 
     pub fn system() -> Result<Self> {
+        if let Some(path) = std::env::var_os("LICHT_DATA_DIR") {
+            return Self::from_override(path.into());
+        }
         let directories = directories::BaseDirs::new().ok_or(CoreError::DataDirectory)?;
         Ok(Self::at(directories.data_dir().join("Licht Launcher")))
+    }
+
+    fn from_override(path: PathBuf) -> Result<Self> {
+        if !path.is_absolute()
+            || path
+                .components()
+                .any(|part| matches!(part, std::path::Component::ParentDir))
+            || path.as_os_str().is_empty()
+            || path.to_str().is_none_or(|text| text.contains('\0'))
+        {
+            return Err(CoreError::SettingsDirectory);
+        }
+        Ok(Self::at(path))
     }
 
     pub fn root(&self) -> &Path {
@@ -127,6 +143,30 @@ impl SharedCache {
             full.push(component);
         }
         Ok(full)
+    }
+}
+
+#[cfg(test)]
+mod override_tests {
+    use super::*;
+
+    #[test]
+    fn profile_override_requires_an_absolute_path_without_parent_traversal() {
+        for path in [
+            PathBuf::new(),
+            PathBuf::from("relative"),
+            std::env::temp_dir().join("invalid\0profile"),
+            std::env::temp_dir().join("../profile"),
+        ] {
+            assert!(SharedCache::from_override(path).is_err());
+        }
+        let path = std::env::temp_dir().join("isolated-profile");
+        assert_eq!(
+            SharedCache::from_override(path.clone())
+                .expect("absolute")
+                .root(),
+            path
+        );
     }
 }
 
