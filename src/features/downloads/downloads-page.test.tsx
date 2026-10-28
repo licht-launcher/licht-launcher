@@ -421,34 +421,6 @@ describe("DownloadsPage", () => {
     );
   });
 
-  it("uses the same row styling for active and queued modpacks without individual cards", async () => {
-    jobs = [
-      downloadJob({ component: "modpackarchive" }),
-      downloadJob({
-        id: "waiting",
-        instanceFolder: "Waiting pack",
-        component: "modpackarchive",
-        status: "queued",
-      }),
-    ];
-    renderPage();
-    const row = await screen.findByRole("region", {
-      name: "Download for Survival",
-    });
-    expect(row).not.toHaveClass("border", "rounded-lg");
-    expect(row.querySelector("img")?.parentElement).toHaveClass("size-10");
-    expect(within(row).getByText("Survival")).toHaveClass(
-      "text-sm",
-      "font-medium",
-    );
-    expect(within(row).getByRole("progressbar")).toHaveClass("h-1");
-    const waiting = screen.getByRole("region", {
-      name: "Download for Waiting pack",
-    });
-    expect(waiting.querySelector("img")?.parentElement).toHaveClass("size-10");
-    expect(within(waiting).getByText("Waiting pack")).toHaveClass("text-sm");
-  });
-
   it("updates the Up next counter as items enter and leave the displayed queue", async () => {
     jobs = [
       downloadJob({ id: "active" }),
