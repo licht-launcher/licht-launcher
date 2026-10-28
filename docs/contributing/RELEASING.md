@@ -25,7 +25,7 @@ From 0.8 on, the list continues (to be defined together with the project owner).
 ## Rules
 
 - Commits follow Conventional Commits.
-- Releases are produced by CI from a tag (see [Roadmap](ROADMAP.md), item 10.3).
+- Releases are produced by CI from a tag (see [Roadmap](../ROADMAP.md), item 10.3).
 - Keep the notice "not affiliated with Mojang Studios or Microsoft" in the README and in the release notes.
 
 ## Updates

@@ -78,7 +78,7 @@ For private security reports, privacy questions, or other private enquiries, ema
 
 Microsoft sign-in opens in your browser. Licht Launcher does not ask for your Microsoft password or automatically upload game logs or crash reports.
 
-Update downloads are verified with the launcher's signing key. Windows publisher signing is not yet available; see the [code signing policy](docs/CODE_SIGNING.md) for details.
+Update downloads are verified with the launcher's signing key. Windows publisher signing is not yet available; see the [code signing policy](docs/contributing/CODE_SIGNING.md) for details.
 
 Read the [Terms of Use](TERMS.md) and [Privacy Policy](PRIVACY.md) for information about accounts, downloads, and local data.
 
@@ -92,7 +92,7 @@ Uninstalling may leave your profiles, worlds, and saved accounts on the computer
 
 ## For contributors
 
-Want to help build Licht Launcher? Start with the [contribution guide](CONTRIBUTING.md) for development setup and testing. The [roadmap](docs/ROADMAP.md), [architecture](docs/internals/ARCHITECTURE.md), and [compatibility notes](docs/internals/COMPATIBILITY.md) describe the technical details and planned work.
+Want to help build Licht Launcher? Start with the [contribution guide](CONTRIBUTING.md) for development setup and testing. The [roadmap](docs/ROADMAP.md), [architecture](docs/contributing/ARCHITECTURE.md), and [compatibility notes](docs/internals/COMPATIBILITY.md) describe the technical details and planned work.
 
 ## Support
 

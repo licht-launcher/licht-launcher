@@ -53,11 +53,11 @@ filters return an error. Logs must not contain tokens, secrets, or personal data
 
 ## Related internals
 
-- [Storage](STORAGE.md): profile/content directories, relocation, SQLite service,
+- [Storage](../internals/STORAGE.md): profile/content directories, relocation, SQLite service,
   and instance persistence.
-- [Runtime](RUNTIME.md): Java selection, installation, and discovery.
-- [Loaders](LOADERS.md): loader profiles and Forge/NeoForge processors.
-- [Compatibility](COMPATIBILITY.md): manifest formats, legacy execution, native
+- [Runtime](../internals/RUNTIME.md): Java selection, installation, and discovery.
+- [Loaders](../internals/LOADERS.md): loader profiles and Forge/NeoForge processors.
+- [Compatibility](../internals/COMPATIBILITY.md): manifest formats, legacy execution, native
   libraries, assets, logs, and known gaps.
 - [Integrations](../integrations/MODRINTH.md): Modrinth, alongside
   [CurseForge](../integrations/CURSEFORGE.md) and
@@ -72,7 +72,8 @@ access. Frontend tests use Vitest, Testing Library, and jsdom.
 
 CI checks frontend lint, types, and tests, Rust formatting, Clippy, and tests, and
 builds Tauri on Windows and Ubuntu. Build/test coverage is distinct from manual
-graphical validation. See [Contributing](../../CONTRIBUTING.md) for commands.
+graphical validation. See [Development](DEVELOPMENT.md#implementation-and-testing)
+for commands.
 
 ## References
 

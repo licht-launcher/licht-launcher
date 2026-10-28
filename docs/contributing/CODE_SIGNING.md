@@ -43,12 +43,12 @@ artifacts signed through that program will be:
 > Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
 
 Data handling, automatic network requests, available controls, and third-party
-services are described in the [Privacy Policy](../PRIVACY.md).
+services are described in the [Privacy Policy](../../PRIVACY.md).
 SignPath's [conditions](https://signpath.org/terms) also require appropriate
 installation-time privacy disclosure and controls for covered data-transfer
 features; publication of these documents alone does not add those
 installer/application controls.
 
-See [contribution responsibilities](../CONTRIBUTING.md#releases-and-signing-responsibilities)
+See [contribution responsibilities](../../CONTRIBUTING.md#releases-and-signing-responsibilities)
 for the review process and [Releasing](RELEASING.md#updates) for the current updater-signature
 workflow.

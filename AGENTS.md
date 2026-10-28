@@ -72,7 +72,7 @@
 
 ## Releases
 
-- For anything about releases, versions or codenames, read `docs/RELEASING.md`.
+- For anything about releases, versions or codenames, read `docs/contributing/RELEASING.md`.
 
 ## Efficiency (token budget)
 
