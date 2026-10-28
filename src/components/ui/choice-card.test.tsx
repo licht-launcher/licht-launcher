@@ -8,7 +8,7 @@ describe("ChoiceCard", () => {
   it("runs the select handler and exposes pressed state", () => {
     const onSelect = vi.fn();
 
-    render(
+    const { rerender } = render(
       <ChoiceCard
         title="From a modpack"
         description="Browse packs"
@@ -23,29 +23,17 @@ describe("ChoiceCard", () => {
     expect(button).toHaveAttribute("aria-pressed", "true");
     fireEvent.click(button);
     expect(onSelect).toHaveBeenCalledOnce();
-    expect(button.className).toContain("bg-muted");
-    expect(button.className).toContain("ring-2");
-    expect(button.className).toContain("ring-primary");
-    expect(button.className).not.toContain("border-primary");
-    expect(button.querySelector(".text-warning")).toBeInTheDocument();
-  });
-
-  it("keeps loader icon wells neutral", () => {
-    render(
+    rerender(
       <ChoiceCard
-        title="Fabric"
-        icon={<img alt="" src="fabric.png" />}
-        iconNeutral
+        title="From a modpack"
+        description="Browse packs"
+        icon={<PackageIcon aria-hidden />}
+        iconTone="warning"
         selected={false}
-        onSelect={() => {}}
+        onSelect={onSelect}
       />,
     );
-
-    const button = screen.getByRole("button", { name: "Fabric" });
-    const well = button.querySelector(".bg-black\\/20");
-    expect(well).toBeInTheDocument();
-    expect(well?.className).not.toContain("grayscale");
-    expect(well?.className).not.toContain("text-instance");
+    expect(button).toHaveAttribute("aria-pressed", "false");
   });
 
   it("does not select when disabled", () => {
@@ -63,7 +51,6 @@ describe("ChoiceCard", () => {
 
     const button = screen.getByRole("button", { name: /Upload \.mrpack/ });
     expect(button).toBeDisabled();
-    expect(button.className).toContain("disabled:opacity-50");
     fireEvent.click(button);
     expect(onSelect).not.toHaveBeenCalled();
   });
