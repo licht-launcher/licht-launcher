@@ -104,7 +104,7 @@ async fn initialize(
         .recover_pending()
         .await
         .context("Could not restore the installation queue")?;
-    crate::create_main_window(app, custom_title_bar, !settings.disable_transparency)?;
+    crate::create_main_window(app, custom_title_bar)?;
     if let Err(error) = crate::desktop::apply_preferences(app, &settings) {
         tracing::error!(%error, "Could not apply launcher behavior preferences");
         session.update(app, |state| {

@@ -79,9 +79,6 @@
   --window-background: var(--background);
   --launcher-chrome: var(--popover);
   --home-sidebar: color-mix(in srgb, black 20%, var(--popover));
-  --acrylic-opacity: 60%;
-  --acrylic-lightness: 15%;
-  --acrylic-hue: 260;
   /* Three native caption buttons × 46 logical px (tauri-plugin-window-controls). */
   --native-caption-inset: 138px;
   --background: oklch(1 0 0);
@@ -181,15 +178,6 @@
   --sidebar-accent-foreground: oklch(0.96 0.002 260);
   --sidebar-border: oklch(1 0 0 / 8%);
   --sidebar-ring: oklch(0.556 0.01 260);
-}
-
-:root.dark[data-window-effect="acrylic"] {
-  --window-background: transparent;
-  --launcher-chrome: transparent;
-  --home-sidebar: oklch(
-    var(--acrylic-lightness) 0.004 var(--acrylic-hue) /
-    var(--acrylic-opacity)
-  );
 }
 
 .toaster {

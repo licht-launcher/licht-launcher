@@ -24,7 +24,6 @@ export type Draft = {
   downloadSpeedLimitKbs: string;
   dataDirectory: string;
   disableCustomTitleBar: boolean;
-  disableTransparency: boolean;
   automaticUpdates: boolean;
   language: Settings["language"];
   hardwareAcceleration: boolean;
@@ -70,7 +69,6 @@ export function fromSnapshot(
     ),
     dataDirectory: snapshot.applicationDirectory,
     disableCustomTitleBar: settings.disableCustomTitleBar,
-    disableTransparency: settings.disableTransparency,
     automaticUpdates: settings.automaticUpdates,
     language: settings.language,
     hardwareAcceleration: settings.hardwareAcceleration,
@@ -127,7 +125,6 @@ export function toSettings(
     downloadSpeedLimitBytesPerSecond: speed,
     dataDirectory: emptyToNull(draft.dataDirectory),
     disableCustomTitleBar: draft.disableCustomTitleBar,
-    disableTransparency: draft.disableTransparency,
     automaticUpdates: draft.automaticUpdates,
     language: draft.language,
     hardwareAcceleration: draft.hardwareAcceleration,

@@ -41,7 +41,6 @@ export function useSettingsDraft(open: boolean) {
   const schemaRef = useRef(1);
   const persistRef = useRef<(current: Draft) => void>(() => {});
   const appliedDisableCustomTitleBar = useRef<boolean | null>(null);
-  const appliedDisableTransparency = useRef<boolean | null>(null);
   const appliedHardwareAcceleration = useRef<boolean | null>(null);
 
   const save = useMutation({
@@ -53,11 +52,6 @@ export function useSettingsDraft(open: boolean) {
         saved.hardwareAcceleration !== appliedHardwareAcceleration.current
       ) {
         promptTitleBarRestart("Apply the hardware acceleration change now?");
-      } else if (
-        appliedDisableTransparency.current !== null &&
-        saved.disableTransparency !== appliedDisableTransparency.current
-      ) {
-        promptTitleBarRestart("Apply the appearance changes now?");
       } else if (
         appliedDisableCustomTitleBar.current !== null &&
         saved.disableCustomTitleBar !== appliedDisableCustomTitleBar.current
@@ -92,8 +86,6 @@ export function useSettingsDraft(open: boolean) {
       schemaRef.current = settings.data.settings.schema;
       appliedDisableCustomTitleBar.current =
         settings.data.settings.disableCustomTitleBar;
-      appliedDisableTransparency.current =
-        settings.data.settings.disableTransparency;
       appliedHardwareAcceleration.current =
         settings.data.settings.hardwareAcceleration;
       const next = fromSnapshot(settings.data, runtime.data ?? null);
@@ -125,13 +117,10 @@ export function useSettingsDraft(open: boolean) {
 
     if (
       (patch.disableCustomTitleBar !== undefined ||
-        patch.disableTransparency !== undefined ||
         patch.hardwareAcceleration !== undefined) &&
       appliedDisableCustomTitleBar.current !== null &&
-      appliedDisableTransparency.current !== null &&
       appliedHardwareAcceleration.current !== null &&
       next.disableCustomTitleBar === appliedDisableCustomTitleBar.current &&
-      next.disableTransparency === appliedDisableTransparency.current &&
       next.hardwareAcceleration === appliedHardwareAcceleration.current
     ) {
       dismissTitleBarRestartToast();

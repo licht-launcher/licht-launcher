@@ -174,11 +174,7 @@ pub fn run() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn create_main_window(
-    app: &tauri::AppHandle,
-    custom_title_bar: bool,
-    transparency: bool,
-) -> tauri::Result<()> {
+fn create_main_window(app: &tauri::AppHandle, custom_title_bar: bool) -> tauri::Result<()> {
     let theme = theme::preference(app)?;
     let builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::default())
         .title("Licht Launcher")
@@ -191,26 +187,6 @@ fn create_main_window(
         .theme(theme::native_theme(theme))
         .initialization_script(theme::initialization_script(theme)?)
         .background_color(tauri::window::Color(0x11, 0x12, 0x14, 0xff));
-
-    #[cfg(windows)]
-    let builder = if transparency {
-        builder.transparent(true)
-        .background_color(tauri::window::Color(0, 0, 0, 0))
-        .effects(
-            tauri::window::EffectsBuilder::new()
-                .effect(tauri::utils::WindowEffect::Acrylic)
-                .color(tauri::window::Color(0x11, 0x12, 0x14, 125))
-                .build(),
-        )
-        .initialization_script(
-            "document.addEventListener('DOMContentLoaded', () => { document.documentElement.dataset.windowEffect = 'acrylic'; }, { once: true });",
-        )
-    } else {
-        builder
-    };
-
-    #[cfg(not(windows))]
-    let _ = transparency;
 
     #[cfg(windows)]
     let builder = if app.state::<desktop::Runtime>().hardware_acceleration {
