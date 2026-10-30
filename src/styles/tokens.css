@@ -1,6 +1,10 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "@fontsource/google-sans/400.css";
+@import "@fontsource/google-sans/500.css";
+@import "@fontsource/google-sans/600.css";
+@import "@fontsource/google-sans/700.css";
 @import "@fontsource/space-grotesk/500.css";
 
 @custom-variant dark (&:is(.dark *));
@@ -11,7 +15,7 @@
   --animate-menu-in: menu-in 120ms ease-out;
   --animate-menu-out: menu-out 120ms ease-in;
   --font-heading: var(--font-sans);
-  --font-sans: system-ui, "Segoe UI", Ubuntu, sans-serif;
+  --font-sans: "Google Sans", system-ui, "Segoe UI", Ubuntu, sans-serif;
   --font-brand: "Space Grotesk", var(--font-sans);
   --font-mono:
     ui-monospace, "Cascadia Mono", Consolas, "Segoe UI Mono", monospace;
@@ -69,8 +73,10 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-:root {
-  --window-background: #111214;
+:root,
+[data-theme-preview="light"] {
+  color-scheme: light;
+  --window-background: var(--background);
   --launcher-chrome: var(--popover);
   --home-sidebar: color-mix(in srgb, black 20%, var(--popover));
   --acrylic-opacity: 60%;
@@ -127,8 +133,10 @@
   --sidebar-ring: oklch(0.708 0 0);
 }
 
-.dark {
+.dark,
+[data-theme-preview="dark"] {
   color-scheme: dark;
+  --window-background: #111214;
   /* Cool near-black stack inspired by Discord/Grok-style chrome. */
   --background: oklch(0.14 0.004 260);
   --foreground: oklch(0.96 0.002 260);
@@ -175,7 +183,7 @@
   --sidebar-ring: oklch(0.556 0.01 260);
 }
 
-:root[data-window-effect="acrylic"] {
+:root.dark[data-window-effect="acrylic"] {
   --window-background: transparent;
   --launcher-chrome: transparent;
   --home-sidebar: oklch(

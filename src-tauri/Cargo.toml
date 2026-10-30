@@ -20,7 +20,7 @@ anyhow = "=1.0.104"
 licht-core = { path = "../crates/licht-core" }
 reqwest = { version = "=0.13.5", default-features = false, features = ["json", "rustls", "stream"] }
 serde_json = "=1.0.151"
-tauri = { version = "=2.12.1", features = ["protocol-asset"] }
+tauri = { version = "=2.12.1", features = ["protocol-asset", "tray-icon"] }
 tauri-plugin-dialog = "=2.8.1"
 tauri-plugin-opener = "=2.7.0"
 tauri-plugin-process = "=2.4.0"
@@ -29,6 +29,9 @@ tauri-plugin-window-controls = "=0.2.1"
 tokio = { version = "=1.53.2", features = ["macros", "sync", "time"] }
 tracing = "=0.1.44"
 tracing-subscriber = { version = "=0.3.23", features = ["env-filter"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+webkit2gtk = { version = "=2.0.2", features = ["v2_16"] }
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]

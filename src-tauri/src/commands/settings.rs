@@ -16,10 +16,21 @@ pub fn get_settings(paths: State<'_, LauncherPaths>) -> Result<SettingsSnapshot,
 
 #[tauri::command]
 pub fn save_settings(
+    app: AppHandle,
+    updates: State<'_, std::sync::Arc<crate::app_updates::Runtime>>,
     paths: State<'_, LauncherPaths>,
     settings: Settings,
 ) -> Result<Settings, String> {
-    licht_core::save_settings(&paths.settings, &settings).map_err(failure)
+    let saved = licht_core::save_settings(&paths.settings, &settings).map_err(failure)?;
+    updates
+        .preferences_changed(&app, saved.automatic_updates)
+        .map_err(|error| {
+            format!("Settings were saved, but background updates could not be notified: {error}")
+        })?;
+    crate::desktop::apply_preferences(&app, &saved).map_err(|error| {
+        format!("Settings were saved, but launcher behavior could not be applied: {error}")
+    })?;
+    Ok(saved)
 }
 
 #[tauri::command]

@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useStartupProgress } from "@/features/startup/hooks/use-startup-progress";
+import { messageOf } from "@/lib/errors";
 import type { StartupPhase } from "@/lib/generated/StartupPhase";
 import logo from "../../../src-tauri/icons/128x128@2x.png?no-inline";
 
@@ -28,6 +29,25 @@ function formatBytes(bytes: number) {
 }
 
 export function StartupScreen() {
+  const previewWindow = getCurrentWindow().label.startsWith("startup-preview-");
+  const { mutate: closePreview, ...closing } = useMutation({
+    mutationFn: () => getCurrentWindow().close(),
+  });
+  useEffect(() => {
+    if (!previewWindow) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.key === "Escape" &&
+        !event.defaultPrevented &&
+        !closing.isPending
+      ) {
+        event.preventDefault();
+        closePreview();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [previewWindow, closing.isPending, closePreview]);
   const logoRef = useRef<HTMLImageElement>(null);
   const revealing = useRef(false);
   const { mutate: revealWindow, ...reveal } = useMutation({
@@ -68,6 +88,7 @@ export function StartupScreen() {
       <main
         className="flex min-h-screen flex-col items-center justify-center gap-6 bg-sidebar p-6 text-center text-sidebar-foreground"
         aria-label="Launcher startup"
+        aria-busy={closing.isPending}
       >
         <h1 data-tauri-drag-region className="flex w-full justify-center">
           <img
@@ -129,6 +150,11 @@ export function StartupScreen() {
           {reveal.error ? (
             <p role="alert" className="text-sm text-destructive">
               Could not prepare the startup window: {reveal.error.message}
+            </p>
+          ) : null}
+          {closing.error ? (
+            <p role="alert" className="text-sm text-destructive">
+              Could not close preview: {messageOf(closing.error)}
             </p>
           ) : null}
         </div>

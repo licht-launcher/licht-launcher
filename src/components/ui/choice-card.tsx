@@ -42,40 +42,39 @@ export function ChoiceCard({
       aria-pressed={selected}
       disabled={disabled}
       className={cn(
-        "flex h-auto w-full cursor-pointer flex-col items-start gap-3 rounded-lg border px-4 py-4 text-left outline-none select-none",
+        "flex h-auto w-full cursor-pointer flex-col items-start gap-3 rounded-lg border px-3 py-3 text-left text-foreground outline-none select-none",
         "transition-[background-color,border-color,box-shadow] duration-200 ease-out",
         "focus-visible:ring-3 focus-visible:ring-ring/50",
         "disabled:pointer-events-none disabled:opacity-50",
-        "border-border/60 ring-2",
-        selected
-          ? "bg-muted text-foreground shadow-sm ring-primary"
-          : "bg-black/20 text-foreground ring-primary/0 hover:bg-muted/50",
+        "border-border/60 ring-3",
+        selected ? "bg-muted ring-primary" : "ring-primary/0",
         className,
       )}
       onClick={onSelect}
     >
-      <span className="flex w-full items-start gap-3">
-        {icon !== undefined ? (
-          <span
-            className={cn(
-              "flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-md transition-colors duration-200 ease-out [&_img]:size-5 [&_img]:object-contain [&_svg]:size-5",
-              iconNeutral
-                ? "bg-black/20 text-muted-foreground"
-                : iconTones[iconTone],
-            )}
-          >
-            {icon}
-          </span>
-        ) : null}
-        <span className="min-w-0 flex-1">
-          <span className="block text-sm font-medium">{title}</span>
-          {description !== undefined ? (
-            <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
-              {description}
+      <span className="flex flex-col items-start w-full gap-2">
+        <div className="flex items-center gap-2">
+          {icon !== undefined ? (
+            <span
+              className={cn(
+                "flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-md transition-colors duration-200 ease-out",
+                iconNeutral
+                  ? "bg-black/20 text-muted-foreground"
+                  : iconTones[iconTone],
+              )}
+            >
+              {icon}
             </span>
           ) : null}
-          {children}
-        </span>
+          <span className="block text-sm">{title}</span>
+        </div>
+
+        {description !== undefined ? (
+          <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
+            {description}
+          </span>
+        ) : null}
+        {children}
       </span>
     </button>
   );

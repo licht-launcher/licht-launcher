@@ -1,10 +1,15 @@
 use anyhow::Context;
+#[cfg(windows)]
+use tauri::Manager;
 use tauri::{WebviewUrl, WebviewWindowBuilder};
 
+mod app_updates;
 mod commands;
+mod desktop;
 mod logging;
 mod progress;
 mod startup;
+mod theme;
 
 /// Logical height of the custom title bar strip (matches frontend `h-9`).
 #[cfg(windows)]
@@ -19,7 +24,14 @@ pub fn run() -> anyhow::Result<()> {
     );
 
     let runtime = startup::state::StartupRuntime::new();
+    let updates = app_updates::Runtime::new();
     let startup_runtime = std::sync::Arc::clone(&runtime);
+    let (hardware_acceleration, initial_theme) = licht_core::startup_settings()
+        .map(|settings| (settings.hardware_acceleration, settings.theme))
+        .unwrap_or_else(|error| {
+            tracing::warn!(%error, "Could not read startup appearance preferences; using defaults until settings can be loaded");
+            (true, licht_core::LauncherTheme::Dark)
+        });
 
     let application = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -28,7 +40,9 @@ pub fn run() -> anyhow::Result<()> {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_window_controls::init())
         .manage(std::sync::Arc::clone(&runtime))
+        .manage(updates)
         .manage(commands::LaunchSessions::new())
+        .manage(desktop::Runtime::new(hardware_acceleration, initial_theme))
         .setup(move |app| {
             startup::start(app.handle().clone(), startup_runtime)?;
             Ok(())
@@ -36,8 +50,15 @@ pub fn run() -> anyhow::Result<()> {
         .invoke_handler(tauri::generate_handler![
             startup::commands::get_startup_progress,
             startup::commands::open_startup_preview,
+            startup::commands::is_startup_preview_open,
+            startup::commands::close_startup_preview,
             startup::commands::restart_startup_preview,
             startup::commands::request_update_restart,
+            app_updates::get_app_update_state,
+            app_updates::check_app_update,
+            app_updates::download_app_update,
+            app_updates::install_app_update,
+            commands::shell::get_build_diagnostics,
             commands::downloads::list_download_jobs,
             commands::downloads::reorder_download_jobs,
             commands::downloads::download_telemetry,
@@ -70,6 +91,7 @@ pub fn run() -> anyhow::Result<()> {
             commands::shell::open_feedback,
             commands::shell::custom_title_bar_active,
             commands::shell::restart_app,
+            commands::shell::quit_app,
             commands::instances::get_last_played_folder,
             commands::instances::set_last_played_folder,
             commands::instances::touch_last_opened,
@@ -101,6 +123,17 @@ pub fn run() -> anyhow::Result<()> {
         .context("Failed to build Licht Launcher")?;
     let mut closing = false;
     application.run(move |app, event| {
+        if let tauri::RunEvent::WindowEvent {
+            ref label,
+            event: tauri::WindowEvent::CloseRequested { ref api, .. },
+            ..
+        } = event
+            && label == "main"
+            && desktop::hide_on_close(app)
+        {
+            api.prevent_close();
+            return;
+        }
         if let tauri::RunEvent::ExitRequested { ref api, code, .. } = event
             && !runtime
                 .shutdown_complete
@@ -126,10 +159,16 @@ pub fn run() -> anyhow::Result<()> {
             ..
         } = event
             && label.starts_with("startup-preview-")
-            && let Ok(mut sessions) = runtime.sessions.lock()
-            && let Some(session) = sessions.remove(&label)
         {
-            session.stop();
+            if let Ok(mut sessions) = runtime.sessions.lock() {
+                if let Some(session) = sessions.remove(&label) {
+                    session.stop();
+                }
+            } else {
+                tracing::error!("Could not remove a closed startup preview session");
+            }
+            runtime.finish_preview();
+            startup::preview::publish_state(app, false);
         }
     });
     Ok(())
@@ -140,6 +179,7 @@ fn create_main_window(
     custom_title_bar: bool,
     transparency: bool,
 ) -> tauri::Result<()> {
+    let theme = theme::preference(app)?;
     let builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::default())
         .title("Licht Launcher")
         .inner_size(1200.0, 800.0)
@@ -148,7 +188,8 @@ fn create_main_window(
         .fullscreen(false)
         .maximizable(false)
         .decorations(!custom_title_bar)
-        .theme(Some(tauri::Theme::Dark))
+        .theme(theme::native_theme(theme))
+        .initialization_script(theme::initialization_script(theme)?)
         .background_color(tauri::window::Color(0x11, 0x12, 0x14, 0xff));
 
     #[cfg(windows)]
@@ -171,22 +212,27 @@ fn create_main_window(
     #[cfg(not(windows))]
     let _ = transparency;
 
-    if !custom_title_bar {
-        builder.build()?;
-        return Ok(());
-    }
+    #[cfg(windows)]
+    let builder = if app.state::<desktop::Runtime>().hardware_acceleration {
+        builder
+    } else {
+        builder.additional_browser_args("--disable-gpu")
+    };
 
     #[cfg(windows)]
-    {
+    let window = {
         use tauri_plugin_window_controls::WindowControlsBuilderExt;
         // Native min / (disabled) max / close above the WebView. Maximize stays
         // grayed while `maximizable(false)` clears WS_MAXIMIZEBOX.
-        builder.window_controls_height(TITLE_BAR_HEIGHT).build()?;
-    }
+        if custom_title_bar {
+            builder.window_controls_height(TITLE_BAR_HEIGHT).build()?
+        } else {
+            builder.build()?
+        }
+    };
     #[cfg(not(windows))]
-    {
-        builder.build()?;
-    }
+    let window = builder.build()?;
+    desktop::configure_webview(&window)?;
 
     Ok(())
 }

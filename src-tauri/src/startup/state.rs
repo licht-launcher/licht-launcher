@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -127,6 +128,7 @@ impl Session {
 }
 
 pub struct StartupRuntime {
+    preview_open: AtomicBool,
     pub shutdown_complete: std::sync::atomic::AtomicBool,
     pub sessions: Mutex<HashMap<String, Arc<Session>>>,
     pub database: tokio::sync::Mutex<Option<licht_core::DatabaseService>>,
@@ -137,6 +139,7 @@ pub struct StartupRuntime {
 impl StartupRuntime {
     pub fn new() -> Arc<Self> {
         Arc::new(Self {
+            preview_open: AtomicBool::new(false),
             shutdown_complete: std::sync::atomic::AtomicBool::new(false),
             sessions: Mutex::new(HashMap::from([(
                 "startup".to_string(),
@@ -156,6 +159,18 @@ impl StartupRuntime {
             .get(label)
             .cloned()
             .ok_or_else(|| std::io::Error::other("startup session not found").into())
+    }
+
+    pub fn try_begin_preview(&self) -> bool {
+        !self.preview_open.swap(true, Ordering::SeqCst)
+    }
+
+    pub fn preview_is_open(&self) -> bool {
+        self.preview_open.load(Ordering::SeqCst)
+    }
+
+    pub fn finish_preview(&self) {
+        self.preview_open.store(false, Ordering::SeqCst);
     }
 
     pub async fn shutdown(&self) {
@@ -194,6 +209,35 @@ impl StartupRuntime {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_one_preview_can_occupy_the_slot_and_closing_releases_it() {
+        let runtime = StartupRuntime::new();
+        assert!(!runtime.preview_is_open());
+        assert!(runtime.try_begin_preview());
+        assert!(runtime.preview_is_open());
+        assert!(!runtime.try_begin_preview());
+        runtime.finish_preview();
+        assert!(!runtime.preview_is_open());
+        assert!(runtime.try_begin_preview());
+    }
+
+    #[test]
+    fn concurrent_preview_requests_cannot_open_two_windows() {
+        let runtime = StartupRuntime::new();
+        let handles = (0..2)
+            .map(|_| {
+                let runtime = Arc::clone(&runtime);
+                std::thread::spawn(move || runtime.try_begin_preview())
+            })
+            .collect::<Vec<_>>();
+        let opened = handles
+            .into_iter()
+            .map(|handle| handle.join().expect("preview request"))
+            .filter(|opened| *opened)
+            .count();
+        assert_eq!(opened, 1);
+    }
 
     #[tokio::test]
     async fn readiness_and_stop_signals_survive_subscription_order() {

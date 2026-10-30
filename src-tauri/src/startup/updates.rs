@@ -12,17 +12,11 @@ pub async fn run(app: &AppHandle, session: &Arc<Session>) -> anyhow::Result<bool
     )) {
         Ok(intent) => intent,
         Err(error) => {
-            session.update(app, |state| state.warning = Some(format!("Could not read the saved update request: {error}. Automatic update preferences will be used.")))?;
+            session.update(app, |state| state.warning = Some(format!("Could not read the saved update request: {error}. Starting the installed version.")))?;
             (false, false)
         }
     };
-    let settings = licht_core::startup_settings()?;
-    let policy = licht_core::startup_update_policy(
-        settings.check_for_updates,
-        settings.install_updates_on_restart,
-        manual,
-        attempted,
-    );
+    let policy = licht_core::startup_update_policy(false, false, manual, attempted);
     if policy.blocked {
         session.update(app, |state| {
             state.update_status = StartupUpdateStatus::Failed;

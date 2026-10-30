@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 
@@ -30,14 +31,16 @@ export function SegmentedBar({
   label,
   segments,
   loading = false,
+  compact = false,
 }: {
   label: string;
   segments: readonly Segment[];
   loading?: boolean;
+  compact?: boolean;
 }) {
   const [hovered, setHovered] = useState<string | null>(null);
-  const [focused, setFocused] = useState<string | null>(null);
-  const active = loading ? null : (hovered ?? focused);
+
+  const active = loading ? null : hovered;
   const total = segments.reduce(
     (sum, segment) => sum + Math.max(0, segment.value),
     0,
@@ -69,78 +72,84 @@ export function SegmentedBar({
       className="flex w-full min-w-0 max-w-full flex-col gap-3"
       onMouseOver={(event) => setHovered(segmentFrom(event.target))}
       onMouseLeave={() => setHovered(null)}
-      onFocus={(event) => setFocused(segmentFrom(event.target))}
-      onBlur={() => setFocused(null)}
+      onFocus={(event) => setHovered(segmentFrom(event.target))}
+      onBlur={() => setHovered(null)}
     >
-      <div
-        role="img"
-        aria-label={`${label}. ${summary}`}
-        className="relative flex h-5 w-full min-w-0 max-w-full items-center overflow-hidden"
-      >
-        <svg
-          aria-hidden
-          aria-label={`${label} bar`}
-          viewBox="0 0 1000 12"
-          preserveAspectRatio="none"
-          width="100%"
-          height="12"
-          className="relative w-full min-w-0 max-w-full overflow-hidden rounded-full"
+      <div className="relative flex h-5 w-full min-w-0 max-w-full items-center overflow-hidden">
+        <div
+          role="img"
+          aria-label={`${label}. ${summary}`}
+          aria-hidden={loading}
+          className="flex w-full min-w-0 max-w-full items-center"
         >
-          <rect width="1000" height="12" className="fill-muted" />
-          {blocks.map((block) => (
-            <rect
-              key={block.label}
-              aria-label={`${block.label} segment`}
-              data-segment={block.label}
-              x={block.x}
-              y="0"
-              width={block.width}
-              height="12"
-              className={cn(
-                colors[block.color].fill,
-                "transition-opacity duration-200 ease-out motion-reduce:transition-none",
-                active !== null && active !== block.label
-                  ? "opacity-25"
-                  : "opacity-100",
-              )}
-            />
-          ))}
-        </svg>
-        <svg
-          aria-hidden
-          aria-label={`${label} highlight`}
-          viewBox="0 0 1000 16"
-          preserveAspectRatio="none"
-          width="100%"
-          height={highlighted ? 16 : 12}
-          className={cn(
-            "pointer-events-none absolute top-1/2 left-0 w-full min-w-0 max-w-full -translate-y-1/2 overflow-hidden rounded-full transition-[height,opacity] duration-200 ease-out motion-reduce:transition-none",
-            highlighted ? "opacity-100" : "opacity-0",
-          )}
-        >
-          {highlighted && (
-            <rect
-              x={highlighted.x}
-              y="0"
-              width={highlighted.width}
-              height="16"
-              className={colors[highlighted.color].fill}
-            />
-          )}
-        </svg>
+          <svg
+            aria-hidden
+            aria-label={`${label} bar`}
+            viewBox="0 0 1000 12"
+            preserveAspectRatio="none"
+            width="100%"
+            height="12"
+            className="relative w-full min-w-0 max-w-full overflow-hidden rounded-full"
+          >
+            <rect width="1000" height="12" className="fill-muted" />
+            {blocks.map((block) => (
+              <rect
+                key={block.label}
+                aria-label={`${block.label} segment`}
+                data-segment={block.label}
+                x={block.x}
+                y="0"
+                width={block.width}
+                height="12"
+                className={cn(
+                  colors[block.color].fill,
+                  "transition-opacity duration-200 ease-out motion-reduce:transition-none",
+                  active !== null && active !== block.label
+                    ? "opacity-25"
+                    : "opacity-100",
+                )}
+              />
+            ))}
+          </svg>
+          <svg
+            aria-hidden
+            aria-label={`${label} highlight`}
+            viewBox="0 0 1000 16"
+            preserveAspectRatio="none"
+            width="100%"
+            height={highlighted ? 16 : 12}
+            className={cn(
+              "pointer-events-none absolute top-1/2 left-0 w-full min-w-0 max-w-full -translate-y-1/2 overflow-hidden rounded-full transition-[height,opacity] duration-200 ease-out motion-reduce:transition-none",
+              highlighted ? "opacity-100" : "opacity-0",
+            )}
+          >
+            {highlighted && (
+              <rect
+                x={highlighted.x}
+                y="0"
+                width={highlighted.width}
+                height="16"
+                className={colors[highlighted.color].fill}
+              />
+            )}
+          </svg>
+        </div>
         {loading && (
-          <Spinner
+          <Progress
             aria-label={`Loading ${label.toLowerCase()}`}
-            className="absolute top-1/2 left-1/2 size-3 -translate-x-1/2 -translate-y-1/2 text-muted-foreground"
+            className="absolute top-1/2 left-0 h-3 -translate-y-1/2 motion-reduce:[&_[data-slot=progress-indicator]]:animate-none"
           />
         )}
       </div>
       <ul
         aria-label={`${label} breakdown`}
-        className="flex flex-col gap-1 text-xs"
+        className={cn(
+          "text-xs",
+          compact ? "grid grid-cols-3 gap-x-4 gap-y-2" : "flex flex-col gap-1",
+        )}
       >
         {segments.map((segment) => (
-          <li key={segment.label}>
+          <li key={segment.label} className={compact ? "min-w-0" : undefined}>
             <Button
               type="button"
               variant="ghost"
@@ -153,14 +162,14 @@ export function SegmentedBar({
               disabled={loading}
               data-segment={segment.label}
               className={cn(
-                "h-auto w-full justify-between gap-3 px-1 py-1 text-xs",
+                "h-auto w-full justify-between text-xs",
+                compact ? "gap-2 px-0 py-0.5" : "gap-3 px-1 py-1",
                 active === segment.label
                   ? "text-foreground"
                   : "text-muted-foreground",
               )}
-              onClick={() => setFocused(segment.label)}
             >
-              <span className="flex min-w-0 items-center gap-2 text-muted-foreground">
+              <span className="flex min-w-0 items-center gap-2">
                 <span
                   aria-hidden
                   className={`size-2 shrink-0 rounded-sm ${colors[segment.color].marker}`}

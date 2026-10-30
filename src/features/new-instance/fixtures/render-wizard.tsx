@@ -14,6 +14,7 @@ import {
   snapshot,
 } from "@/features/settings/fixtures/snapshot";
 import { startupProgress } from "@/features/startup/fixtures/progress";
+import { appUpdateState } from "@/features/updater/fixtures/state";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 import type { VersionSummary } from "@/lib/generated/VersionSummary";
 import { routeTree } from "@/routeTree.gen";
@@ -54,6 +55,8 @@ export function mockWizardCommands(
     const custom = implement?.(command, args);
     if (custom !== undefined) return custom;
     switch (command) {
+      case "get_app_update_state":
+        return appUpdateState();
       case "get_startup_progress":
         return startupProgress();
       case "get_player_head":

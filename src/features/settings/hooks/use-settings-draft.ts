@@ -14,6 +14,7 @@ import {
   toSettings,
 } from "@/features/settings/model/draft";
 import { getSettings, runtimeJava, saveSettings } from "@/lib/commands";
+import { DOWNLOAD_SPEED_ERROR, parseDownloadLimit } from "@/lib/download-speed";
 import { friendlyError, messageOf } from "@/lib/errors";
 import type { Settings } from "@/lib/generated/Settings";
 
@@ -41,12 +42,18 @@ export function useSettingsDraft(open: boolean) {
   const persistRef = useRef<(current: Draft) => void>(() => {});
   const appliedDisableCustomTitleBar = useRef<boolean | null>(null);
   const appliedDisableTransparency = useRef<boolean | null>(null);
+  const appliedHardwareAcceleration = useRef<boolean | null>(null);
 
   const save = useMutation({
     mutationFn: saveSettings,
     onSuccess: async (saved: Settings) => {
       await queryClient.invalidateQueries({ queryKey: ["settings"] });
       if (
+        appliedHardwareAcceleration.current !== null &&
+        saved.hardwareAcceleration !== appliedHardwareAcceleration.current
+      ) {
+        promptTitleBarRestart("Apply the hardware acceleration change now?");
+      } else if (
         appliedDisableTransparency.current !== null &&
         saved.disableTransparency !== appliedDisableTransparency.current
       ) {
@@ -72,11 +79,9 @@ export function useSettingsDraft(open: boolean) {
       toast.error("window size must be at least 1");
       return;
     }
-    const speed = optionalSize(current.downloadSpeedLimitMiB);
-    if (speed === "invalid" || (speed !== null && speed > 4_294_967_295)) {
-      toast.error(
-        "Download speed limit must be a positive whole number of MiB/s.",
-      );
+    const speed = parseDownloadLimit(current.downloadSpeedLimitKbs);
+    if (speed === "invalid") {
+      toast.error(DOWNLOAD_SPEED_ERROR);
       return;
     }
     save.mutate(toSettings(current, schemaRef.current, width, height));
@@ -89,6 +94,8 @@ export function useSettingsDraft(open: boolean) {
         settings.data.settings.disableCustomTitleBar;
       appliedDisableTransparency.current =
         settings.data.settings.disableTransparency;
+      appliedHardwareAcceleration.current =
+        settings.data.settings.hardwareAcceleration;
       const next = fromSnapshot(settings.data, runtime.data ?? null);
       draftRef.current = next;
       setDraft(next);
@@ -118,11 +125,14 @@ export function useSettingsDraft(open: boolean) {
 
     if (
       (patch.disableCustomTitleBar !== undefined ||
-        patch.disableTransparency !== undefined) &&
+        patch.disableTransparency !== undefined ||
+        patch.hardwareAcceleration !== undefined) &&
       appliedDisableCustomTitleBar.current !== null &&
       appliedDisableTransparency.current !== null &&
+      appliedHardwareAcceleration.current !== null &&
       next.disableCustomTitleBar === appliedDisableCustomTitleBar.current &&
-      next.disableTransparency === appliedDisableTransparency.current
+      next.disableTransparency === appliedDisableTransparency.current &&
+      next.hardwareAcceleration === appliedHardwareAcceleration.current
     ) {
       dismissTitleBarRestartToast();
     }

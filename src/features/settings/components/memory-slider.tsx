@@ -39,6 +39,7 @@ export function MemorySlider({
   maximumMb,
   recommendedMb,
   totalMb,
+  stepMb,
   onChange,
 }: {
   valueMb: number;
@@ -46,45 +47,82 @@ export function MemorySlider({
   maximumMb: number;
   recommendedMb: number;
   totalMb: number;
+  stepMb: number;
   onChange: (maxMemoryMb: number) => void;
 }) {
   const options = memoryPresetOptions({
     minimumMb,
     maximumMb,
     recommendedMb,
-    currentMb: valueMb,
     totalMb,
   });
-  const index = Math.max(0, options.indexOf(valueMb));
-  const lastIndex = Math.max(options.length - 1, 0);
+  const ceiling = Math.max(minimumMb, Math.min(maximumMb, totalMb));
+  const bounded = (value: number) =>
+    Math.min(ceiling, Math.max(minimumMb, value));
+  const percentage = (value: number) =>
+    ceiling === minimumMb
+      ? 0
+      : ((value - minimumMb) / (ceiling - minimumMb)) * 100;
 
   return (
     <div className="flex w-full flex-col gap-3">
       <Slider
         aria-label="Memory"
         className="w-full"
-        min={0}
-        max={lastIndex}
+        min={minimumMb}
+        max={ceiling}
         step={1}
-        value={[index]}
+        value={[bounded(valueMb)]}
+        aria-valuetext={`${valueMb} MB`}
+        onKeyDownCapture={(event) => {
+          let next = valueMb;
+          const increment = stepMb * (event.shiftKey ? 10 : 1);
+          switch (event.key) {
+            case "Home":
+              next = minimumMb;
+              break;
+            case "End":
+              next = ceiling;
+              break;
+            case "ArrowRight":
+            case "ArrowUp":
+              next += increment;
+              break;
+            case "ArrowLeft":
+            case "ArrowDown":
+              next -= increment;
+              break;
+            case "PageUp":
+              next += stepMb * 10;
+              break;
+            case "PageDown":
+              next -= stepMb * 10;
+              break;
+            default:
+              return;
+          }
+          event.preventDefault();
+          onChange(bounded(next));
+        }}
         onValueChange={(value) => {
-          const nextIndex = value[0];
-          if (nextIndex === undefined) {
-            return;
-          }
-          const next = options[nextIndex];
-          if (next !== undefined) {
-            onChange(next);
-          }
+          const next = value[0];
+          if (next === undefined) return;
+          // Snap dragging separately so typed values and the exact RAM endpoint stay representable.
+          onChange(
+            next === ceiling
+              ? ceiling
+              : bounded(
+                  minimumMb + Math.round((next - minimumMb) / stepMb) * stepMb,
+                ),
+          );
         }}
       >
         <div
           aria-hidden
           className="pointer-events-none absolute inset-x-0 top-1/2 z-10 h-0"
         >
-          {options.map((mb, optionIndex) => {
-            const percent =
-              lastIndex === 0 ? 0 : (optionIndex / lastIndex) * 100;
+          {options.map((mb) => {
+            const percent = percentage(mb);
             const selected = mb === valueMb;
             return (
               <span
@@ -103,10 +141,10 @@ export function MemorySlider({
       <div className="relative h-8 w-full">
         {options.map((mb, optionIndex) => {
           const selected = mb === valueMb;
-          const percent = lastIndex === 0 ? 0 : (optionIndex / lastIndex) * 100;
+          const percent = percentage(mb);
           const isEnd =
             options.length > 1 &&
-            (optionIndex === 0 || optionIndex === lastIndex);
+            (optionIndex === 0 || optionIndex === options.length - 1);
           return (
             <button
               key={mb}

@@ -24,8 +24,8 @@ pub async fn open_startup_preview(
     runtime: State<'_, Arc<StartupRuntime>>,
     scenario: StartupPreviewScenario,
 ) -> Result<(), String> {
-    if window.label() != "main" {
-        return Err("Startup tests must be opened from the launcher".to_string());
+    if window.label() != "main" || !cfg!(debug_assertions) {
+        return Err("Startup tests require the development launcher".to_string());
     }
     let runtime = Arc::clone(runtime.inner());
     // WebView2 creation must not block the synchronous IPC/UI thread on Windows.
@@ -33,6 +33,25 @@ pub async fn open_startup_preview(
         .await
         .map_err(|_| "Could not join startup preview creation".to_string())?
         .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn is_startup_preview_open(
+    window: WebviewWindow,
+    runtime: State<'_, Arc<StartupRuntime>>,
+) -> Result<bool, String> {
+    if window.label() != "main" || !cfg!(debug_assertions) {
+        return Err("Startup tests require the development launcher".to_string());
+    }
+    Ok(runtime.preview_is_open())
+}
+
+#[tauri::command]
+pub async fn close_startup_preview(app: AppHandle, window: WebviewWindow) -> Result<(), String> {
+    if window.label() != "main" || !cfg!(debug_assertions) {
+        return Err("Startup tests require the development launcher".to_string());
+    }
+    super::preview::close(&app).map_err(|error| error.to_string())
 }
 
 #[tauri::command]

@@ -1,4 +1,5 @@
 export { Button, buttonVariants } from "@/components/ui/button";
+export { Card } from "@/components/ui/card";
 export {
   Dialog,
   DialogClose,

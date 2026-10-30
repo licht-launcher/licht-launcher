@@ -17,17 +17,23 @@ export const snapshot = {
     java8: null,
     downloadConcurrency: 8,
     writeConcurrency: 8,
-    downloadSpeedLimitMiB: null,
+    downloadSpeedLimitBytesPerSecond: null,
     dataDirectory: null,
     disableCustomTitleBar: false,
     disableTransparency: false,
-    checkForUpdates: true,
-    installUpdatesOnRestart: true,
+    automaticUpdates: true,
+    language: "en",
+    hardwareAcceleration: true,
+    minimizeToTray: true,
+    minimizeOnGameStart: false,
+    restoreOnGameExit: false,
   },
   applicationDirectory: "C:\\Users\\Mateus\\AppData\\Roaming\\Licht",
   memoryTotalMb: 16384,
   memoryRecommendedMb: 4096,
   memoryMinimumMb: 512,
   memoryMaximumMb: 16384,
-  memoryStepMb: 256,
-};
+  memoryStepMb: 64,
+} satisfies SettingsSnapshot;
+
+import type { SettingsSnapshot } from "@/lib/generated/SettingsSnapshot";

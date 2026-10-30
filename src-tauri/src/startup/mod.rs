@@ -10,7 +10,8 @@ pub mod state;
 mod updates;
 
 pub fn create_window(app: &AppHandle, label: &str) -> tauri::Result<()> {
-    WebviewWindowBuilder::new(app, label, WebviewUrl::default())
+    let theme = crate::theme::preference(app)?;
+    let builder = WebviewWindowBuilder::new(app, label, WebviewUrl::default())
         .title("Licht Launcher")
         .inner_size(420.0, 320.0)
         .center()
@@ -18,8 +19,16 @@ pub fn create_window(app: &AppHandle, label: &str) -> tauri::Result<()> {
         .visible(false)
         .resizable(false)
         .maximizable(false)
-        .theme(Some(tauri::Theme::Dark))
-        .build()?;
+        .theme(crate::theme::native_theme(theme))
+        .initialization_script(crate::theme::initialization_script(theme)?);
+    #[cfg(windows)]
+    let builder = if app.state::<crate::desktop::Runtime>().hardware_acceleration {
+        builder
+    } else {
+        builder.additional_browser_args("--disable-gpu")
+    };
+    let window = builder.build()?;
+    crate::desktop::configure_webview(&window)?;
     Ok(())
 }
 
@@ -96,7 +105,31 @@ async fn initialize(
         .await
         .context("Could not restore the installation queue")?;
     crate::create_main_window(app, custom_title_bar, !settings.disable_transparency)?;
+    if let Err(error) = crate::desktop::apply_preferences(app, &settings) {
+        tracing::error!(%error, "Could not apply launcher behavior preferences");
+        session.update(app, |state| {
+            state.warning = Some(
+                "System tray setup failed. Closing the window will exit the launcher.".to_string(),
+            )
+        })?;
+    }
     session.update(app, |state| state.phase = StartupPhase::Ready)?;
+    if crate::app_updates::start(
+        app.clone(),
+        Arc::clone(runtime),
+        Arc::clone(session),
+        settings.automatic_updates,
+    )
+    .is_err()
+    {
+        tracing::error!("Could not start background application updates");
+        session.update(app, |state| {
+            state.warning = Some(
+                "Background updates could not start. Restart the launcher to try again."
+                    .to_string(),
+            )
+        })?;
+    }
     if let Some(window) = app.get_webview_window("startup") {
         window.close()?;
     }

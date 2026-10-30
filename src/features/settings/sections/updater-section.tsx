@@ -1,26 +1,31 @@
-import {
-  CircleCheckIcon,
-  ClockIcon,
-  DownloadIcon,
-  OctagonXIcon,
-  PackageIcon,
-  RefreshCwIcon,
-} from "lucide-react";
-import { useEffect, useState } from "react";
-
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
 import type { Draft } from "@/features/settings/model/draft";
 import {
-  getUpdateCheckStatus,
+  DOWNLOAD_UPDATE_EVENT,
   INSTALL_UPDATE_EVENT,
-  LATEST_VERSION_EVENT,
-  LATEST_VERSION_KEY,
   MANUAL_UPDATE_CHECK_EVENT,
-  UPDATE_CHECK_STATUS_EVENT,
-  type UpdateCheckStatus,
 } from "@/features/updater/components/update-check";
+import { useAppUpdateState } from "@/features/updater/hooks/use-app-update-state";
 import { appReleaseLabel } from "@/lib/app-release";
+import { messageOf } from "@/lib/errors";
+import type { AppUpdatePhase } from "@/lib/generated/AppUpdatePhase";
+
+const labels: Record<AppUpdatePhase, string> = {
+  idle: "Not checked yet",
+  checking: "Checking for updates…",
+  upToDate: "Up to date",
+  available: "An update is available to download.",
+  downloading: "Downloading update…",
+  verifying: "Verifying update…",
+  cached:
+    "A downloaded update is cached. Check online to prepare installation.",
+  ready: "Ready to update",
+  installing: "Installing update…",
+  failed: "Update failed. Try again.",
+};
 
 export function UpdaterSection({
   draft,
@@ -29,159 +34,122 @@ export function UpdaterSection({
   draft: Draft;
   onChange: (patch: Partial<Draft>) => void;
 }) {
-  const [latestVersion, setLatestVersion] = useState<string | null>(() =>
-    localStorage.getItem(LATEST_VERSION_KEY),
-  );
-  const [status, setStatus] = useState(getUpdateCheckStatus);
-  const checking = status === "checking";
-  const statusLabels: Record<UpdateCheckStatus, string> = {
-    "not-checked": "Not checked yet",
-    checking: "Checking for updates…",
-    "up-to-date": "Up to date",
-    available: "Update available",
-    failed: "Update check failed. Try again.",
-  };
-  const statusIcons = {
-    "not-checked": ClockIcon,
-    checking: RefreshCwIcon,
-    "up-to-date": CircleCheckIcon,
-    available: DownloadIcon,
-    failed: OctagonXIcon,
-  };
-  const StatusIcon = statusIcons[status];
-
-  useEffect(() => {
-    const updateLatestVersion = () => {
-      setLatestVersion(localStorage.getItem(LATEST_VERSION_KEY));
-    };
-    window.addEventListener(LATEST_VERSION_EVENT, updateLatestVersion);
-    const updateChecking = () => {
-      setStatus(getUpdateCheckStatus());
-    };
-    window.addEventListener(UPDATE_CHECK_STATUS_EVENT, updateChecking);
-    updateChecking();
-    return () => {
-      window.removeEventListener(LATEST_VERSION_EVENT, updateLatestVersion);
-      window.removeEventListener(UPDATE_CHECK_STATUS_EVENT, updateChecking);
-    };
-  }, []);
-
+  const query = useAppUpdateState();
+  const state = query.data;
+  const busy =
+    query.isPending ||
+    ["checking", "downloading", "verifying", "installing"].includes(
+      state?.phase ?? "",
+    );
+  const error = state?.error ?? (query.error ? messageOf(query.error) : null);
+  const action =
+    state?.phase === "ready"
+      ? { label: "Restart to update", event: INSTALL_UPDATE_EVENT }
+      : state?.phase === "available"
+        ? { label: "Download update", event: DOWNLOAD_UPDATE_EVENT }
+        : {
+            label:
+              state?.phase === "cached"
+                ? "Prepare update"
+                : "Check for updates",
+            event: MANUAL_UPDATE_CHECK_EVENT,
+          };
+  const percentage =
+    state?.totalBytes && state.totalBytes > 0
+      ? Math.min(100, (state.downloadedBytes / state.totalBytes) * 100)
+      : undefined;
   return (
-    <section aria-label="Launcher updates" className="flex flex-col gap-4">
-      <div className="overflow-hidden rounded-lg border border-border/60 bg-muted/30">
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] border-b border-border/60 px-3 py-2.5 text-sm">
-          <span className="flex items-center gap-2 font-medium">
-            <PackageIcon aria-hidden className="size-4 text-muted-foreground" />
-            Current version
-          </span>
-          <span className="font-brand text-muted-foreground">
-            {appReleaseLabel}
-          </span>
-        </div>
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] px-3 py-2.5 text-sm">
-          <span className="flex items-center gap-2 font-medium">
-            <DownloadIcon
-              aria-hidden
-              className="size-4 text-muted-foreground"
-            />
-            Latest version
-          </span>
-          <span className="font-brand text-muted-foreground">
-            {checking
-              ? "Checking…"
-              : status === "up-to-date"
-                ? "No newer version available"
-                : (latestVersion ??
-                  (status === "failed" ? "Unavailable" : "Not checked yet"))}
-          </span>
-        </div>
-      </div>
-      <div className="flex flex-wrap items-center gap-3">
-        {status === "available" ? (
-          <Button
-            type="button"
-            className="cursor-pointer"
-            onClick={() => {
-              window.dispatchEvent(new Event(INSTALL_UPDATE_EVENT));
-            }}
+    <Card title="Launcher updates">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <label htmlFor="automatic-updates" className="text-sm font-normal">
+            Automatic updates
+          </label>
+          <p
+            id="automatic-updates-hint"
+            className="text-sm text-muted-foreground"
           >
-            <DownloadIcon data-icon="inline-start" aria-hidden />
-            Update
-          </Button>
-        ) : null}
-        <Button
-          type="button"
-          variant="outline"
-          disabled={checking}
-          onClick={() => {
-            window.dispatchEvent(new Event(MANUAL_UPDATE_CHECK_EVENT));
-          }}
-        >
-          <RefreshCwIcon
-            data-icon="inline-start"
-            aria-hidden
-            className={checking ? "animate-spin" : undefined}
-          />
-          {checking ? "Checking…" : "Check for updates"}
-        </Button>
-        <div className="flex flex-wrap items-center gap-3">
+            Check and download updates in the background.
+          </p>
+        </div>
+        <Switch
+          id="automatic-updates"
+          className="shrink-0"
+          aria-describedby="automatic-updates-hint"
+          checked={draft.automaticUpdates}
+          onCheckedChange={(automaticUpdates) => onChange({ automaticUpdates })}
+        />
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5 text-sm">
+          <p>Version {appReleaseLabel}</p>
           <p
             role="status"
-            className="flex items-center gap-2 text-sm text-muted-foreground"
+            className={
+              state?.phase === "ready"
+                ? "text-green-500"
+                : "text-muted-foreground"
+            }
           >
-            <StatusIcon
-              aria-hidden
-              className={checking ? "size-4 animate-spin" : "size-4"}
-            />
-            {statusLabels[status]}
+            {state?.phase === "ready" && state.version
+              ? `Version ${state.version} is ready. Restart to apply.`
+              : state
+                ? labels[state.phase]
+                : "Loading update status…"}
           </p>
+          {state?.phase === "cached" && state.version ? (
+            <p className="text-sm text-muted-foreground">
+              Cached version: {state.version}
+            </p>
+          ) : null}
         </div>
+        <Button
+          type="button"
+          variant={state?.phase === "ready" ? "default" : "outline"}
+          size="default"
+          disabled={busy}
+          onClick={() => window.dispatchEvent(new Event(action.event))}
+        >
+          {action.label === "Restart to update" && (
+            <DownloadCloud data-icon="inline-start" aria-hidden />
+          )}
+          {action.label === "Download update" && (
+            <DownloadCloud data-icon="inline-start" aria-hidden />
+          )}
+          {action.label === "Prepare update" && (
+            <DownloadCloud data-icon="inline-start" aria-hidden />
+          )}
+
+          {action.label === "Check for updates" &&
+          (!busy || state?.phase === "checking") ? (
+            <RefreshCwIcon data-icon="inline-start" aria-hidden />
+          ) : null}
+          {busy
+            ? state?.phase === "downloading"
+              ? "Downloading…"
+              : state?.phase === "installing"
+                ? "Installing…"
+                : state?.phase === "verifying"
+                  ? "Verifying…"
+                  : "Checking…"
+            : action.label}
+        </Button>
       </div>
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 flex-col gap-1">
-          <label htmlFor="check-for-updates" className="text-sm font-medium">
-            Check for updates automatically
-          </label>
-          <p
-            id="check-for-updates-hint"
-            className="text-sm text-muted-foreground"
-          >
-            Check for a new launcher version when the launcher opens.
-          </p>
-        </div>
-        <Switch
-          id="check-for-updates"
-          className="shrink-0"
-          aria-describedby="check-for-updates-hint"
-          checked={draft.checkForUpdates}
-          onCheckedChange={(checkForUpdates) => onChange({ checkForUpdates })}
-        />
-      </div>
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 flex-col gap-1">
-          <label
-            htmlFor="install-updates-on-restart"
-            className="text-sm font-medium"
-          >
-            Install updates on startup
-          </label>
-          <p
-            id="install-updates-on-restart-hint"
-            className="text-sm text-muted-foreground"
-          >
-            Download and install available updates before opening the launcher.
-          </p>
-        </div>
-        <Switch
-          id="install-updates-on-restart"
-          className="shrink-0"
-          aria-describedby="install-updates-on-restart-hint"
-          checked={draft.installUpdatesOnRestart}
-          onCheckedChange={(installUpdatesOnRestart) =>
-            onChange({ installUpdatesOnRestart })
-          }
-        />
-      </div>
-    </section>
+      {state?.phase === "downloading" || state?.phase === "verifying" ? (
+        <Progress value={percentage} aria-label="Update download progress" />
+      ) : null}
+      {error ? (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      ) : null}
+      {query.eventError ? (
+        <p className="text-xs text-muted-foreground">
+          Live update progress is unavailable. Polling update status.
+        </p>
+      ) : null}
+    </Card>
   );
 }
+
+import { DownloadCloud, RefreshCwIcon } from "lucide-react";

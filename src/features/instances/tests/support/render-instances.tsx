@@ -29,6 +29,7 @@ import {
   snapshot,
 } from "@/features/settings/fixtures/snapshot";
 import { startupProgress } from "@/features/startup/fixtures/progress";
+import { appUpdateState } from "@/features/updater/fixtures/state";
 import { routeTree } from "@/routeTree.gen";
 
 export { closeWindow, invoke, listeners };
@@ -55,6 +56,8 @@ export async function renderAt(path: string) {
 
 function defaultCommandResponse(command: string): Promise<unknown> {
   switch (command) {
+    case "get_app_update_state":
+      return Promise.resolve(appUpdateState());
     case "get_player_head":
       return Promise.resolve(playerHeadPathFixture);
     case "get_startup_progress":
@@ -121,7 +124,7 @@ export function mockContextMenuCommands(
     if (command === "get_settings") {
       return Promise.resolve({
         ...snapshot,
-        settings: { ...snapshot.settings, checkForUpdates: false },
+        settings: { ...snapshot.settings, automaticUpdates: false },
       });
     }
     if (command === "list_running_games") return Promise.resolve([]);

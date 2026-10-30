@@ -48,13 +48,13 @@ pub enum CoreError {
     SettingsConcurrency,
     #[error("write concurrency must be from 1 to 16")]
     SettingsWriteConcurrency,
-    #[error("download speed limit must be a positive whole number of MiB/s")]
+    #[error("download speed limit must be a positive safe integer of bytes per second")]
     SettingsDownloadSpeed,
+    #[error("application update failed: {0}")]
+    ApplicationUpdate(&'static str),
     #[error("download queue changed; refresh and try again")]
     DownloadQueueChanged,
-    #[error("color theme must be dark")]
-    SettingsTheme,
-    #[error("memory must be from 512 to 16384 in steps of 256")]
+    #[error("memory must be from 512 MB up to the machine's total RAM")]
     SettingsMemory,
     #[error("window size must be at least 1")]
     SettingsWindow,

@@ -41,17 +41,14 @@ export function SettingsDialog({
   }
 
   return (
-    <Dialog modal={false} open={open} onOpenChange={handleOpenChange}>
-      {open ? (
-        <div aria-hidden="true" className="fixed inset-0 z-40 bg-black/60" />
-      ) : null}
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
-        className="flex h-3/4 max-h-screen gap-0 overflow-hidden p-0 sm:max-w-4xl"
+        className="flex h-5/6 max-h-screen gap-0 overflow-hidden bg-popover p-0 sm:max-w-4xl"
         onInteractOutside={(event) => {
           if (
             event.target instanceof Element &&
             (event.target.closest("[data-sonner-toast]") !== null ||
-              event.target.closest("[data-title-bar]") !== null)
+              event.target.closest("[data-window-controls]") !== null)
           ) {
             event.preventDefault();
           }
@@ -66,7 +63,7 @@ export function SettingsDialog({
             onChange={update}
           />
         ) : (
-          <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center bg-muted/30 p-6">
+          <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center p-6">
             <Spinner
               className="size-5 text-muted-foreground"
               aria-label="Loading settings"

@@ -1,3 +1,6 @@
+import { MonitorIcon, MoonIcon, SunIcon } from "lucide-react";
+import { Card } from "@/components/ui/card";
+import { ChoiceCard } from "@/components/ui/choice-card";
 import {
   Select,
   SelectContent,
@@ -5,8 +8,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
+import { ThemePreview } from "@/components/ui/theme-preview";
 import type { Draft } from "@/features/settings/model/draft";
+import type { LauncherTheme } from "@/lib/generated/LauncherTheme";
+
+const themes = [
+  { value: "dark", label: "Dark", icon: <MoonIcon className="size-4.5" /> },
+  { value: "light", label: "Light", icon: <SunIcon className="size-4.5" /> },
+  {
+    value: "system",
+    label: "System",
+    icon: <MonitorIcon className="size-4" />,
+  },
+] as const satisfies ReadonlyArray<{
+  value: LauncherTheme;
+  label: string;
+  icon: React.ReactNode;
+}>;
 
 export function AppearanceSection({
   draft,
@@ -16,87 +34,58 @@ export function AppearanceSection({
   onChange: (patch: Partial<Draft>) => void;
 }) {
   return (
-    <div className="flex max-w-md flex-col gap-6">
-      <div className="flex max-w-xs flex-col gap-1 text-sm">
-        <span>Color theme</span>
+    <Card title="Appearance">
+      <div className="flex items-center justify-between gap-3 text-sm">
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <span className="font-normal">Language</span>
+          <p id="language-hint" className="text-sm text-muted-foreground">
+            Choose the launcher's display language.
+          </p>
+        </div>
         <Select
-          value={draft.theme}
-          onValueChange={(theme) => {
-            if (theme === "dark") {
-              onChange({ theme });
-            }
+          value={draft.language}
+          onValueChange={(language) => {
+            if (language === "en") onChange({ language });
           }}
         >
-          <SelectTrigger aria-label="Color theme">
+          <SelectTrigger aria-label="Language" aria-describedby="language-hint">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="dark">Dark</SelectItem>
+            <SelectItem value="en">English</SelectItem>
           </SelectContent>
         </Select>
       </div>
-
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 flex-col gap-1">
-          <label htmlFor="disable-transparency" className="text-sm font-medium">
-            Disable transparency
-          </label>
-          <div
-            id="disable-transparency-hint"
-            className="flex flex-col gap-1 text-sm"
-          >
-            <p className="text-muted-foreground">
-              Use an opaque sidebar instead of Acrylic on Windows. Linux always
-              uses an opaque sidebar.
-            </p>
-            <p className="text-destructive">
-              This change applies after restart.
-            </p>
-          </div>
+      <fieldset
+        aria-labelledby="color-theme-label"
+        aria-describedby="color-theme-hint"
+        className="flex min-w-0 flex-col gap-3 text-sm"
+      >
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <span id="color-theme-label" className="font-normal">
+            Color theme
+          </span>
+          <p id="color-theme-hint" className="text-sm text-muted-foreground">
+            Choose the launcher's color theme.
+          </p>
         </div>
-        <Switch
-          id="disable-transparency"
-          className="shrink-0"
-          aria-label="Disable transparency"
-          aria-describedby="disable-transparency-hint"
-          checked={draft.disableTransparency}
-          onCheckedChange={(disableTransparency) =>
-            onChange({ disableTransparency })
-          }
-        />
-      </div>
-
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 flex-col gap-1">
-          <label
-            htmlFor="disable-custom-title-bar"
-            className="text-sm font-medium"
-          >
-            Disable custom title bar
-          </label>
-          <div
-            id="disable-custom-title-bar-hint"
-            className="flex flex-col gap-1 text-sm"
-          >
-            <p className="text-muted-foreground">
-              Use the operating system title bar instead of Licht's.
-            </p>
-            <p className="text-destructive">
-              This change applies after restart.
-            </p>
-          </div>
+        <div className="flex gap-3">
+          {themes.map(({ value, label, icon }) => (
+            <ChoiceCard
+              key={value}
+              title={label}
+              icon={icon}
+              selected={draft.theme === value}
+              onSelect={() => onChange({ theme: value })}
+              className="min-w-0 flex-1"
+            >
+              <span aria-hidden="true">
+                <ThemePreview theme={value} />
+              </span>
+            </ChoiceCard>
+          ))}
         </div>
-        <Switch
-          id="disable-custom-title-bar"
-          className="shrink-0"
-          aria-label="Disable custom title bar"
-          aria-describedby="disable-custom-title-bar-hint"
-          checked={draft.disableCustomTitleBar}
-          onCheckedChange={(disableCustomTitleBar) =>
-            onChange({ disableCustomTitleBar })
-          }
-        />
-      </div>
-    </div>
+      </fieldset>
+    </Card>
   );
 }

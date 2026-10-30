@@ -2,9 +2,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render } from "@testing-library/react";
 
 import { Toaster } from "@/components/ui/sonner";
+import { storageSummary } from "@/features/downloads/fixtures/storage";
+import { buildDiagnostics } from "@/features/settings/fixtures/build-diagnostics";
 import { invoke } from "@/features/settings/fixtures/invoke";
 import { snapshot } from "@/features/settings/fixtures/snapshot";
 import { SettingsDialog } from "@/features/settings/settings-dialog";
+import { appUpdateState } from "@/features/updater/fixtures/state";
 
 export { invoke } from "@/features/settings/fixtures/invoke";
 export { snapshot } from "@/features/settings/fixtures/snapshot";
@@ -21,6 +24,12 @@ export function mockSettingsCommands(
     if (command === "get_settings") {
       return Promise.resolve(snapshot);
     }
+    if (command === "get_app_update_state")
+      return Promise.resolve(appUpdateState());
+    if (command === "get_build_diagnostics")
+      return Promise.resolve(buildDiagnostics);
+    if (command === "storage_summary") return Promise.resolve(storageSummary);
+    if (command === "is_startup_preview_open") return Promise.resolve(false);
     if (command === "list_microsoft_accounts") {
       return Promise.resolve([]);
     }
