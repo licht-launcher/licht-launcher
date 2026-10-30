@@ -20,7 +20,6 @@ export const snapshot = {
     downloadSpeedLimitBytesPerSecond: null,
     dataDirectory: null,
     disableCustomTitleBar: false,
-    disableTransparency: false,
     automaticUpdates: true,
     language: "en",
     hardwareAcceleration: true,

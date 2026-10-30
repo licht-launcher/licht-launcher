@@ -35,7 +35,6 @@ fn sample(download_concurrency: u32) -> Settings {
         download_speed_limit_bytes_per_second: None,
         data_directory: None,
         disable_custom_title_bar: false,
-        disable_transparency: false,
         automatic_updates: true,
         language: licht_core::LauncherLanguage::English,
         hardware_acceleration: true,
@@ -96,7 +95,6 @@ fn a_missing_file_returns_defaults_and_is_not_created() {
     assert!(!settings.restore_on_game_exit);
     assert_eq!(settings.theme, licht_core::LauncherTheme::Dark);
     assert!(!settings.fullscreen);
-    assert!(!settings.disable_transparency);
     assert_eq!(settings.width, Some(854));
     assert_eq!(settings.height, Some(480));
     assert_eq!(settings.download_concurrency, 8);
@@ -280,26 +278,24 @@ fn an_explicit_null_window_stays_empty() {
 }
 
 #[test]
-fn transparency_defaults_to_enabled_for_existing_settings() {
-    let cache = cache("transparency-old");
+fn legacy_transparency_preferences_are_ignored_and_removed_on_save() {
+    let cache = cache("legacy-transparency");
     std::fs::create_dir_all(cache.root()).expect("root");
-    std::fs::write(settings_file(&cache), r#"{"schema":1}"#).expect("write");
-    let loaded = load_settings(&cache).expect("load");
-    let json = serde_json::to_value(loaded).expect("serialize");
-    assert_eq!(json["disableTransparency"], false);
-}
-
-#[test]
-fn transparency_preference_survives_save_and_reload() {
-    let cache = cache("transparency-roundtrip");
     for disabled in [true, false] {
-        let mut json = serde_json::to_value(sample(8)).expect("serialize");
-        json["disableTransparency"] = disabled.into();
-        let settings = serde_json::from_value(json).expect("deserialize");
+        let legacy = serde_json::json!({"schema": 1, "disableTransparency": disabled});
+        std::fs::write(
+            settings_file(&cache),
+            serde_json::to_vec(&legacy).expect("json"),
+        )
+        .expect("legacy settings");
+        let settings = load_settings(&cache).expect("load legacy settings");
+        assert_eq!(settings.theme, licht_core::LauncherTheme::Dark);
         save_settings(&cache, &settings).expect("save");
-        let loaded = load_settings(&cache).expect("reload");
-        let json = serde_json::to_value(loaded).expect("serialize");
-        assert_eq!(json["disableTransparency"], disabled);
+        let saved: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(settings_file(&cache)).expect("saved file"))
+                .expect("json");
+        assert!(saved.get("disableTransparency").is_none());
+        assert_eq!(load_settings(&cache).expect("reload"), settings);
     }
 }
 

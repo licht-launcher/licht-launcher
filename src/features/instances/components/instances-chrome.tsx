@@ -221,7 +221,7 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
 
   const content = (
     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      <div className="mx-2 mt-2 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border-t border-foreground/10 bg-popover">
+      <div className="mx-2 mt-2 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-foreground/10 bg-popover">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-muted/30">
           <ChromeContext.Provider value={context}>
             {children}

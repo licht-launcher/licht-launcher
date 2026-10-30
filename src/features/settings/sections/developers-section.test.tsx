@@ -7,7 +7,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { STORAGE_LOADING_PREVIEW_EVENT } from "@/features/downloads/hooks/use-storage-loading-preview";
 import { snapshot } from "@/features/settings/fixtures/snapshot";
 import { type Draft, fromSnapshot } from "@/features/settings/model/draft";
@@ -94,11 +94,6 @@ describe("DevelopersSection", () => {
     resizeWindow.mockReset().mockResolvedValue(undefined);
     resetWindow.mockReset().mockResolvedValue(undefined);
     sessionStorage.clear();
-    document.documentElement.dataset.windowEffect = "acrylic";
-  });
-  afterEach(() => {
-    document.getElementById("developer-acrylic-preview")?.remove();
-    delete document.documentElement.dataset.windowEffect;
   });
 
   it("shows the offline username directly and sends edits through the settings draft", () => {
@@ -123,7 +118,6 @@ describe("DevelopersSection", () => {
   it("groups window and concurrency controls and forwards their changes", () => {
     const onChange = vi.fn();
     view(onChange);
-    fireEvent.click(screen.getByRole("switch", { name: "Disable Acrylic" }));
     fireEvent.click(screen.getByRole("switch", { name: "System title bar" }));
     fireEvent.keyDown(
       screen.getByRole("slider", { name: "Simultaneous downloads" }),
@@ -133,7 +127,6 @@ describe("DevelopersSection", () => {
       screen.getByRole("slider", { name: "Simultaneous writes" }),
       { key: "ArrowLeft" },
     );
-    expect(onChange).toHaveBeenCalledWith({ disableTransparency: true });
     expect(onChange).toHaveBeenCalledWith({ disableCustomTitleBar: true });
     expect(onChange).toHaveBeenCalledWith({ downloadConcurrency: 9 });
     expect(onChange).toHaveBeenCalledWith({ writeConcurrency: 7 });
@@ -141,13 +134,7 @@ describe("DevelopersSection", () => {
       screen
         .getAllByRole("heading", { level: 3 })
         .map((heading) => heading.textContent),
-    ).toEqual([
-      "Player",
-      "Window",
-      "Acrylic — Experimental",
-      "Transfers",
-      "Testing",
-    ]);
+    ).toEqual(["Player", "Window", "Transfers", "Testing"]);
     const window = within(screen.getByRole("region", { name: "Window" }));
     expect(
       window.getByRole("switch", { name: "System title bar" }),
@@ -156,20 +143,11 @@ describe("DevelopersSection", () => {
       window.getByRole("button", { name: "Reset window bounds" }),
     ).toBeInTheDocument();
     const testing = within(screen.getByRole("region", { name: "Testing" }));
-    const acrylic = within(
-      screen.getByRole("region", { name: "Acrylic — Experimental" }),
-    );
     expect(
-      acrylic.getByRole("switch", { name: "Disable Acrylic" }),
-    ).toBeInTheDocument();
-    expect(
-      acrylic.getByRole("switch", { name: "Adjust Acrylic" }),
-    ).toBeInTheDocument();
-    expect(
-      acrylic.queryByRole("slider", { name: "Opacity" }),
+      screen.queryByRole("region", { name: /Acrylic/i }),
     ).not.toBeInTheDocument();
     expect(
-      acrylic.queryByRole("button", { name: "Reset Acrylic preview" }),
+      screen.queryByRole("switch", { name: /Acrylic/i }),
     ).not.toBeInTheDocument();
     expect(
       testing.getByRole("switch", { name: "Simulate available update" }),
@@ -262,196 +240,6 @@ describe("DevelopersSection", () => {
     );
   });
 
-  it("previews opacity, lightness and hue with keyboard controls", () => {
-    view();
-    fireEvent.click(screen.getByRole("switch", { name: "Adjust Acrylic" }));
-    for (const [label, token, initial, unit] of [
-      ["Opacity", "opacity", 60, "%"],
-      ["Lightness", "lightness", 15, "%"],
-      ["Hue", "hue", 260, ""],
-    ] as const) {
-      const slider = screen.getByRole("slider", { name: label });
-      expect(slider).toHaveAttribute("aria-valuenow", String(initial));
-      fireEvent.keyDown(slider, { key: "ArrowRight" });
-      expect(slider).toHaveAttribute("aria-valuenow", String(initial + 1));
-      expect(
-        getComputedStyle(document.documentElement)
-          .getPropertyValue(`--acrylic-${token}`)
-          .trim(),
-      ).toBe(`${initial + 1}${unit}`);
-    }
-    expect(screen.getByText("61%")).toBeVisible();
-    expect(screen.getByText("16%")).toBeVisible();
-    expect(screen.getByText("261°")).toBeVisible();
-  });
-
-  it("keeps previews when reopening the section and resets all adjustments", () => {
-    const first = view();
-    fireEvent.click(screen.getByRole("switch", { name: "Adjust Acrylic" }));
-    fireEvent.keyDown(screen.getByRole("slider", { name: "Opacity" }), {
-      key: "End",
-    });
-    fireEvent.keyDown(screen.getByRole("slider", { name: "Lightness" }), {
-      key: "ArrowRight",
-    });
-    fireEvent.keyDown(screen.getByRole("slider", { name: "Hue" }), {
-      key: "Home",
-    });
-    first.unmount();
-    view();
-    expect(screen.getByRole("slider", { name: "Opacity" })).toHaveAttribute(
-      "aria-valuenow",
-      "100",
-    );
-    expect(screen.getByRole("slider", { name: "Lightness" })).toHaveAttribute(
-      "aria-valuenow",
-      "16",
-    );
-    expect(screen.getByRole("slider", { name: "Hue" })).toHaveAttribute(
-      "aria-valuenow",
-      "0",
-    );
-    fireEvent.click(
-      screen.getByRole("button", { name: "Reset Acrylic preview" }),
-    );
-    expect(screen.getByRole("slider", { name: "Opacity" })).toHaveAttribute(
-      "aria-valuenow",
-      "60",
-    );
-    expect(screen.getByRole("slider", { name: "Lightness" })).toHaveAttribute(
-      "aria-valuenow",
-      "15",
-    );
-    expect(screen.getByRole("slider", { name: "Hue" })).toHaveAttribute(
-      "aria-valuenow",
-      "260",
-    );
-    expect(
-      getComputedStyle(document.documentElement).getPropertyValue(
-        "--acrylic-opacity",
-      ),
-    ).toBe("");
-  });
-
-  it("shows adjustment controls only while enabled and restores their values when disabled", () => {
-    view();
-    const adjust = screen.getByRole("switch", { name: "Adjust Acrylic" });
-    expect(adjust).not.toBeChecked();
-    expect(adjust).toHaveAccessibleDescription(
-      "Experimental window-overlay adjustments. Changes apply immediately and reset when the launcher closes.",
-    );
-    expect(
-      screen.queryByRole("button", { name: "Reset Acrylic preview" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("slider", { name: "Opacity" }),
-    ).not.toBeInTheDocument();
-
-    fireEvent.click(adjust);
-    const opacity = screen.getByRole("slider", { name: "Opacity" });
-    expect(screen.getByRole("slider", { name: "Lightness" })).toBeVisible();
-    expect(screen.getByRole("slider", { name: "Hue" })).toBeVisible();
-    expect(
-      screen.getByRole("button", { name: "Reset Acrylic preview" }),
-    ).toBeVisible();
-    fireEvent.keyDown(opacity, { key: "End" });
-    expect(opacity).toHaveAttribute("aria-valuenow", "100");
-    expect(
-      getComputedStyle(document.documentElement)
-        .getPropertyValue("--acrylic-opacity")
-        .trim(),
-    ).toBe("100%");
-
-    fireEvent.click(adjust);
-    expect(adjust).not.toBeChecked();
-    expect(
-      screen.queryByRole("slider", { name: "Opacity" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Reset Acrylic preview" }),
-    ).not.toBeInTheDocument();
-    expect(
-      document.getElementById("developer-acrylic-preview"),
-    ).not.toBeInTheDocument();
-    fireEvent.click(adjust);
-    expect(screen.getByRole("slider", { name: "Opacity" })).toHaveAttribute(
-      "aria-valuenow",
-      "60",
-    );
-  });
-
-  it("disables adjustments when the native Acrylic effect is unavailable", () => {
-    delete document.documentElement.dataset.windowEffect;
-    view();
-    const adjust = screen.getByRole("switch", { name: "Adjust Acrylic" });
-    expect(adjust).toBeDisabled();
-    expect(adjust).toHaveAccessibleDescription(
-      "Requires a compatible Windows system with native Acrylic enabled.",
-    );
-    expect(
-      screen.queryByRole("slider", { name: "Opacity" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Reset Acrylic preview" }),
-    ).not.toBeInTheDocument();
-    expect(
-      document.getElementById("developer-acrylic-preview"),
-    ).not.toBeInTheDocument();
-  });
-
-  it("disables adjustments while the window is configured as opaque", () => {
-    view(vi.fn(), { disableTransparency: true });
-    expect(
-      screen.getByRole("switch", { name: "Adjust Acrylic" }),
-    ).toBeDisabled();
-    expect(
-      screen.queryByRole("slider", { name: "Hue" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Reset Acrylic preview" }),
-    ).not.toBeInTheDocument();
-  });
-
-  it("clears active overrides when opaque mode is enabled", () => {
-    const client = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
-    const draft = fromSnapshot(snapshot, null);
-    const renderWindow = (opaque: boolean) => (
-      <QueryClientProvider client={client}>
-        <DevelopersSection
-          draft={{ ...draft, disableTransparency: opaque }}
-          onChange={vi.fn()}
-        />
-      </QueryClientProvider>
-    );
-    const current = render(renderWindow(false));
-    fireEvent.click(screen.getByRole("switch", { name: "Adjust Acrylic" }));
-    fireEvent.keyDown(screen.getByRole("slider", { name: "Opacity" }), {
-      key: "End",
-    });
-    expect(screen.getByRole("slider", { name: "Opacity" })).toHaveAttribute(
-      "aria-valuenow",
-      "100",
-    );
-
-    current.rerender(renderWindow(true));
-    const adjust = screen.getByRole("switch", { name: "Adjust Acrylic" });
-    expect(adjust).toBeDisabled();
-    expect(adjust).not.toBeChecked();
-    expect(
-      document.getElementById("developer-acrylic-preview"),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("slider", { name: "Opacity" }),
-    ).not.toBeInTheDocument();
-    current.rerender(renderWindow(false));
-    fireEvent.click(screen.getByRole("switch", { name: "Adjust Acrylic" }));
-    expect(screen.getByRole("slider", { name: "Opacity" })).toHaveAttribute(
-      "aria-valuenow",
-      "60",
-    );
-  });
   it("keeps update simulation enabled when Developer Tools is reopened", () => {
     const first = view();
     fireEvent.click(

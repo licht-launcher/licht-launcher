@@ -82,33 +82,6 @@ describe("AppearanceSection", () => {
     );
   });
 
-  it("saves the transparency preference and offers a restart", async () => {
-    mockSettingsCommands((command, args) => {
-      if (command === "save_settings") {
-        return Promise.resolve((args as { settings: unknown }).settings);
-      }
-      return undefined;
-    });
-    await renderSettings();
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Developer Tools" }),
-    );
-    const toggle = screen.getByRole("switch", { name: "Disable Acrylic" });
-    expect(toggle).not.toBeChecked();
-    fireEvent.click(toggle);
-    expect(toggle).toBeChecked();
-    await waitFor(() => {
-      expect(invoke).toHaveBeenCalledWith("save_settings", {
-        settings: expect.objectContaining({ disableTransparency: true }),
-      });
-    });
-    expect(
-      await screen.findByText("Apply the appearance changes now?"),
-    ).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "Restart" }));
-    await waitFor(() => expect(invoke).toHaveBeenCalledWith("restart_app"));
-  });
-
   it("dismisses the restart notification with Later without restarting", async () => {
     mockSettingsCommands((command, args) => {
       if (
@@ -124,7 +97,7 @@ describe("AppearanceSection", () => {
     fireEvent.click(
       await screen.findByRole("button", { name: "Developer Tools" }),
     );
-    fireEvent.click(screen.getByRole("switch", { name: "Disable Acrylic" }));
+    fireEvent.click(screen.getByRole("switch", { name: "System title bar" }));
     expect(await screen.findByText("Restart required")).toBeVisible();
     expect(screen.getByRole("button", { name: "Restart" })).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Later" }));
@@ -132,80 +105,6 @@ describe("AppearanceSection", () => {
       expect(screen.queryByText("Restart required")).not.toBeInTheDocument(),
     );
     expect(invoke).not.toHaveBeenCalledWith("restart_app");
-  });
-
-  it("loads a disabled transparency preference and allows enabling it", async () => {
-    mockSettingsCommands((command, args) => {
-      if (command === "get_settings") {
-        return Promise.resolve({
-          ...snapshot,
-          settings: { ...snapshot.settings, disableTransparency: true },
-        });
-      }
-      if (command === "save_settings") {
-        return Promise.resolve((args as { settings: unknown }).settings);
-      }
-      return undefined;
-    });
-    await renderSettings();
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Developer Tools" }),
-    );
-    const toggle = screen.getByRole("switch", { name: "Disable Acrylic" });
-    expect(toggle).toBeChecked();
-    fireEvent.click(toggle);
-    await waitFor(() => {
-      expect(invoke).toHaveBeenCalledWith("save_settings", {
-        settings: expect.objectContaining({ disableTransparency: false }),
-      });
-    });
-    expect(
-      await screen.findByText("Apply the appearance changes now?"),
-    ).toBeVisible();
-  });
-
-  it("keeps the restart prompt until both appearance changes are reverted", async () => {
-    mockSettingsCommands((command, args) => {
-      if (command === "save_settings") {
-        return Promise.resolve((args as { settings: unknown }).settings);
-      }
-      return undefined;
-    });
-    await renderSettings();
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Developer Tools" }),
-    );
-    const transparency = screen.getByRole("switch", {
-      name: "Disable Acrylic",
-    });
-    const titleBar = screen.getByRole("switch", {
-      name: "System title bar",
-    });
-    fireEvent.click(transparency);
-    expect(await screen.findByText("Restart required")).toBeVisible();
-    fireEvent.click(titleBar);
-    await waitFor(() =>
-      expect(invoke).toHaveBeenCalledWith("save_settings", {
-        settings: expect.objectContaining({
-          disableTransparency: true,
-          disableCustomTitleBar: true,
-        }),
-      }),
-    );
-    fireEvent.click(titleBar);
-    expect(screen.getByText("Restart required")).toBeVisible();
-    fireEvent.click(transparency);
-    await waitFor(() =>
-      expect(screen.queryByText("Restart required")).not.toBeInTheDocument(),
-    );
-    await waitFor(() =>
-      expect(invoke).toHaveBeenCalledWith("save_settings", {
-        settings: expect.objectContaining({
-          disableTransparency: false,
-          disableCustomTitleBar: false,
-        }),
-      }),
-    );
   });
 
   it("asks to restart after the title bar setting is saved", async () => {
