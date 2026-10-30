@@ -28,6 +28,7 @@ import {
   pauseAllDownloads,
   resumeAllDownloads,
 } from "@/lib/commands";
+import { formatDownloadLimit } from "@/lib/download-speed";
 import { friendlyError, messageOf } from "@/lib/errors";
 import { requestOpenSettings } from "@/lib/shell-events";
 
@@ -207,10 +208,13 @@ export function DownloadsPage() {
                   },
                 ]}
               />
-              {settings.data?.settings.downloadSpeedLimitMiB != null && (
+              {settings.data?.settings.downloadSpeedLimitBytesPerSecond !=
+                null && (
                 <p className="text-xs text-muted-foreground">
-                  Limited to {settings.data.settings.downloadSpeedLimitMiB}{" "}
-                  MiB/s
+                  Limited to{" "}
+                  {formatDownloadLimit(
+                    settings.data.settings.downloadSpeedLimitBytesPerSecond,
+                  )}
                 </p>
               )}
               {settings.isError && (

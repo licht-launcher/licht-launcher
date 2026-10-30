@@ -1,24 +1,39 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { StrictMode } from "react";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { startupProgress } from "@/features/startup/fixtures/progress";
 import { StartupScreen } from "@/features/startup/startup-screen";
 import type { StartupProgress } from "@/lib/generated/StartupProgress";
 
-const { getProgress, center, show, decode, listen, listeners } = vi.hoisted(
-  () => ({
-    getProgress: vi.fn(),
-    center: vi.fn(),
-    show: vi.fn(),
-    decode: vi.fn(),
-    listen: vi.fn(),
-    listeners: new Set<(event: { payload: StartupProgress }) => void>(),
-  }),
-);
+const {
+  getProgress,
+  center,
+  show,
+  close,
+  windowInfo,
+  decode,
+  listen,
+  listeners,
+} = vi.hoisted(() => ({
+  getProgress: vi.fn(),
+  center: vi.fn(),
+  show: vi.fn(),
+  close: vi.fn(),
+  windowInfo: { label: "startup" },
+  decode: vi.fn(),
+  listen: vi.fn(),
+  listeners: new Set<(event: { payload: StartupProgress }) => void>(),
+}));
 vi.mock("@/lib/commands", () => ({ getStartupProgress: getProgress }));
 vi.mock("@tauri-apps/api/window", () => ({
-  getCurrentWindow: () => ({ center, show }),
+  getCurrentWindow: () => ({ center, show, close, label: windowInfo.label }),
 }));
 vi.mock("@tauri-apps/api/event", () => ({ listen }));
 
@@ -58,6 +73,8 @@ describe("StartupScreen", () => {
     getProgress.mockReset();
     center.mockReset();
     show.mockReset();
+    close.mockReset().mockResolvedValue(undefined);
+    windowInfo.label = "startup";
     decode.mockReset();
     listen.mockReset();
     center.mockResolvedValue(undefined);
@@ -139,6 +156,68 @@ describe("StartupScreen", () => {
     expect(screen.getByText("Migrating shared game files…")).toBeVisible();
     unmount();
     expect(listeners.size).toBe(0);
+  });
+
+  it("does not show an X button inside the scenario preview", async () => {
+    windowInfo.label = "startup-preview-1";
+    getProgress.mockResolvedValue(startupProgress({ preview: true }));
+    view();
+    await screen.findByText(/Development preview/);
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  it("closes a separate preview with Escape while it is loading", async () => {
+    windowInfo.label = "startup-preview-2";
+    view();
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => expect(close).toHaveBeenCalledOnce());
+  });
+
+  it("does not expose preview close controls or Escape on the real startup window", async () => {
+    getProgress.mockResolvedValue(startupProgress({ preview: true }));
+    view();
+    await screen.findByText(/Development preview/);
+    expect(
+      screen.queryByRole("button", { name: "Close preview" }),
+    ).not.toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(close).not.toHaveBeenCalled();
+  });
+
+  it("reports close failures and lets the preview close be retried", async () => {
+    windowInfo.label = "startup-preview-3";
+    close.mockRejectedValueOnce(new Error("Close permission unavailable"));
+    view();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Could not close preview: Close permission unavailable",
+    );
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => expect(close).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument(),
+    );
+  });
+
+  it("prevents another close request while the current one is pending", async () => {
+    let finishClose: (() => void) | undefined;
+    close.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        finishClose = resolve;
+      }),
+    );
+    windowInfo.label = "startup-preview-4";
+    view();
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() =>
+      expect(screen.getByRole("main")).toHaveAttribute("aria-busy", "true"),
+    );
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(close).toHaveBeenCalledOnce();
+    await act(async () => finishClose?.());
+    await waitFor(() =>
+      expect(screen.getByRole("main")).toHaveAttribute("aria-busy", "false"),
+    );
   });
 
   it("keeps a migration failure visible without a close button", async () => {

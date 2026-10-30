@@ -47,7 +47,8 @@ export function JavaDetectDialog({
                     <td className="py-2">
                       <Button
                         type="button"
-                        variant="secondary"
+                        variant="outline"
+                        size="default"
                         disabled={selected}
                         onClick={() => onSelect(path)}
                       >

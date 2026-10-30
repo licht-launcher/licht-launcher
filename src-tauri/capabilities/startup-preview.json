@@ -1,0 +1,6 @@
+{
+  "identifier": "startup-preview-controls",
+  "description": "Separate developer startup previews can close themselves.",
+  "windows": ["startup-preview-*"],
+  "permissions": ["core:window:allow-close"]
+}

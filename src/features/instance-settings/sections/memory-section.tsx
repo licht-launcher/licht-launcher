@@ -1,5 +1,6 @@
 import { Switch } from "@/components/ui/switch";
 import type { InstanceDraft } from "@/features/instance-settings/model/draft";
+import { MemoryInput } from "@/features/settings/components/memory-input";
 import { MemorySlider } from "@/features/settings/components/memory-slider";
 import type { SettingsSnapshot } from "@/lib/generated/SettingsSnapshot";
 
@@ -33,11 +34,14 @@ export function MemorySection({
       </div>
       {draft.overrideMemory ? (
         <div className="flex flex-col gap-2">
-          <div className="flex items-baseline justify-between gap-3 text-sm">
+          <div className="flex items-center justify-between gap-3 text-sm">
             <span>Memory</span>
-            <span className="text-muted-foreground">
-              {draft.maxMemoryMb} MB
-            </span>
+            <MemoryInput
+              valueMb={draft.maxMemoryMb}
+              minimumMb={snapshot.memoryMinimumMb}
+              maximumMb={snapshot.memoryMaximumMb}
+              onChange={(maxMemoryMb) => onChange({ maxMemoryMb })}
+            />
           </div>
           <MemorySlider
             valueMb={draft.maxMemoryMb}
@@ -45,12 +49,13 @@ export function MemorySection({
             maximumMb={snapshot.memoryMaximumMb}
             recommendedMb={snapshot.memoryRecommendedMb}
             totalMb={snapshot.memoryTotalMb}
+            stepMb={snapshot.memoryStepMb}
             onChange={(maxMemoryMb) => {
               onChange({ maxMemoryMb });
             }}
           />
           <p className="text-sm text-muted-foreground">
-            Maximum memory. The minimum stays 512 MB.
+            Memory allocation. The minimum stays 512 MB.
           </p>
         </div>
       ) : null}

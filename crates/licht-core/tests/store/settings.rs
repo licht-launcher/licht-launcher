@@ -19,7 +19,7 @@ fn settings_file(cache: &SharedCache) -> PathBuf {
 fn sample(download_concurrency: u32) -> Settings {
     Settings {
         schema: 1,
-        theme: "dark".to_string(),
+        theme: licht_core::LauncherTheme::Dark,
         username: "Steve".to_string(),
         fullscreen: false,
         width: None,
@@ -32,12 +32,42 @@ fn sample(download_concurrency: u32) -> Settings {
         java8: None,
         download_concurrency,
         write_concurrency: 8,
-        download_speed_limit_mib: None,
+        download_speed_limit_bytes_per_second: None,
         data_directory: None,
         disable_custom_title_bar: false,
         disable_transparency: false,
-        check_for_updates: true,
-        install_updates_on_restart: true,
+        automatic_updates: true,
+        language: licht_core::LauncherLanguage::English,
+        hardware_acceleration: true,
+        minimize_to_tray: true,
+        minimize_on_game_start: false,
+        restore_on_game_exit: false,
+    }
+}
+
+#[test]
+fn automatic_updates_migrate_without_enabling_previously_disabled_downloads() {
+    for (index, (check, install, expected)) in [
+        (true, true, true),
+        (true, false, false),
+        (false, true, false),
+        (false, false, false),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let cache = cache(&format!("old-update-preferences-{index}"));
+        std::fs::create_dir_all(cache.root()).expect("root");
+        std::fs::write(settings_file(&cache), serde_json::to_vec(&serde_json::json!({"schema":1,"checkForUpdates":check,"installUpdatesOnRestart":install})).expect("json")).expect("legacy settings");
+        let loaded = load_settings(&cache).expect("migrate preferences");
+        assert_eq!(loaded.automatic_updates, expected);
+        save_settings(&cache, &loaded).expect("save new preference");
+        let saved: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(settings_file(&cache)).expect("saved file"))
+                .expect("json");
+        assert_eq!(saved["automaticUpdates"], expected);
+        assert!(saved.get("checkForUpdates").is_none());
+        assert!(saved.get("installUpdatesOnRestart").is_none());
     }
 }
 
@@ -46,8 +76,8 @@ fn recommended_memory_is_half_the_ram_inside_the_bounds() {
     assert_eq!(recommended_max_memory_mb(8192), 4096);
     assert_eq!(recommended_max_memory_mb(3000), 1280);
     assert_eq!(recommended_max_memory_mb(1024), 1024);
-    assert_eq!(memory_slider_max(100_000), 16384);
-    assert_eq!(memory_slider_max(1000), 768);
+    assert_eq!(memory_slider_max(100_000), 100_000);
+    assert_eq!(memory_slider_max(1000), 1000);
     assert!(total_memory_mb() >= 512);
 }
 
@@ -58,7 +88,13 @@ fn a_missing_file_returns_defaults_and_is_not_created() {
     let settings = load_settings(&cache).expect("default");
 
     assert_eq!(settings.schema, 1);
-    assert_eq!(settings.theme, "dark");
+    assert!(settings.automatic_updates);
+    assert_eq!(settings.language, licht_core::LauncherLanguage::English);
+    assert!(settings.hardware_acceleration);
+    assert!(settings.minimize_to_tray);
+    assert!(!settings.minimize_on_game_start);
+    assert!(!settings.restore_on_game_exit);
+    assert_eq!(settings.theme, licht_core::LauncherTheme::Dark);
     assert!(!settings.fullscreen);
     assert!(!settings.disable_transparency);
     assert_eq!(settings.width, Some(854));
@@ -87,24 +123,107 @@ fn a_saved_value_roundtrips() {
 }
 
 #[test]
+fn general_preferences_roundtrip_and_legacy_files_use_defaults() {
+    let cache = cache("general-preferences");
+    std::fs::create_dir_all(cache.root()).expect("root");
+    std::fs::write(settings_file(&cache), r#"{"schema":1}"#).expect("legacy settings");
+    let mut settings = load_settings(&cache).expect("legacy defaults");
+    assert!(settings.hardware_acceleration);
+    assert!(settings.minimize_to_tray);
+    assert!(!settings.minimize_on_game_start);
+    assert!(!settings.restore_on_game_exit);
+    settings.hardware_acceleration = false;
+    settings.minimize_to_tray = false;
+    settings.minimize_on_game_start = true;
+    settings.restore_on_game_exit = true;
+    save_settings(&cache, &settings).expect("save preferences");
+    assert_eq!(load_settings(&cache).expect("reload"), settings);
+    let saved: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(settings_file(&cache)).expect("settings"))
+            .expect("json");
+    assert_eq!(saved["language"], "en");
+    assert_eq!(saved["minimizeToTray"], false);
+}
+
+#[test]
+fn unsupported_languages_are_rejected_at_the_settings_boundary() {
+    let cache = cache("unsupported-language");
+    std::fs::create_dir_all(cache.root()).expect("root");
+    std::fs::write(settings_file(&cache), r#"{"schema":1,"language":"pt-BR"}"#).expect("settings");
+    assert!(matches!(load_settings(&cache), Err(CoreError::Settings(_))));
+}
+
+#[test]
+fn legacy_mib_limits_are_loaded_as_exact_bytes_per_second() {
+    let cache = cache("legacy-speed-limit");
+    std::fs::create_dir_all(cache.root()).expect("root");
+    std::fs::write(
+        settings_file(&cache),
+        r#"{"schema":1,"downloadSpeedLimitMiB":3}"#,
+    )
+    .expect("legacy settings");
+    let loaded = load_settings(&cache).expect("load legacy limit");
+    let serialized = serde_json::to_value(&loaded).expect("settings json");
+    assert_eq!(
+        serialized["downloadSpeedLimitBytesPerSecond"],
+        3 * 1024 * 1024
+    );
+    assert!(serialized.get("downloadSpeedLimitMiB").is_none());
+    save_settings(&cache, &loaded).expect("save migrated settings");
+    assert_eq!(
+        load_settings(&cache).expect("reload migrated limit"),
+        loaded
+    );
+}
+
+#[test]
+fn byte_limits_take_precedence_and_remain_safe_for_the_frontend() {
+    let cache = cache("byte-speed-limit");
+    std::fs::create_dir_all(cache.root()).expect("root");
+    std::fs::write(
+        settings_file(&cache),
+        r#"{"schema":1,"downloadSpeedLimitMiB":3,"downloadSpeedLimitBytesPerSecond":1000}"#,
+    )
+    .expect("settings");
+    assert_eq!(
+        load_settings(&cache)
+            .expect("byte limit")
+            .download_speed_limit_bytes_per_second,
+        Some(1000)
+    );
+    let mut settings = sample(4);
+    settings.download_speed_limit_bytes_per_second = Some(9_007_199_254_740_992);
+    assert!(matches!(
+        save_settings(&cache, &settings),
+        Err(CoreError::SettingsDownloadSpeed)
+    ));
+    assert_eq!(
+        load_settings(&cache)
+            .expect("previous limit")
+            .download_speed_limit_bytes_per_second,
+        Some(1000)
+    );
+}
+
+#[test]
 fn global_speed_limit_roundtrips_and_rejects_zero() {
     let cache = cache("speed-limit");
     let mut settings = sample(4);
     assert_eq!(
         load_settings(&cache)
             .expect("defaults")
-            .download_speed_limit_mib,
+            .download_speed_limit_bytes_per_second,
         None
     );
-    settings.download_speed_limit_mib = Some(3);
+    settings.download_speed_limit_bytes_per_second = Some(3000);
     save_settings(&cache, &settings).expect("save speed limit");
     assert_eq!(
         load_settings(&cache)
             .expect("load speed limit")
-            .download_speed_limit_mib,
-        Some(3)
+            .download_speed_limit_bytes_per_second,
+        Some(3000)
     );
-    settings.download_speed_limit_mib = Some(0);
+    settings.download_speed_limit_bytes_per_second = Some(0);
     assert!(matches!(
         save_settings(&cache, &settings),
         Err(CoreError::SettingsDownloadSpeed)
@@ -112,10 +231,10 @@ fn global_speed_limit_roundtrips_and_rejects_zero() {
     assert_eq!(
         load_settings(&cache)
             .expect("previous valid value")
-            .download_speed_limit_mib,
-        Some(3)
+            .download_speed_limit_bytes_per_second,
+        Some(3000)
     );
-    settings.download_speed_limit_mib = None;
+    settings.download_speed_limit_bytes_per_second = None;
     save_settings(&cache, &settings).expect("remove limit");
 }
 
@@ -131,7 +250,7 @@ fn an_old_file_keeps_concurrency_and_fills_the_new_fields() {
 
     assert_eq!(loaded.download_concurrency, 4);
     assert_eq!(loaded.write_concurrency, 8);
-    assert_eq!(loaded.theme, "dark");
+    assert_eq!(loaded.theme, licht_core::LauncherTheme::Dark);
     assert!(!loaded.fullscreen);
     assert_eq!(loaded.width, Some(854));
     assert_eq!(loaded.height, Some(480));
@@ -220,22 +339,56 @@ fn write_concurrency_outside_one_to_sixteen_is_rejected() {
 }
 
 #[test]
-fn a_light_theme_and_bad_memory_are_rejected() {
+fn unsupported_themes_and_bad_memory_are_rejected() {
     let cache = cache("theme");
-    let mut light = sample(8);
-    light.theme = "light".to_string();
-    assert!(matches!(
-        save_settings(&cache, &light).expect_err("theme"),
-        CoreError::SettingsTheme
-    ));
+    let mut settings = serde_json::to_value(sample(8)).expect("settings");
+    settings["theme"] = "unknown".into();
+    assert!(serde_json::from_value::<Settings>(settings).is_err());
 
     let mut memory = sample(8);
-    memory.max_memory_mb = 1000;
+    memory.max_memory_mb = 511;
     assert!(matches!(
         save_settings(&cache, &memory).expect_err("memory"),
         CoreError::SettingsMemory
     ));
     assert!(!settings_file(&cache).exists());
+}
+
+#[test]
+fn exact_memory_values_survive_save_and_relocated_settings_fit_the_current_machine() {
+    let cache = cache("exact-memory");
+    let mut settings = sample(8);
+    settings.max_memory_mb = 513;
+    save_settings(&cache, &settings).expect("save exact memory");
+    assert_eq!(load_settings(&cache).expect("reload").max_memory_mb, 513);
+    let mut stored = serde_json::to_value(settings).expect("json");
+    stored["maxMemoryMb"] = u32::MAX.into();
+    std::fs::write(
+        settings_file(&cache),
+        serde_json::to_vec(&stored).expect("json"),
+    )
+    .expect("settings from another machine");
+    assert_eq!(
+        load_settings(&cache)
+            .expect("adapt to current RAM")
+            .max_memory_mb,
+        memory_slider_max(total_memory_mb())
+    );
+}
+
+#[test]
+fn all_supported_themes_survive_save_and_reload() {
+    let cache = cache("theme-roundtrip");
+    for theme in [
+        licht_core::LauncherTheme::Light,
+        licht_core::LauncherTheme::Dark,
+        licht_core::LauncherTheme::System,
+    ] {
+        let mut settings = sample(8);
+        settings.theme = theme;
+        save_settings(&cache, &settings).expect("save theme");
+        assert_eq!(load_settings(&cache).expect("reload theme").theme, theme);
+    }
 }
 
 #[test]

@@ -1,25 +1,18 @@
 import {
   BoxesIcon,
-  Code2Icon,
-  DownloadIcon,
-  PaletteIcon,
-  RefreshCwIcon,
-  TerminalIcon,
-  UserRoundIcon,
+  CircleArrowUpIcon,
+  CpuIcon,
+  HardDriveDownloadIcon,
+  SettingsIcon,
+  SquareCodeIcon,
 } from "lucide-react";
 
 export const SECTIONS = [
   {
     id: "account",
-    label: "Account",
-    description: "Microsoft sign-in and offline player name.",
-    icon: UserRoundIcon,
-  },
-  {
-    id: "appearance",
-    label: "Appearance",
-    description: "How the launcher looks.",
-    icon: PaletteIcon,
+    label: "General",
+    description: "Accounts, appearance and launcher behavior.",
+    icon: SettingsIcon,
   },
   {
     id: "instances",
@@ -30,29 +23,29 @@ export const SECTIONS = [
   },
   {
     id: "java",
-    label: "Java",
+    label: "Runtime",
     description: "Java paths and extra JVM arguments for launch.",
-    icon: TerminalIcon,
+    icon: CpuIcon,
   },
   {
     id: "downloads",
     label: "Downloads",
-    description: "How many files download at once.",
-    icon: DownloadIcon,
+    description: "Download speed and launcher storage.",
+    icon: HardDriveDownloadIcon,
   },
   {
     id: "updater",
-    label: "Updater",
+    label: "Updates",
     description: "How Licht Launcher checks and installs updates.",
-    icon: RefreshCwIcon,
+    icon: CircleArrowUpIcon,
   },
   ...(import.meta.env.DEV
     ? [
         {
           id: "developers",
-          label: "Developers",
+          label: "Developer Tools",
           description: "Development-only tools for testing the launcher.",
-          icon: Code2Icon,
+          icon: SquareCodeIcon,
         },
       ]
     : []),

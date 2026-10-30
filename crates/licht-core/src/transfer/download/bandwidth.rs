@@ -60,11 +60,10 @@ impl BandwidthLimiter {
         }
     }
 
-    pub fn set_limit(&self, mib_per_second: Option<u32>) -> Result<()> {
-        if mib_per_second == Some(0) {
+    pub fn set_limit(&self, bytes_per_second: Option<u64>) -> Result<()> {
+        if bytes_per_second == Some(0) {
             return Err(CoreError::SettingsDownloadSpeed);
         }
-        let bytes_per_second = mib_per_second.map(|value| u64::from(value) * 1024 * 1024);
         let mut budget = self
             .budget
             .lock()
@@ -130,9 +129,20 @@ mod tests {
     use super::*;
 
     #[tokio::test(start_paused = true)]
+    async fn byte_limits_support_rates_below_one_mib_per_second() {
+        let limiter = BandwidthLimiter::new();
+        limiter.set_limit(Some(1000)).expect("one kB per second");
+        let start = Instant::now();
+        let mut permit = limiter.acquire(1000).await;
+        permit.consume(1000);
+        assert!(start.elapsed() >= Duration::from_secs(1));
+        assert!(start.elapsed() < Duration::from_millis(1010));
+    }
+
+    #[tokio::test(start_paused = true)]
     async fn concurrent_transfers_share_one_global_budget() {
         let limiter = BandwidthLimiter::new();
-        limiter.set_limit(Some(1)).expect("limit");
+        limiter.set_limit(Some(1024 * 1024)).expect("limit");
         let start = Instant::now();
         let transfer = || async {
             let mut permit = limiter.acquire(CAPACITY).await;
@@ -146,7 +156,7 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn partial_reads_refund_unused_budget() {
         let limiter = BandwidthLimiter::new();
-        limiter.set_limit(Some(1)).expect("limit");
+        limiter.set_limit(Some(1024 * 1024)).expect("limit");
         let mut permit = limiter.acquire(CAPACITY).await;
         permit.consume(1024);
         drop(permit);
@@ -159,7 +169,7 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn removing_the_limit_wakes_waiting_transfers() {
         let limiter = BandwidthLimiter::new();
-        limiter.set_limit(Some(1)).expect("limit");
+        limiter.set_limit(Some(1024 * 1024)).expect("limit");
         let waiting = limiter.acquire(CAPACITY);
         tokio::pin!(waiting);
         tokio::select! {
@@ -237,7 +247,7 @@ mod tests {
         options
             .limits
             .bandwidth
-            .set_limit(Some(1))
+            .set_limit(Some(1024 * 1024))
             .expect("global limit");
         tokio::time::timeout(
             Duration::from_secs(10),

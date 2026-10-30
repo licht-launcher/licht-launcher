@@ -12,10 +12,7 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { DownloadsPopover } from "@/features/downloads/components/downloads-popover";
-import {
-  STORAGE_LOADING_PREVIEW_EVENT,
-  STORAGE_LOADING_PREVIEW_QUERY_KEY,
-} from "@/features/downloads/hooks/use-storage-loading-preview";
+import { STORAGE_LOADING_PREVIEW_EVENT } from "@/features/downloads/hooks/use-storage-loading-preview";
 import { HomeSidebar } from "@/features/instances/components/home-sidebar";
 import { InstanceDialogs } from "@/features/instances/components/instance-dialogs";
 import {
@@ -122,14 +119,13 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!import.meta.env.DEV) return;
     const preview = () => {
-      queryClient.setQueryData(STORAGE_LOADING_PREVIEW_QUERY_KEY, Date.now());
       dialogs.setSettingsOpen(false);
       void navigate({ to: "/downloads" });
     };
     window.addEventListener(STORAGE_LOADING_PREVIEW_EVENT, preview);
     return () =>
       window.removeEventListener(STORAGE_LOADING_PREVIEW_EVENT, preview);
-  }, [queryClient, dialogs.setSettingsOpen, navigate]);
+  }, [dialogs.setSettingsOpen, navigate]);
   const markStartedRef = useRef<(folder: string) => void>(() => {});
   const {
     progressForVersion,

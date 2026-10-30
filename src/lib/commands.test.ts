@@ -1,7 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-
+import { buildDiagnostics } from "@/features/settings/fixtures/build-diagnostics";
+import { appUpdateState } from "@/features/updater/fixtures/state";
 import {
   activateOfflineAccount,
   activeMicrosoftAccount,
@@ -9,21 +10,28 @@ import {
   browseApplicationDirectory,
   browseJava,
   cancelDownloadJob,
+  checkAppUpdate,
   clearLastPlayedFolder,
+  closeStartupPreview,
   createInstance,
   createInstanceFromModpack,
   createInstanceWithPlatform,
   customTitleBarActive,
   deleteInstance,
   detectJavaInstallations,
+  downloadAppUpdate,
   duplicateInstance,
+  getAppUpdateState,
+  getBuildDiagnostics,
   getLastPlayedFolder,
   getPlayerHead,
   getSettings,
   getStartupProgress,
+  installAppUpdate,
   installModpackFiles,
   installRecommendedJava,
   installVersion,
+  isStartupPreviewOpen,
   isVersionReady,
   javaInstallationStatus,
   launchVersion,
@@ -43,6 +51,7 @@ import {
   openStartupPreview,
   pauseDownloadJob,
   prepareInstanceDownload,
+  quitApp,
   renameInstance,
   repairInstance,
   requestUpdateRestart,
@@ -89,6 +98,41 @@ vi.mock("@tauri-apps/api/event", () => ({
 }));
 
 describe("launcher commands", () => {
+  it("loads and validates native build diagnostics", async () => {
+    vi.mocked(invoke).mockResolvedValueOnce(buildDiagnostics);
+    await expect(getBuildDiagnostics()).resolves.toEqual(buildDiagnostics);
+    expect(invoke).toHaveBeenCalledWith("get_build_diagnostics");
+    vi.mocked(invoke).mockResolvedValueOnce({ debug: "false" });
+    await expect(getBuildDiagnostics()).rejects.toThrow(
+      "Invalid build diagnostics",
+    );
+  });
+  it("routes signed application-update operations to the native coordinator", async () => {
+    const state = appUpdateState({ phase: "ready", version: "0.4.0" });
+    vi.mocked(invoke).mockResolvedValueOnce(state);
+    expect(await getAppUpdateState()).toEqual(state);
+    expect(invoke).toHaveBeenCalledWith("get_app_update_state");
+    await checkAppUpdate();
+    await downloadAppUpdate();
+    await installAppUpdate();
+    expect(invoke).toHaveBeenCalledWith("check_app_update");
+    expect(invoke).toHaveBeenCalledWith("download_app_update");
+    expect(invoke).toHaveBeenCalledWith("install_app_update");
+  });
+  it("reads and closes the single startup preview through native commands", async () => {
+    vi.mocked(invoke).mockResolvedValueOnce(true);
+    expect(await isStartupPreviewOpen()).toBe(true);
+    expect(invoke).toHaveBeenCalledWith("is_startup_preview_open");
+    await closeStartupPreview();
+    expect(invoke).toHaveBeenCalledWith("close_startup_preview");
+  });
+
+  it("rejects an invalid native preview state", async () => {
+    vi.mocked(invoke).mockResolvedValueOnce("yes");
+    await expect(isStartupPreviewOpen()).rejects.toThrow(
+      "Invalid startup preview window state",
+    );
+  });
   beforeEach(() => {
     vi.mocked(invoke).mockReset();
     vi.mocked(invoke).mockResolvedValue(undefined);
@@ -452,10 +496,15 @@ describe("launcher commands", () => {
     expect(invoke).toHaveBeenCalledWith("restart_app");
   });
 
+  it("requests application exit independently of window-close behavior", async () => {
+    await quitApp();
+    expect(invoke).toHaveBeenCalledWith("quit_app");
+  });
+
   it("saves settings and asks for Java and folders", async () => {
     const settings = {
       schema: 1,
-      theme: "dark",
+      theme: "dark" as const,
       username: "Steve",
       fullscreen: false,
       width: null,
@@ -468,12 +517,16 @@ describe("launcher commands", () => {
       java8: null,
       downloadConcurrency: 4,
       writeConcurrency: 8,
-      downloadSpeedLimitMiB: null,
+      downloadSpeedLimitBytesPerSecond: null,
       disableCustomTitleBar: false,
       disableTransparency: false,
       dataDirectory: null,
-      checkForUpdates: true,
-      installUpdatesOnRestart: true,
+      automaticUpdates: true,
+      language: "en" as const,
+      hardwareAcceleration: true,
+      minimizeToTray: false,
+      minimizeOnGameStart: false,
+      restoreOnGameExit: false,
     };
     await saveSettings(settings);
     expect(invoke).toHaveBeenCalledWith("save_settings", { settings });

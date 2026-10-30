@@ -459,11 +459,10 @@ async fn startup_migration_previews_use_temporary_fixtures_for_success_and_confl
 fn startup_reads_update_preferences_before_migration_and_prefers_the_current_settings() {
     let (legacy, home) = fixture("startup-preferences");
     let mut old = crate::load_settings(&legacy).expect("defaults");
-    old.check_for_updates = false;
-    old.install_updates_on_restart = false;
+    old.automatic_updates = false;
     crate::save_settings(&legacy, &old).expect("legacy preferences");
     let loaded = super::startup_settings_at(&home, &legacy).expect("legacy fallback");
-    assert!(!loaded.check_for_updates && !loaded.install_updates_on_restart);
+    assert!(!loaded.automatic_updates);
     assert!(
         !home.root().exists(),
         "reading preferences must not start migration"
@@ -471,5 +470,5 @@ fn startup_reads_update_preferences_before_migration_and_prefers_the_current_set
     let current = crate::load_settings(&home).expect("current defaults");
     crate::save_settings(&home, &current).expect("current preferences");
     let loaded = super::startup_settings_at(&home, &legacy).expect("current settings");
-    assert!(loaded.check_for_updates && loaded.install_updates_on_restart);
+    assert!(loaded.automatic_updates);
 }

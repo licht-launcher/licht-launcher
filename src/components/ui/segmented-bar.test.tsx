@@ -190,7 +190,7 @@ describe("SegmentedBar", () => {
     );
   });
 
-  it("supports keyboard focus and restores the focused segment after mouse hover", () => {
+  it("supports keyboard focus and clears the highlight when the pointer leaves", () => {
     render(
       <SegmentedBar
         label="Storage"
@@ -220,8 +220,19 @@ describe("SegmentedBar", () => {
     expect(screen.getByLabelText("Instances segment")).toHaveClass(
       "opacity-100",
     );
-    expect(screen.getByLabelText("Java segment")).toHaveClass("opacity-25");
-    fireEvent.blur(instances);
     expect(screen.getByLabelText("Java segment")).toHaveClass("opacity-100");
+    expect(screen.getByLabelText("Storage highlight")).toHaveAttribute(
+      "height",
+      "12",
+    );
+    fireEvent.focus(java);
+    expect(screen.getByLabelText("Instances segment")).toHaveClass(
+      "opacity-25",
+    );
+    fireEvent.blur(java);
+    expect(screen.getByLabelText("Java segment")).toHaveClass("opacity-100");
+    expect(screen.getByLabelText("Instances segment")).toHaveClass(
+      "opacity-100",
+    );
   });
 });

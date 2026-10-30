@@ -7,6 +7,30 @@ import {
 } from "@/features/settings/model/draft";
 
 describe("draft", () => {
+  it("preserves exact memory allocations instead of rounding to the slider step", () => {
+    const draft = fromSnapshot(
+      { ...snapshot, settings: { ...snapshot.settings, maxMemoryMb: 5001 } },
+      null,
+    );
+    expect(draft.maxMemoryMb).toBe(5001);
+    expect(toSettings(draft, 1, 854, 480).maxMemoryMb).toBe(5001);
+  });
+  it("roundtrips stored byte rates through the kB/s input without changing their value", () => {
+    const draft = fromSnapshot(
+      {
+        ...snapshot,
+        settings: {
+          ...snapshot.settings,
+          downloadSpeedLimitBytesPerSecond: 3_145_728,
+        },
+      },
+      null,
+    );
+    expect(draft.downloadSpeedLimitKbs).toBe("3145.728");
+    expect(
+      toSettings(draft, 1, 854, 480).downloadSpeedLimitBytesPerSecond,
+    ).toBe(3_145_728);
+  });
   it("fills empty java fields from the runtime paths", () => {
     const draft = fromSnapshot(snapshot, {
       java25: null,

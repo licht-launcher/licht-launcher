@@ -69,8 +69,11 @@ export function JavaMajorRow({
 
   return (
     <div className="flex flex-col gap-2">
-      <label className="flex flex-col gap-1 text-sm" htmlFor={row.field}>
-        <span className="font-medium">{row.label}</span>
+      <label
+        className="flex flex-col gap-0.5 text-sm leading-snug"
+        htmlFor={row.field}
+      >
+        <span className="font-normal">{row.label}</span>
         <span className="flex items-center gap-2">
           <Input
             id={row.field}
@@ -85,7 +88,8 @@ export function JavaMajorRow({
       <div className="flex flex-wrap gap-2">
         <Button
           type="button"
-          variant="secondary"
+          variant="outline"
+          size="default"
           aria-label={`Recommended install for ${row.label}`}
           disabled={busy || checking || valid}
           onClick={onInstall}
@@ -95,7 +99,8 @@ export function JavaMajorRow({
         </Button>
         <Button
           type="button"
-          variant="secondary"
+          variant="outline"
+          size="default"
           aria-label={`Detect installations for ${row.label}`}
           disabled={
             installations.length === 0 || (detectionsPending && !runtimePath)
@@ -110,7 +115,8 @@ export function JavaMajorRow({
         </Button>
         <Button
           type="button"
-          variant="secondary"
+          variant="outline"
+          size="default"
           aria-label={`Browse for ${row.label}`}
           disabled={busy}
           onClick={onBrowse}

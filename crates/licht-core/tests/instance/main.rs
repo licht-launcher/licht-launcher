@@ -471,6 +471,55 @@ async fn update_instance_persists_overrides_and_keeps_name() {
 }
 
 #[tokio::test]
+async fn memory_overrides_accept_exact_values_and_reject_out_of_range_allocations() {
+    let root = scratch("memory-limits");
+    let instances = root.join("instances");
+    let service = database(&root).await;
+    let client = service.client();
+    let created = create_instance(&client, &instances, "Memory", "1.20.1", &plain_template())
+        .await
+        .expect("create");
+    let mut settings = InstanceSettings {
+        override_window: false,
+        override_memory: true,
+        override_java: false,
+        override_jvm_arguments: false,
+        java_path: None,
+        max_memory_mb: 513,
+        jvm_arguments: Vec::new(),
+        fullscreen: false,
+        width: None,
+        height: None,
+    };
+    assert_eq!(
+        update_instance(&client, &instances, &created.folder, &settings)
+            .await
+            .expect("exact allocation")
+            .max_memory_mb,
+        513
+    );
+    settings.max_memory_mb = 511;
+    assert!(matches!(
+        update_instance(&client, &instances, &created.folder, &settings).await,
+        Err(CoreError::InstanceMemory)
+    ));
+    settings.max_memory_mb = licht_core::total_memory_mb().saturating_add(1);
+    assert!(matches!(
+        update_instance(&client, &instances, &created.folder, &settings).await,
+        Err(CoreError::SettingsMemory)
+    ));
+    assert_eq!(
+        load_instance(&client, &instances.join(&created.folder))
+            .await
+            .expect("unchanged profile")
+            .max_memory_mb,
+        513
+    );
+    service.shutdown().await.expect("shutdown");
+    let _ = fs::remove_dir_all(root);
+}
+
+#[tokio::test]
 async fn update_instance_version_changes_only_the_game_version() {
     let root = scratch("version");
     let instances = root.join("instances");

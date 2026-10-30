@@ -1,6 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
 import { useRouter, useRouterState } from "@tanstack/react-router";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
@@ -25,7 +24,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { SectionId } from "@/features/settings/model/sections";
-import { openFeedback } from "@/lib/commands";
+import { openFeedback, quitApp } from "@/lib/commands";
 import { friendlyError, messageOf } from "@/lib/errors";
 
 export function LauncherNavigation({
@@ -46,9 +45,9 @@ export function LauncherNavigation({
   const canGoForward =
     router.history.location.state.__TSR_index < router.history.length - 1;
   const [menuOpen, setMenuOpen] = useState(false);
-  const openingSettings = useRef(false);
+  const openingSettings = useRef<SectionId | null>(null);
   const exit = useMutation({
-    mutationFn: () => getCurrentWindow().close(),
+    mutationFn: quitApp,
     onError: (error: unknown) => toast.error(friendlyError(messageOf(error))),
   });
   const feedback = useMutation({
@@ -57,8 +56,8 @@ export function LauncherNavigation({
   });
 
   function openSettings(section: SectionId) {
-    openingSettings.current = true;
-    onOpenSettings(section);
+    openingSettings.current = section;
+    setMenuOpen(false);
   }
 
   return (
@@ -84,9 +83,11 @@ export function LauncherNavigation({
           align="start"
           className="font-brand"
           onCloseAutoFocus={(event) => {
-            if (openingSettings.current) {
+            const section = openingSettings.current;
+            if (section !== null) {
               event.preventDefault();
-              openingSettings.current = false;
+              openingSettings.current = null;
+              onOpenSettings(section);
             }
           }}
         >
@@ -94,7 +95,7 @@ export function LauncherNavigation({
             <UsersIcon aria-hidden />
             Manage accounts
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => openSettings("appearance")}>
+          <DropdownMenuItem onSelect={() => openSettings("account")}>
             <SettingsIcon aria-hidden />
             Settings
           </DropdownMenuItem>

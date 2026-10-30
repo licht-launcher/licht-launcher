@@ -96,8 +96,8 @@ describe("InstanceSettingsDialog", () => {
           memoryTotalMb: 16384,
           memoryRecommendedMb: 4096,
           memoryMinimumMb: 512,
-          memoryMaximumMb: 8192,
-          memoryStepMb: 256,
+          memoryMaximumMb: 16384,
+          memoryStepMb: 64,
         });
       }
       if (command === "list_versions") {
@@ -227,8 +227,8 @@ describe("InstanceSettingsDialog", () => {
           memoryTotalMb: 16384,
           memoryRecommendedMb: 4096,
           memoryMinimumMb: 512,
-          memoryMaximumMb: 8192,
-          memoryStepMb: 256,
+          memoryMaximumMb: 16384,
+          memoryStepMb: 64,
         });
       }
       if (command === "repair_instance") {
@@ -320,5 +320,31 @@ describe("InstanceSettingsDialog", () => {
         }),
       );
     });
+  });
+
+  it("saves an exact memory override from the numeric input", async () => {
+    renderDialog();
+    await screen.findByText("Survival");
+    fireEvent.click(screen.getByRole("button", { name: "Override Settings" }));
+    fireEvent.click(
+      screen.getByRole("switch", { name: "Customize memory allocation" }),
+    );
+    const input = screen.getByRole("spinbutton", {
+      name: "Memory Allocation (MB)",
+    });
+    fireEvent.change(input, { target: { value: "5001" } });
+    expect(screen.getByRole("slider", { name: "Memory" })).toHaveAttribute(
+      "aria-valuenow",
+      "5001",
+    );
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("save_instance", {
+        folder: "Survival",
+        settings: expect.objectContaining({
+          overrideMemory: true,
+          maxMemoryMb: 5001,
+        }),
+      }),
+    );
   });
 });

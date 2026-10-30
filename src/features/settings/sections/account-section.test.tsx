@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -27,21 +27,34 @@ describe("AccountSection", () => {
     });
   });
 
-  it("shows Microsoft account and offline username", async () => {
+  it("shows Microsoft sign-in without the developer-only offline username", async () => {
     await renderSettings();
 
     expect(
-      await screen.findByRole("heading", { name: "Microsoft account" }),
+      await screen.findByRole("heading", { name: "Account" }),
     ).toBeVisible();
-    expect(screen.getByLabelText("Offline username")).toHaveValue("Steve");
-    expect(screen.getByRole("heading", { name: "Account" })).toBeVisible();
     expect(
-      screen.getByText("Microsoft sign-in and offline player name."),
+      screen.getByRole("heading", { name: "Sign in with Microsoft", level: 4 }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("textbox", { name: "Offline username" }),
+    ).not.toBeInTheDocument();
+    const account = within(screen.getByRole("region", { name: "Account" }));
+    expect(
+      account.getByRole("heading", { name: "Sign in with Microsoft" }),
+    ).toBeVisible();
+    expect(account.getByRole("button", { name: "Sign in" })).toBeEnabled();
+    expect(
+      account.queryByRole("button", { name: "Offline username" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "General" })).toBeVisible();
+    expect(
+      screen.getByText("Accounts, appearance and launcher behavior."),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
   });
 
-  it("starts Microsoft browser sign-in and keeps offline username", async () => {
+  it("starts Microsoft browser sign-in and shows the active account", async () => {
     const profile = {
       uuid: "abcdef0123456789abcdef0123456789",
       name: "PlayerOne",
@@ -69,6 +82,5 @@ describe("AccountSection", () => {
     });
     expect(await screen.findByText("PlayerOne")).toBeInTheDocument();
     expect(screen.getByText("Active")).toBeInTheDocument();
-    expect(screen.getByLabelText("Offline username")).toHaveValue("Steve");
   });
 });

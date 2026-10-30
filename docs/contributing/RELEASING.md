@@ -59,13 +59,25 @@ signed updates for those installs; users must reinstall manually.
 
 ### User flow
 
-- **Check for updates** controls automatic checks when the launcher starts.
-- **Install updates on startup** controls downloading and installing available
-  updates before the main window opens.
-- Settings and the title bar provide manual update actions. Installing an update
-  requests a restart into the startup update flow.
-- **Later** dismisses the notification; automatic installation on a later start
-  follows the saved preferences, rather than the dismissal itself.
-- A startup check failure reports a warning and opens the installed version.
-  A previous unsuccessful install attempt blocks an automatic retry and asks the
-  user to retry from Updates.
+- **Automatic updates** checks after the main window opens and every 30 minutes
+  while no verified package is waiting to be applied. Available updates download
+  in the background; installation always requires **Restart to update**.
+- Turning automatic updates off cancels automatic checks/downloads. Manual
+  checks and downloads remain available, and verified cached packages are kept.
+- Existing preferences migrate conservatively: automatic updates are enabled
+  only when both automatic checking and automatic startup installation were on.
+- Packages and metadata live in the settings directory's `cache/app-updates`.
+  Cache reads verify SHA1 and the Minisign signature using the configured public
+  key, including the updater's configured signed-version policy.
+- After reopening, a cached package needs an online manifest check before it can
+  be installed. Matching versions and signatures reuse the package instead of
+  downloading it again. Packages for an already installed version are removed.
+- Settings and the title bar provide explicit update actions. Before installing,
+  downloads are suspended. Windows drains launcher services in the updater's
+  exit callback; Linux uses the normal restart/shutdown path after installation.
+- **Later** dismisses the ready notification without deleting the package or
+  changing preferences. Closing/reopening the app never installs automatically.
+- Failures leave the installed launcher available and expose a retry in Updates.
+  An unsuccessful installation attempt still requires another explicit action.
+- The startup installer remains available for explicit requests saved by older
+  launcher versions; it no longer checks/downloads automatically during startup.

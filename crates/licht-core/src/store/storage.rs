@@ -11,6 +11,7 @@ use crate::{CoreError, Result, SharedCache};
 pub enum StorageCategory {
     Instances,
     GameFiles,
+    Natives,
     Java,
     Cache,
     Other,
@@ -68,13 +69,15 @@ pub fn storage_summary(game: &SharedCache) -> Result<StorageSummary> {
 
 fn measure_categories(game: &SharedCache, directory: &Path) -> Result<Vec<StorageUsage>> {
     let mut game_files = 0_u64;
+    let mut natives = 0_u64;
     let mut java = 0_u64;
     let mut other = 0_u64;
     for entry in std::fs::read_dir(directory)? {
         let entry = entry?;
         let target = match entry.file_name().to_str() {
             Some("runtime") => &mut java,
-            Some("assets" | "libraries" | "versions" | "natives") => &mut game_files,
+            Some("assets" | "libraries" | "versions") => &mut game_files,
+            Some("natives") => &mut natives,
             _ => &mut other,
         };
         *target = target
@@ -89,6 +92,10 @@ fn measure_categories(game: &SharedCache, directory: &Path) -> Result<Vec<Storag
         StorageUsage {
             category: StorageCategory::GameFiles,
             bytes: game_files,
+        },
+        StorageUsage {
+            category: StorageCategory::Natives,
+            bytes: natives,
         },
         StorageUsage {
             category: StorageCategory::Java,
@@ -224,6 +231,36 @@ mod tests {
     }
 
     #[test]
+    fn natives_have_their_own_category_without_double_counting() {
+        let launcher = fixture_directory();
+        let directory = launcher.join("data");
+        for (folder, bytes) in [("natives", 19), ("assets", 11)] {
+            let folder = directory.join(folder);
+            std::fs::create_dir_all(&folder).expect("managed folder");
+            std::fs::write(folder.join("payload"), vec![0; bytes]).expect("managed file");
+        }
+        let summary = storage_summary(&SharedCache::at(&directory)).expect("storage");
+        std::fs::remove_dir_all(launcher).expect("cleanup");
+        let serialized = serde_json::to_value(&summary).expect("storage json");
+        let categories = serialized["categories"].as_array().expect("categories");
+        assert!(
+            categories
+                .iter()
+                .any(|usage| usage["category"] == "natives" && usage["bytes"] == 19)
+        );
+        assert_eq!(summary.managed_bytes, 30);
+        assert_eq!(
+            summary
+                .categories
+                .iter()
+                .find(|usage| usage.category == StorageCategory::GameFiles)
+                .expect("game files")
+                .bytes,
+            11
+        );
+    }
+
+    #[test]
     fn managed_consumption_includes_sibling_instances_and_cache() {
         let launcher = fixture_directory();
         for (relative, bytes) in [
@@ -253,7 +290,11 @@ mod tests {
                 },
                 StorageUsage {
                     category: StorageCategory::GameFiles,
-                    bytes: 60
+                    bytes: 41
+                },
+                StorageUsage {
+                    category: StorageCategory::Natives,
+                    bytes: 19
                 },
                 StorageUsage {
                     category: StorageCategory::Java,
@@ -295,7 +336,7 @@ mod tests {
         std::fs::create_dir(&directory).expect("data directory");
         let summary = storage_summary(&SharedCache::at(&directory)).expect("empty directory");
         assert_eq!(summary.managed_bytes, 0);
-        assert_eq!(summary.categories.len(), 5);
+        assert_eq!(summary.categories.len(), 6);
         assert!(summary.categories.iter().all(|usage| usage.bytes == 0));
         std::fs::remove_dir_all(launcher).expect("cleanup");
     }

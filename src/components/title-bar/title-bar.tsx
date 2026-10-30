@@ -53,7 +53,7 @@ export function TitleBar({
   return (
     <header
       data-title-bar
-      className="pointer-events-auto relative z-[60] shrink-0 text-popover-foreground"
+      className="pointer-events-auto relative shrink-0 text-popover-foreground"
     >
       <div
         className={cn(
@@ -85,7 +85,10 @@ export function TitleBar({
           {actions}
         </div>
         {!windowControls || nativeCaption ? null : (
-          <div className="flex shrink-0 items-stretch text-muted-foreground">
+          <div
+            data-window-controls
+            className="pointer-events-auto relative z-[60] flex shrink-0 items-stretch text-muted-foreground"
+          >
             <Button
               type="button"
               variant="ghost"

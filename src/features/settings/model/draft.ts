@@ -1,9 +1,14 @@
+import {
+  DOWNLOAD_SPEED_ERROR,
+  downloadLimitKbs,
+  parseDownloadLimit,
+} from "@/lib/download-speed";
 import type { JavaPaths } from "@/lib/generated/JavaPaths";
 import type { Settings } from "@/lib/generated/Settings";
 import type { SettingsSnapshot } from "@/lib/generated/SettingsSnapshot";
 
 export type Draft = {
-  theme: string;
+  theme: Settings["theme"];
   username: string;
   fullscreen: boolean;
   width: string;
@@ -16,18 +21,17 @@ export type Draft = {
   java8: string;
   downloadConcurrency: number;
   writeConcurrency: number;
-  downloadSpeedLimitMiB: string;
+  downloadSpeedLimitKbs: string;
   dataDirectory: string;
   disableCustomTitleBar: boolean;
   disableTransparency: boolean;
-  checkForUpdates: boolean;
-  installUpdatesOnRestart: boolean;
+  automaticUpdates: boolean;
+  language: Settings["language"];
+  hardwareAcceleration: boolean;
+  minimizeToTray: boolean;
+  minimizeOnGameStart: boolean;
+  restoreOnGameExit: boolean;
 };
-
-function clampStep(value: number, min: number, max: number, step: number) {
-  const stepped = Math.floor(value / step) * step;
-  return Math.min(max, Math.max(min, stepped));
-}
 
 function installedPath(
   saved: string | null,
@@ -50,11 +54,9 @@ export function fromSnapshot(
     fullscreen: settings.fullscreen,
     width: settings.width === null ? "" : String(settings.width),
     height: settings.height === null ? "" : String(settings.height),
-    maxMemoryMb: clampStep(
-      settings.maxMemoryMb,
-      snapshot.memoryMinimumMb,
+    maxMemoryMb: Math.min(
       snapshot.memoryMaximumMb,
-      snapshot.memoryStepMb,
+      Math.max(snapshot.memoryMinimumMb, settings.maxMemoryMb),
     ),
     jvmArguments: settings.jvmArguments.join(" "),
     java25: installedPath(settings.java25, runtime?.java25),
@@ -63,15 +65,18 @@ export function fromSnapshot(
     java8: installedPath(settings.java8, runtime?.java8),
     downloadConcurrency: settings.downloadConcurrency,
     writeConcurrency: settings.writeConcurrency,
-    downloadSpeedLimitMiB:
-      settings.downloadSpeedLimitMiB === null
-        ? ""
-        : String(settings.downloadSpeedLimitMiB),
+    downloadSpeedLimitKbs: downloadLimitKbs(
+      settings.downloadSpeedLimitBytesPerSecond,
+    ),
     dataDirectory: snapshot.applicationDirectory,
     disableCustomTitleBar: settings.disableCustomTitleBar,
     disableTransparency: settings.disableTransparency,
-    checkForUpdates: settings.checkForUpdates,
-    installUpdatesOnRestart: settings.installUpdatesOnRestart,
+    automaticUpdates: settings.automaticUpdates,
+    language: settings.language,
+    hardwareAcceleration: settings.hardwareAcceleration,
+    minimizeToTray: settings.minimizeToTray,
+    minimizeOnGameStart: settings.minimizeOnGameStart,
+    restoreOnGameExit: settings.restoreOnGameExit,
   };
 }
 
@@ -102,6 +107,8 @@ export function toSettings(
   width: number | null,
   height: number | null,
 ): Settings {
+  const speed = parseDownloadLimit(draft.downloadSpeedLimitKbs);
+  if (speed === "invalid") throw new Error(DOWNLOAD_SPEED_ERROR);
   return {
     schema,
     theme: draft.theme,
@@ -117,14 +124,15 @@ export function toSettings(
     java8: emptyToNull(draft.java8),
     downloadConcurrency: draft.downloadConcurrency,
     writeConcurrency: draft.writeConcurrency,
-    downloadSpeedLimitMiB:
-      draft.downloadSpeedLimitMiB.trim() === ""
-        ? null
-        : Number(draft.downloadSpeedLimitMiB),
+    downloadSpeedLimitBytesPerSecond: speed,
     dataDirectory: emptyToNull(draft.dataDirectory),
     disableCustomTitleBar: draft.disableCustomTitleBar,
     disableTransparency: draft.disableTransparency,
-    checkForUpdates: draft.checkForUpdates,
-    installUpdatesOnRestart: draft.installUpdatesOnRestart,
+    automaticUpdates: draft.automaticUpdates,
+    language: draft.language,
+    hardwareAcceleration: draft.hardwareAcceleration,
+    minimizeToTray: draft.minimizeToTray,
+    minimizeOnGameStart: draft.minimizeOnGameStart,
+    restoreOnGameExit: draft.restoreOnGameExit,
   };
 }

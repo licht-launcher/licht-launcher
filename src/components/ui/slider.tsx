@@ -32,6 +32,7 @@ function Slider({
       {children}
       <SliderPrimitive.Thumb
         data-slot="slider-thumb"
+        aria-label={props["aria-label"]}
         aria-labelledby={props["aria-labelledby"]}
         aria-describedby={props["aria-describedby"]}
         aria-valuetext={props["aria-valuetext"]}

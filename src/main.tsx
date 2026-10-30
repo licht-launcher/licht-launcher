@@ -10,6 +10,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import { Toaster } from "@/components/ui/sonner";
+import { useLauncherTheme } from "@/features/settings/hooks/use-launcher-theme";
 import { StartupScreen } from "@/features/startup/startup-screen";
 
 import { routeTree } from "./routeTree.gen";
@@ -37,17 +38,22 @@ if (root === null) {
 const startupWindow =
   isTauri() && getCurrentWindow().label.startsWith("startup");
 
+function App() {
+  const theme = useLauncherTheme(startupWindow);
+  return startupWindow ? (
+    <StartupScreen />
+  ) : (
+    <>
+      <RouterProvider router={router} />
+      <Toaster theme={theme} />
+    </>
+  );
+}
+
 createRoot(root).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      {startupWindow ? (
-        <StartupScreen />
-      ) : (
-        <>
-          <RouterProvider router={router} />
-          <Toaster />
-        </>
-      )}
+      <App />
     </QueryClientProvider>
   </StrictMode>,
 );

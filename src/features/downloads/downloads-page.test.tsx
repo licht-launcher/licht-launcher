@@ -109,7 +109,10 @@ describe("DownloadsPage", () => {
       if (command === "get_settings")
         return {
           ...snapshot,
-          settings: { ...snapshot.settings, downloadSpeedLimitMiB: speedLimit },
+          settings: {
+            ...snapshot.settings,
+            downloadSpeedLimitBytesPerSecond: speedLimit,
+          },
         };
       if (command === "pause_all_downloads") {
         telemetry = { ...telemetry, paused: true };
@@ -167,7 +170,9 @@ describe("DownloadsPage", () => {
       screen.getByRole("complementary", { name: "Download information" }),
     );
     const chart = information.getByRole("region", { name: "Transfer speed" });
-    const storage = information.getByRole("region", { name: "Launcher Data" });
+    const storage = information.getByRole("region", {
+      name: "Launcher Storage",
+    });
     expect(
       chart.compareDocumentPosition(storage) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
@@ -392,7 +397,7 @@ describe("DownloadsPage", () => {
   );
 
   it("shows the active global speed limit and updates it after settings change", async () => {
-    speedLimit = 3;
+    speedLimit = 3 * 1024 * 1024;
     const { client } = renderPage();
     expect(await screen.findByText("Limited to 3 MiB/s")).toBeVisible();
     speedLimit = null;

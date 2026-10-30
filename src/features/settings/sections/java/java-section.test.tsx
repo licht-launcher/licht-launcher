@@ -26,7 +26,7 @@ describe("JavaSection", () => {
         : undefined,
     );
     await renderSettings();
-    fireEvent.click(await screen.findByRole("button", { name: "Java" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Runtime" }));
     fireEvent.click(
       screen.getByRole("button", { name: "Recommended install for Java 25" }),
     );
@@ -75,7 +75,7 @@ describe("JavaSection", () => {
     });
 
     await renderSettings();
-    fireEvent.click(await screen.findByRole("button", { name: "Java" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Runtime" }));
 
     expect(screen.getByLabelText("Java 21")).toHaveValue("C:\\saved\\java.exe");
     expect(screen.getByLabelText("Java 17")).toHaveValue(
@@ -132,7 +132,7 @@ describe("JavaSection", () => {
     });
 
     await renderSettings();
-    fireEvent.click(await screen.findByRole("button", { name: "Java" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Runtime" }));
 
     expect(
       screen.getByRole("img", { name: "Java 25 is invalid" }),
@@ -194,7 +194,7 @@ describe("JavaSection", () => {
     });
 
     await renderSettings();
-    fireEvent.click(await screen.findByRole("button", { name: "Java" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Runtime" }));
     expect(
       await screen.findByRole("img", { name: "Java 21 is invalid" }),
     ).toBeInTheDocument();
@@ -264,13 +264,13 @@ describe("JavaSection", () => {
     });
 
     await renderSettings();
-    fireEvent.click(await screen.findByRole("button", { name: "Java" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Runtime" }));
     expect(
       await screen.findByRole("img", { name: "Java 17 is valid" }),
     ).toBeInTheDocument();
     const first = checks;
     fireEvent.click(screen.getByRole("button", { name: "Instances" }));
-    fireEvent.click(screen.getByRole("button", { name: "Java" }));
+    fireEvent.click(screen.getByRole("button", { name: "Runtime" }));
     expect(
       screen.getByRole("img", { name: "Java 17 is valid" }),
     ).toBeInTheDocument();
@@ -279,7 +279,7 @@ describe("JavaSection", () => {
 
   it("disables detect when no Java installation was found", async () => {
     await renderSettings();
-    fireEvent.click(await screen.findByRole("button", { name: "Java" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Runtime" }));
 
     const detect = await screen.findByRole("button", {
       name: "Detect installations for Java 25",
@@ -289,7 +289,7 @@ describe("JavaSection", () => {
 
   it("shows java arguments after the paths", async () => {
     await renderSettings();
-    fireEvent.click(await screen.findByRole("button", { name: "Java" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Runtime" }));
 
     expect(screen.getByLabelText("Java arguments")).toHaveAttribute(
       "placeholder",

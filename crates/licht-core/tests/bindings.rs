@@ -50,6 +50,8 @@ fn the_committed_bindings_match_ts_rs() {
     DownloadProgress::export_all(&config).expect("progress");
     licht_core::DownloadTelemetry::export_all(&config).expect("download telemetry");
     licht_core::StorageSummary::export_all(&config).expect("storage summary");
+    licht_core::AppUpdateState::export_all(&config).expect("application update state");
+    licht_core::BuildDiagnostics::export_all(&config).expect("build diagnostics");
     DownloadJobSnapshot::export_all(&config).expect("download jobs");
     InstallProgress::export_all(&config).expect("install progress");
     GameLine::export_all(&config).expect("game line");

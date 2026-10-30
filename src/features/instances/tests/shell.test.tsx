@@ -20,7 +20,7 @@ import { requestOpenSettings } from "@/lib/shell-events";
 describe("Launcher shell", () => {
   setupInstancesPageTests();
 
-  it("opens Updater settings from the footer version", async () => {
+  it("opens Updates settings from the footer version", async () => {
     mockContextMenuCommands();
     await renderAt("/");
     fireEvent.click(
@@ -31,7 +31,7 @@ describe("Launcher shell", () => {
     const settings = await screen.findByRole("dialog", { name: "Settings" });
     expect(
       within(settings).getByRole("button", {
-        name: "Updater",
+        name: "Updates",
         current: "page",
       }),
     ).toBeVisible();
@@ -57,7 +57,7 @@ describe("Launcher shell", () => {
       await screen.findByRole("dialog", { name: "Settings" }),
     ).toBeVisible();
     expect(
-      screen.getByRole("button", { name: "Appearance", current: "page" }),
+      screen.getByRole("button", { name: "General", current: "page" }),
     ).toBeVisible();
     expect(
       screen.queryByRole("menu", { name: "Licht menu" }),
@@ -65,7 +65,7 @@ describe("Launcher shell", () => {
     expect(closeWindow).not.toHaveBeenCalled();
   });
 
-  it("requests window closure from Exit", async () => {
+  it("requests explicit application exit from Exit", async () => {
     mockContextMenuCommands();
     await renderAt("/");
     await screen.findByRole("heading", { name: "Classic" });
@@ -90,7 +90,8 @@ describe("Launcher shell", () => {
         { name: "Exit" },
       ),
     );
-    await waitFor(() => expect(closeWindow).toHaveBeenCalledOnce());
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith("quit_app"));
+    expect(closeWindow).not.toHaveBeenCalled();
   });
 
   it("opens feedback from the Licht menu and closes the menu", async () => {
@@ -174,7 +175,7 @@ describe("Launcher shell", () => {
     const settings = await screen.findByRole("dialog", { name: "Settings" });
     expect(
       within(settings).getByRole("button", {
-        name: "Account",
+        name: "General",
         current: "page",
       }),
     ).toBeVisible();
@@ -202,8 +203,8 @@ describe("Launcher shell", () => {
     const { router } = await renderAt("/");
     act(() => requestOpenSettings("developers"));
     const settings = await screen.findByRole("dialog", { name: "Settings" });
-    const preview = await within(settings).findByRole("button", {
-      name: "Test Launcher Data loading",
+    const preview = await within(settings).findByRole("switch", {
+      name: "Simulate storage loading",
     });
     await act(async () => {
       fireEvent.click(preview);
@@ -216,9 +217,23 @@ describe("Launcher shell", () => {
       screen.queryByRole("dialog", { name: "Settings" }),
     ).not.toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/downloads");
-    const data = within(screen.getByRole("region", { name: "Launcher Data" }));
+    const data = within(
+      screen.getByRole("region", { name: "Launcher Storage" }),
+    );
     expect(data.getAllByRole("status")).toHaveLength(6);
+    expect(
+      data.getByRole("progressbar", { name: "Loading launcher storage" }),
+    ).toHaveAttribute("data-state", "indeterminate");
     expect(data.getByText("Instances")).toBeVisible();
     expect(invoke).not.toHaveBeenCalledWith("storage_summary");
+    act(() => requestOpenSettings("developers"));
+    const reopened = await screen.findByRole("dialog", { name: "Settings" });
+    const loading = within(reopened).getByRole("switch", {
+      name: "Simulate storage loading",
+    });
+    expect(loading).toBeChecked();
+    fireEvent.click(loading);
+    await waitFor(() => expect(loading).not.toBeChecked());
+    expect(await data.findByText("20.0 GB")).toBeVisible();
   });
 });

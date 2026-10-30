@@ -27,8 +27,8 @@ pub async fn launch(
         .map_err(failure)?;
     let instances_dir = paths.game.instances_dir().map_err(failure)?;
     sessions.reconcile(&instances_dir)?;
-    let _guard = sessions.try_begin(&folder)?;
-    launch_one(
+    let guard = sessions.try_begin(&folder)?;
+    let result = launch_one(
         &app,
         &database,
         &paths.game,
@@ -37,8 +37,12 @@ pub async fn launch(
         &folder,
         &username,
     )
-    .await
-    .map_err(failure)
+    .await;
+    drop(guard);
+    if let Err(error) = crate::desktop::game_finished(&app, &folder) {
+        tracing::warn!(%error, "Could not apply launcher behavior after the game closed");
+    }
+    result.map_err(failure)
 }
 
 #[tauri::command]
@@ -153,10 +157,13 @@ async fn launch_one(
     sessions
         .attach_live(folder, running.abort_handle())
         .map_err(|message| CoreError::Io(std::io::Error::other(message)))?;
-    if let Ok(pid) = pid_rx.await
-        && let Err(error) = write_launch_lock_for_pid(&dir, pid)
-    {
-        tracing::warn!(error = %error, folder, "could not write launch lock");
+    if let Ok(pid) = pid_rx.await {
+        if let Err(error) = write_launch_lock_for_pid(&dir, pid) {
+            tracing::warn!(error = %error, folder, "could not write launch lock");
+        }
+        if let Err(error) = crate::desktop::game_started(app, folder) {
+            tracing::warn!(%error, "Could not minimize the launcher after the game started");
+        }
     }
 
     while let Some(line) = incoming.recv().await {

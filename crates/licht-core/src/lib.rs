@@ -5,10 +5,12 @@
 //! names as before so callers and `crate::…` paths inside the library stay stable.
 
 mod auth;
+mod diagnostics;
 mod error;
 mod game;
 mod hashes;
 mod instance;
+mod launcher_behavior;
 mod loaders;
 mod meta;
 mod modpacks;
@@ -18,6 +20,12 @@ mod store;
 #[cfg(test)]
 mod test_http;
 mod transfer;
+mod updates;
+
+pub use updates::{
+    APP_UPDATE_INTERVAL_SECONDS, AppUpdateCache, AppUpdatePackage, AppUpdatePhase, AppUpdateState,
+    app_update_can_check,
+};
 
 pub(crate) use game::install;
 pub(crate) use game::launch;
@@ -49,6 +57,7 @@ pub use db::{
     clear_last_played_folder, clear_meta, db_path, get_meta, last_played_folder, open_db,
     set_last_played_folder, set_meta,
 };
+pub use diagnostics::{BuildDiagnostics, build_diagnostics};
 pub use download::{
     DEFAULT_CONCURRENCY, DEFAULT_RETRY, DownloadOptions, DownloadProgress, DownloadTask,
     InstallProgress, Retry, TransferLimits, VerifiedDownloadTask, download_all,
@@ -81,6 +90,7 @@ pub use launch_lock::{
     list_running_launch_folders, process_matches_lock, process_start_time, read_launch_lock,
     write_launch_lock, write_launch_lock_for_pid,
 };
+pub use launcher_behavior::LauncherBehavior;
 pub use loaders::{
     LoaderChannel, LoaderPlatform, create_instance_with_platform, list_loader_versions,
 };
@@ -104,9 +114,10 @@ pub use runtime::{
     validate_java,
 };
 pub use settings::{
-    GlobalLaunch, Settings, SettingsSnapshot, configured_java, download_concurrency, game_cache,
-    global_launch, load_settings, memory_slider_max, recommended_max_memory_mb, save_settings,
-    set_java_path, settings_snapshot, total_memory_mb, write_concurrency,
+    GlobalLaunch, LauncherLanguage, LauncherTheme, Settings, SettingsSnapshot, configured_java,
+    download_concurrency, game_cache, global_launch, load_settings, memory_slider_max,
+    recommended_max_memory_mb, save_settings, set_java_path, settings_snapshot, total_memory_mb,
+    write_concurrency,
 };
 pub use store::layout::progress::{
     StartupPhase, StartupPreviewScenario, StartupProgress, StartupReporter, StartupUpdateStatus,

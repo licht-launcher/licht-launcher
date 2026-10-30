@@ -166,6 +166,12 @@ pub async fn update_instance(
     instance.width = settings.width;
     instance.height = settings.height;
     validate(&instance)?;
+    if settings.override_memory {
+        crate::settings::validate_memory_allocation(
+            settings.max_memory_mb,
+            crate::total_memory_mb(),
+        )?;
+    }
     write_instance(database, &dir, &instance).await?;
     Ok(entry_from(&dir, folder.to_string(), instance))
 }

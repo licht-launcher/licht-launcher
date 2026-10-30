@@ -7,7 +7,11 @@ import type {
   ModpackVersionItem,
   PlatformId,
 } from "@/features/new-instance/model/wizard";
+import { parseAppUpdateState } from "@/lib/app-update-state";
+import { parseBuildDiagnostics } from "@/lib/build-info";
 import type { AccountProfile } from "@/lib/generated/AccountProfile";
+import type { AppUpdateState } from "@/lib/generated/AppUpdateState";
+import type { BuildDiagnostics } from "@/lib/generated/BuildDiagnostics";
 import type { DownloadJobOperation } from "@/lib/generated/DownloadJobOperation";
 import type { DownloadJobSnapshot } from "@/lib/generated/DownloadJobSnapshot";
 import type { DownloadTelemetry } from "@/lib/generated/DownloadTelemetry";
@@ -32,13 +36,42 @@ export function listInstances(): Promise<InstanceEntry[]> {
   return invoke("list_instances");
 }
 
+export async function getBuildDiagnostics(): Promise<BuildDiagnostics> {
+  return parseBuildDiagnostics(await invoke<unknown>("get_build_diagnostics"));
+}
+
+export function quitApp(): Promise<void> {
+  return invoke("quit_app");
+}
+
 export function getStartupProgress(): Promise<StartupProgress> {
   return invoke("get_startup_progress");
+}
+export async function getAppUpdateState(): Promise<AppUpdateState> {
+  return parseAppUpdateState(await invoke<unknown>("get_app_update_state"));
+}
+export function checkAppUpdate(): Promise<void> {
+  return invoke("check_app_update");
+}
+export function downloadAppUpdate(): Promise<void> {
+  return invoke("download_app_update");
+}
+export function installAppUpdate(): Promise<void> {
+  return invoke("install_app_update");
 }
 export function openStartupPreview(
   scenario: StartupPreviewScenario,
 ): Promise<void> {
   return invoke("open_startup_preview", { scenario });
+}
+export async function isStartupPreviewOpen(): Promise<boolean> {
+  const open = await invoke<unknown>("is_startup_preview_open");
+  if (typeof open !== "boolean")
+    throw new Error("Invalid startup preview window state");
+  return open;
+}
+export function closeStartupPreview(): Promise<void> {
+  return invoke("close_startup_preview");
 }
 export function restartStartupPreview(
   scenario: StartupPreviewScenario,

@@ -35,13 +35,13 @@ describe("StoragePanel", () => {
     invoke.mockResolvedValue(storageSummary);
     renderStorage();
     expect(
-      screen.getByRole("heading", { name: "Launcher Data" }),
+      screen.getByRole("heading", { name: "Launcher Storage" }),
     ).toBeVisible();
     expect(screen.queryByText(/Loading/)).not.toBeInTheDocument();
     expect(screen.queryByText("20.0 GB")).not.toBeInTheDocument();
     expect(await screen.findByText("20.0 GB")).toBeVisible();
     expect(
-      screen.getByRole("heading", { name: "Launcher Data" }),
+      screen.getByRole("heading", { name: "Launcher Storage" }),
     ).toBeVisible();
     expect(screen.queryByText(storageSummary.diskName)).not.toBeInTheDocument();
     expect(screen.queryByText(/Available|Used|Total/)).not.toBeInTheDocument();
@@ -50,7 +50,14 @@ describe("StoragePanel", () => {
     const legend = within(
       screen.getByRole("list", { name: "Launcher storage breakdown" }),
     );
-    for (const label of ["Instances", "Game files", "Java", "Cache", "Other"]) {
+    for (const label of [
+      "Instances",
+      "Game files",
+      "Natives",
+      "Java",
+      "Cache",
+      "Other",
+    ]) {
       expect(legend.getByText(label)).toBeVisible();
     }
     expect(legend.getByText("12.0 GB")).toBeVisible();
@@ -74,7 +81,7 @@ describe("StoragePanel", () => {
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
-  it("shows a neutral bar and a spinner beside every category until the data arrives", async () => {
+  it("shows indeterminate progress and category spinners until the data arrives", async () => {
     let resolveStorage: ((summary: StorageSummary) => void) | undefined;
     invoke.mockReturnValue(
       new Promise<StorageSummary>((resolve) => {
@@ -82,12 +89,16 @@ describe("StoragePanel", () => {
       }),
     );
     renderStorage();
-    expect(
-      screen.getByRole("status", { name: "Loading launcher storage" }),
-    ).toBeVisible();
+    const progress = screen.getByRole("progressbar", {
+      name: "Loading launcher storage",
+    });
+    expect(progress).toBeVisible();
+    expect(progress).toHaveAttribute("data-state", "indeterminate");
+    expect(progress).not.toHaveAttribute("aria-valuenow");
     for (const category of [
       "Instances",
       "Game files",
+      "Natives",
       "Java",
       "Cache",
       "Other",
@@ -106,13 +117,14 @@ describe("StoragePanel", () => {
     expect(screen.queryByLabelText("Java segment")).not.toBeInTheDocument();
     await act(async () => resolveStorage?.(storageSummary));
     expect(await screen.findByText("20.0 GB")).toBeVisible();
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Highlight Java: 2.0 GB" }),
     ).toBeEnabled();
   });
 
-  it("previews loading for five seconds without replacing cached real measurements", async () => {
+  it("keeps loading until explicitly disabled without replacing cached real measurements", async () => {
     vi.useFakeTimers();
     try {
       invoke.mockResolvedValue(storageSummary);
@@ -120,14 +132,24 @@ describe("StoragePanel", () => {
         defaultOptions: { queries: { retry: false } },
       });
       client.setQueryData(["storage-summary"], storageSummary);
-      client.setQueryData(STORAGE_LOADING_PREVIEW_QUERY_KEY, Date.now());
+      client.setQueryData(STORAGE_LOADING_PREVIEW_QUERY_KEY, true);
       const view = renderStorage(client);
       expect(screen.getAllByRole("status")).toHaveLength(6);
+      expect(
+        screen.getByRole("progressbar", { name: "Loading launcher storage" }),
+      ).toHaveAttribute("data-state", "indeterminate");
       expect(screen.queryByText("20.0 GB")).not.toBeInTheDocument();
       expect(client.getQueryData(["storage-summary"])).toEqual(storageSummary);
-      await act(async () => vi.advanceTimersByTimeAsync(4999));
+      await act(async () => vi.advanceTimersByTimeAsync(60_000));
       expect(screen.getAllByRole("status")).toHaveLength(6);
-      await act(async () => vi.advanceTimersByTimeAsync(2));
+      expect(
+        screen.getByRole("progressbar", { name: "Loading launcher storage" }),
+      ).toHaveAttribute("data-state", "indeterminate");
+      expect(invoke).not.toHaveBeenCalled();
+      await act(async () => {
+        client.setQueryData(STORAGE_LOADING_PREVIEW_QUERY_KEY, false);
+        await vi.advanceTimersByTimeAsync(1);
+      });
       expect(screen.getByText("20.0 GB")).toBeVisible();
       expect(screen.queryByRole("status")).not.toBeInTheDocument();
       expect(client.getQueryData(["storage-summary"])).toEqual(storageSummary);
@@ -168,7 +190,8 @@ describe("StoragePanel", () => {
       renderStorage();
       await waitFor(() =>
         expect(
-          screen.getByRole("heading", { name: "Launcher Data" }).parentElement,
+          screen.getByRole("heading", { name: "Launcher Storage" })
+            .parentElement,
         ).toHaveTextContent(label),
       );
     },

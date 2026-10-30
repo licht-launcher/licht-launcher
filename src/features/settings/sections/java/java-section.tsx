@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useJavaReady } from "@/features/settings/hooks/use-java-ready";
 import { useToastError } from "@/features/settings/hooks/use-toast-error";
@@ -79,8 +80,8 @@ export function JavaSection({
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <section className="flex flex-col gap-4">
+    <div className="flex flex-col gap-8">
+      <Card title="Runtimes">
         {JAVA_MAJORS.map((row) => (
           <JavaMajorRow
             key={row.field}
@@ -99,11 +100,13 @@ export function JavaSection({
             onBrowse={() => browseFor(row.field)}
           />
         ))}
-      </section>
+      </Card>
 
-      <section className="flex flex-col gap-4 border-t border-border pt-6">
-        <div className="flex flex-col gap-1">
-          <h3 className="text-sm font-medium">Java arguments</h3>
+      <Card title="Launch options">
+        <div className="flex flex-col gap-0.5">
+          <label htmlFor="jvm-arguments" className="text-sm font-normal">
+            Java arguments
+          </label>
           <p id="jvm-arguments-hint" className="text-sm text-muted-foreground">
             Extra JVM flags, separated by spaces.
           </p>
@@ -116,7 +119,7 @@ export function JavaSection({
           value={draft.jvmArguments}
           onChange={(event) => onChange({ jvmArguments: event.target.value })}
         />
-      </section>
+      </Card>
     </div>
   );
 }
