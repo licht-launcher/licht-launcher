@@ -186,7 +186,7 @@ fn create_main_window(app: &tauri::AppHandle, custom_title_bar: bool) -> tauri::
         .decorations(!custom_title_bar)
         .theme(theme::native_theme(theme))
         .initialization_script(theme::initialization_script(theme)?)
-        .background_color(tauri::window::Color(0x14, 0x16, 0x18, 0xff));
+        .background_color(tauri::window::Color(0x10, 0x11, 0x12, 0xff));
 
     #[cfg(windows)]
     let builder = if app.state::<desktop::Runtime>().hardware_acceleration {
