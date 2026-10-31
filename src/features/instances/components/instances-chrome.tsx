@@ -333,7 +333,7 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
         <footer
           role="contentinfo"
           aria-label="Download status"
-          className="flex shrink-0 items-center justify-center px-3 pt-0.5 pb-1.5"
+          className="flex shrink-0 items-center justify-center px-3 pt-2 pb-1.5"
         >
           <div className="grid min-h-8 w-full grid-cols-4 items-center">
             <div className="flex items-center justify-start">
