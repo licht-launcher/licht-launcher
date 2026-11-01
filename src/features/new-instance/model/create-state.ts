@@ -1,17 +1,8 @@
-export type InstanceSource = "scratch" | "modpack" | "file";
+export type InstanceSource = "scratch" | "modpack" | "file" | "clone";
 
 export type PlatformId = "vanilla" | "fabric" | "neoforge" | "forge" | "quilt";
 
 export type LoaderChannel = "stable" | "latest" | "manual";
-
-export type WizardStep =
-  | "source"
-  | "platform"
-  | "details"
-  | "modpack"
-  | "modpack-version"
-  | "file"
-  | "confirm";
 
 export type ModpackSource = "modrinth" | "curseforge";
 
@@ -32,10 +23,9 @@ export type ModpackVersionItem = {
   loaders: string[];
 };
 
-export type WizardState = {
-  step: WizardStep;
-  source: InstanceSource | null;
-  platform: PlatformId | null;
+export type CreateState = {
+  source: InstanceSource;
+  platform: PlatformId;
   name: string;
   gameVersion: string;
   includeSnapshots: boolean;
@@ -45,12 +35,12 @@ export type WizardState = {
   modpack: ModpackListItem | null;
   modpackVersion: ModpackVersionItem | null;
   filePath: string;
+  cloneFolder: string;
 };
 
-export const initialWizardState: WizardState = {
-  step: "source",
-  source: null,
-  platform: null,
+export const initialCreateState: CreateState = {
+  source: "scratch",
+  platform: "vanilla",
   name: "",
   gameVersion: "",
   includeSnapshots: false,
@@ -60,6 +50,7 @@ export const initialWizardState: WizardState = {
   modpack: null,
   modpackVersion: null,
   filePath: "",
+  cloneFolder: "",
 };
 
 export const PLATFORMS: {
@@ -84,31 +75,13 @@ export function fileBaseName(path: string): string {
   return dot > 0 ? name.slice(0, dot) : name;
 }
 
-export function stepsFor(state: WizardState): WizardStep[] {
-  if (state.source === "modpack") {
-    return ["source", "modpack", "modpack-version", "confirm"];
+export function canCreate(state: CreateState): boolean {
+  if (state.name.trim() === "") {
+    return false;
   }
-  if (state.source === "scratch") {
-    return ["source", "platform", "details", "confirm"];
-  }
-  if (state.source === "file") {
-    return ["source", "file", "confirm"];
-  }
-  return ["source"];
-}
-
-export function stepIndex(state: WizardState): number {
-  return stepsFor(state).indexOf(state.step);
-}
-
-export function canAdvance(state: WizardState): boolean {
-  switch (state.step) {
-    case "source":
-      return state.source !== null;
-    case "platform":
-      return state.platform !== null;
-    case "details": {
-      if (state.name.trim() === "" || state.gameVersion === "") {
+  switch (state.source) {
+    case "scratch":
+      if (state.gameVersion === "") {
         return false;
       }
       if (
@@ -118,28 +91,11 @@ export function canAdvance(state: WizardState): boolean {
         return state.loaderVersion !== "";
       }
       return true;
-    }
     case "modpack":
-      return state.modpack !== null;
-    case "modpack-version":
-      return state.modpackVersion !== null && state.name.trim() !== "";
+      return state.modpack !== null && state.modpackVersion !== null;
     case "file":
-      return state.filePath !== "" && state.name.trim() !== "";
-    case "confirm":
-      return true;
-    default:
-      return false;
+      return state.filePath !== "";
+    case "clone":
+      return state.cloneFolder !== "";
   }
-}
-
-export function nextStep(state: WizardState): WizardStep {
-  const steps = stepsFor(state);
-  const index = steps.indexOf(state.step);
-  return steps[Math.min(index + 1, steps.length - 1)] ?? state.step;
-}
-
-export function previousStep(state: WizardState): WizardStep {
-  const steps = stepsFor(state);
-  const index = steps.indexOf(state.step);
-  return steps[Math.max(index - 1, 0)] ?? state.step;
 }

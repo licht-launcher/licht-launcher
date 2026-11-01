@@ -91,10 +91,7 @@ export function InstancesPage() {
         <Button
           type="button"
           onClick={() => {
-            void navigate({
-              to: "/instances/new",
-              search: { step: "source" },
-            });
+            void navigate({ to: "/instances/new" });
           }}
         >
           <PlusIcon data-icon="inline-start" aria-hidden />

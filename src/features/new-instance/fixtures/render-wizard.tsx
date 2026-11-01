@@ -50,10 +50,33 @@ export const wizardVersions: VersionSummary[] = [
   { id: "24w14a", versionType: "snapshot", installed: false },
 ];
 
+export function wizardInstance(name: string, versionId = "1.20.1") {
+  const entry: InstanceEntry = {
+    folder: name,
+    name,
+    versionId,
+    minMemoryMb: 512,
+    maxMemoryMb: 2048,
+    jvmArguments: [],
+    fullscreen: false,
+    width: null,
+    height: null,
+    overrideWindow: false,
+    overrideMemory: false,
+    overrideJava: false,
+    overrideJvmArguments: false,
+    javaPath: null,
+    lastOpenedAt: null,
+    iconPath: null,
+  };
+  return entry;
+}
+
 export function mockWizardCommands(
   implement?: (command: string, args?: unknown) => unknown,
+  existing: InstanceEntry[] = [],
 ) {
-  let instances: InstanceEntry[] = [];
+  let instances: InstanceEntry[] = [...existing];
   unexpectedCommands = [];
   invoke.mockReset();
   invoke.mockImplementation(async (command, args) => {
@@ -112,7 +135,8 @@ export function mockWizardCommands(
         ];
       case "create_instance_with_platform":
       case "create_instance_from_modpack":
-      case "create_instance_from_modpack_file": {
+      case "create_instance_from_modpack_file":
+      case "duplicate_instance": {
         if (
           args === null ||
           typeof args !== "object" ||
@@ -121,27 +145,12 @@ export function mockWizardCommands(
         ) {
           throw new Error(`Missing instance name for ${command}`);
         }
-        const entry: InstanceEntry = {
-          folder: args.name,
-          name: args.name,
-          versionId:
-            "gameVersion" in args && typeof args.gameVersion === "string"
-              ? args.gameVersion
-              : "1.20.1",
-          minMemoryMb: 512,
-          maxMemoryMb: 2048,
-          jvmArguments: [],
-          fullscreen: false,
-          width: null,
-          height: null,
-          overrideWindow: false,
-          overrideMemory: false,
-          overrideJava: false,
-          overrideJvmArguments: false,
-          javaPath: null,
-          lastOpenedAt: null,
-          iconPath: null,
-        };
+        const entry = wizardInstance(
+          args.name,
+          "gameVersion" in args && typeof args.gameVersion === "string"
+            ? args.gameVersion
+            : "1.20.1",
+        );
         instances = [...instances, entry];
         return entry;
       }
@@ -179,8 +188,13 @@ export async function selectChoice(name: string | RegExp) {
   );
 }
 
-export async function continueWizard() {
-  const button = screen.getByRole("button", { name: "Continue" });
-  await waitFor(() => expect(button).toBeEnabled());
-  fireEvent.click(button);
+export async function selectSource(name: string) {
+  fireEvent.mouseDown(await screen.findByRole("tab", { name }));
+  fireEvent.click(screen.getByRole("tab", { name }));
+  await waitFor(() =>
+    expect(screen.getByRole("tab", { name })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    ),
+  );
 }

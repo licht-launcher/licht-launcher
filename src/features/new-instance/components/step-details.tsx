@@ -45,7 +45,7 @@ import {
   type LoaderChannel,
   type PlatformId,
   platformNeedsLoader,
-} from "@/features/new-instance/model/wizard";
+} from "@/features/new-instance/model/create-state";
 import type { VersionSummary } from "@/lib/generated/VersionSummary";
 import type { VersionType } from "@/lib/generated/VersionType";
 import { cn } from "@/lib/utils";

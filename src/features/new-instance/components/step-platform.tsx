@@ -3,7 +3,7 @@ import { PlatformIcon } from "@/features/new-instance/assets/platform-icons";
 import {
   PLATFORMS,
   type PlatformId,
-} from "@/features/new-instance/model/wizard";
+} from "@/features/new-instance/model/create-state";
 
 const PLATFORM_HINTS: Record<PlatformId, string> = {
   vanilla: "Official game, no mod loader.",

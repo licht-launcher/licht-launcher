@@ -1,139 +1,93 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { ArrowLeftIcon, ArrowRightIcon, PlusIcon, XIcon } from "lucide-react";
-import { useCallback, useEffect, useMemo } from "react";
+import {
+  CopyIcon,
+  FileUpIcon,
+  PackageIcon,
+  PlusIcon,
+  WrenchIcon,
+  XIcon,
+} from "lucide-react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   VERSIONS_QUERY_KEY,
   versionsQueryOptions,
 } from "@/features/instances/lib/versions-query";
 import { createVersionChoices } from "@/features/instances/model/create-versions";
-import { StepConfirm } from "@/features/new-instance/components/step-confirm";
+import { StepClone } from "@/features/new-instance/components/step-clone";
 import { StepDetails } from "@/features/new-instance/components/step-details";
 import { StepFile } from "@/features/new-instance/components/step-file";
 import { StepModpack } from "@/features/new-instance/components/step-modpack";
 import { StepModpackVersion } from "@/features/new-instance/components/step-modpack-version";
 import { StepPlatform } from "@/features/new-instance/components/step-platform";
-import { StepSource } from "@/features/new-instance/components/step-source";
-import { WizardStepper } from "@/features/new-instance/components/wizard-stepper";
 import {
-  canAdvance,
+  type CreateState,
+  canCreate,
   fileBaseName,
-  initialWizardState,
-  type ModpackListItem,
-  type ModpackVersionItem,
-  nextStep,
+  type InstanceSource,
+  initialCreateState,
   platformNeedsLoader,
-  previousStep,
-  stepIndex,
-  stepsFor,
-  type WizardState,
-} from "@/features/new-instance/model/wizard";
-import {
-  type NewInstanceSearch,
-  searchFromWizardState,
-  wizardStateFromSearch,
-} from "@/features/new-instance/model/wizard-search";
+} from "@/features/new-instance/model/create-state";
 import {
   browseModpackFile,
   createInstanceFromModpack,
   createInstanceFromModpackFile,
   createInstanceWithPlatform,
+  duplicateInstance,
+  listInstances,
   listLoaderVersions,
   listModpackVersions,
   searchModpacks,
 } from "@/lib/commands";
 import { friendlyError, messageOf } from "@/lib/errors";
-import { Route } from "@/routes/_app/instances.new";
 
-function resolveModpack(
-  search: NewInstanceSearch,
-  items: ModpackListItem[],
-): ModpackListItem | null {
-  if (search.modpackId === undefined) {
-    return null;
-  }
-  const found = items.find((item) => item.id === search.modpackId);
-  if (found !== undefined) {
-    return found;
-  }
-  return {
-    id: search.modpackId,
-    source: search.modpackSource ?? "modrinth",
-    name: search.name ?? search.modpackId,
-    description: "",
-    downloads: 0,
-    iconUrl: null,
-    author: "",
-  };
-}
+const SOURCES: readonly InstanceSource[] = [
+  "scratch",
+  "modpack",
+  "file",
+  "clone",
+];
 
-function resolveModpackVersion(
-  search: NewInstanceSearch,
-  versions: ModpackVersionItem[],
-): ModpackVersionItem | null {
-  if (search.modpackVersionId === undefined) {
-    return null;
-  }
-  const found = versions.find((item) => item.id === search.modpackVersionId);
-  if (found !== undefined) {
-    return found;
-  }
-  return {
-    id: search.modpackVersionId,
-    name: search.modpackVersionId,
-    gameVersions: [],
-    loaders: [],
-  };
+function isInstanceSource(value: string): value is InstanceSource {
+  return (SOURCES as readonly string[]).includes(value);
 }
 
 export function NewInstancePage() {
   const navigate = useNavigate({ from: "/instances/new" });
-  const search = Route.useSearch();
   const queryClient = useQueryClient();
+  const [state, setState] = useState<CreateState>(initialCreateState);
+
+  function update(patch: Partial<CreateState>) {
+    setState((current) => ({ ...current, ...patch }));
+  }
 
   const versions = useQuery(versionsQueryOptions);
 
   const modpacks = useQuery({
-    queryKey: ["modpacks", search.modpackQuery ?? ""],
-    queryFn: () => searchModpacks(search.modpackQuery ?? ""),
-    enabled: search.step === "modpack" || search.modpackId !== undefined,
+    queryKey: ["modpacks", state.modpackQuery],
+    queryFn: () => searchModpacks(state.modpackQuery),
+    enabled: state.source === "modpack",
     retry: false,
   });
 
   const packVersions = useQuery({
     queryKey: [
       "modpack-versions",
-      search.modpackSource ?? "modrinth",
-      search.modpackId ?? "",
+      state.modpack?.source ?? "modrinth",
+      state.modpack?.id ?? "",
     ],
     queryFn: () =>
       listModpackVersions(
-        search.modpackSource ?? "modrinth",
-        search.modpackId ?? "",
+        state.modpack?.source ?? "modrinth",
+        state.modpack?.id ?? "",
       ),
-    enabled:
-      (search.step === "modpack-version" ||
-        search.modpackVersionId !== undefined) &&
-      search.modpackId !== undefined,
+    enabled: state.source === "modpack" && state.modpack !== null,
     retry: false,
   });
-
-  const modpack = useMemo(
-    () => resolveModpack(search, modpacks.data ?? []),
-    [search, modpacks.data],
-  );
-  const modpackVersion = useMemo(
-    () => resolveModpackVersion(search, packVersions.data ?? []),
-    [search, packVersions.data],
-  );
-
-  const state = useMemo(
-    () => wizardStateFromSearch(search, modpack, modpackVersion),
-    [search, modpack, modpackVersion],
-  );
 
   const loaderVersions = useQuery({
     queryKey: [
@@ -144,41 +98,25 @@ export function NewInstancePage() {
     ],
     queryFn: () =>
       listLoaderVersions(
-        state.platform ?? "fabric",
+        state.platform,
         state.gameVersion,
         state.loaderChannel,
       ),
     enabled:
-      state.step === "details" &&
+      state.source === "scratch" &&
       platformNeedsLoader(state.platform) &&
       state.gameVersion !== "",
     retry: false,
   });
 
-  const replaceState = useCallback(
-    (next: WizardState) => {
-      void navigate({
-        to: "/instances/new",
-        search: searchFromWizardState(next),
-        replace: true,
-      });
-    },
-    [navigate],
-  );
-
-  const pushState = useCallback(
-    (next: WizardState) => {
-      void navigate({
-        to: "/instances/new",
-        search: searchFromWizardState(next),
-        replace: false,
-      });
-    },
-    [navigate],
-  );
+  const instances = useQuery({
+    queryKey: ["instances"],
+    queryFn: listInstances,
+    enabled: state.source === "clone",
+  });
 
   useEffect(() => {
-    if (state.step !== "details" || state.gameVersion !== "") {
+    if (state.source !== "scratch" || state.gameVersion !== "") {
       return;
     }
     const choices = createVersionChoices(
@@ -186,13 +124,16 @@ export function NewInstancePage() {
       state.includeSnapshots,
     );
     if (choices[0] !== undefined) {
-      replaceState({ ...state, gameVersion: choices[0].id });
+      setState((current) => ({
+        ...current,
+        gameVersion: choices[0]?.id ?? "",
+      }));
     }
-  }, [state, versions.data, replaceState]);
+  }, [state.source, state.gameVersion, state.includeSnapshots, versions.data]);
 
   useEffect(() => {
     if (
-      state.step !== "details" ||
+      state.source !== "scratch" ||
       !platformNeedsLoader(state.platform) ||
       state.loaderChannel === "manual"
     ) {
@@ -200,56 +141,58 @@ export function NewInstancePage() {
     }
     const first = loaderVersions.data?.[0];
     if (first !== undefined && state.loaderVersion !== first) {
-      replaceState({ ...state, loaderVersion: first });
+      setState((current) => ({ ...current, loaderVersion: first }));
     }
-  }, [state, loaderVersions.data, replaceState]);
+  }, [
+    state.source,
+    state.platform,
+    state.loaderChannel,
+    state.loaderVersion,
+    loaderVersions.data,
+  ]);
 
   useEffect(() => {
-    if (state.step !== "modpack-version" || state.modpackVersion !== null) {
+    if (state.source !== "modpack" || state.modpackVersion !== null) {
       return;
     }
     const first = packVersions.data?.[0];
     if (first !== undefined) {
-      replaceState({
-        ...state,
-        modpackVersion: first,
-        name:
-          state.name.trim() === "" ? (state.modpack?.name ?? "") : state.name,
-      });
+      setState((current) => ({ ...current, modpackVersion: first }));
     }
-  }, [state, packVersions.data, replaceState]);
+  }, [state.source, state.modpackVersion, packVersions.data]);
 
   const create = useMutation({
     mutationFn: async () => {
-      if (state.source === "modpack") {
-        if (state.modpack === null || state.modpackVersion === null) {
-          throw new Error("Pick a modpack version first.");
-        }
-        return createInstanceFromModpack({
-          name: state.name.trim(),
-          source: state.modpack.source,
-          projectId: state.modpack.id,
-          versionId: state.modpackVersion.id,
-          iconUrl: state.modpack.iconUrl,
-        });
+      const name = state.name.trim();
+      switch (state.source) {
+        case "scratch":
+          return createInstanceWithPlatform({
+            name,
+            platform: state.platform,
+            gameVersion: state.gameVersion,
+            loaderChannel: state.loaderChannel,
+            loaderVersion:
+              state.loaderChannel === "manual" ? state.loaderVersion : null,
+          });
+        case "modpack":
+          if (state.modpack === null || state.modpackVersion === null) {
+            throw new Error("Pick a modpack version first.");
+          }
+          return createInstanceFromModpack({
+            name,
+            source: state.modpack.source,
+            projectId: state.modpack.id,
+            versionId: state.modpackVersion.id,
+            iconUrl: state.modpack.iconUrl,
+          });
+        case "file":
+          return createInstanceFromModpackFile({
+            name,
+            path: state.filePath,
+          });
+        case "clone":
+          return duplicateInstance(state.cloneFolder, name);
       }
-      if (state.source === "file") {
-        return createInstanceFromModpackFile({
-          name: state.name.trim(),
-          path: state.filePath,
-        });
-      }
-      if (state.platform === null) {
-        throw new Error("Pick a platform first.");
-      }
-      return createInstanceWithPlatform({
-        name: state.name.trim(),
-        platform: state.platform,
-        gameVersion: state.gameVersion,
-        loaderChannel: state.loaderChannel,
-        loaderVersion:
-          state.loaderChannel === "manual" ? state.loaderVersion : null,
-      });
     },
     onSuccess: async (entry) => {
       await queryClient.invalidateQueries({ queryKey: ["instances"] });
@@ -264,75 +207,64 @@ export function NewInstancePage() {
     },
   });
 
-  const path = stepsFor(state);
-  const index = stepIndex(state);
-
   async function browseFile() {
     try {
       const filePath = await browseModpackFile();
       if (filePath === null) {
         return;
       }
-      replaceState({
-        ...state,
+      setState((current) => ({
+        ...current,
         filePath,
-        name: state.name.trim() === "" ? fileBaseName(filePath) : state.name,
-      });
+        name:
+          current.name.trim() === "" ? fileBaseName(filePath) : current.name,
+      }));
     } catch (error) {
       toast.error(friendlyError(messageOf(error)));
     }
   }
 
-  function goNext() {
-    if (!canAdvance(state)) {
-      return;
-    }
-    if (state.step === "confirm") {
-      create.mutate();
-      return;
-    }
-    pushState({ ...state, step: nextStep(state) });
-  }
-
-  function goBack() {
-    if (state.step === "source") {
-      void navigate({ to: "/", search: {} });
-      return;
-    }
-    pushState({ ...state, step: previousStep(state) });
-  }
-
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-8 pt-6 pr-12 pb-8">
-      <div className="flex min-h-0 flex-1 flex-col gap-4">
-        <WizardStepper steps={path} currentIndex={Math.max(index, 0)} />
+      <Tabs
+        value={state.source}
+        onValueChange={(next) => {
+          if (isInstanceSource(next)) {
+            update({ source: next });
+          }
+        }}
+        className="min-h-0 flex-1 gap-4"
+      >
+        <TabsList variant="sliding" className="w-fit shrink-0">
+          <TabsTrigger value="scratch" className="cursor-pointer gap-1.5 px-3">
+            <WrenchIcon aria-hidden className="size-4 shrink-0" />
+            From scratch
+          </TabsTrigger>
+          <TabsTrigger value="modpack" className="cursor-pointer gap-1.5 px-3">
+            <PackageIcon aria-hidden className="size-4 shrink-0" />
+            Modpack
+          </TabsTrigger>
+          <TabsTrigger value="file" className="cursor-pointer gap-1.5 px-3">
+            <FileUpIcon aria-hidden className="size-4 shrink-0" />
+            Pack file
+          </TabsTrigger>
+          <TabsTrigger value="clone" className="cursor-pointer gap-1.5 px-3">
+            <CopyIcon aria-hidden className="size-4 shrink-0" />
+            Clone
+          </TabsTrigger>
+        </TabsList>
 
-        <div className="flex min-h-0 flex-1 flex-col">
-          {state.step === "source" ? (
-            <StepSource
-              value={state.source}
-              onChange={(source) => {
-                replaceState({
-                  ...initialWizardState,
-                  step: "source",
-                  source,
-                });
-              }}
-            />
-          ) : null}
-          {state.step === "platform" ? (
-            <StepPlatform
-              value={state.platform}
-              onChange={(platform) => {
-                replaceState({
-                  ...state,
-                  platform,
-                  loaderVersion: "",
-                });
-              }}
-            />
-          ) : null}
-          {state.step === "details" ? (
+        <TabsContent
+          value="scratch"
+          className="grid min-h-0 flex-1 gap-6 overflow-y-auto md:grid-cols-3"
+        >
+          <StepPlatform
+            value={state.platform}
+            onChange={(platform) => {
+              update({ platform, loaderVersion: "" });
+            }}
+          />
+          <div className="md:col-span-2">
             <StepDetails
               platform={state.platform}
               name={state.name}
@@ -349,114 +281,122 @@ export function NewInstancePage() {
               loaderVersions={loaderVersions.data ?? []}
               loaderVersionsPending={loaderVersions.isPending}
               onNameChange={(name) => {
-                replaceState({ ...state, name });
+                update({ name });
               }}
               onGameVersionChange={(gameVersion) => {
-                replaceState({
-                  ...state,
-                  gameVersion,
-                  loaderVersion: "",
-                });
+                update({ gameVersion, loaderVersion: "" });
               }}
               onIncludeSnapshotsChange={(includeSnapshots) => {
-                replaceState({ ...state, includeSnapshots });
+                update({ includeSnapshots });
               }}
               onLoaderChannelChange={(loaderChannel) => {
-                replaceState({
-                  ...state,
-                  loaderChannel,
-                  loaderVersion: "",
-                });
+                update({ loaderChannel, loaderVersion: "" });
               }}
               onLoaderVersionChange={(loaderVersion) => {
-                replaceState({ ...state, loaderVersion });
+                update({ loaderVersion });
               }}
             />
-          ) : null}
-          {state.step === "modpack" ? (
-            <StepModpack
-              query={state.modpackQuery}
-              items={modpacks.data ?? []}
-              selectedId={state.modpack?.id ?? null}
-              pending={modpacks.isPending}
-              error={
-                modpacks.isError
-                  ? friendlyError(messageOf(modpacks.error))
-                  : null
-              }
-              onQueryChange={(modpackQuery) => {
-                replaceState({ ...state, modpackQuery });
-              }}
-              onSelect={(nextModpack) => {
-                replaceState({
-                  ...state,
-                  modpack: nextModpack,
-                  modpackVersion: null,
-                  name: nextModpack.name,
-                });
-              }}
-            />
-          ) : null}
-          {state.step === "modpack-version" ? (
+          </div>
+        </TabsContent>
+
+        <TabsContent
+          value="modpack"
+          className="grid min-h-0 flex-1 gap-6 md:grid-cols-2"
+        >
+          <StepModpack
+            query={state.modpackQuery}
+            items={modpacks.data ?? []}
+            selectedId={state.modpack?.id ?? null}
+            pending={modpacks.isPending}
+            error={
+              modpacks.isError ? friendlyError(messageOf(modpacks.error)) : null
+            }
+            onQueryChange={(modpackQuery) => {
+              update({ modpackQuery });
+            }}
+            onSelect={(modpack) => {
+              update({ modpack, modpackVersion: null, name: modpack.name });
+            }}
+          />
+          {state.modpack === null ? (
+            <p className="text-sm text-muted-foreground">
+              Pick a modpack to choose its version.
+            </p>
+          ) : (
             <StepModpackVersion
               name={state.name}
               versions={packVersions.data ?? []}
               versionId={state.modpackVersion?.id ?? ""}
               versionsPending={packVersions.isPending}
               onNameChange={(name) => {
-                replaceState({ ...state, name });
+                update({ name });
               }}
               onVersionChange={(versionId) => {
-                const nextVersion =
-                  packVersions.data?.find((entry) => entry.id === versionId) ??
-                  null;
-                replaceState({ ...state, modpackVersion: nextVersion });
+                update({
+                  modpackVersion:
+                    packVersions.data?.find(
+                      (entry) => entry.id === versionId,
+                    ) ?? null,
+                });
               }}
             />
-          ) : null}
-          {state.step === "file" ? (
-            <StepFile
-              filePath={state.filePath}
-              name={state.name}
-              onBrowse={() => {
-                void browseFile();
-              }}
-              onNameChange={(name) => {
-                replaceState({ ...state, name });
-              }}
-            />
-          ) : null}
-          {state.step === "confirm" ? <StepConfirm state={state} /> : null}
-        </div>
+          )}
+        </TabsContent>
 
-        <footer className="flex justify-between gap-3 pt-2">
-          <Button type="button" variant="outline" onClick={goBack}>
-            {state.step === "source" ? (
-              <XIcon data-icon="inline-start" aria-hidden />
-            ) : (
-              <ArrowLeftIcon data-icon="inline-start" aria-hidden />
-            )}
-            {state.step === "source" ? "Cancel" : "Back"}
-          </Button>
-          <Button
-            type="button"
-            disabled={!canAdvance(state) || create.isPending}
-            onClick={goNext}
-          >
-            {state.step === "confirm" ? (
-              <PlusIcon data-icon="inline-start" aria-hidden />
-            ) : null}
-            {state.step === "confirm"
-              ? create.isPending
-                ? "Creating…"
-                : "Create instance"
-              : "Continue"}
-            {state.step === "confirm" ? null : (
-              <ArrowRightIcon data-icon="inline-end" aria-hidden />
-            )}
-          </Button>
-        </footer>
-      </div>
+        <TabsContent value="file" className="min-h-0 flex-1 overflow-y-auto">
+          <StepFile
+            filePath={state.filePath}
+            name={state.name}
+            onBrowse={() => {
+              void browseFile();
+            }}
+            onNameChange={(name) => {
+              update({ name });
+            }}
+          />
+        </TabsContent>
+
+        <TabsContent value="clone" className="flex min-h-0 flex-1 flex-col">
+          <StepClone
+            instances={instances.data ?? []}
+            pending={instances.isPending}
+            selectedFolder={state.cloneFolder}
+            name={state.name}
+            onSelect={(instance) => {
+              update({
+                cloneFolder: instance.folder,
+                name: `${instance.name} copy`,
+              });
+            }}
+            onNameChange={(name) => {
+              update({ name });
+            }}
+          />
+        </TabsContent>
+      </Tabs>
+
+      <footer className="flex shrink-0 justify-between gap-3 pt-4">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => {
+            void navigate({ to: "/", search: {} });
+          }}
+        >
+          <XIcon data-icon="inline-start" aria-hidden />
+          Cancel
+        </Button>
+        <Button
+          type="button"
+          disabled={!canCreate(state) || create.isPending}
+          onClick={() => {
+            create.mutate();
+          }}
+        >
+          <PlusIcon data-icon="inline-start" aria-hidden />
+          {create.isPending ? "Creating…" : "Create instance"}
+        </Button>
+      </footer>
     </div>
   );
 }

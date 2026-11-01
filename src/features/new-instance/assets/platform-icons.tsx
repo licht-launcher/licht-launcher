@@ -5,7 +5,7 @@ import forgeUrl from "@/assets/platforms/forge.png?no-inline";
 import neoforgeUrl from "@/assets/platforms/neoforge.png?no-inline";
 import quiltUrl from "@/assets/platforms/quilt.svg?no-inline";
 import vanillaUrl from "@/assets/platforms/vanilla.svg?no-inline";
-import type { PlatformId } from "@/features/new-instance/model/wizard";
+import type { PlatformId } from "@/features/new-instance/model/create-state";
 import { cn } from "@/lib/utils";
 
 const PLATFORM_ICON_URL: Record<PlatformId, string> = {

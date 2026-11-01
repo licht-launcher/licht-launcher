@@ -160,7 +160,7 @@ describe("Instance library", () => {
       await router.load();
     });
     expect(
-      await screen.findByRole("heading", { name: "How do you want to start?" }),
+      await screen.findByRole("tab", { name: "From scratch" }),
     ).toBeVisible();
   });
 
@@ -190,9 +190,9 @@ describe("Instance library", () => {
     await screen.findByRole("heading", { name: "Next" });
     fireEvent.click(screen.getByRole("link", { name: "Create instance" }));
     expect(
-      await screen.findByRole("heading", { name: "How do you want to start?" }),
+      await screen.findByRole("tab", { name: "From scratch" }),
     ).toBeVisible();
-    expect(router.state.location.search).toMatchObject({ step: "source" });
+    expect(router.state.location.pathname).toBe("/instances/new");
     expect(
       invoke.mock.calls.some(
         ([command]) => command === "create_instance_with_platform",
@@ -206,7 +206,7 @@ describe("Instance library", () => {
     expect(router.state.location.search).toMatchObject({ instance: "next" });
     fireEvent.click(screen.getByRole("button", { name: "Back" }));
     expect(
-      await screen.findByRole("heading", { name: "How do you want to start?" }),
+      await screen.findByRole("tab", { name: "From scratch" }),
     ).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Forward" }));
     expect(await screen.findByRole("heading", { name: "Next" })).toBeVisible();

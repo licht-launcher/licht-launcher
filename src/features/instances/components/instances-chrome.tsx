@@ -343,7 +343,7 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
                 size="sm"
                 className={footerActionClassName}
               >
-                <Link to="/instances/new" search={{ step: "source" }}>
+                <Link to="/instances/new">
                   <PlusIcon aria-hidden className="size-3.5" />
                   Create instance
                 </Link>

@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Spinner } from "@/components/ui/spinner";
 import { formatModpackSource } from "@/features/new-instance/assets/platform-icons";
-import type { ModpackListItem } from "@/features/new-instance/model/wizard";
+import type { ModpackListItem } from "@/features/new-instance/model/create-state";
 import { cn } from "@/lib/utils";
 
 export function StepModpack({

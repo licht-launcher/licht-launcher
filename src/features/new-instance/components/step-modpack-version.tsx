@@ -3,7 +3,7 @@ import { TagIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Spinner } from "@/components/ui/spinner";
-import type { ModpackVersionItem } from "@/features/new-instance/model/wizard";
+import type { ModpackVersionItem } from "@/features/new-instance/model/create-state";
 import { cn } from "@/lib/utils";
 
 export function StepModpackVersion({
