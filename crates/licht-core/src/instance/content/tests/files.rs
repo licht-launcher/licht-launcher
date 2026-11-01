@@ -26,6 +26,25 @@ fn lists_and_toggles_content() {
 }
 
 #[test]
+fn lists_only_zip_files_for_shader_packs() {
+    let cache = cache("shader-zips");
+    let root = instance(&cache);
+    let shaders = root.join("shaderpacks");
+    fs::write(shaders.join("complementary.zip"), b"shader").expect("zip");
+    fs::write(shaders.join("bsl.zip.disabled"), b"shader").expect("disabled zip");
+    fs::write(shaders.join("complementary.zip.txt"), b"config").expect("config");
+    fs::write(shaders.join("notes.txt"), b"notes").expect("notes");
+
+    let entries = list_instance_content(&cache, "classic").expect("list");
+    let names = entries
+        .iter()
+        .filter(|entry| entry.kind == InstanceContentKind::ShaderPacks)
+        .map(|entry| entry.name.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(names, ["bsl.zip", "complementary.zip"]);
+}
+
+#[test]
 fn rejects_unsafe_names_and_conflicts() {
     let cache = cache("validation");
     let root = instance(&cache);
