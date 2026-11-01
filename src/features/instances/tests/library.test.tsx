@@ -250,7 +250,10 @@ describe("Instance library", () => {
     await screen.findByRole("heading", { name: "Classic" });
     expect(screen.getByRole("navigation", { name: "Instances" })).toBeVisible();
     await act(async () => {
-      await router.navigate({ to: "/instances/new", search: { step: "source" } });
+      await router.navigate({
+        to: "/instances/new",
+        search: { step: "source" },
+      });
     });
     expect(
       await screen.findByRole("heading", { name: "How do you want to start?" }),
