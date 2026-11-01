@@ -34,6 +34,11 @@ pub fn list_instance_content(
                 .strip_suffix(DISABLED_SUFFIX)
                 .unwrap_or(&raw_name)
                 .to_string();
+            if kind == InstanceContentKind::ShaderPacks
+                && !name.to_ascii_lowercase().ends_with(".zip")
+            {
+                continue;
+            }
             entries.push(InstanceContentEntry {
                 title: fallback_title(&name),
                 name,
