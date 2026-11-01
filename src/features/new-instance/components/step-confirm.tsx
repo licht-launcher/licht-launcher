@@ -6,6 +6,7 @@ import {
   TagIcon,
 } from "lucide-react";
 
+import { Card } from "@/components/ui/card";
 import { formatModpackSource } from "@/features/new-instance/assets/platform-icons";
 import {
   PLATFORMS,
@@ -33,15 +34,15 @@ export function StepConfirm({ state }: { state: WizardState }) {
             </p>
           </div>
         </div>
-        <ul className="flex flex-col gap-2 text-sm text-muted-foreground">
-          <SummaryRow icon={TagIcon} label="Name" value={state.name.trim()} />
-          <SummaryRow
+        <ul className="grid gap-3 sm:grid-cols-2">
+          <SummaryCard icon={TagIcon} label="Name" value={state.name.trim()} />
+          <SummaryCard
             icon={PackageIcon}
             label="Modpack"
             value={`${state.modpack.name} · ${formatModpackSource(state.modpack.source)}`}
           />
           {state.modpackVersion !== null ? (
-            <SummaryRow
+            <SummaryCard
               icon={BoxIcon}
               label="Pack version"
               value={state.modpackVersion.name}
@@ -68,9 +69,9 @@ export function StepConfirm({ state }: { state: WizardState }) {
             </p>
           </div>
         </div>
-        <ul className="flex flex-col gap-2 text-sm text-muted-foreground">
-          <SummaryRow icon={TagIcon} label="Name" value={state.name.trim()} />
-          <SummaryRow icon={PackageIcon} label="File" value={state.filePath} />
+        <ul className="grid gap-3 sm:grid-cols-2">
+          <SummaryCard icon={TagIcon} label="Name" value={state.name.trim()} />
+          <SummaryCard icon={PackageIcon} label="File" value={state.filePath} />
         </ul>
       </div>
     );
@@ -92,16 +93,16 @@ export function StepConfirm({ state }: { state: WizardState }) {
           </p>
         </div>
       </div>
-      <ul className="flex flex-col gap-2 text-sm text-muted-foreground">
-        <SummaryRow icon={TagIcon} label="Name" value={state.name.trim()} />
-        <SummaryRow icon={BoxIcon} label="Platform" value={platformLabel} />
-        <SummaryRow
+      <ul className="grid gap-3 sm:grid-cols-2">
+        <SummaryCard icon={TagIcon} label="Name" value={state.name.trim()} />
+        <SummaryCard icon={BoxIcon} label="Platform" value={platformLabel} />
+        <SummaryCard
           icon={TagIcon}
           label="Game version"
           value={state.gameVersion}
         />
         {state.platform !== "vanilla" && state.platform !== null ? (
-          <SummaryRow
+          <SummaryCard
             icon={PuzzleIcon}
             label="Loader"
             value={
@@ -116,7 +117,7 @@ export function StepConfirm({ state }: { state: WizardState }) {
   );
 }
 
-function SummaryRow({
+function SummaryCard({
   icon: Icon,
   label,
   value,
@@ -126,12 +127,18 @@ function SummaryRow({
   value: string;
 }) {
   return (
-    <li className="flex items-center gap-2 rounded-md bg-black/25 px-3 py-2">
-      <Icon aria-hidden className="size-4 shrink-0 text-instance" />
-      <span className="min-w-0 flex-1">
-        <span className="text-muted-foreground">{label}: </span>
-        <span className="text-foreground">{value || "—"}</span>
-      </span>
+    <li className="min-w-0">
+      <Card aria-label={label} className="flex-row items-center gap-3 p-3">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-instance/20 text-instance">
+          <Icon aria-hidden className="size-4" />
+        </span>
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="text-xs text-muted-foreground">{label}</span>
+          <span className="truncate text-sm font-medium text-foreground">
+            {value || "—"}
+          </span>
+        </span>
+      </Card>
     </li>
   );
 }

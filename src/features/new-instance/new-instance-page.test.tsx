@@ -1,14 +1,40 @@
-import { fireEvent, screen } from "@testing-library/react";
+import { fireEvent, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import {
+  continueWizard,
   mockWizardCommands,
   renderWizard,
+  selectChoice,
   wizardVersions,
 } from "@/features/new-instance/fixtures/render-wizard";
 
 describe("NewInstancePage navigation and recovery", () => {
   beforeEach(() => mockWizardCommands());
+
+  it("preselects the scratch source so the user can continue right away", async () => {
+    await renderWizard();
+    expect(
+      await screen.findByRole("button", { name: /From scratch/ }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
+  });
+
+  it("goes back to a finished step from the stepper and keeps the choices", async () => {
+    await renderWizard();
+    await continueWizard();
+    await selectChoice(/^Fabric/);
+    await continueWizard();
+    await screen.findByLabelText("Instance Name");
+    fireEvent.click(screen.getByRole("button", { name: /Platform/ }));
+    expect(
+      await screen.findByRole("button", { name: /^Fabric/ }),
+    ).toHaveAttribute("aria-pressed", "true");
+    const progress = screen.getByRole("list", { name: "Wizard progress" });
+    expect(
+      within(progress).getByText("Platform").closest("[aria-current]"),
+    ).toHaveAttribute("aria-current", "step");
+  });
 
   it("restores progress from the URL search params", async () => {
     await renderWizard(

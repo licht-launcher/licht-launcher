@@ -1,25 +1,5 @@
-import {
-  BoxIcon,
-  CheckCircle2Icon,
-  FileUpIcon,
-  FolderPlusIcon,
-  type LucideIcon,
-  PackageIcon,
-  TagIcon,
-} from "lucide-react";
-
 import { Stepper } from "@/components/ui/stepper";
 import type { WizardStep } from "@/features/new-instance/model/wizard";
-
-const STEP_ICONS: Record<WizardStep, LucideIcon> = {
-  source: FolderPlusIcon,
-  platform: BoxIcon,
-  details: TagIcon,
-  modpack: PackageIcon,
-  "modpack-version": TagIcon,
-  file: FileUpIcon,
-  confirm: CheckCircle2Icon,
-};
 
 const STEP_LABELS: Record<WizardStep, string> = {
   source: "Source",
@@ -34,17 +14,22 @@ const STEP_LABELS: Record<WizardStep, string> = {
 export function WizardStepper({
   steps,
   currentIndex,
+  onSelect,
 }: {
   steps: WizardStep[];
   currentIndex: number;
+  onSelect: (step: WizardStep) => void;
 }) {
   return (
     <Stepper
       currentIndex={currentIndex}
-      steps={steps.map((step) => ({
-        label: STEP_LABELS[step],
-        icon: STEP_ICONS[step],
-      }))}
+      steps={steps.map((step) => ({ label: STEP_LABELS[step] }))}
+      onSelect={(index) => {
+        const step = steps[index];
+        if (step !== undefined) {
+          onSelect(step);
+        }
+      }}
     />
   );
 }

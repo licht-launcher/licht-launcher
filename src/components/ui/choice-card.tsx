@@ -17,6 +17,7 @@ export function ChoiceCard({
   icon,
   iconNeutral = false,
   iconTone = "instance",
+  size = "default",
   selected,
   disabled = false,
   onSelect,
@@ -30,6 +31,8 @@ export function ChoiceCard({
   iconNeutral?: boolean;
   /** Accent well for Lucide icons when not neutral. */
   iconTone?: ChoiceCardIconTone;
+  /** `lg` gives a roomier card for primary, one-of-few choices. */
+  size?: "default" | "lg";
   selected: boolean;
   disabled?: boolean;
   onSelect: () => void;
@@ -47,6 +50,7 @@ export function ChoiceCard({
         "focus-visible:ring-3 focus-visible:ring-ring/50",
         "disabled:pointer-events-none disabled:opacity-50",
         "border-border/60 ring-3",
+        size === "lg" && "min-h-40 gap-4 px-4 py-4",
         selected ? "bg-muted ring-primary" : "ring-primary/0",
         className,
       )}
@@ -57,7 +61,8 @@ export function ChoiceCard({
           {icon !== undefined ? (
             <span
               className={cn(
-                "flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-md transition-colors duration-200 ease-out",
+                "flex shrink-0 items-center justify-center overflow-hidden rounded-md transition-colors duration-200 ease-out",
+                size === "lg" ? "size-10" : "size-7",
                 iconNeutral
                   ? "bg-black/20 text-muted-foreground"
                   : iconTones[iconTone],
@@ -66,7 +71,9 @@ export function ChoiceCard({
               {icon}
             </span>
           ) : null}
-          <span className="block text-sm">{title}</span>
+          <span className={cn("block text-sm", size === "lg" && "text-base")}>
+            {title}
+          </span>
         </div>
 
         {description !== undefined ? (
