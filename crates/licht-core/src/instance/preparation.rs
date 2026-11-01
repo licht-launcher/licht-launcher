@@ -33,6 +33,8 @@ pub enum InstanceSource {
         #[serde(rename = "iconUrl")]
         icon_url: Option<String>,
     },
+    /// A modpack archive the user picked from disk, staged in the installation workspace.
+    ModpackFile { source: ModpackSource },
 }
 
 impl InstanceSource {
@@ -41,7 +43,7 @@ impl InstanceSource {
             Self::Vanilla { game_version } | Self::Loader { game_version, .. } => {
                 Some(game_version)
             }
-            Self::Modpack { .. } => None,
+            Self::Modpack { .. } | Self::ModpackFile { .. } => None,
         }
     }
 

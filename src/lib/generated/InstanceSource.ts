@@ -3,4 +3,4 @@ import type { LoaderChannel } from "./LoaderChannel";
 import type { LoaderPlatform } from "./LoaderPlatform";
 import type { ModpackSource } from "./ModpackSource";
 
-export type InstanceSource = { "type": "vanilla", gameVersion: string, } | { "type": "loader", platform: LoaderPlatform, gameVersion: string, channel: LoaderChannel, loaderVersion: string | null, } | { "type": "modpack", source: ModpackSource, projectId: string, versionId: string, iconUrl: string | null, };
+export type InstanceSource = { "type": "vanilla", gameVersion: string, } | { "type": "loader", platform: LoaderPlatform, gameVersion: string, channel: LoaderChannel, loaderVersion: string | null, } | { "type": "modpack", source: ModpackSource, projectId: string, versionId: string, iconUrl: string | null, } | { "type": "modpackFile", source: ModpackSource, };

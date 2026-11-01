@@ -89,14 +89,16 @@ pub(crate) async fn prepare_modpack_instance(
     selection: &InstanceSource,
     context: &crate::InstallationContext,
 ) -> Result<InstanceEntry> {
-    let InstanceSource::Modpack {
-        source,
-        project_id,
-        version_id,
-        icon_url: _,
-    } = selection
-    else {
-        return Err(CoreError::InstancePreparing);
+    let (source, remote) = match selection {
+        InstanceSource::Modpack {
+            source,
+            project_id,
+            version_id,
+            icon_url: _,
+        } => (source, Some((project_id, version_id))),
+        // The archive was staged in the workspace when the instance was created.
+        InstanceSource::ModpackFile { source } => (source, None),
+        _ => return Err(CoreError::InstancePreparing),
     };
     selection.validate()?;
     let context = context.component(crate::DownloadComponent::ModpackArchive);
@@ -104,20 +106,22 @@ pub(crate) async fn prepare_modpack_instance(
     let dir = instances_dir.join(&entry.folder);
     restore_instance_icon(client, &dir, selection, &context).await?;
     let archive = workspace::archive_path(&dir)?;
-    match source {
-        ModpackSource::Modrinth => {
-            modrinth::download_modrinth_mrpack_to(
-                client, project_id, version_id, &archive, &context,
-            )
-            .await?
-        }
-        ModpackSource::Curseforge => {
-            curseforge::download_curseforge_pack_to(
-                client, project_id, version_id, &archive, &context,
-            )
-            .await?
-        }
-    };
+    if let Some((project_id, version_id)) = remote {
+        match source {
+            ModpackSource::Modrinth => {
+                modrinth::download_modrinth_mrpack_to(
+                    client, project_id, version_id, &archive, &context,
+                )
+                .await?
+            }
+            ModpackSource::Curseforge => {
+                curseforge::download_curseforge_pack_to(
+                    client, project_id, version_id, &archive, &context,
+                )
+                .await?
+            }
+        };
+    }
     context.stage(crate::DownloadPhase::Extracting).await?;
     let bytes = std::fs::read(&archive)?;
     let entry = match source {
@@ -148,6 +152,29 @@ pub(crate) async fn prepare_modpack_instance(
     };
     context.checkpoint().await?;
     instance_entry(database, &dir, &entry.folder).await
+}
+
+/// Identifies a local modpack archive by the manifest it carries.
+pub(crate) fn detect_modpack_source(archive: &Path) -> Result<ModpackSource> {
+    let file = std::fs::File::open(archive)?;
+    let zip = zip::ZipArchive::new(file).map_err(|_| CoreError::ModpackArchive)?;
+    if zip.file_names().any(|name| name == "modrinth.index.json") {
+        Ok(ModpackSource::Modrinth)
+    } else if zip.file_names().any(|name| name == "manifest.json") {
+        Ok(ModpackSource::Curseforge)
+    } else {
+        Err(CoreError::ModpackArchive)
+    }
+}
+
+/// Copies a local archive into the instance's installation workspace.
+pub(crate) fn stage_modpack_archive(instance: &Path, archive: &Path) -> Result<()> {
+    let destination = workspace::archive_path(instance)?;
+    if let Some(directory) = destination.parent() {
+        std::fs::create_dir_all(directory)?;
+    }
+    std::fs::copy(archive, destination)?;
+    Ok(())
 }
 
 pub(crate) async fn restore_instance_icon(
