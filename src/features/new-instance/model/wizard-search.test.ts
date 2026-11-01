@@ -47,6 +47,19 @@ describe("wizard-search", () => {
     expect(wizardStateFromSearch(search, null, null)).toEqual(state);
   });
 
+  it("round-trips the picked archive through search", () => {
+    const state = {
+      ...initialWizardState,
+      step: "file" as const,
+      source: "file" as const,
+      name: "Cobblemon",
+      filePath: "C:\\packs\\cobble.mrpack",
+    };
+    const search = searchFromWizardState(state);
+    expect(parseNewInstanceSearch({ ...search })).toEqual(search);
+    expect(wizardStateFromSearch(search, null, null)).toEqual(state);
+  });
+
   it("patches search without dropping unrelated fields", () => {
     const current = parseNewInstanceSearch({
       step: "details",

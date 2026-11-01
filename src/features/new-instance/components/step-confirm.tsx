@@ -52,6 +52,34 @@ export function StepConfirm({ state }: { state: WizardState }) {
     );
   }
 
+  if (state.source === "file") {
+    return (
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center gap-3">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-instance/20 text-instance">
+            <CheckCircle2Icon aria-hidden className="size-5" strokeWidth={2} />
+          </span>
+          <div>
+            <h2 className="text-lg font-medium">Confirm</h2>
+            <p className="text-sm text-muted-foreground">
+              Create{" "}
+              <span className="text-foreground">{state.name.trim()}</span> from
+              a local pack file.
+            </p>
+          </div>
+        </div>
+        <ul className="flex flex-col gap-2 text-sm text-muted-foreground">
+          <SummaryRow icon={TagIcon} label="Name" value={state.name.trim()} />
+          <SummaryRow
+            icon={PackageIcon}
+            label="File"
+            value={state.filePath}
+          />
+        </ul>
+      </div>
+    );
+  }
+
   const platformLabel =
     PLATFORMS.find((entry) => entry.id === state.platform)?.label ?? "Unknown";
 

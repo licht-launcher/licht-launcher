@@ -24,6 +24,7 @@ export type NewInstanceSearch = {
   modpackId?: string;
   modpackSource?: ModpackSource;
   modpackVersionId?: string;
+  filePath?: string;
 };
 
 const WIZARD_STEPS: readonly WizardStep[] = [
@@ -32,6 +33,7 @@ const WIZARD_STEPS: readonly WizardStep[] = [
   "details",
   "modpack",
   "modpack-version",
+  "file",
   "confirm",
 ];
 
@@ -51,7 +53,7 @@ export function isWizardStep(value: unknown): value is WizardStep {
 }
 
 function isInstanceSource(value: unknown): value is InstanceSource {
-  return value === "scratch" || value === "modpack";
+  return value === "scratch" || value === "modpack" || value === "file";
 }
 
 function isPlatformId(value: unknown): value is PlatformId {
@@ -119,6 +121,10 @@ export function parseNewInstanceSearch(
   if (modpackVersionId !== undefined) {
     parsed.modpackVersionId = modpackVersionId;
   }
+  const filePath = optionalString(search.filePath);
+  if (filePath !== undefined) {
+    parsed.filePath = filePath;
+  }
 
   return clampSearchStep(parsed);
 }
@@ -150,6 +156,7 @@ export function wizardStateFromSearch(
     modpackQuery: search.modpackQuery ?? "",
     modpack,
     modpackVersion,
+    filePath: search.filePath ?? "",
   };
 }
 
@@ -187,6 +194,9 @@ export function searchFromWizardState(state: WizardState): NewInstanceSearch {
   }
   if (state.modpackVersion !== null) {
     search.modpackVersionId = state.modpackVersion.id;
+  }
+  if (state.filePath !== "") {
+    search.filePath = state.filePath;
   }
 
   return search;

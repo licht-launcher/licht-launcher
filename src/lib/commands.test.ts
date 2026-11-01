@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { open } from "@tauri-apps/plugin-dialog";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildDiagnostics } from "@/features/settings/fixtures/build-diagnostics";
 import { appUpdateState } from "@/features/updater/fixtures/state";
@@ -9,12 +10,14 @@ import {
   beginMicrosoftLogin,
   browseApplicationDirectory,
   browseJava,
+  browseModpackFile,
   cancelDownloadJob,
   checkAppUpdate,
   clearLastPlayedFolder,
   closeStartupPreview,
   createInstance,
   createInstanceFromModpack,
+  createInstanceFromModpackFile,
   createInstanceWithPlatform,
   customTitleBarActive,
   deleteInstance,
@@ -74,6 +77,10 @@ import type { InstanceContentUpdate } from "@/lib/generated/InstanceContentUpdat
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
+}));
+
+vi.mock("@tauri-apps/plugin-dialog", () => ({
+  open: vi.fn(),
 }));
 
 const { contentListeners, unsubscribe } = vi.hoisted(() => ({
@@ -257,6 +264,23 @@ describe("launcher commands", () => {
       projectId: "ABC",
       versionId: "v1",
       iconUrl: null,
+    });
+    vi.mocked(open).mockResolvedValueOnce("C:\\packs\\cobble.mrpack");
+    await expect(browseModpackFile()).resolves.toBe("C:\\packs\\cobble.mrpack");
+    expect(open).toHaveBeenCalledWith({
+      multiple: false,
+      directory: false,
+      filters: [{ name: "Modpack", extensions: ["mrpack", "zip"] }],
+    });
+    vi.mocked(open).mockResolvedValueOnce(null);
+    await expect(browseModpackFile()).resolves.toBeNull();
+    await createInstanceFromModpackFile({
+      name: "Cobblemon",
+      path: "C:\\packs\\cobble.mrpack",
+    });
+    expect(invoke).toHaveBeenCalledWith("create_instance_from_modpack_file", {
+      name: "Cobblemon",
+      path: "C:\\packs\\cobble.mrpack",
     });
     await renameInstance("Survival", "Classic");
     expect(invoke).toHaveBeenCalledWith("rename_instance", {

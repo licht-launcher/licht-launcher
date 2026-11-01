@@ -1,4 +1,4 @@
-export type InstanceSource = "scratch" | "modpack";
+export type InstanceSource = "scratch" | "modpack" | "file";
 
 export type PlatformId = "vanilla" | "fabric" | "neoforge" | "forge" | "quilt";
 
@@ -10,6 +10,7 @@ export type WizardStep =
   | "details"
   | "modpack"
   | "modpack-version"
+  | "file"
   | "confirm";
 
 export type ModpackSource = "modrinth" | "curseforge";
@@ -43,6 +44,7 @@ export type WizardState = {
   modpackQuery: string;
   modpack: ModpackListItem | null;
   modpackVersion: ModpackVersionItem | null;
+  filePath: string;
 };
 
 export const initialWizardState: WizardState = {
@@ -57,6 +59,7 @@ export const initialWizardState: WizardState = {
   modpackQuery: "",
   modpack: null,
   modpackVersion: null,
+  filePath: "",
 };
 
 export const PLATFORMS: {
@@ -75,12 +78,21 @@ export function platformNeedsLoader(platform: PlatformId | null): boolean {
   return PLATFORMS.some((entry) => entry.id === platform && entry.needsLoader);
 }
 
+export function fileBaseName(path: string): string {
+  const name = path.split(/[\\/]/).pop() ?? "";
+  const dot = name.lastIndexOf(".");
+  return dot > 0 ? name.slice(0, dot) : name;
+}
+
 export function stepsFor(state: WizardState): WizardStep[] {
   if (state.source === "modpack") {
     return ["source", "modpack", "modpack-version", "confirm"];
   }
   if (state.source === "scratch") {
     return ["source", "platform", "details", "confirm"];
+  }
+  if (state.source === "file") {
+    return ["source", "file", "confirm"];
   }
   return ["source"];
 }
@@ -111,6 +123,8 @@ export function canAdvance(state: WizardState): boolean {
       return state.modpack !== null;
     case "modpack-version":
       return state.modpackVersion !== null && state.name.trim() !== "";
+    case "file":
+      return state.filePath !== "" && state.name.trim() !== "";
     case "confirm":
       return true;
     default:

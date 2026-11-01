@@ -40,13 +40,14 @@ export function StepSource({
           }}
         />
         <ChoiceCard
-          title="Upload .mrpack"
-          description="Import a local Modrinth pack file."
+          title="Import a pack file"
+          description="Use a local .mrpack or CurseForge .zip."
           icon={<FileUpIcon aria-hidden strokeWidth={2} />}
           iconTone="file"
-          selected={false}
-          disabled
-          onSelect={() => {}}
+          selected={value === "file"}
+          onSelect={() => {
+            onChange("file");
+          }}
         />
       </div>
     </div>

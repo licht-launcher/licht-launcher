@@ -12,6 +12,7 @@ import {
 import { createVersionChoices } from "@/features/instances/model/create-versions";
 import { StepConfirm } from "@/features/new-instance/components/step-confirm";
 import { StepDetails } from "@/features/new-instance/components/step-details";
+import { StepFile } from "@/features/new-instance/components/step-file";
 import { StepModpack } from "@/features/new-instance/components/step-modpack";
 import { StepModpackVersion } from "@/features/new-instance/components/step-modpack-version";
 import { StepPlatform } from "@/features/new-instance/components/step-platform";
@@ -19,6 +20,7 @@ import { StepSource } from "@/features/new-instance/components/step-source";
 import { WizardStepper } from "@/features/new-instance/components/wizard-stepper";
 import {
   canAdvance,
+  fileBaseName,
   initialWizardState,
   type ModpackListItem,
   type ModpackVersionItem,
@@ -35,7 +37,9 @@ import {
   wizardStateFromSearch,
 } from "@/features/new-instance/model/wizard-search";
 import {
+  browseModpackFile,
   createInstanceFromModpack,
+  createInstanceFromModpackFile,
   createInstanceWithPlatform,
   listLoaderVersions,
   listModpackVersions,
@@ -229,6 +233,12 @@ export function NewInstancePage() {
           iconUrl: state.modpack.iconUrl,
         });
       }
+      if (state.source === "file") {
+        return createInstanceFromModpackFile({
+          name: state.name.trim(),
+          path: state.filePath,
+        });
+      }
       if (state.platform === null) {
         throw new Error("Pick a platform first.");
       }
@@ -256,6 +266,22 @@ export function NewInstancePage() {
 
   const path = stepsFor(state);
   const index = stepIndex(state);
+
+  async function browseFile() {
+    try {
+      const filePath = await browseModpackFile();
+      if (filePath === null) {
+        return;
+      }
+      replaceState({
+        ...state,
+        filePath,
+        name: state.name.trim() === "" ? fileBaseName(filePath) : state.name,
+      });
+    } catch (error) {
+      toast.error(friendlyError(messageOf(error)));
+    }
+  }
 
   function goNext() {
     if (!canAdvance(state)) {
@@ -385,6 +411,18 @@ export function NewInstancePage() {
                   packVersions.data?.find((entry) => entry.id === versionId) ??
                   null;
                 replaceState({ ...state, modpackVersion: nextVersion });
+              }}
+            />
+          ) : null}
+          {state.step === "file" ? (
+            <StepFile
+              filePath={state.filePath}
+              name={state.name}
+              onBrowse={() => {
+                void browseFile();
+              }}
+              onNameChange={(name) => {
+                replaceState({ ...state, name });
               }}
             />
           ) : null}

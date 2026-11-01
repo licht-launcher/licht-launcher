@@ -23,12 +23,17 @@ const { invoke } = vi.hoisted(() => ({
   invoke: vi.fn<(command: string, args?: unknown) => Promise<unknown>>(),
 }));
 
-export { invoke };
+const { openDialog } = vi.hoisted(() => ({
+  openDialog: vi.fn<() => Promise<string | null>>(),
+}));
+
+export { invoke, openDialog };
 
 let unexpectedCommands: string[] = [];
 afterEach(() => expect(unexpectedCommands).toEqual([]));
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
+vi.mock("@tauri-apps/plugin-dialog", () => ({ open: openDialog }));
 vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn(async () => () => {}),
 }));
@@ -106,7 +111,8 @@ export function mockWizardCommands(
           },
         ];
       case "create_instance_with_platform":
-      case "create_instance_from_modpack": {
+      case "create_instance_from_modpack":
+      case "create_instance_from_modpack_file": {
         if (
           args === null ||
           typeof args !== "object" ||
