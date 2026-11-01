@@ -60,6 +60,15 @@ describe("wizard-search", () => {
     expect(wizardStateFromSearch(search, null, null)).toEqual(state);
   });
 
+  it("falls back to the scratch source when the URL has none", () => {
+    expect(wizardStateFromSearch({ step: "source" }, null, null).source).toBe(
+      "scratch",
+    );
+    expect(parseNewInstanceSearch({ step: "platform" })).toMatchObject({
+      step: "platform",
+    });
+  });
+
   it("patches search without dropping unrelated fields", () => {
     const current = parseNewInstanceSearch({
       step: "details",

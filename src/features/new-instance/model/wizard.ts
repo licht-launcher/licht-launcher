@@ -49,7 +49,7 @@ export type WizardState = {
 
 export const initialWizardState: WizardState = {
   step: "source",
-  source: null,
+  source: "scratch",
   platform: null,
   name: "",
   gameVersion: "",

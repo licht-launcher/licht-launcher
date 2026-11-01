@@ -146,7 +146,7 @@ export function wizardStateFromSearch(
 ): WizardState {
   return {
     step: search.step,
-    source: search.source ?? null,
+    source: search.source ?? "scratch",
     platform: search.platform ?? null,
     name: search.name ?? "",
     gameVersion: search.gameVersion ?? "",

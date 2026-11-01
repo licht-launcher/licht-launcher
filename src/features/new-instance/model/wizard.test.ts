@@ -10,6 +10,17 @@ import {
 } from "@/features/new-instance/model/wizard";
 
 describe("wizard steps", () => {
+  it("starts with the scratch source selected so Continue is ready", () => {
+    expect(initialWizardState.source).toBe("scratch");
+    expect(stepsFor(initialWizardState)).toEqual([
+      "source",
+      "platform",
+      "details",
+      "confirm",
+    ]);
+    expect(canAdvance(initialWizardState)).toBe(true);
+  });
+
   it("builds the vanilla scratch path", () => {
     const state = {
       ...initialWizardState,

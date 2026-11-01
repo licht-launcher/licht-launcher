@@ -1,10 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { ArrowLeftIcon, ArrowRightIcon, PlusIcon, XIcon } from "lucide-react";
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { PageTransition } from "@/components/ui/page-transition";
 import {
   VERSIONS_QUERY_KEY,
   versionsQueryOptions,
@@ -30,9 +31,11 @@ import {
   stepIndex,
   stepsFor,
   type WizardState,
+  type WizardStep,
 } from "@/features/new-instance/model/wizard";
 import {
   type NewInstanceSearch,
+  patchSearch,
   searchFromWizardState,
   wizardStateFromSearch,
 } from "@/features/new-instance/model/wizard-search";
@@ -90,6 +93,7 @@ function resolveModpackVersion(
 }
 
 export function NewInstancePage() {
+  const [direction, setDirection] = useState<"left" | "right">("left");
   const navigate = useNavigate({ from: "/instances/new" });
   const search = Route.useSearch();
   const queryClient = useQueryClient();
@@ -177,6 +181,20 @@ export function NewInstancePage() {
     [navigate],
   );
 
+  // Applies a loaded default to the latest route, and only while the user is
+  // still on `step`; a stale `state` would otherwise undo a step change.
+  const fillDefault = useCallback(
+    (step: WizardStep, patch: Partial<NewInstanceSearch>) => {
+      void navigate({
+        to: "/instances/new",
+        search: (prev) =>
+          prev.step === step ? patchSearch(prev, patch) : prev,
+        replace: true,
+      });
+    },
+    [navigate],
+  );
+
   useEffect(() => {
     if (state.step !== "details" || state.gameVersion !== "") {
       return;
@@ -186,9 +204,9 @@ export function NewInstancePage() {
       state.includeSnapshots,
     );
     if (choices[0] !== undefined) {
-      replaceState({ ...state, gameVersion: choices[0].id });
+      fillDefault("details", { gameVersion: choices[0].id });
     }
-  }, [state, versions.data, replaceState]);
+  }, [state, versions.data, fillDefault]);
 
   useEffect(() => {
     if (
@@ -200,9 +218,9 @@ export function NewInstancePage() {
     }
     const first = loaderVersions.data?.[0];
     if (first !== undefined && state.loaderVersion !== first) {
-      replaceState({ ...state, loaderVersion: first });
+      fillDefault("details", { loaderVersion: first });
     }
-  }, [state, loaderVersions.data, replaceState]);
+  }, [state, loaderVersions.data, fillDefault]);
 
   useEffect(() => {
     if (state.step !== "modpack-version" || state.modpackVersion !== null) {
@@ -210,14 +228,14 @@ export function NewInstancePage() {
     }
     const first = packVersions.data?.[0];
     if (first !== undefined) {
-      replaceState({
-        ...state,
-        modpackVersion: first,
-        name:
-          state.name.trim() === "" ? (state.modpack?.name ?? "") : state.name,
+      fillDefault("modpack-version", {
+        modpackVersionId: first.id,
+        ...(state.name.trim() === "" && state.modpack !== null
+          ? { name: state.modpack.name }
+          : {}),
       });
     }
-  }, [state, packVersions.data, replaceState]);
+  }, [state, packVersions.data, fillDefault]);
 
   const create = useMutation({
     mutationFn: async () => {
@@ -291,6 +309,7 @@ export function NewInstancePage() {
       create.mutate();
       return;
     }
+    setDirection("left");
     pushState({ ...state, step: nextStep(state) });
   }
 
@@ -299,15 +318,25 @@ export function NewInstancePage() {
       void navigate({ to: "/", search: {} });
       return;
     }
+    setDirection("right");
     pushState({ ...state, step: previousStep(state) });
+  }
+
+  function goToStep(step: WizardStep) {
+    setDirection("right");
+    pushState({ ...state, step });
   }
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-8 pt-6 pr-12 pb-8">
-      <div className="flex min-h-0 flex-1 flex-col gap-4">
-        <WizardStepper steps={path} currentIndex={Math.max(index, 0)} />
+      <div className="mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col gap-6">
+        <WizardStepper
+          steps={path}
+          currentIndex={Math.max(index, 0)}
+          onSelect={goToStep}
+        />
 
-        <div className="flex min-h-0 flex-1 flex-col">
+        <PageTransition animationKey={state.step} direction={direction}>
           {state.step === "source" ? (
             <StepSource
               value={state.source}
@@ -427,7 +456,7 @@ export function NewInstancePage() {
             />
           ) : null}
           {state.step === "confirm" ? <StepConfirm state={state} /> : null}
-        </div>
+        </PageTransition>
 
         <footer className="flex justify-between gap-3 pt-2">
           <Button type="button" variant="outline" onClick={goBack}>
