@@ -70,11 +70,7 @@ export function StepConfirm({ state }: { state: WizardState }) {
         </div>
         <ul className="flex flex-col gap-2 text-sm text-muted-foreground">
           <SummaryRow icon={TagIcon} label="Name" value={state.name.trim()} />
-          <SummaryRow
-            icon={PackageIcon}
-            label="File"
-            value={state.filePath}
-          />
+          <SummaryRow icon={PackageIcon} label="File" value={state.filePath} />
         </ul>
       </div>
     );
