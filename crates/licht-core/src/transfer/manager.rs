@@ -115,6 +115,42 @@ impl DownloadManager {
             .await?;
         Ok(entry)
     }
+    /// Creates an instance from a modpack archive on disk (`.mrpack` or CurseForge zip).
+    pub async fn create_from_modpack_file(
+        self: &Arc<Self>,
+        name: &str,
+        archive: &std::path::Path,
+    ) -> Result<InstanceEntry> {
+        self.accept_work()?;
+        let source = crate::modpacks::detect_modpack_source(archive)?;
+        let settings = load_settings(&self.runtime.settings)?;
+        let root = self.runtime.game.instances_dir()?;
+        let entry = create_pending_instance(
+            &self.runtime.database,
+            &root,
+            name,
+            InstanceSource::ModpackFile { source },
+            &global_launch(&settings),
+        )
+        .await?;
+        if let Err(error) =
+            crate::modpacks::stage_modpack_archive(&root.join(&entry.folder), archive)
+        {
+            if let Err(cleanup) =
+                crate::delete_instance(&self.runtime.database, &root, &entry.folder).await
+            {
+                tracing::warn!(error = %cleanup, "could not remove an instance that failed to stage its archive");
+            }
+            return Err(error);
+        }
+        self.runtime
+            .database
+            .delete_modpack(&root, &entry.folder)
+            .await?;
+        self.start(&entry.folder, DownloadJobOperation::Install)
+            .await?;
+        Ok(entry)
+    }
     pub async fn prepare(
         self: &Arc<Self>,
         folder: &str,

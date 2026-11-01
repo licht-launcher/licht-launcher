@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   canAdvance,
+  fileBaseName,
   initialWizardState,
   nextStep,
   previousStep,
@@ -63,6 +64,38 @@ describe("wizard steps", () => {
       "modpack-version",
       "confirm",
     ]);
+  });
+
+  it("builds the local file path", () => {
+    const state = {
+      ...initialWizardState,
+      source: "file" as const,
+    };
+    expect(stepsFor(state)).toEqual(["source", "file", "confirm"]);
+  });
+
+  it("needs a picked file and a name to leave the file step", () => {
+    const state = {
+      ...initialWizardState,
+      step: "file" as const,
+      source: "file" as const,
+    };
+    expect(canAdvance(state)).toBe(false);
+    expect(canAdvance({ ...state, filePath: "C:\\packs\\a.mrpack" })).toBe(
+      false,
+    );
+    expect(
+      canAdvance({ ...state, filePath: "C:\\packs\\a.mrpack", name: "  " }),
+    ).toBe(false);
+    expect(
+      canAdvance({ ...state, filePath: "C:\\packs\\a.mrpack", name: "Pack" }),
+    ).toBe(true);
+  });
+
+  it("derives a default name from the archive file name", () => {
+    expect(fileBaseName("C:\\packs\\Cobble Pack.mrpack")).toBe("Cobble Pack");
+    expect(fileBaseName("/home/a/pack.v2.zip")).toBe("pack.v2");
+    expect(fileBaseName("/home/a/noextension")).toBe("noextension");
   });
 
   it("advances and goes back", () => {

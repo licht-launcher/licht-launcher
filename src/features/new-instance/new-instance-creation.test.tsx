@@ -5,6 +5,7 @@ import {
   continueWizard,
   invoke,
   mockWizardCommands,
+  openDialog,
   renderWizard,
   selectChoice,
 } from "@/features/new-instance/fixtures/render-wizard";
@@ -91,5 +92,40 @@ describe("NewInstancePage creation", () => {
     expect(
       await screen.findByRole("heading", { name: "Cobblemon" }),
     ).toBeVisible();
+  });
+
+  it("imports a local pack file and returns to its library page", async () => {
+    openDialog.mockResolvedValueOnce("C:\\packs\\Cobble Pack.mrpack");
+    await renderWizard();
+    await selectChoice(/Import a pack file/);
+    await continueWizard();
+    fireEvent.click(await screen.findByRole("button", { name: "Choose file" }));
+    await waitFor(() =>
+      expect(screen.getByLabelText(/^Name$/)).toHaveValue("Cobble Pack"),
+    );
+    await continueWizard();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Create instance" }),
+    );
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("create_instance_from_modpack_file", {
+        name: "Cobble Pack",
+        path: "C:\\packs\\Cobble Pack.mrpack",
+      }),
+    );
+    expect(
+      await screen.findByRole("heading", { name: "Cobble Pack" }),
+    ).toBeVisible();
+  });
+
+  it("keeps the file step unchanged when the picker is cancelled", async () => {
+    openDialog.mockResolvedValueOnce(null);
+    await renderWizard();
+    await selectChoice(/Import a pack file/);
+    await continueWizard();
+    fireEvent.click(await screen.findByRole("button", { name: "Choose file" }));
+    await waitFor(() => expect(openDialog).toHaveBeenCalled());
+    expect(screen.getByText("No file selected")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
   });
 });

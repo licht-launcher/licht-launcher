@@ -59,7 +59,7 @@ pub(crate) fn execute(
                     )
                     .await?
                 }
-                source @ InstanceSource::Modpack { .. } => {
+                source @ (InstanceSource::Modpack { .. } | InstanceSource::ModpackFile { .. }) => {
                     let entry = instance_entry(&runtime.database, &dir, &folder).await?;
                     let imported = crate::modpacks::prepare_modpack_instance(
                         &runtime.database,

@@ -259,7 +259,7 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
             onOpenSettings={dialogs.openGlobalSettings}
           />
         </TitleBar>
-        {pathname === "/downloads" ? (
+        {pathname === "/downloads" || onWizard ? (
           content
         ) : (
           <ResizablePanelGroup

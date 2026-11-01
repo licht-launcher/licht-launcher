@@ -58,6 +58,19 @@ pub async fn create_instance_from_modpack(
 }
 
 #[tauri::command]
+pub async fn create_instance_from_modpack_file(
+    downloads: State<'_, std::sync::Arc<licht_core::DownloadManager>>,
+    name: String,
+    path: String,
+) -> Result<InstanceEntry, String> {
+    downloads
+        .inner()
+        .create_from_modpack_file(&name, std::path::Path::new(&path))
+        .await
+        .map_err(failure)
+}
+
+#[tauri::command]
 pub async fn install_modpack_files(
     app: AppHandle,
     database: State<'_, licht_core::DatabaseClient>,

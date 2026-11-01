@@ -244,6 +244,36 @@ describe("Instance library", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("gives the creator the whole window and restores the library sidebar on return", async () => {
+    mockContextMenuCommands();
+    const { router } = await renderAt("/");
+    await screen.findByRole("heading", { name: "Classic" });
+    expect(screen.getByRole("navigation", { name: "Instances" })).toBeVisible();
+    await act(async () => {
+      await router.navigate({
+        to: "/instances/new",
+        search: { step: "source" },
+      });
+    });
+    expect(
+      await screen.findByRole("heading", { name: "How do you want to start?" }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("navigation", { name: "Instances" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("separator", { name: "Resize sidebar" }),
+    ).not.toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Library" }));
+      await router.load();
+    });
+    expect(
+      await screen.findByRole("heading", { name: "Classic" }),
+    ).toBeVisible();
+    expect(screen.getByRole("navigation", { name: "Instances" })).toBeVisible();
+  });
+
   it("treats instance switches as history entries", async () => {
     mockContextMenuCommands();
     await renderAt("/");

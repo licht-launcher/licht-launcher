@@ -1,6 +1,7 @@
 import {
   BoxIcon,
   CheckCircle2Icon,
+  FileUpIcon,
   FolderPlusIcon,
   type LucideIcon,
   PackageIcon,
@@ -16,6 +17,7 @@ const STEP_ICONS: Record<WizardStep, LucideIcon> = {
   details: TagIcon,
   modpack: PackageIcon,
   "modpack-version": TagIcon,
+  file: FileUpIcon,
   confirm: CheckCircle2Icon,
 };
 
@@ -25,6 +27,7 @@ const STEP_LABELS: Record<WizardStep, string> = {
   details: "Details",
   modpack: "Modpack",
   "modpack-version": "Pack version",
+  file: "Pack file",
   confirm: "Confirm",
 };
 

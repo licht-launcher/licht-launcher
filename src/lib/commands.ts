@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { open } from "@tauri-apps/plugin-dialog";
 import type {
   LoaderChannel,
   ModpackListItem,
@@ -182,6 +183,24 @@ export function createInstanceFromModpack(input: {
     projectId: input.projectId,
     versionId: input.versionId,
     iconUrl: input.iconUrl ?? null,
+  });
+}
+
+export function browseModpackFile(): Promise<string | null> {
+  return open({
+    multiple: false,
+    directory: false,
+    filters: [{ name: "Modpack", extensions: ["mrpack", "zip"] }],
+  });
+}
+
+export function createInstanceFromModpackFile(input: {
+  name: string;
+  path: string;
+}): Promise<InstanceEntry> {
+  return invoke("create_instance_from_modpack_file", {
+    name: input.name,
+    path: input.path,
   });
 }
 
