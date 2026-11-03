@@ -6,6 +6,7 @@ import { onOpenSettingsRequest } from "@/lib/shell-events";
 
 export function useInstanceDialogs() {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SectionId>("account");
   const [configuringFolder, setConfiguringFolder] = useState<string | null>(
     null,
@@ -23,6 +24,10 @@ export function useInstanceDialogs() {
 
   function clearAction() {
     setAction(null);
+  }
+
+  function openCreate() {
+    setCreateOpen(true);
   }
 
   function openConfigure(folder: string) {
@@ -53,6 +58,9 @@ export function useInstanceDialogs() {
   return {
     settingsOpen,
     setSettingsOpen,
+    createOpen,
+    setCreateOpen,
+    openCreate,
     settingsSection,
     configuringFolder,
     setConfiguringFolder,

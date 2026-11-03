@@ -31,6 +31,7 @@ export function InstancesPage() {
     prepareInstance,
     stopInstance,
     openConfigure,
+    openCreate,
   } = useInstancesChrome();
 
   useEffect(() => {
@@ -88,15 +89,7 @@ export function InstancesPage() {
             Choose a Minecraft version or install a modpack to start playing.
           </p>
         </div>
-        <Button
-          type="button"
-          onClick={() => {
-            void navigate({
-              to: "/instances/new",
-              search: { step: "source" },
-            });
-          }}
-        >
+        <Button type="button" onClick={openCreate}>
           <PlusIcon data-icon="inline-start" aria-hidden />
           Create instance
         </Button>

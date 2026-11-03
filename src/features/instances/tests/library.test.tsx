@@ -135,11 +135,11 @@ describe("Instance library", () => {
     );
   });
 
-  it("guides an empty library to the creation wizard without instance tabs", async () => {
+  it("guides an empty library to the creation dialog without instance tabs", async () => {
     mockContextMenuCommands((command) => {
       if (command === "list_instances") return Promise.resolve([]);
     });
-    const { router } = await renderAt("/");
+    await renderAt("/");
     expect(
       await screen.findByRole("heading", {
         name: "Create your first instance",
@@ -155,12 +155,11 @@ describe("Instance library", () => {
     expect(
       screen.queryByRole("textbox", { name: "Search content" }),
     ).not.toBeInTheDocument();
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Create instance" }));
-      await router.load();
-    });
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "Create instance" })[0] as Element,
+    );
     expect(
-      await screen.findByRole("heading", { name: "How do you want to start?" }),
+      await screen.findByRole("dialog", { name: "Create instance" }),
     ).toBeVisible();
   });
 
@@ -184,32 +183,28 @@ describe("Instance library", () => {
     ).toBeVisible();
   });
 
-  it("opens the creator from the footer and restores selection through Library and history", async () => {
+  it("opens the creator over the library from the footer and keeps the selection", async () => {
     mockContextMenuCommands();
     const { router } = await renderAt("/?instance=next");
     await screen.findByRole("heading", { name: "Next" });
-    fireEvent.click(screen.getByRole("link", { name: "Create instance" }));
+    const footer = screen.getByRole("contentinfo");
+    fireEvent.click(
+      within(footer).getByRole("button", { name: "Create instance" }),
+    );
     expect(
-      await screen.findByRole("heading", { name: "How do you want to start?" }),
+      await screen.findByRole("dialog", { name: "Create instance" }),
     ).toBeVisible();
-    expect(router.state.location.search).toMatchObject({ step: "source" });
+    expect(router.state.location.pathname).toBe("/");
+    expect(router.state.location.search).toMatchObject({ instance: "next" });
     expect(
       invoke.mock.calls.some(
         ([command]) => command === "create_instance_with_platform",
       ),
     ).toBe(false);
-    const library = screen.getByRole("button", { name: "Library" });
-    expect(library).not.toHaveAttribute("aria-current");
-    fireEvent.click(library);
-    expect(await screen.findByRole("heading", { name: "Next" })).toBeVisible();
-    expect(library).toHaveAttribute("aria-current", "page");
-    expect(router.state.location.search).toMatchObject({ instance: "next" });
-    fireEvent.click(screen.getByRole("button", { name: "Back" }));
-    expect(
-      await screen.findByRole("heading", { name: "How do you want to start?" }),
-    ).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "Forward" }));
-    expect(await screen.findByRole("heading", { name: "Next" })).toBeVisible();
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(screen.getByRole("heading", { name: "Next" })).toBeVisible();
+    expect(screen.getByRole("navigation", { name: "Instances" })).toBeVisible();
   });
 
   it("preserves the Downloads route and restores the library sidebar on return", async () => {
@@ -242,36 +237,6 @@ describe("Instance library", () => {
     expect(
       screen.queryByRole("navigation", { name: "Instances" }),
     ).not.toBeInTheDocument();
-  });
-
-  it("gives the creator the whole window and restores the library sidebar on return", async () => {
-    mockContextMenuCommands();
-    const { router } = await renderAt("/");
-    await screen.findByRole("heading", { name: "Classic" });
-    expect(screen.getByRole("navigation", { name: "Instances" })).toBeVisible();
-    await act(async () => {
-      await router.navigate({
-        to: "/instances/new",
-        search: { step: "source" },
-      });
-    });
-    expect(
-      await screen.findByRole("heading", { name: "How do you want to start?" }),
-    ).toBeVisible();
-    expect(
-      screen.queryByRole("navigation", { name: "Instances" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("separator", { name: "Resize sidebar" }),
-    ).not.toBeInTheDocument();
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Library" }));
-      await router.load();
-    });
-    expect(
-      await screen.findByRole("heading", { name: "Classic" }),
-    ).toBeVisible();
-    expect(screen.getByRole("navigation", { name: "Instances" })).toBeVisible();
   });
 
   it("treats instance switches as history entries", async () => {

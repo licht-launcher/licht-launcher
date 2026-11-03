@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { PlusIcon } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef } from "react";
 import { useDefaultLayout } from "react-resizable-panels";
@@ -36,6 +36,7 @@ import {
   SIDEBAR_PANEL_IDS,
   sidebarLayoutStorage,
 } from "@/features/instances/lib/sidebar-layout";
+import { CreateInstanceDialog } from "@/features/new-instance/create-instance-dialog";
 import { PlayerAccountButton } from "@/features/settings/components/player-account-button";
 import { useCustomTitleBar } from "@/hooks/use-custom-title-bar";
 import { APP_CODENAME, APP_VERSION } from "@/lib/app-release";
@@ -65,13 +66,12 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
       return state.location.search as HomeSearch;
     },
   });
-  const onWizard = pathname === "/instances/new";
   const instanceParam = homeSearch?.instance ?? null;
 
   const { instances, username } = useInstancesData();
   const { selectedFolder, setSelectedFolder, selected } = useInstanceSelection(
     instances.data,
-    onWizard ? null : instanceParam,
+    instanceParam,
   );
   const queryClient = useQueryClient();
 
@@ -195,6 +195,7 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
       prepareInstance,
       stopInstance,
       openConfigure: dialogs.openConfigure,
+      openCreate: dialogs.openCreate,
     }),
     [
       instances,
@@ -216,6 +217,7 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
       prepareInstance,
       stopInstance,
       dialogs.openConfigure,
+      dialogs.openCreate,
     ],
   );
 
@@ -259,7 +261,7 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
             onOpenSettings={dialogs.openGlobalSettings}
           />
         </TitleBar>
-        {pathname === "/downloads" || onWizard ? (
+        {pathname === "/downloads" ? (
           content
         ) : (
           <ResizablePanelGroup
@@ -338,15 +340,14 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
           <div className="grid min-h-8 w-full grid-cols-4 items-center">
             <div className="flex items-center justify-start">
               <Button
-                asChild
+                type="button"
                 variant="ghost"
                 size="sm"
                 className={footerActionClassName}
+                onClick={dialogs.openCreate}
               >
-                <Link to="/instances/new" search={{ step: "source" }}>
-                  <PlusIcon aria-hidden className="size-3.5" />
-                  Create instance
-                </Link>
+                <PlusIcon aria-hidden className="size-3.5" />
+                Create instance
               </Button>
             </div>
             <div className="col-span-2 flex min-w-0 items-center justify-center">
@@ -377,6 +378,10 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
         </footer>
       </div>
 
+      <CreateInstanceDialog
+        open={dialogs.createOpen}
+        onOpenChange={dialogs.setCreateOpen}
+      />
       <InstanceDialogs
         configuring={configuring}
         busy={busy}

@@ -7,7 +7,7 @@ import type {
   ModpackSource,
   ModpackVersionItem,
   PlatformId,
-} from "@/features/new-instance/model/wizard";
+} from "@/features/new-instance/model/create-state";
 import { parseAppUpdateState } from "@/lib/app-update-state";
 import { parseBuildDiagnostics } from "@/lib/build-info";
 import type { AccountProfile } from "@/lib/generated/AccountProfile";
