@@ -1,0 +1,111 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, renderHook, waitFor } from "@testing-library/react";
+import type { ReactNode } from "react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { useScratchForm } from "@/features/new-instance/hooks/use-scratch-form";
+import { listLoaderVersions, listVersions } from "@/lib/commands";
+import type { VersionSummary } from "@/lib/generated/VersionSummary";
+
+vi.mock("@/lib/commands", () => ({
+  listVersions: vi.fn(),
+  listLoaderVersions: vi.fn(),
+}));
+
+const versions: VersionSummary[] = [
+  { id: "24w14a", versionType: "snapshot", installed: false },
+  { id: "1.20.1", versionType: "release", installed: false },
+  { id: "1.19.4", versionType: "release", installed: false },
+];
+
+function setup(enabled: boolean) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+  return renderHook(({ on }) => useScratchForm(on), {
+    wrapper,
+    initialProps: { on: enabled },
+  });
+}
+
+beforeEach(() => {
+  vi.mocked(listVersions).mockReset().mockResolvedValue(versions);
+  vi.mocked(listLoaderVersions)
+    .mockReset()
+    .mockResolvedValue(["0.16.0", "0.15.11"]);
+});
+
+describe("useScratchForm", () => {
+  it("does not load anything until it is enabled", async () => {
+    const { result, rerender } = setup(false);
+
+    expect(listVersions).not.toHaveBeenCalled();
+    expect(result.current.state.gameVersion).toBe("");
+    rerender({ on: true });
+    await waitFor(() => expect(result.current.state.gameVersion).toBe("1.20.1"));
+    expect(listVersions).toHaveBeenCalledOnce();
+  });
+
+  it("selects the newest release, skipping snapshots", async () => {
+    const { result } = setup(true);
+
+    await waitFor(() => expect(result.current.state.gameVersion).toBe("1.20.1"));
+  });
+
+  it("merges patches without dropping the other fields", async () => {
+    const { result } = setup(true);
+
+    act(() => {
+      result.current.update({ name: "Modded" });
+    });
+    act(() => {
+      result.current.update({ platform: "forge" });
+    });
+    expect(result.current.state).toMatchObject({
+      name: "Modded",
+      platform: "forge",
+    });
+  });
+
+  it("fills the newest loader version for a loader platform", async () => {
+    const { result } = setup(true);
+    await waitFor(() => expect(result.current.state.gameVersion).toBe("1.20.1"));
+
+    act(() => {
+      result.current.update({ platform: "fabric" });
+    });
+    await waitFor(() =>
+      expect(result.current.state.loaderVersion).toBe("0.16.0"),
+    );
+    expect(listLoaderVersions).toHaveBeenCalledWith(
+      "fabric",
+      "1.20.1",
+      "stable",
+    );
+  });
+
+  it("keeps a loader version chosen by hand", async () => {
+    const { result } = setup(true);
+    await waitFor(() => expect(result.current.state.gameVersion).toBe("1.20.1"));
+
+    act(() => {
+      result.current.update({
+        platform: "fabric",
+        loaderChannel: "manual",
+        loaderVersion: "0.15.11",
+      });
+    });
+    await waitFor(() => expect(listLoaderVersions).toHaveBeenCalled());
+    expect(result.current.state.loaderVersion).toBe("0.15.11");
+  });
+
+  it("does not ask for loader versions on vanilla", async () => {
+    const { result } = setup(true);
+    await waitFor(() => expect(result.current.state.gameVersion).toBe("1.20.1"));
+
+    expect(listLoaderVersions).not.toHaveBeenCalled();
+  });
+});

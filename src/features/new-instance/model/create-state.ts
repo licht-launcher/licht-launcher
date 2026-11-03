@@ -2,6 +2,9 @@ export type PlatformId = "vanilla" | "fabric" | "neoforge" | "forge" | "quilt";
 
 export type LoaderChannel = "stable" | "latest" | "manual";
 
+/** The popup's two steps: choosing where to start, then the from-scratch form. */
+export type CreateView = "source" | "details";
+
 /** What the user fills in when creating an instance from scratch. */
 export type ScratchState = {
   name: string;
