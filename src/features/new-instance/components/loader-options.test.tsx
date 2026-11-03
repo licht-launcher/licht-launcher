@@ -108,6 +108,49 @@ describe("LoaderOptions", () => {
     );
   });
 
+  it("prints no status text under the cards", () => {
+    for (const loaderState of ["checking", "empty", "ready"] as const) {
+      const { unmount } = render(
+        <LoaderOptions
+          state={{
+            ...initialScratchState,
+            platform: "quilt",
+            gameVersion: "26.3",
+            loaderChannel: "latest",
+          }}
+          loaderState={loaderState}
+          stableMissing
+          loaderVersions={[]}
+          onChange={() => {}}
+          onRetry={() => {}}
+        />,
+      );
+      expect(screen.queryByText(/Checking .* builds/)).toBeNull();
+      expect(screen.queryByText(/has no build/)).toBeNull();
+      expect(screen.queryByText(/No stable/)).toBeNull();
+      unmount();
+    }
+  });
+
+  it("disables the channels with a reason and offers a retry when the check failed", async () => {
+    const onRetry = vi.fn();
+    renderOptions({}, { loaderState: "error", onRetry });
+
+    for (const name of ["Stable", "Latest", "Other"]) {
+      expect(screen.getByRole("button", { name })).toBeDisabled();
+    }
+    expect(screen.queryByText(/Could not check/)).toBeNull();
+    fireEvent.focus(
+      screen.getByRole("button", { name: "Stable" })
+        .parentElement as HTMLElement,
+    );
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(
+      "Could not check Quilt builds for 26.3.",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Retry loader check" }));
+    expect(onRetry).toHaveBeenCalledOnce();
+  });
+
   it("keeps every channel available while the builds are still loading", () => {
     renderOptions({}, { loaderState: "checking" });
 

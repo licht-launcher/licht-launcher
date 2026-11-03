@@ -234,11 +234,12 @@ describe("CreateInstanceDialog", () => {
     await openDetails();
 
     fireEvent.click(screen.getByRole("button", { name: /^Forge/ }));
-    expect(
-      await screen.findByText(
-        "Forge has no build for 1.20.1. Pick another version or platform.",
-      ),
-    ).toBeVisible();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Latest" })).toBeDisabled(),
+    );
+    expect(screen.getByRole("button", { name: "Stable" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Other" })).toBeDisabled();
+    expect(screen.queryByText(/has no build/)).toBeNull();
     expect(screen.getByRole("button", { name: "Create" })).toBeDisabled();
   });
 
@@ -257,11 +258,14 @@ describe("CreateInstanceDialog", () => {
     await openDetails();
 
     fireEvent.click(screen.getByRole("button", { name: /^Quilt/ }));
-    expect(
-      await screen.findByText(
-        "No stable Quilt build for 1.20.1. The latest build is used instead.",
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Latest" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
       ),
-    ).toBeVisible();
+    );
+    expect(screen.getByRole("button", { name: "Stable" })).toBeDisabled();
+    expect(screen.queryByText(/No stable/)).toBeNull();
     await submit();
     await waitFor(() =>
       expect(invoke).toHaveBeenCalledWith("create_instance_with_platform", {
@@ -288,7 +292,8 @@ describe("CreateInstanceDialog", () => {
     await openDetails();
 
     fireEvent.click(screen.getByRole("button", { name: /^Fabric/ }));
-    expect(await screen.findByText("Checking Fabric builds…")).toBeVisible();
+    await screen.findByRole("group", { name: "Loader channel" });
+    expect(screen.queryByText(/Checking/)).toBeNull();
     expect(screen.getByRole("button", { name: "Create" })).toBeDisabled();
     finish(["0.16.0"]);
     await waitFor(() =>

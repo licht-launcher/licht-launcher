@@ -36,13 +36,18 @@ function unavailableReason(
     gameVersion,
     stableMissing,
     noBuilds,
+    failed,
   }: {
     loader: string;
     gameVersion: string;
     stableMissing: boolean;
     noBuilds: boolean;
+    failed: boolean;
   },
 ): string | undefined {
+  if (failed) {
+    return `Could not check ${loader} builds for ${gameVersion}.`;
+  }
   if (noBuilds) {
     return `${loader} has no build for ${gameVersion}.`;
   }
@@ -58,6 +63,7 @@ export function ChannelPicker({
   gameVersion,
   stableMissing,
   noBuilds,
+  failed,
   onChange,
 }: {
   value: LoaderChannel;
@@ -68,6 +74,8 @@ export function ChannelPicker({
   stableMissing: boolean;
   /** The loader has no build at all for this game version. */
   noBuilds: boolean;
+  /** The builds could not be checked (network or service error). */
+  failed: boolean;
   onChange: (channel: LoaderChannel) => void;
 }) {
   return (
@@ -80,6 +88,7 @@ export function ChannelPicker({
             gameVersion,
             stableMissing,
             noBuilds,
+            failed,
           });
           const card = (
             <ChoiceCard

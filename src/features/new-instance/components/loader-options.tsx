@@ -48,41 +48,20 @@ export function LoaderOptions({
         gameVersion={state.gameVersion}
         stableMissing={stableMissing}
         noBuilds={loaderState === "empty"}
+        failed={loaderState === "error"}
         onChange={(loaderChannel) => {
           onChange({ loaderChannel, loaderVersion: "" });
         }}
       />
-      {stableMissing && state.loaderChannel === "latest" ? (
-        <p className="text-sm text-muted-foreground">
-          No stable {loader} build for {state.gameVersion}. The latest build is
-          used instead.
-        </p>
-      ) : null}
-      {loaderState === "checking" ? (
-        <p className="text-sm text-muted-foreground">
-          Checking {loader} builds…
-        </p>
-      ) : null}
-      {loaderState === "empty" ? (
-        <p className="text-sm text-destructive">
-          {loader} has no build for {state.gameVersion}. Pick another version or
-          platform.
-        </p>
-      ) : null}
       {loaderState === "error" ? (
-        <div className="flex flex-col gap-2">
-          <p className="text-sm text-destructive">
-            Could not check {loader} builds for {state.gameVersion}.
-          </p>
-          <Button
-            type="button"
-            variant="outline"
-            className="self-start"
-            onClick={onRetry}
-          >
-            Retry loader check
-          </Button>
-        </div>
+        <Button
+          type="button"
+          variant="outline"
+          className="self-start"
+          onClick={onRetry}
+        >
+          Retry loader check
+        </Button>
       ) : null}
       {loaderState === "ready" && state.loaderChannel === "manual" ? (
         <Select

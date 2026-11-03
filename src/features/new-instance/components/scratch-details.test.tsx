@@ -32,7 +32,7 @@ function renderDetails(
   props: Partial<Parameters<typeof ScratchDetails>[0]> = {},
 ) {
   const onChange = vi.fn();
-  render(
+  const { unmount } = render(
     <ScratchDetails
       state={{ ...initialScratchState, gameVersion: "1.20.1", ...state }}
       takenNames={[]}
@@ -48,7 +48,7 @@ function renderDetails(
       {...props}
     />,
   );
-  return { onChange };
+  return { onChange, unmount };
 }
 
 describe("ScratchDetails", () => {
@@ -111,56 +111,17 @@ describe("ScratchDetails", () => {
     ).toHaveClass("data-[state=checked]:bg-warning");
   });
 
-  it("explains when the loader has no build for the game version", () => {
-    renderDetails(
-      { platform: "forge", gameVersion: "26.3" },
-      { loaderState: "empty" },
-    );
-
-    expect(
-      screen.getByText(
-        "Forge has no build for 26.3. Pick another version or platform.",
-      ),
-    ).toBeVisible();
-  });
-
-  it("lets the user retry a loader check that failed", () => {
-    const onRetryLoader = vi.fn();
-    renderDetails(
-      { platform: "quilt", gameVersion: "26.4-snapshot-7" },
-      { loaderState: "error", onRetryLoader },
-    );
-
-    expect(
-      screen.getByText(/Could not check Quilt builds for 26.4-snapshot-7/),
-    ).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "Retry loader check" }));
-    expect(onRetryLoader).toHaveBeenCalledOnce();
-  });
-
-  it("explains that the latest channel is used when there is no stable build", () => {
-    renderDetails(
-      { platform: "quilt", gameVersion: "26.3", loaderChannel: "latest" },
-      { stableMissing: true },
-    );
-
-    expect(
-      screen.getByText(
-        "No stable Quilt build for 26.3. The latest build is used instead.",
-      ),
-    ).toBeVisible();
-  });
-
-  it("stays quiet about stable builds when they exist", () => {
-    renderDetails({ platform: "fabric" }, { stableMissing: false });
-
-    expect(screen.queryByText(/No stable/)).toBeNull();
-  });
-
-  it("says it is checking while the loader builds load", () => {
-    renderDetails({ platform: "fabric" }, { loaderState: "checking" });
-
-    expect(screen.getByText("Checking Fabric builds…")).toBeVisible();
+  it("prints no status text under the loader channel cards", () => {
+    for (const loaderState of ["checking", "empty", "ready"] as const) {
+      const { unmount } = renderDetails(
+        { platform: "forge", gameVersion: "26.3", loaderChannel: "latest" },
+        { loaderState, stableMissing: true },
+      );
+      expect(screen.queryByText(/Checking .* builds/)).toBeNull();
+      expect(screen.queryByText(/has no build/)).toBeNull();
+      expect(screen.queryByText(/No stable/)).toBeNull();
+      unmount();
+    }
   });
 
   it("selects the game version from a typeable select", () => {
