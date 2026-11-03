@@ -29,7 +29,7 @@ export function CreateFlow({ onClose }: { onClose: () => void }) {
       {/* Only the form scrolls; the header and the actions stay in view. */}
       <div
         data-slot="create-scroll"
-        className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1 pt-1 pb-5"
+        className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1"
       >
         <ScratchDetails
           state={state}

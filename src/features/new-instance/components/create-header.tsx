@@ -6,8 +6,8 @@ import { DialogHeader, DialogTitle } from "@/components/ui/dialog";
  */
 export function CreateHeader() {
   return (
-    <DialogHeader className="-mx-4 -mt-6 rounded-t-xl border-b px-4 py-5 pr-12">
-      <DialogTitle className="text-lg leading-tight pt-0.5">
+    <DialogHeader className="-mx-4 rounded-t-xl px-4.5 ">
+      <DialogTitle className="text-lg leading-tight">
         Create instance
       </DialogTitle>
     </DialogHeader>

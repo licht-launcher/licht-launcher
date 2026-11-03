@@ -15,7 +15,7 @@ export function ScratchActions({
   onCreate: () => void;
 }) {
   return (
-    <DialogFooter className="-mx-4 -mb-6 bg-transparent px-4 py-4 sm:justify-between">
+    <DialogFooter className="-mx-4 -mb-6 bg-transparent border-none px-4 pt-0 sm:justify-between">
       <Button
         type="button"
         variant="outline"

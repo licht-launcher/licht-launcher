@@ -79,12 +79,13 @@ describe("CreateInstanceDialog", () => {
     ).toBeVisible();
   });
 
-  it("styles the header as a full-width band on the same background as the content", async () => {
+  it("shows the header without a divider on the same background as the content", async () => {
     await renderApp();
     const dialog = await openCreateDialog();
 
     const header = dialog.querySelector("[data-slot='dialog-header']");
-    expect(header).toHaveClass("-mx-4", "-mt-6", "border-b", "px-4", "py-5");
+    expect(header).toHaveClass("-mx-4");
+    expect(header).not.toHaveClass("border-b");
     expect(header).not.toHaveClass("bg-muted/50");
     expect(header).not.toHaveClass("border-border/40");
   });
@@ -295,7 +296,7 @@ describe("CreateInstanceDialog", () => {
     const dialog = await openDetails();
 
     const scroll = dialog.querySelector("[data-slot='create-scroll']");
-    expect(scroll).toHaveClass("-mx-1", "px-1", "pb-5");
+    expect(scroll).toHaveClass("-mx-1", "px-1");
   });
 
   it("keeps the header and the actions out of the scrolling area", async () => {
