@@ -169,51 +169,20 @@ describe("Instance actions", () => {
     ).toBeVisible();
   });
 
-  it("suggests the name with a number when duplicating", async () => {
+  it("duplicates straight away under a numbered name, with no dialog", async () => {
     await renderAt("/?instance=classic");
     await openInstanceContextMenu();
     fireEvent.click(screen.getByRole("menuitem", { name: "Duplicate" }));
-    const dialog = await screen.findByRole("dialog", {
-      name: "Duplicate Next",
-    });
-    expect(within(dialog).getByLabelText("Name")).toHaveValue("Next (1)");
-    fireEvent.click(
-      within(dialog).getByRole("button", { name: "Duplicate instance" }),
-    );
+
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("duplicate_instance", {
         folder: "next",
         name: "Next (1)",
       });
     });
-  });
-
-  it("duplicates the clicked instance after entering a name", async () => {
-    await renderAt("/?instance=classic");
-    await openInstanceContextMenu();
-    fireEvent.click(screen.getByRole("menuitem", { name: "Duplicate" }));
-    const dialog = await screen.findByRole("dialog", {
-      name: "Duplicate Next",
-    });
-    expect(invoke).not.toHaveBeenCalledWith(
-      "duplicate_instance",
-      expect.anything(),
-    );
-    fireEvent.change(within(dialog).getByLabelText("Name"), {
-      target: { value: "Next copy" },
-    });
-    fireEvent.click(
-      within(dialog).getByRole("button", { name: "Duplicate instance" }),
-    );
-    await waitFor(() => {
-      expect(invoke).toHaveBeenCalledWith("duplicate_instance", {
-        folder: "next",
-        name: "Next copy",
-      });
-      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(
-      await screen.findByRole("button", { name: "Next copy" }),
+      await screen.findByRole("button", { name: "Next (1)" }),
     ).toBeVisible();
   });
 

@@ -1,13 +1,10 @@
 import { useEffect, useState } from "react";
 
 import type { InstanceAction } from "@/features/instances/components/instance-action-dialog";
-import { useInstanceNames } from "@/features/new-instance/hooks/use-instance-names";
-import { uniqueName } from "@/features/new-instance/model/create-state";
 import type { SectionId } from "@/features/settings/model/sections";
 import { onOpenSettingsRequest } from "@/lib/shell-events";
 
 export function useInstanceDialogs() {
-  const instanceNames = useInstanceNames();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SectionId>("account");
@@ -43,11 +40,6 @@ export function useInstanceDialogs() {
     setSettingsOpen(true);
   }
 
-  function openDuplicate(folder: string, name: string) {
-    setDraftName(uniqueName(name, instanceNames));
-    setAction({ kind: "duplicate", folder, name });
-  }
-
   function openRename(folder: string, name: string) {
     setDraftName(name);
     setAction({ kind: "rename", folder, name });
@@ -73,7 +65,6 @@ export function useInstanceDialogs() {
     clearAction,
     openConfigure,
     openGlobalSettings,
-    openDuplicate,
     openRename,
     openDelete,
   };

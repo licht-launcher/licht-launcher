@@ -38,6 +38,7 @@ import {
 } from "@/features/instances/lib/sidebar-layout";
 import { CreateInstanceMenu } from "@/features/new-instance/components/create-instance-menu";
 import { CreateInstanceDialog } from "@/features/new-instance/create-instance-dialog";
+import { uniqueName } from "@/features/new-instance/model/create-state";
 import { PlayerAccountButton } from "@/features/settings/components/player-account-button";
 import { useCustomTitleBar } from "@/hooks/use-custom-title-bar";
 import { APP_CODENAME, APP_VERSION } from "@/lib/app-release";
@@ -169,6 +170,18 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
       setConfiguringFolder: dialogs.setConfiguringFolder,
       clearAction: dialogs.clearAction,
     });
+
+  // Duplicating needs no questions: the copy is named like the original plus
+  // a number, and it can be renamed afterwards.
+  function duplicateNumbered(folder: string, name: string) {
+    duplicate.mutate({
+      folder,
+      name: uniqueName(
+        name,
+        (instances.data ?? []).map((instance) => instance.name),
+      ),
+    });
+  }
 
   const configuring =
     instances.data?.find(
@@ -305,7 +318,7 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
                       dialogs.openRename(instance.folder, instance.name);
                       break;
                     case "duplicate":
-                      dialogs.openDuplicate(instance.folder, instance.name);
+                      duplicateNumbered(instance.folder, instance.name);
                       break;
                     case "delete":
                       dialogs.openDelete(instance.folder, instance.name);
@@ -389,7 +402,6 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
         busy={busy}
         mutations={{
           rename,
-          duplicate,
           remove,
           openFolder,
           changeVersion,
@@ -416,7 +428,7 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
           if (!configuring) {
             return;
           }
-          dialogs.openDuplicate(configuring.folder, configuring.name);
+          duplicateNumbered(configuring.folder, configuring.name);
         }}
         onOpenDelete={() => {
           if (!configuring) {
