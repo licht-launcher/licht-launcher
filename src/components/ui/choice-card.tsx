@@ -13,7 +13,6 @@ export type ChoiceCardIconTone = keyof typeof iconTones;
 
 export function ChoiceCard({
   title,
-  description,
   icon,
   iconNeutral = false,
   iconTone = "instance",
@@ -24,7 +23,6 @@ export function ChoiceCard({
   children,
 }: {
   title: string;
-  description?: string;
   icon?: ReactNode;
   /** Neutral well for brand/loader images. */
   iconNeutral?: boolean;
@@ -42,7 +40,7 @@ export function ChoiceCard({
       aria-pressed={selected}
       disabled={disabled}
       className={cn(
-        "flex h-auto w-full cursor-pointer flex-col items-start gap-3 rounded-lg border px-2 py-2 text-left text-foreground outline-none select-none",
+        "flex h-auto w-full cursor-pointer flex-col items-start gap-3 rounded-lg border py-1 pl-1 pr-2.5 text-left text-foreground outline-none select-none",
         "transition-[background-color,border-color,box-shadow] duration-200 ease-out",
         "focus-visible:ring-3 focus-visible:ring-ring/50",
         "disabled:pointer-events-none disabled:opacity-50",
@@ -68,12 +66,6 @@ export function ChoiceCard({
           ) : null}
           <span className="block text-sm">{title}</span>
         </div>
-
-        {description !== undefined ? (
-          <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
-            {description}
-          </span>
-        ) : null}
         {children}
       </span>
     </button>
