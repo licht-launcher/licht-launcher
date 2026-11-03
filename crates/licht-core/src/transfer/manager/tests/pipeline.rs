@@ -695,3 +695,94 @@ async fn real_pipeline_resumes_a_persisted_loader_profile_without_reselecting_it
         .expect("ready loader");
     fixture.close().await;
 }
+
+fn local_mrpack() -> Vec<u8> {
+    use std::io::Write;
+    let mut buffer = std::io::Cursor::new(Vec::new());
+    {
+        let mut zip = zip::ZipWriter::new(&mut buffer);
+        let options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Stored);
+        zip.start_file("modrinth.index.json", options)
+            .expect("index entry");
+        zip.write_all(
+            serde_json::json!({"dependencies": {"minecraft": VERSION}, "files": []})
+                .to_string()
+                .as_bytes(),
+        )
+        .expect("index");
+        zip.start_file("overrides/options.txt", options)
+            .expect("override entry");
+        zip.write_all(b"fov:90").expect("override");
+        zip.finish().expect("archive");
+    }
+    buffer.into_inner()
+}
+
+#[tokio::test]
+async fn creating_from_a_local_modpack_archive_installs_it_without_network_requests() {
+    let server = Server::new().await;
+    let fixture = Fixture::new(&server.url).await;
+    let manager = prepare_cache(&fixture, &server);
+    std::fs::write(fixture.game.version_jar(VERSION).expect("jar"), BODY).expect("cached client");
+    let archive = fixture.game.root().join("local.mrpack");
+    std::fs::write(&archive, local_mrpack()).expect("local archive");
+    let entry = manager
+        .create_from_modpack_file("Local pack", &archive)
+        .await
+        .expect("instance from archive");
+    let job = manager
+        .stored_jobs()
+        .await
+        .expect("jobs")
+        .into_iter()
+        .find(|job| job.instance_folder.as_deref() == Some(entry.folder.as_str()))
+        .expect("installation job");
+    let done = finish(manager.wait(&job.id)).await.expect("completion");
+    assert_eq!(
+        done.status,
+        DownloadJobStatus::Completed,
+        "{:?}",
+        done.error
+    );
+    let directory = fixture
+        .game
+        .instances_dir()
+        .expect("instances")
+        .join(&entry.folder);
+    assert_eq!(
+        std::fs::read_to_string(directory.join("options.txt")).expect("override"),
+        "fov:90"
+    );
+    let profile = crate::load_instance(&fixture.database(), &directory)
+        .await
+        .expect("profile");
+    assert_eq!(profile.version_id.as_deref(), Some(VERSION));
+    assert_eq!(
+        profile.installation.map(|installation| installation.source),
+        Some(InstanceSource::ModpackFile {
+            source: crate::ModpackSource::Modrinth
+        })
+    );
+    assert!(archive.is_file(), "the original archive must be untouched");
+    assert!(server.requests.is_empty());
+    fixture.close().await;
+}
+
+#[tokio::test]
+async fn creating_from_an_unrecognized_archive_leaves_no_instance_behind() {
+    let server = Server::new().await;
+    let fixture = Fixture::new(&server.url).await;
+    let manager = prepare_cache(&fixture, &server);
+    let archive = fixture.game.root().join("not-a-pack.zip");
+    std::fs::write(&archive, b"definitely not a zip").expect("bad archive");
+    let error = manager
+        .create_from_modpack_file("Broken pack", &archive)
+        .await
+        .expect_err("invalid archive");
+    assert!(matches!(error, CoreError::ModpackArchive), "{error:?}");
+    let instances = fixture.game.instances_dir().expect("instances");
+    let leftovers = std::fs::read_dir(&instances).map_or(0, Iterator::count);
+    assert_eq!(leftovers, 0);
+    fixture.close().await;
+}

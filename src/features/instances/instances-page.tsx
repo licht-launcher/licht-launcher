@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { HomePanel } from "@/features/instances/components/home-panel";
 import { useInstancesChrome } from "@/features/instances/components/instances-chrome-context";
+import { CreateInstanceMenu } from "@/features/new-instance/components/create-instance-menu";
 import { friendlyError, messageOf } from "@/lib/errors";
 import { Route } from "@/routes/_app/index";
 
@@ -31,6 +32,7 @@ export function InstancesPage() {
     prepareInstance,
     stopInstance,
     openConfigure,
+    openCreate,
   } = useInstancesChrome();
 
   useEffect(() => {
@@ -88,18 +90,12 @@ export function InstancesPage() {
             Choose a Minecraft version or install a modpack to start playing.
           </p>
         </div>
-        <Button
-          type="button"
-          onClick={() => {
-            void navigate({
-              to: "/instances/new",
-              search: { step: "source" },
-            });
-          }}
-        >
-          <PlusIcon data-icon="inline-start" aria-hidden />
-          Create instance
-        </Button>
+        <CreateInstanceMenu onScratch={openCreate}>
+          <Button type="button">
+            <PlusIcon data-icon="inline-start" aria-hidden />
+            Create instance
+          </Button>
+        </CreateInstanceMenu>
       </section>
     );
   }

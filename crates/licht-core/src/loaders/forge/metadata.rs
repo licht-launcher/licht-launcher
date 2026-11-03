@@ -1,6 +1,7 @@
 use reqwest::Client;
 
-use crate::loaders::types::LoaderChannel;
+use crate::loaders::http_cache::fetch_cached;
+use crate::loaders::types::{LoaderBuild, LoaderChannel};
 use crate::{CoreError, Result};
 
 pub const FORGE_METADATA: &str =
@@ -14,30 +15,37 @@ pub async fn list_forge_like_versions(
     game_version: &str,
     channel: LoaderChannel,
 ) -> Result<Vec<String>> {
-    let response = client.get(metadata_url).send().await?;
-    let status = response.status().as_u16();
-    let body = response.text().await?;
-    if !(200..300).contains(&status) {
+    let builds = list_forge_like_builds(client, metadata_url, game_version).await?;
+    let versions = builds.into_iter().map(|build| build.version);
+    Ok(match channel {
+        LoaderChannel::Stable | LoaderChannel::Latest => versions.take(1).collect(),
+        LoaderChannel::Manual => versions.collect(),
+    })
+}
+
+/// Every build for a game version, newest first. The maven metadata does not
+/// say which builds are stable, so all of them count as stable.
+pub async fn list_forge_like_builds(
+    client: &Client,
+    metadata_url: &str,
+    game_version: &str,
+) -> Result<Vec<LoaderBuild>> {
+    let response = fetch_cached(client, metadata_url).await?;
+    if !(200..300).contains(&response.status) {
         return Err(CoreError::LoaderMeta {
-            detail: format!("forge_meta_http_{status}"),
+            detail: format!("forge_meta_http_{}", response.status),
         });
     }
-    Ok(parse_forge_versions(
-        &body,
+    Ok(parse_forge_builds(
+        &response.body,
         game_version,
-        channel,
         metadata_url,
     ))
 }
 
-pub fn parse_forge_versions(
-    xml: &str,
-    game_version: &str,
-    channel: LoaderChannel,
-    metadata_url: &str,
-) -> Vec<String> {
+pub fn parse_forge_builds(xml: &str, game_version: &str, metadata_url: &str) -> Vec<LoaderBuild> {
     let neoforge = metadata_url.contains("neoforged");
-    let mut versions = Vec::new();
+    let mut builds = Vec::new();
     for line in xml.lines() {
         let trimmed = line.trim();
         let Some(inner) = trimmed
@@ -46,20 +54,21 @@ pub fn parse_forge_versions(
         else {
             continue;
         };
-        if neoforge {
+        let matches_game = if neoforge {
             // NeoForge versions look like 21.1.x matching MC 1.21.1 via major.minor.
-            if neo_matches_game(inner, game_version) {
-                versions.push(inner.to_string());
-            }
-        } else if inner.starts_with(&format!("{game_version}-")) {
-            versions.push(inner.to_string());
+            neo_matches_game(inner, game_version)
+        } else {
+            inner.starts_with(&format!("{game_version}-"))
+        };
+        if matches_game {
+            builds.push(LoaderBuild {
+                version: inner.to_string(),
+                stable: true,
+            });
         }
     }
-    versions.reverse();
-    match channel {
-        LoaderChannel::Stable | LoaderChannel::Latest => versions.into_iter().take(1).collect(),
-        LoaderChannel::Manual => versions,
-    }
+    builds.reverse();
+    builds
 }
 
 fn neo_matches_game(neo_version: &str, game_version: &str) -> bool {
@@ -85,7 +94,36 @@ mod tests {
           </versioning>
         </metadata>
         "#;
-        let list = parse_forge_versions(xml, "1.20.1", LoaderChannel::Manual, FORGE_METADATA);
-        assert_eq!(list, vec!["1.20.1-47.2.0".to_string()]);
+        let list = parse_forge_builds(xml, "1.20.1", FORGE_METADATA);
+        assert_eq!(
+            list.into_iter()
+                .map(|build| build.version)
+                .collect::<Vec<_>>(),
+            vec!["1.20.1-47.2.0".to_string()]
+        );
+    }
+
+    #[test]
+    fn forge_builds_are_newest_first_and_all_stable() {
+        let xml = r#"
+        <metadata><versioning><versions>
+          <version>1.20.1-47.1.0</version>
+          <version>1.20.1-47.2.0</version>
+        </versions></versioning></metadata>
+        "#;
+        let builds = parse_forge_builds(xml, "1.20.1", FORGE_METADATA);
+        assert_eq!(
+            builds,
+            vec![
+                LoaderBuild {
+                    version: "1.20.1-47.2.0".into(),
+                    stable: true
+                },
+                LoaderBuild {
+                    version: "1.20.1-47.1.0".into(),
+                    stable: true
+                },
+            ]
+        );
     }
 }

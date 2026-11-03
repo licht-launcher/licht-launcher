@@ -11,7 +11,6 @@ describe("ChoiceCard", () => {
     const { rerender } = render(
       <ChoiceCard
         title="From a modpack"
-        description="Browse packs"
         icon={<PackageIcon aria-hidden />}
         iconTone="warning"
         selected
@@ -26,7 +25,6 @@ describe("ChoiceCard", () => {
     rerender(
       <ChoiceCard
         title="From a modpack"
-        description="Browse packs"
         icon={<PackageIcon aria-hidden />}
         iconTone="warning"
         selected={false}
@@ -41,7 +39,6 @@ describe("ChoiceCard", () => {
     render(
       <ChoiceCard
         title="Upload .mrpack"
-        description="Import a local Modrinth pack file."
         iconTone="file"
         selected={false}
         disabled

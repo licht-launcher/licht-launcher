@@ -277,7 +277,34 @@ fn display_name(name: &str) -> Result<String> {
     Ok(name.to_string())
 }
 
-fn folder_id(name: &str) -> Result<String> {
+/// The folder a new instance gets: the name reduced to filesystem-safe
+/// characters, numbered (`-1`, `-2`, …) when that folder is already taken.
+///
+/// Instance names do not have to be unique (`Pack` twice, or `Pack` and
+/// `Pack!`), so the folder is what keeps each instance apart.
+fn available_folder(instances_dir: &Path, name: &str) -> Result<String> {
+    let base = folder_id(name);
+    let taken: Vec<String> = match fs::read_dir(instances_dir) {
+        Ok(entries) => entries
+            .filter_map(|entry| entry.ok()?.file_name().into_string().ok())
+            .map(|folder| folder.to_ascii_lowercase())
+            .collect(),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+        Err(error) => return Err(error.into()),
+    };
+    let is_free = |folder: &str| !taken.contains(&folder.to_ascii_lowercase());
+    if is_free(&base) {
+        return Ok(base);
+    }
+    (1..)
+        .map(|number| format!("{base}-{number}"))
+        .find(|folder| is_free(folder))
+        .ok_or(CoreError::InstanceName)
+}
+
+/// Letters, digits, `.` and `_` are kept, and runs of spaces and hyphens become
+/// one hyphen. Names with nothing left to keep fall back to `instance`.
+fn folder_id(name: &str) -> String {
     let mut folder = String::new();
     let mut hyphen = false;
     for character in name.chars() {
@@ -291,8 +318,13 @@ fn folder_id(name: &str) -> Result<String> {
             hyphen = true;
         }
     }
-    single_component(&folder).map_err(|_| CoreError::InstanceName)?;
-    Ok(folder)
+    // Windows drops trailing dots, and `.`/`..` are not folder names at all.
+    let folder = folder.trim_end_matches('.');
+    if folder.is_empty() {
+        "instance".to_string()
+    } else {
+        folder.to_string()
+    }
 }
 
 fn copy_tree(source: &Path, destination: &Path, skip_install: bool) -> Result<()> {

@@ -23,7 +23,9 @@ use crate::{
 };
 use archive::Installer;
 use artifacts::{checksum, failure, normalize_libraries};
-pub use metadata::{FORGE_METADATA, NEOFORGE_METADATA, list_forge_like_versions};
+pub use metadata::{
+    FORGE_METADATA, NEOFORGE_METADATA, list_forge_like_builds, list_forge_like_versions,
+};
 
 // Different loader builds can generate the same intermediate Minecraft libraries.
 pub(crate) static INSTALL_LOCK: Mutex<()> = Mutex::const_new(());

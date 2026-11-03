@@ -28,6 +28,7 @@ export type InstancesChromeContext = {
   prepareInstance: ReturnType<typeof usePlaySession>["prepareInstance"];
   stopInstance: ReturnType<typeof usePlaySession>["stopInstance"];
   openConfigure: (folder: string) => void;
+  openCreate: () => void;
 };
 
 export const ChromeContext = createContext<InstancesChromeContext | null>(null);

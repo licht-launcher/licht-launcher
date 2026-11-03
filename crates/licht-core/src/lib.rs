@@ -92,7 +92,8 @@ pub use launch_lock::{
 };
 pub use launcher_behavior::LauncherBehavior;
 pub use loaders::{
-    LoaderChannel, LoaderPlatform, create_instance_with_platform, list_loader_versions,
+    LoaderBuild, LoaderChannel, LoaderPlatform, create_instance_with_platform, list_loader_builds,
+    list_loader_versions,
 };
 pub use modpacks::{
     CURSEFORGE_API_KEY_ENV, CURSEFORGE_INDEX_FILE, MODPACK_INDEX_FILE, ModpackListItem,

@@ -4,7 +4,7 @@ import {
   createRouter,
   RouterProvider,
 } from "@tanstack/react-router";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, vi } from "vitest";
 
 import { Toaster } from "@/components/ui/sonner";
@@ -23,12 +23,17 @@ const { invoke } = vi.hoisted(() => ({
   invoke: vi.fn<(command: string, args?: unknown) => Promise<unknown>>(),
 }));
 
-export { invoke };
+const { openDialog } = vi.hoisted(() => ({
+  openDialog: vi.fn<() => Promise<string | null>>(),
+}));
+
+export { invoke, openDialog };
 
 let unexpectedCommands: string[] = [];
 afterEach(() => expect(unexpectedCommands).toEqual([]));
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
+vi.mock("@tauri-apps/plugin-dialog", () => ({ open: openDialog }));
 vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn(async () => () => {}),
 }));
@@ -40,15 +45,49 @@ vi.mock("@tauri-apps/api/window", () => ({
   }),
 }));
 
-export const wizardVersions: VersionSummary[] = [
+export const createVersions: VersionSummary[] = [
   { id: "1.20.1", versionType: "release", installed: false },
+  { id: "1.19.4", versionType: "release", installed: false },
   { id: "24w14a", versionType: "snapshot", installed: false },
 ];
 
-export function mockWizardCommands(
+/** Gives the virtualized version list a size, which jsdom does not lay out. */
+export function mockVersionViewport() {
+  vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(
+    function (this: HTMLElement) {
+      return this.dataset.slot === "combobox-viewport" ? 256 : 0;
+    },
+  );
+  vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(400);
+}
+
+export function createdInstance(name: string, versionId = "1.20.1") {
+  const entry: InstanceEntry = {
+    folder: name,
+    name,
+    versionId,
+    minMemoryMb: 512,
+    maxMemoryMb: 2048,
+    jvmArguments: [],
+    fullscreen: false,
+    width: null,
+    height: null,
+    overrideWindow: false,
+    overrideMemory: false,
+    overrideJava: false,
+    overrideJvmArguments: false,
+    javaPath: null,
+    lastOpenedAt: null,
+    iconPath: null,
+  };
+  return entry;
+}
+
+export function mockCreateCommands(
   implement?: (command: string, args?: unknown) => unknown,
+  existing: InstanceEntry[] = [],
 ) {
-  let instances: InstanceEntry[] = [];
+  let instances: InstanceEntry[] = [...existing];
   unexpectedCommands = [];
   invoke.mockReset();
   invoke.mockImplementation(async (command, args) => {
@@ -66,11 +105,10 @@ export function mockWizardCommands(
       case "list_instances":
         return instances;
       case "list_versions":
-        return wizardVersions;
+        return createVersions;
       case "list_running_games":
       case "list_download_jobs":
       case "list_microsoft_accounts":
-        return [];
       case "list_instance_content":
         return [];
       case "get_last_played_folder":
@@ -82,31 +120,13 @@ export function mockWizardCommands(
         return { receivedBytes: 0, writtenBytes: 0, paused: false };
       case "prepare_instance_download":
         return completedDownload();
-      case "list_loader_versions":
-        return ["0.16.0", "0.15.11"];
-      case "search_modpacks":
+      case "list_loader_builds":
         return [
-          {
-            id: "ABC",
-            source: "modrinth",
-            name: "Cobblemon",
-            description: "Pokemon",
-            downloads: 10,
-            iconUrl: null,
-            author: "team",
-          },
-        ];
-      case "list_modpack_versions":
-        return [
-          {
-            id: "v1",
-            name: "1.0.0",
-            gameVersions: ["1.20.1"],
-            loaders: ["fabric"],
-          },
+          { version: "0.16.0", stable: true },
+          { version: "0.15.11", stable: true },
         ];
       case "create_instance_with_platform":
-      case "create_instance_from_modpack": {
+      case "create_instance_from_modpack_file": {
         if (
           args === null ||
           typeof args !== "object" ||
@@ -115,38 +135,23 @@ export function mockWizardCommands(
         ) {
           throw new Error(`Missing instance name for ${command}`);
         }
-        const entry: InstanceEntry = {
-          folder: args.name,
-          name: args.name,
-          versionId:
-            "gameVersion" in args && typeof args.gameVersion === "string"
-              ? args.gameVersion
-              : "1.20.1",
-          minMemoryMb: 512,
-          maxMemoryMb: 2048,
-          jvmArguments: [],
-          fullscreen: false,
-          width: null,
-          height: null,
-          overrideWindow: false,
-          overrideMemory: false,
-          overrideJava: false,
-          overrideJvmArguments: false,
-          javaPath: null,
-          lastOpenedAt: null,
-          iconPath: null,
-        };
+        const entry = createdInstance(
+          args.name,
+          "gameVersion" in args && typeof args.gameVersion === "string"
+            ? args.gameVersion
+            : "1.20.1",
+        );
         instances = [...instances, entry];
         return entry;
       }
       default:
         unexpectedCommands.push(command);
-        throw new Error(`Unexpected wizard command: ${command}`);
+        throw new Error(`Unexpected command: ${command}`);
     }
   });
 }
 
-export async function renderWizard(initialEntry = "/instances/new") {
+export async function renderApp(initialEntry = "/") {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -163,18 +168,19 @@ export async function renderWizard(initialEntry = "/instances/new") {
   );
 }
 
-export async function selectChoice(name: string | RegExp) {
-  fireEvent.click(await screen.findByRole("button", { name }));
-  await waitFor(() =>
-    expect(screen.getByRole("button", { name })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    ),
+/** Opens the "Create instance" menu from the library footer. */
+export async function openCreateMenu() {
+  const footer = await screen.findByRole("contentinfo");
+  fireEvent.pointerDown(
+    within(footer).getByRole("button", { name: "Create instance" }),
+    { button: 0, ctrlKey: false, pointerType: "mouse" },
   );
+  return screen.findByRole("menu", { name: "Create instance" });
 }
 
-export async function continueWizard() {
-  const button = screen.getByRole("button", { name: "Continue" });
-  await waitFor(() => expect(button).toBeEnabled());
-  fireEvent.click(button);
+/** Opens the scratch popup through the footer menu. */
+export async function openCreateDialog() {
+  const menu = await openCreateMenu();
+  fireEvent.click(within(menu).getByRole("menuitem", { name: "From scratch" }));
+  return screen.findByRole("dialog", { name: "Create instance" });
 }

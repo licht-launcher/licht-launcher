@@ -12,7 +12,6 @@ import { Route as rootRouteImport } from "./routes/__root";
 import { Route as AppRouteImport } from "./routes/_app";
 import { Route as AppIndexRouteImport } from "./routes/_app/index";
 import { Route as AppDownloadsRouteImport } from "./routes/_app/downloads";
-import { Route as AppInstancesNewRouteImport } from "./routes/_app/instances.new";
 
 const AppRoute = AppRouteImport.update({
   id: "/_app",
@@ -28,36 +27,27 @@ const AppDownloadsRoute = AppDownloadsRouteImport.update({
   path: "/downloads",
   getParentRoute: () => AppRoute,
 } as any);
-const AppInstancesNewRoute = AppInstancesNewRouteImport.update({
-  id: "/instances/new",
-  path: "/instances/new",
-  getParentRoute: () => AppRoute,
-} as any);
 
 export interface FileRoutesByFullPath {
   "/": typeof AppIndexRoute;
   "/downloads": typeof AppDownloadsRoute;
-  "/instances/new": typeof AppInstancesNewRoute;
 }
 export interface FileRoutesByTo {
   "/downloads": typeof AppDownloadsRoute;
   "/": typeof AppIndexRoute;
-  "/instances/new": typeof AppInstancesNewRoute;
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport;
   "/_app": typeof AppRouteWithChildren;
   "/_app/downloads": typeof AppDownloadsRoute;
   "/_app/": typeof AppIndexRoute;
-  "/_app/instances/new": typeof AppInstancesNewRoute;
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath;
-  fullPaths: "/" | "/downloads" | "/instances/new";
+  fullPaths: "/" | "/downloads";
   fileRoutesByTo: FileRoutesByTo;
-  to: "/downloads" | "/" | "/instances/new";
-  id:
-    "__root__" | "/_app" | "/_app/downloads" | "/_app/" | "/_app/instances/new";
+  to: "/downloads" | "/";
+  id: "__root__" | "/_app" | "/_app/downloads" | "/_app/";
   fileRoutesById: FileRoutesById;
 }
 export interface RootRouteChildren {
@@ -87,26 +77,17 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof AppDownloadsRouteImport;
       parentRoute: typeof AppRoute;
     };
-    "/_app/instances/new": {
-      id: "/_app/instances/new";
-      path: "/instances/new";
-      fullPath: "/instances/new";
-      preLoaderRoute: typeof AppInstancesNewRouteImport;
-      parentRoute: typeof AppRoute;
-    };
   }
 }
 
 interface AppRouteChildren {
   AppDownloadsRoute: typeof AppDownloadsRoute;
   AppIndexRoute: typeof AppIndexRoute;
-  AppInstancesNewRoute: typeof AppInstancesNewRoute;
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppDownloadsRoute: AppDownloadsRoute,
   AppIndexRoute: AppIndexRoute,
-  AppInstancesNewRoute: AppInstancesNewRoute,
 };
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren);

@@ -39,16 +39,14 @@ pub async fn create_instance(
 }
 
 #[tauri::command]
-pub async fn list_loader_versions(
+pub async fn list_loader_builds(
     platform: String,
     game_version: String,
-    channel: String,
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<licht_core::LoaderBuild>, String> {
     let platform =
         LoaderPlatform::parse(&platform).ok_or_else(|| "unknown platform".to_string())?;
-    let channel = LoaderChannel::parse(&channel).ok_or_else(|| "unknown channel".to_string())?;
     let client = http_client().map_err(failure)?;
-    licht_core::list_loader_versions(&client, platform, &game_version, channel)
+    licht_core::list_loader_builds(&client, platform, &game_version)
         .await
         .map_err(failure)
 }

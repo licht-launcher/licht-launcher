@@ -72,8 +72,6 @@ pub enum CoreError {
     InstanceMemory,
     #[error("instance name is invalid")]
     InstanceName,
-    #[error("an instance folder already exists")]
-    InstanceExists,
     #[error("instance preparation is incomplete")]
     InstancePreparing,
     #[error("Java runtime index JSON is invalid")]

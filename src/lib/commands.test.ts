@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { open } from "@tauri-apps/plugin-dialog";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildDiagnostics } from "@/features/settings/fixtures/build-diagnostics";
 import { appUpdateState } from "@/features/updater/fixtures/state";
@@ -9,12 +10,12 @@ import {
   beginMicrosoftLogin,
   browseApplicationDirectory,
   browseJava,
+  browseModpackFile,
   cancelDownloadJob,
   checkAppUpdate,
   clearLastPlayedFolder,
   closeStartupPreview,
-  createInstance,
-  createInstanceFromModpack,
+  createInstanceFromModpackFile,
   createInstanceWithPlatform,
   customTitleBarActive,
   deleteInstance,
@@ -39,9 +40,8 @@ import {
   listInstanceContent,
   listInstanceEntries,
   listInstances,
-  listLoaderVersions,
+  listLoaderBuilds,
   listMicrosoftAccounts,
-  listModpackVersions,
   listRunningGames,
   listVersions,
   logoutMicrosoftAccount,
@@ -61,7 +61,6 @@ import {
   runtimeJava,
   saveInstance,
   saveSettings,
-  searchModpacks,
   setActiveMicrosoftAccount,
   setInstanceVersion,
   setLastPlayedFolder,
@@ -74,6 +73,10 @@ import type { InstanceContentUpdate } from "@/lib/generated/InstanceContentUpdat
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
+}));
+
+vi.mock("@tauri-apps/plugin-dialog", () => ({
+  open: vi.fn(),
 }));
 
 const { contentListeners, unsubscribe } = vi.hoisted(() => ({
@@ -213,11 +216,6 @@ describe("launcher commands", () => {
   });
 
   it("creates, renames, duplicates, and deletes an instance", async () => {
-    await createInstance("Survival", "1.20.1");
-    expect(invoke).toHaveBeenCalledWith("create_instance", {
-      name: "Survival",
-      versionId: "1.20.1",
-    });
     await createInstanceWithPlatform({
       name: "Fabric",
       platform: "fabric",
@@ -232,31 +230,27 @@ describe("launcher commands", () => {
       loaderChannel: "stable",
       loaderVersion: null,
     });
-    await listLoaderVersions("fabric", "1.20.1", "stable");
-    expect(invoke).toHaveBeenCalledWith("list_loader_versions", {
+    await listLoaderBuilds("fabric", "1.20.1");
+    expect(invoke).toHaveBeenCalledWith("list_loader_builds", {
       platform: "fabric",
       gameVersion: "1.20.1",
-      channel: "stable",
     });
-    await searchModpacks("cobble");
-    expect(invoke).toHaveBeenCalledWith("search_modpacks", { query: "cobble" });
-    await listModpackVersions("modrinth", "ABC");
-    expect(invoke).toHaveBeenCalledWith("list_modpack_versions", {
-      source: "modrinth",
-      projectId: "ABC",
+    vi.mocked(open).mockResolvedValueOnce("C:\\packs\\cobble.mrpack");
+    await expect(browseModpackFile()).resolves.toBe("C:\\packs\\cobble.mrpack");
+    expect(open).toHaveBeenCalledWith({
+      multiple: false,
+      directory: false,
+      filters: [{ name: "Modpack", extensions: ["mrpack", "zip"] }],
     });
-    await createInstanceFromModpack({
+    vi.mocked(open).mockResolvedValueOnce(null);
+    await expect(browseModpackFile()).resolves.toBeNull();
+    await createInstanceFromModpackFile({
       name: "Cobblemon",
-      source: "modrinth",
-      projectId: "ABC",
-      versionId: "v1",
+      path: "C:\\packs\\cobble.mrpack",
     });
-    expect(invoke).toHaveBeenCalledWith("create_instance_from_modpack", {
+    expect(invoke).toHaveBeenCalledWith("create_instance_from_modpack_file", {
       name: "Cobblemon",
-      source: "modrinth",
-      projectId: "ABC",
-      versionId: "v1",
-      iconUrl: null,
+      path: "C:\\packs\\cobble.mrpack",
     });
     await renameInstance("Survival", "Classic");
     expect(invoke).toHaveBeenCalledWith("rename_instance", {
