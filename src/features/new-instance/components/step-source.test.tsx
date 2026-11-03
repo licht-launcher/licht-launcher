@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { StepSource } from "@/features/new-instance/components/step-source";
@@ -40,20 +40,22 @@ describe("StepSource", () => {
     ).toBeNull();
   });
 
-  it("fills each card with what the source gives you", () => {
+  it("adds two short details per card without repeating the description", () => {
     render(<StepSource value="scratch" onChange={() => {}} />);
 
-    expect(
-      screen.getByText("Pick Vanilla, Fabric, NeoForge, Forge or Quilt"),
-    ).toBeVisible();
-    expect(screen.getByText("Mods come already selected")).toBeVisible();
-    expect(screen.getByText("The format is detected for you")).toBeVisible();
-    const scratch = screen.getByRole("button", { name: /From scratch/ });
-    for (const chip of ["Vanilla", "Fabric", "NeoForge", "Forge", "Quilt"]) {
-      expect(within(scratch).getByText(chip)).toBeVisible();
+    for (const detail of [
+      "Vanilla, Fabric, NeoForge, Forge or Quilt",
+      "Starts empty, add mods later",
+      "Mods come already selected",
+      "Choose any published pack version",
+      "The format is detected for you",
+      "Your original file is left untouched",
+    ]) {
+      expect(screen.getByText(detail)).toBeVisible();
     }
-    const modpack = screen.getByRole("button", { name: /From a modpack/ });
-    expect(within(modpack).getAllByText("Modrinth").length).toBeGreaterThan(0);
+    for (const card of screen.getAllByRole("button")) {
+      expect(card.querySelectorAll("li")).toHaveLength(2);
+    }
   });
 
   it("animates the selection mark in and out instead of mounting it", () => {

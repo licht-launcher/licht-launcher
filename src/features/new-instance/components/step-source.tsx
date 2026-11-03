@@ -43,24 +43,6 @@ function Features({ tone, items }: { tone: Tone; items: string[] }) {
   );
 }
 
-function Chips({ items, mono = false }: { items: string[]; mono?: boolean }) {
-  return (
-    <div className="mt-auto flex w-full flex-wrap gap-1.5 border-t border-border/40 pt-3">
-      {items.map((item) => (
-        <span
-          key={item}
-          className={cn(
-            "rounded-full border border-border/60 bg-black/10 px-2 py-0.5 text-xs text-muted-foreground transition-colors duration-200 group-hover/choice:text-foreground",
-            mono && "font-mono",
-          )}
-        >
-          {item}
-        </span>
-      ))}
-    </div>
-  );
-}
-
 function SelectedMark({ selected }: { selected: boolean }) {
   return (
     <span
@@ -116,12 +98,10 @@ export function StepSource({
           <Features
             tone="cool"
             items={[
-              "Pick Vanilla, Fabric, NeoForge, Forge or Quilt",
-              "Loader version chosen for you or set by hand",
+              "Vanilla, Fabric, NeoForge, Forge or Quilt",
               "Starts empty, add mods later",
             ]}
           />
-          <Chips items={["Vanilla", "Fabric", "NeoForge", "Forge", "Quilt"]} />
           <SelectedMark selected={value === "scratch"} />
         </ChoiceCard>
         <ChoiceCard
@@ -146,10 +126,8 @@ export function StepSource({
             items={[
               "Mods come already selected",
               "Choose any published pack version",
-              "Search by name to find a pack",
             ]}
           />
-          <Chips items={["Modrinth", "CurseForge"]} />
           <SelectedMark selected={value === "modpack"} />
         </ChoiceCard>
         <ChoiceCard
@@ -173,10 +151,8 @@ export function StepSource({
             items={[
               "The format is detected for you",
               "Your original file is left untouched",
-              "Works with packs you exported or downloaded",
             ]}
           />
-          <Chips items={[".mrpack", ".zip"]} mono />
           <SelectedMark selected={value === "file"} />
         </ChoiceCard>
       </div>
