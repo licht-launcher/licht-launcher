@@ -75,8 +75,8 @@ function SourceRow({
         >
           {icon}
         </span>
-        <span className="flex min-w-0 flex-1 flex-col">
-          <span className="text-sm font-medium tracking-tight">{title}</span>
+        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="text-base font-medium tracking-tight">{title}</span>
           <span className="text-xs leading-snug text-muted-foreground">
             {description}
           </span>
