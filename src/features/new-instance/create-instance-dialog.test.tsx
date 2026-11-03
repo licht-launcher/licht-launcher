@@ -187,6 +187,31 @@ describe("CreateInstanceDialog", () => {
     );
   });
 
+  it("avoids the folder of an instance that was renamed", async () => {
+    mockCreateCommands(undefined, [
+      { ...createdInstance("Renamed"), folder: "Vanilla-1.20.1" },
+    ]);
+    await renderApp();
+    await openDetails();
+
+    expect(screen.getByLabelText("Instance Name")).toHaveAttribute(
+      "placeholder",
+      "Vanilla 1.20.1 (1)",
+    );
+  });
+
+  it("refuses a typed name that lands in the same folder as another", async () => {
+    mockCreateCommands(undefined, [createdInstance("Survival")]);
+    await renderApp();
+    await openDetails();
+
+    await typeName("Survival!");
+    expect(
+      await screen.findByText("An instance with this name already exists."),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "Create" })).toBeDisabled();
+  });
+
   it("refuses a typed name that another instance already has", async () => {
     mockCreateCommands(undefined, [createdInstance("Survival")]);
     await renderApp();
