@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ScratchDetails } from "@/features/new-instance/components/scratch-details";
@@ -62,6 +62,44 @@ describe("ScratchDetails", () => {
       "Choose a platform",
       "Game version",
     ]);
+  });
+
+  it("grows the loader section in when a loader platform is picked", async () => {
+    const props = {
+      takenNames: [],
+      loaderState: "ready" as const,
+      stableMissing: false,
+      versions,
+      versionsPending: false,
+      versionsError: false,
+      loaderVersions: [],
+      onRetryVersions: () => {},
+      onChange: () => {},
+    };
+    const { container, rerender } = render(
+      <ScratchDetails
+        state={{ ...initialScratchState, gameVersion: "1.20.1" }}
+        {...props}
+      />,
+    );
+    expect(container.querySelector("[data-slot='reveal']")).toBeNull();
+
+    rerender(
+      <ScratchDetails
+        state={{
+          ...initialScratchState,
+          gameVersion: "1.20.1",
+          platform: "fabric",
+        }}
+        {...props}
+      />,
+    );
+    const reveal = container.querySelector("[data-slot='reveal']");
+    expect(reveal).not.toBeNull();
+    await waitFor(() => expect(reveal).toHaveAttribute("data-state", "open"));
+    expect(
+      screen.getByRole("heading", { name: "Loader version" }),
+    ).toBeVisible();
   });
 
   it("puts the loader after the game version for platforms with a loader", () => {

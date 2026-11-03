@@ -155,7 +155,7 @@ describe("LoaderOptions", () => {
     }
   });
 
-  it("asks for the loader version only under Other", () => {
+  it("asks for the loader version only under Other", async () => {
     const { rerender } = render(
       <LoaderOptions
         state={{
@@ -189,7 +189,12 @@ describe("LoaderOptions", () => {
       />,
     );
     expect(
-      screen.getByRole("combobox", { name: "Loader version" }),
+      await screen.findByRole("combobox", { name: "Loader version" }),
     ).toBeVisible();
+    expect(
+      document
+        .querySelector("[data-slot='reveal']")
+        ?.contains(screen.getByRole("combobox", { name: "Loader version" })),
+    ).toBe(true);
   });
 });

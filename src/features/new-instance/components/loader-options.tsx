@@ -1,5 +1,5 @@
 import { PuzzleIcon } from "lucide-react";
-
+import { Reveal } from "@/components/ui/reveal";
 import {
   Select,
   SelectContent,
@@ -39,36 +39,42 @@ export function LoaderOptions({
       title="Loader version"
       description="Stable and Latest are picked for you. Other lets you choose a build."
     >
-      <ChannelPicker
-        value={state.loaderChannel}
-        loader={loader}
-        gameVersion={state.gameVersion}
-        stableMissing={stableMissing}
-        noBuilds={loaderState === "empty"}
-        failed={loaderState === "error"}
-        onChange={(loaderChannel) => {
-          onChange({ loaderChannel, loaderVersion: "" });
-        }}
-      />
-      {loaderState === "ready" && state.loaderChannel === "manual" ? (
-        <Select
-          value={state.loaderVersion}
-          onValueChange={(loaderVersion) => {
-            onChange({ loaderVersion });
+      <div>
+        <ChannelPicker
+          value={state.loaderChannel}
+          loader={loader}
+          gameVersion={state.gameVersion}
+          stableMissing={stableMissing}
+          noBuilds={loaderState === "empty"}
+          failed={loaderState === "error"}
+          onChange={(loaderChannel) => {
+            onChange({ loaderChannel, loaderVersion: "" });
           }}
+        />
+        <Reveal
+          open={loaderState === "ready" && state.loaderChannel === "manual"}
         >
-          <SelectTrigger aria-label="Loader version">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {loaderVersions.map((version) => (
-              <SelectItem key={version} value={version}>
-                {version}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      ) : null}
+          <div className="pt-2">
+            <Select
+              value={state.loaderVersion}
+              onValueChange={(loaderVersion) => {
+                onChange({ loaderVersion });
+              }}
+            >
+              <SelectTrigger aria-label="Loader version">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {loaderVersions.map((version) => (
+                  <SelectItem key={version} value={version}>
+                    {version}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </Reveal>
+      </div>
     </FormSection>
   );
 }
