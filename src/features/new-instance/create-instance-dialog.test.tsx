@@ -83,7 +83,7 @@ describe("CreateInstanceDialog", () => {
       "border-b",
       "bg-muted/50",
       "px-6",
-      "py-3",
+      "py-5",
     );
     expect(header).not.toHaveClass("border-border/40");
   });
