@@ -1,5 +1,3 @@
-import { BoxIcon } from "lucide-react";
-
 import { Reveal } from "@/components/ui/reveal";
 import { FormSection } from "@/features/new-instance/components/form-section";
 import { GameVersionField } from "@/features/new-instance/components/game-version-field";

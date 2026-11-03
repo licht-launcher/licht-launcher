@@ -1,5 +1,3 @@
-import { TagIcon } from "lucide-react";
-
 import { Input } from "@/components/ui/input";
 import { FormSection } from "@/features/new-instance/components/form-section";
 
