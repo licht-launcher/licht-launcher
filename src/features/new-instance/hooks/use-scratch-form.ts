@@ -5,6 +5,7 @@ import { versionsQueryOptions } from "@/features/instances/lib/versions-query";
 import { createVersionChoices } from "@/features/instances/model/create-versions";
 import {
   initialScratchState,
+  type LoaderState,
   platformNeedsLoader,
   type ScratchState,
 } from "@/features/new-instance/model/create-state";
@@ -80,5 +81,27 @@ export function useScratchForm(enabled: boolean) {
     loaderVersions.data,
   ]);
 
-  return { state, update, versions, loaderVersions };
+  return {
+    state,
+    update,
+    versions,
+    loaderVersions,
+    loaderState: loaderStateOf(state, loaderVersions),
+  };
+}
+
+function loaderStateOf(
+  state: ScratchState,
+  loaderVersions: { isError: boolean; data: string[] | undefined },
+): LoaderState {
+  if (!platformNeedsLoader(state.platform)) {
+    return "none";
+  }
+  if (loaderVersions.isError) {
+    return "error";
+  }
+  if (loaderVersions.data === undefined) {
+    return "checking";
+  }
+  return loaderVersions.data.length > 0 ? "ready" : "empty";
 }

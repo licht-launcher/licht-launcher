@@ -137,6 +137,45 @@ describe("useScratchForm", () => {
     );
   });
 
+  it("reports whether the loader has a build for the game version", async () => {
+    const { result } = setup(true);
+    await waitFor(() =>
+      expect(result.current.state.gameVersion).toBe("1.20.1"),
+    );
+    expect(result.current.loaderState).toBe("none");
+
+    act(() => {
+      result.current.update({ platform: "fabric" });
+    });
+    await waitFor(() => expect(result.current.loaderState).toBe("ready"));
+  });
+
+  it("flags a loader without builds for the game version", async () => {
+    vi.mocked(listLoaderVersions).mockResolvedValue([]);
+    const { result } = setup(true);
+    await waitFor(() =>
+      expect(result.current.state.gameVersion).toBe("1.20.1"),
+    );
+
+    act(() => {
+      result.current.update({ platform: "quilt" });
+    });
+    await waitFor(() => expect(result.current.loaderState).toBe("empty"));
+  });
+
+  it("flags a loader whose builds could not be checked", async () => {
+    vi.mocked(listLoaderVersions).mockRejectedValue(new Error("404"));
+    const { result } = setup(true);
+    await waitFor(() =>
+      expect(result.current.state.gameVersion).toBe("1.20.1"),
+    );
+
+    act(() => {
+      result.current.update({ platform: "quilt" });
+    });
+    await waitFor(() => expect(result.current.loaderState).toBe("error"));
+  });
+
   it("does not ask for loader versions on vanilla", async () => {
     const { result } = setup(true);
     await waitFor(() =>

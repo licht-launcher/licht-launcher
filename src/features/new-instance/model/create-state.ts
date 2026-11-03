@@ -2,6 +2,13 @@ export type PlatformId = "vanilla" | "fabric" | "neoforge" | "forge" | "quilt";
 
 export type LoaderChannel = "stable" | "latest" | "manual";
 
+/**
+ * Whether the chosen loader has a build for the game version: "none" for
+ * vanilla, "checking" while the list loads, "ready" with builds, "empty" when
+ * the loader does not support the version, "error" when it could not be checked.
+ */
+export type LoaderState = "none" | "checking" | "ready" | "empty" | "error";
+
 /** The popup's two steps: choosing where to start, then the from-scratch form. */
 export type CreateView = "source" | "details";
 
@@ -69,8 +76,13 @@ export function uniqueName(name: string, taken: readonly string[]): string {
 export function canCreateScratch(
   state: ScratchState,
   taken: readonly string[] = [],
+  loaderReady = true,
 ): boolean {
-  if (state.gameVersion === "" || isNameTaken(state.name, taken)) {
+  if (
+    state.gameVersion === "" ||
+    isNameTaken(state.name, taken) ||
+    !loaderReady
+  ) {
     return false;
   }
   if (platformNeedsLoader(state.platform) && state.loaderChannel === "manual") {

@@ -19,9 +19,8 @@ export function CreateFlow({ onClose }: { onClose: () => void }) {
   const [direction, setDirection] = useState<"left" | "right">("left");
 
   const takenNames = useInstanceNames();
-  const { state, update, versions, loaderVersions } = useScratchForm(
-    view === "details",
-  );
+  const { state, update, versions, loaderVersions, loaderState } =
+    useScratchForm(view === "details");
   const { fromScratch, fromUpload, busy } = useCreateInstance({
     scratch: state,
     takenNames,
@@ -52,18 +51,21 @@ export function CreateFlow({ onClose }: { onClose: () => void }) {
             {/* Only the form scrolls; the header and the actions stay in view. */}
             <div
               data-slot="create-scroll"
-              className="min-h-0 flex-1 overflow-y-auto"
+              className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1 pt-1 pb-5"
             >
               <ScratchDetails
                 state={state}
                 takenNames={takenNames}
+                loaderState={loaderState}
                 versions={versions.data ?? []}
                 versionsPending={versions.isPending}
                 versionsError={versions.isError}
                 loaderVersions={loaderVersions.data ?? []}
-                loaderVersionsPending={loaderVersions.isPending}
                 onRetryVersions={() => {
                   void versions.refetch();
+                }}
+                onRetryLoader={() => {
+                  void loaderVersions.refetch();
                 }}
                 onChange={update}
               />
@@ -71,7 +73,11 @@ export function CreateFlow({ onClose }: { onClose: () => void }) {
             <ScratchActions
               busy={busy}
               creating={fromScratch.isPending}
-              canCreate={canCreateScratch(state, takenNames)}
+              canCreate={canCreateScratch(
+                state,
+                takenNames,
+                loaderState === "none" || loaderState === "ready",
+              )}
               onBack={() => {
                 goTo("source");
               }}

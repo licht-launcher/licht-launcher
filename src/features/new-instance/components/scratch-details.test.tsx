@@ -36,11 +36,12 @@ function renderDetails(
     <ScratchDetails
       state={{ ...initialScratchState, gameVersion: "1.20.1", ...state }}
       takenNames={[]}
+      loaderState="ready"
+      onRetryLoader={() => {}}
       versions={versions}
       versionsPending={false}
       versionsError={false}
       loaderVersions={[]}
-      loaderVersionsPending={false}
       onRetryVersions={() => {}}
       onChange={onChange}
       {...props}
@@ -109,6 +110,39 @@ describe("ScratchDetails", () => {
     ).toHaveClass("data-[state=checked]:bg-warning");
   });
 
+  it("explains when the loader has no build for the game version", () => {
+    renderDetails(
+      { platform: "forge", gameVersion: "26.3" },
+      { loaderState: "empty" },
+    );
+
+    expect(
+      screen.getByText(
+        "Forge has no build for 26.3. Pick another version or platform.",
+      ),
+    ).toBeVisible();
+  });
+
+  it("lets the user retry a loader check that failed", () => {
+    const onRetryLoader = vi.fn();
+    renderDetails(
+      { platform: "quilt", gameVersion: "26.4-snapshot-7" },
+      { loaderState: "error", onRetryLoader },
+    );
+
+    expect(
+      screen.getByText(/Could not check Quilt builds for 26.4-snapshot-7/),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Retry loader check" }));
+    expect(onRetryLoader).toHaveBeenCalledOnce();
+  });
+
+  it("says it is checking while the loader builds load", () => {
+    renderDetails({ platform: "fabric" }, { loaderState: "checking" });
+
+    expect(screen.getByText("Checking Fabric builds…")).toBeVisible();
+  });
+
   it("selects the game version from a typeable select", () => {
     const { onChange } = renderDetails();
 
@@ -162,11 +196,12 @@ describe("ScratchDetails", () => {
       <ScratchDetails
         state={initialScratchState}
         takenNames={[]}
+        loaderState="none"
+        onRetryLoader={() => {}}
         versions={[]}
         versionsPending={false}
         versionsError
         loaderVersions={[]}
-        loaderVersionsPending={false}
         onRetryVersions={onRetryVersions}
         onChange={() => {}}
       />,

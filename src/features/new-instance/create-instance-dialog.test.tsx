@@ -224,6 +224,54 @@ describe("CreateInstanceDialog", () => {
     );
   });
 
+  it("does not let a loader without builds be created", async () => {
+    mockCreateCommands((command) => {
+      if (command === "list_loader_versions") {
+        return [];
+      }
+    });
+    await renderApp();
+    await openDetails();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Forge/ }));
+    expect(
+      await screen.findByText(
+        "Forge has no build for 1.20.1. Pick another version or platform.",
+      ),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "Create" })).toBeDisabled();
+  });
+
+  it("blocks creating while the loader builds are still loading", async () => {
+    let finish: (versions: string[]) => void = () => {};
+    const pending = new Promise<string[]>((resolve) => {
+      finish = resolve;
+    });
+    mockCreateCommands((command) => {
+      if (command === "list_loader_versions") {
+        return pending;
+      }
+    });
+    await renderApp();
+    await openDetails();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Fabric/ }));
+    expect(await screen.findByText("Checking Fabric builds…")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Create" })).toBeDisabled();
+    finish(["0.16.0"]);
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Create" })).toBeEnabled(),
+    );
+  });
+
+  it("keeps the form inside the scroll area clear of clipped outlines", async () => {
+    await renderApp();
+    const dialog = await openDetails();
+
+    const scroll = dialog.querySelector("[data-slot='create-scroll']");
+    expect(scroll).toHaveClass("-mx-1", "px-1", "pb-5");
+  });
+
   it("keeps the header and the actions out of the scrolling area", async () => {
     await renderApp();
     const dialog = await openDetails();

@@ -8,6 +8,7 @@ import { PlatformPicker } from "@/features/new-instance/components/platform-pick
 import {
   defaultInstanceName,
   isNameTaken,
+  type LoaderState,
   platformNeedsLoader,
   type ScratchState,
 } from "@/features/new-instance/model/create-state";
@@ -16,23 +17,25 @@ import type { VersionSummary } from "@/lib/generated/VersionSummary";
 export function ScratchDetails({
   state,
   takenNames,
+  loaderState,
   versions,
   versionsPending,
   versionsError,
   loaderVersions,
-  loaderVersionsPending,
   onRetryVersions,
+  onRetryLoader,
   onChange,
 }: {
   state: ScratchState;
   /** Names already used by other instances. */
   takenNames: readonly string[];
+  loaderState: LoaderState;
   versions: VersionSummary[];
   versionsPending: boolean;
   versionsError: boolean;
   loaderVersions: string[];
-  loaderVersionsPending: boolean;
   onRetryVersions: () => void;
+  onRetryLoader: () => void;
   onChange: (patch: Partial<ScratchState>) => void;
 }) {
   return (
@@ -72,9 +75,10 @@ export function ScratchDetails({
       {platformNeedsLoader(state.platform) ? (
         <LoaderOptions
           state={state}
+          loaderState={loaderState}
           loaderVersions={loaderVersions}
-          loaderVersionsPending={loaderVersionsPending}
           onChange={onChange}
+          onRetry={onRetryLoader}
         />
       ) : null}
     </div>

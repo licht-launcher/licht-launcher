@@ -115,6 +115,16 @@ describe("unique names", () => {
     expect(resolveInstanceName(state, ["Survival"])).toBe("Survival");
   });
 
+  it("blocks creating while the loader has no usable build", () => {
+    const state = {
+      ...initialScratchState,
+      platform: "fabric" as const,
+      gameVersion: "26.3",
+    };
+    expect(canCreateScratch(state, [], true)).toBe(true);
+    expect(canCreateScratch(state, [], false)).toBe(false);
+  });
+
   it("blocks creating with a typed name that is already used", () => {
     const state = {
       ...initialScratchState,

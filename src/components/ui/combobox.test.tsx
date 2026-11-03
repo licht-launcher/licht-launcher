@@ -1,8 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 
 const options: ComboboxOption[] = [
   { value: "1.21", label: "1.21" },
@@ -136,6 +136,21 @@ describe("Combobox", () => {
     const rows = screen.getAllByRole("option");
     expect(rows.length).toBeGreaterThan(0);
     expect(rows.length).toBeLessThan(60);
+  });
+
+  it("opens inside the dialog that holds it so it can sit above the dialog footer", () => {
+    render(
+      <Dialog open>
+        <DialogContent aria-describedby={undefined}>
+          <DialogTitle>Form</DialogTitle>
+          <Harness />
+        </DialogContent>
+      </Dialog>,
+    );
+
+    fireEvent.focus(screen.getByRole("combobox", { name: "Game version" }));
+    const list = screen.getByRole("listbox", { name: "Game version" });
+    expect(list.closest("[data-slot='dialog-content']")).not.toBeNull();
   });
 
   it("does not open when disabled", () => {

@@ -1,5 +1,6 @@
 import { PuzzleIcon } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -8,19 +9,29 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { FormSection } from "@/features/new-instance/components/form-section";
-import type { ScratchState } from "@/features/new-instance/model/create-state";
+import {
+  type LoaderState,
+  PLATFORMS,
+  type ScratchState,
+} from "@/features/new-instance/model/create-state";
 
 export function LoaderOptions({
   state,
+  loaderState,
   loaderVersions,
-  loaderVersionsPending,
   onChange,
+  onRetry,
 }: {
   state: ScratchState;
+  loaderState: LoaderState;
   loaderVersions: string[];
-  loaderVersionsPending: boolean;
   onChange: (patch: Partial<ScratchState>) => void;
+  onRetry: () => void;
 }) {
+  const loader =
+    PLATFORMS.find((platform) => platform.id === state.platform)?.label ??
+    state.platform;
+
   return (
     <FormSection
       icon={<PuzzleIcon aria-hidden className="size-4" strokeWidth={2} />}
@@ -44,34 +55,50 @@ export function LoaderOptions({
           <SelectItem value="manual">Select manually</SelectItem>
         </SelectContent>
       </Select>
-      {state.loaderChannel === "manual" ? (
-        loaderVersionsPending ? (
-          <p className="text-sm text-muted-foreground">
-            Loading loader versions…
+      {loaderState === "checking" ? (
+        <p className="text-sm text-muted-foreground">
+          Checking {loader} builds…
+        </p>
+      ) : null}
+      {loaderState === "empty" ? (
+        <p className="text-sm text-destructive">
+          {loader} has no build for {state.gameVersion}. Pick another version or
+          platform.
+        </p>
+      ) : null}
+      {loaderState === "error" ? (
+        <div className="flex flex-col gap-2">
+          <p className="text-sm text-destructive">
+            Could not check {loader} builds for {state.gameVersion}.
           </p>
-        ) : loaderVersions.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No loader versions for this game version.
-          </p>
-        ) : (
-          <Select
-            value={state.loaderVersion}
-            onValueChange={(loaderVersion) => {
-              onChange({ loaderVersion });
-            }}
+          <Button
+            type="button"
+            variant="outline"
+            className="self-start"
+            onClick={onRetry}
           >
-            <SelectTrigger aria-label="Loader version">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {loaderVersions.map((version) => (
-                <SelectItem key={version} value={version}>
-                  {version}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )
+            Retry loader check
+          </Button>
+        </div>
+      ) : null}
+      {loaderState === "ready" && state.loaderChannel === "manual" ? (
+        <Select
+          value={state.loaderVersion}
+          onValueChange={(loaderVersion) => {
+            onChange({ loaderVersion });
+          }}
+        >
+          <SelectTrigger aria-label="Loader version">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {loaderVersions.map((version) => (
+              <SelectItem key={version} value={version}>
+                {version}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       ) : null}
     </FormSection>
   );
