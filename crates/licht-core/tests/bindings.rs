@@ -64,6 +64,7 @@ fn the_committed_bindings_match_ts_rs() {
     JavaStatus::export_all(&config).expect("java status");
     StartupProgress::export_all(&config).expect("startup progress");
     StartupPreviewScenario::export_all(&config).expect("startup preview scenarios");
+    licht_core::LoaderBuild::export_all(&config).expect("loader build");
 
     let expected = generated_dir();
     let expected_names = file_names(&expected);

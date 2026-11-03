@@ -2,11 +2,12 @@
 
 pub(crate) mod fabric;
 pub(crate) mod forge;
+mod http_cache;
 mod types;
 
 pub use fabric::{install_fabric_like, list_fabric_like_versions};
 pub use forge::{install_forge_like, list_forge_like_versions};
-pub use types::{LoaderChannel, LoaderPlatform};
+pub use types::{LoaderBuild, LoaderChannel, LoaderPlatform};
 
 use reqwest::Client;
 
@@ -96,6 +97,30 @@ pub(crate) async fn prepare_platform_profile(
             .await
         }
         LoaderPlatform::Vanilla => Ok(game_version.to_string()),
+    }
+}
+
+/// Lists every loader build for a game version (newest first) with its
+/// stability, from one metadata request that is cached for a few minutes.
+pub async fn list_loader_builds(
+    client: &Client,
+    platform: LoaderPlatform,
+    game_version: &str,
+) -> Result<Vec<LoaderBuild>> {
+    match platform {
+        LoaderPlatform::Vanilla => Ok(Vec::new()),
+        LoaderPlatform::Fabric => {
+            fabric::list_fabric_like_builds(client, fabric::FABRIC_META, game_version).await
+        }
+        LoaderPlatform::Quilt => {
+            fabric::list_fabric_like_builds(client, fabric::QUILT_META, game_version).await
+        }
+        LoaderPlatform::Forge => {
+            forge::list_forge_like_builds(client, forge::FORGE_METADATA, game_version).await
+        }
+        LoaderPlatform::NeoForge => {
+            forge::list_forge_like_builds(client, forge::NEOFORGE_METADATA, game_version).await
+        }
     }
 }
 

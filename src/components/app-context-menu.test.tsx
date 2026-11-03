@@ -65,7 +65,7 @@ async function renderApp() {
   });
   const next = createRoute({
     getParentRoute: () => root,
-    path: "/instances/new",
+    path: "/downloads",
     component: () => <p>Next page</p>,
   });
   const router = createRouter({
@@ -125,10 +125,7 @@ describe("AppContextMenu", () => {
   it("navigates backward and forward through the existing router history", async () => {
     const { router, target } = await renderApp();
     await act(async () => {
-      await router.navigate({
-        to: "/instances/new",
-        search: { step: "source" },
-      });
+      await router.navigate({ to: "/downloads" });
     });
     expect(await screen.findByText("Next page")).toBeVisible();
     await openMenu(target);

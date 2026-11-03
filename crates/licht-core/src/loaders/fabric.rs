@@ -1,10 +1,12 @@
+use std::cmp::Ordering;
 use std::fs;
 
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::loaders::types::LoaderChannel;
+use crate::loaders::http_cache::fetch_cached;
+use crate::loaders::types::{LoaderBuild, LoaderChannel};
 use crate::{CoreError, Result, SharedCache};
 
 pub const FABRIC_META: &str = "https://meta.fabricmc.net/v2";
@@ -18,8 +20,9 @@ struct LoaderEntry {
 #[derive(Debug, Deserialize)]
 struct LoaderInfo {
     version: String,
+    /// Fabric flags stable builds; Quilt's metadata has no such field.
     #[serde(default)]
-    stable: bool,
+    stable: Option<bool>,
 }
 
 pub async fn list_fabric_like_versions(
@@ -28,35 +31,123 @@ pub async fn list_fabric_like_versions(
     game_version: &str,
     channel: LoaderChannel,
 ) -> Result<Vec<String>> {
+    let builds = list_fabric_like_builds(client, meta_base, game_version).await?;
+    let only_stable = matches!(channel, LoaderChannel::Stable);
+    Ok(builds
+        .into_iter()
+        .filter(|build| !only_stable || build.stable)
+        .map(|build| build.version)
+        .collect())
+}
+
+pub async fn list_fabric_like_builds(
+    client: &Client,
+    meta_base: &str,
+    game_version: &str,
+) -> Result<Vec<LoaderBuild>> {
     let url = format!(
         "{meta_base}/versions/loader/{}",
         urlencoding_game(game_version)
     );
-    let response = client.get(&url).send().await?;
-    let status = response.status().as_u16();
-    let body = response.text().await?;
+    let response = fetch_cached(client, &url).await?;
+    loader_builds_from_response(response.status, &response.body)
+}
+
+/// Turns the metadata service's answer into a list of builds.
+///
+/// A game version the service does not know is a normal "no builds" answer
+/// (Fabric replies 400, Quilt 404), so it is an empty list and not an error.
+fn loader_builds_from_response(status: u16, body: &str) -> Result<Vec<LoaderBuild>> {
+    if status == 400 || status == 404 {
+        return Ok(Vec::new());
+    }
     if !(200..300).contains(&status) {
         return Err(CoreError::LoaderMeta {
             detail: format!("loader_list_http_{status}"),
         });
     }
-    parse_fabric_loader_list(&body, channel)
+    parse_fabric_loader_builds(body)
 }
 
-pub fn parse_fabric_loader_list(body: &str, channel: LoaderChannel) -> Result<Vec<String>> {
+pub fn parse_fabric_loader_builds(body: &str) -> Result<Vec<LoaderBuild>> {
     let entries: Vec<LoaderEntry> = serde_json::from_str(body).map_err(CoreError::LoaderJson)?;
-    let versions = match channel {
-        LoaderChannel::Stable => entries
-            .into_iter()
-            .filter(|entry| entry.loader.stable)
-            .map(|entry| entry.loader.version)
-            .collect::<Vec<_>>(),
-        LoaderChannel::Latest | LoaderChannel::Manual => entries
-            .into_iter()
-            .map(|entry| entry.loader.version)
-            .collect::<Vec<_>>(),
+    // Fabric lists loaders newest first and flags the stable ones. Quilt does
+    // neither, so for it the order and the stability come from the version.
+    let flagged = entries.iter().all(|entry| entry.loader.stable.is_some());
+    let mut builds: Vec<LoaderBuild> = entries
+        .into_iter()
+        .map(|entry| {
+            let stable = entry
+                .loader
+                .stable
+                .unwrap_or_else(|| is_final_release(&entry.loader.version));
+            LoaderBuild {
+                version: entry.loader.version,
+                stable,
+            }
+        })
+        .collect();
+    if !flagged {
+        builds.sort_by(|left, right| compare_versions(&right.version, &left.version));
+    }
+    Ok(builds)
+}
+
+/// A version without a pre-release suffix (`0.24.0`, not `0.24.0-beta.1`).
+fn is_final_release(version: &str) -> bool {
+    let version = version.split('+').next().unwrap_or(version);
+    !version.contains('-')
+}
+
+/// Orders loader versions like semver: numbers first, and a final release is
+/// newer than its own pre-releases.
+fn compare_versions(left: &str, right: &str) -> Ordering {
+    let (left_numbers, left_suffix) = split_version(left);
+    let (right_numbers, right_suffix) = split_version(right);
+    left_numbers
+        .cmp(&right_numbers)
+        .then_with(|| match (left_suffix, right_suffix) {
+            (None, None) => Ordering::Equal,
+            (None, Some(_)) => Ordering::Greater,
+            (Some(_), None) => Ordering::Less,
+            (Some(left), Some(right)) => compare_suffixes(left, right),
+        })
+}
+
+/// `0.20.0-beta.9` becomes `([0, 20, 0], Some("beta.9"))`.
+fn split_version(version: &str) -> (Vec<u64>, Option<&str>) {
+    let version = version.split('+').next().unwrap_or(version);
+    let (numbers, suffix) = match version.split_once('-') {
+        Some((numbers, suffix)) => (numbers, Some(suffix)),
+        None => (version, None),
     };
-    Ok(versions)
+    let numbers = numbers
+        .split('.')
+        .map(|part| part.parse().unwrap_or(0))
+        .collect();
+    (numbers, suffix)
+}
+
+/// Compares pre-release suffixes piece by piece: `beta.9` < `beta.10` < `rc.1`.
+fn compare_suffixes(left: &str, right: &str) -> Ordering {
+    let mut left_parts = left.split('.');
+    let mut right_parts = right.split('.');
+    loop {
+        let ordering = match (left_parts.next(), right_parts.next()) {
+            (None, None) => return Ordering::Equal,
+            (None, Some(_)) => return Ordering::Less,
+            (Some(_), None) => return Ordering::Greater,
+            (Some(left), Some(right)) => match (left.parse::<u64>(), right.parse::<u64>()) {
+                (Ok(left), Ok(right)) => left.cmp(&right),
+                (Ok(_), Err(_)) => Ordering::Less,
+                (Err(_), Ok(_)) => Ordering::Greater,
+                (Err(_), Err(_)) => left.cmp(right),
+            },
+        };
+        if ordering != Ordering::Equal {
+            return ordering;
+        }
+    }
 }
 
 /// Downloads the loader profile JSON into the shared versions cache and returns its id.
@@ -178,6 +269,15 @@ fn urlencoding_game(value: &str) -> String {
 mod tests {
     use super::*;
 
+    fn parse_fabric_loader_list(body: &str, channel: LoaderChannel) -> Result<Vec<String>> {
+        let only_stable = matches!(channel, LoaderChannel::Stable);
+        Ok(parse_fabric_loader_builds(body)?
+            .into_iter()
+            .filter(|build| !only_stable || build.stable)
+            .map(|build| build.version)
+            .collect())
+    }
+
     #[test]
     fn stable_filters_unstable_loaders() {
         let body = r#"[
@@ -188,5 +288,121 @@ mod tests {
         assert_eq!(stable, vec!["0.16.0".to_string()]);
         let latest = parse_fabric_loader_list(body, LoaderChannel::Latest).expect("ok");
         assert_eq!(latest.len(), 2);
+    }
+
+    /// Quilt omits `stable` and lists loaders out of order (real versions).
+    const QUILT_BODY: &str = r#"[
+      {"loader":{"version":"0.20.0-beta.9"}},
+      {"loader":{"version":"0.20.0-beta.10"}},
+      {"loader":{"version":"0.24.0"}},
+      {"loader":{"version":"0.23.1"}},
+      {"loader":{"version":"0.24.0-rc.1"}},
+      {"loader":{"version":"0.20.0-beta.7"}}
+    ]"#;
+
+    #[test]
+    fn quilt_stable_is_the_final_releases_newest_first() {
+        let stable = parse_fabric_loader_list(QUILT_BODY, LoaderChannel::Stable).expect("ok");
+        assert_eq!(stable, vec!["0.24.0".to_string(), "0.23.1".to_string()]);
+    }
+
+    #[test]
+    fn quilt_latest_starts_at_the_newest_build_even_if_it_is_a_pre_release() {
+        let latest = parse_fabric_loader_list(QUILT_BODY, LoaderChannel::Latest).expect("ok");
+        assert_eq!(
+            latest,
+            vec![
+                "0.24.0",
+                "0.24.0-rc.1",
+                "0.23.1",
+                "0.20.0-beta.10",
+                "0.20.0-beta.9",
+                "0.20.0-beta.7",
+            ]
+        );
+    }
+
+    #[test]
+    fn quilt_manual_lists_every_build_newest_first() {
+        let manual = parse_fabric_loader_list(QUILT_BODY, LoaderChannel::Manual).expect("ok");
+        assert_eq!(manual.first().map(String::as_str), Some("0.24.0"));
+        assert_eq!(manual.len(), 6);
+    }
+
+    #[test]
+    fn game_versions_the_service_does_not_know_have_no_builds() {
+        // Fabric answers 400 and Quilt 404; neither is worth retrying.
+        for status in [400, 404] {
+            let list =
+                loader_builds_from_response(status, "not found").expect("no builds, not an error");
+            assert!(list.is_empty(), "status {status}");
+        }
+    }
+
+    #[test]
+    fn other_http_errors_still_fail() {
+        for status in [429, 500, 503] {
+            let result = loader_builds_from_response(status, "");
+            assert!(
+                matches!(result, Err(CoreError::LoaderMeta { .. })),
+                "status {status}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_successful_response_is_parsed() {
+        let builds = loader_builds_from_response(200, QUILT_BODY).expect("parsed");
+        assert_eq!(builds.len(), 6);
+    }
+
+    #[test]
+    fn fabric_keeps_the_order_the_api_gives_when_it_flags_stability() {
+        let body = r#"[
+          {"loader":{"version":"0.20.1","stable":true}},
+          {"loader":{"version":"0.20.2-beta.1","stable":false}},
+          {"loader":{"version":"0.19.2","stable":true}}
+        ]"#;
+        let latest = parse_fabric_loader_list(body, LoaderChannel::Latest).expect("ok");
+        assert_eq!(latest, vec!["0.20.1", "0.20.2-beta.1", "0.19.2"]);
+        let stable = parse_fabric_loader_list(body, LoaderChannel::Stable).expect("ok");
+        assert_eq!(stable, vec!["0.20.1", "0.19.2"]);
+    }
+
+    #[test]
+    fn builds_carry_the_stable_flag_newest_first() {
+        let body = r#"[
+          {"loader":{"version":"0.16.1","stable":false}},
+          {"loader":{"version":"0.16.0","stable":true}}
+        ]"#;
+        let builds = parse_fabric_loader_builds(body).expect("ok");
+        assert_eq!(
+            builds,
+            vec![
+                LoaderBuild {
+                    version: "0.16.1".into(),
+                    stable: false
+                },
+                LoaderBuild {
+                    version: "0.16.0".into(),
+                    stable: true
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn quilt_builds_are_sorted_and_flagged_by_version() {
+        let builds = parse_fabric_loader_builds(QUILT_BODY).expect("ok");
+        assert!(
+            builds
+                .windows(2)
+                .all(|pair| compare_versions(&pair[0].version, &pair[1].version) != Ordering::Less)
+        );
+        let newest_stable = builds
+            .iter()
+            .find(|build| build.stable)
+            .expect("a stable build");
+        assert!(!newest_stable.version.contains('-'));
     }
 }

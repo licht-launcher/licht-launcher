@@ -15,11 +15,6 @@ type DialogMutations = {
     unknown,
     { folder: string; name: string }
   >;
-  duplicate: UseMutationResult<
-    InstanceEntry,
-    unknown,
-    { folder: string; name: string }
-  >;
   remove: UseMutationResult<void, unknown, string>;
   openFolder: UseMutationResult<void, unknown, string>;
   changeVersion: UseMutationResult<
@@ -77,15 +72,6 @@ export function InstanceDialogs({
           mutations.rename.mutate({
             folder: action.folder,
             name: draftName.trim(),
-          });
-        }}
-        onDuplicate={() => {
-          if (action?.kind !== "duplicate") {
-            return;
-          }
-          mutations.duplicate.mutate({
-            folder: action.folder,
-            name: draftName,
           });
         }}
         onDelete={() => {

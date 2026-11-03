@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { PlusIcon } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef } from "react";
 import { useDefaultLayout } from "react-resizable-panels";
@@ -36,6 +36,9 @@ import {
   SIDEBAR_PANEL_IDS,
   sidebarLayoutStorage,
 } from "@/features/instances/lib/sidebar-layout";
+import { CreateInstanceMenu } from "@/features/new-instance/components/create-instance-menu";
+import { CreateInstanceDialog } from "@/features/new-instance/create-instance-dialog";
+import { uniqueName } from "@/features/new-instance/model/create-state";
 import { PlayerAccountButton } from "@/features/settings/components/player-account-button";
 import { useCustomTitleBar } from "@/hooks/use-custom-title-bar";
 import { APP_CODENAME, APP_VERSION } from "@/lib/app-release";
@@ -65,13 +68,12 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
       return state.location.search as HomeSearch;
     },
   });
-  const onWizard = pathname === "/instances/new";
   const instanceParam = homeSearch?.instance ?? null;
 
   const { instances, username } = useInstancesData();
   const { selectedFolder, setSelectedFolder, selected } = useInstanceSelection(
     instances.data,
-    onWizard ? null : instanceParam,
+    instanceParam,
   );
   const queryClient = useQueryClient();
 
@@ -169,6 +171,18 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
       clearAction: dialogs.clearAction,
     });
 
+  // Duplicating needs no questions: the copy is named like the original plus
+  // a number, and it can be renamed afterwards.
+  function duplicateNumbered(folder: string, name: string) {
+    duplicate.mutate({
+      folder,
+      name: uniqueName(
+        name,
+        (instances.data ?? []).map((instance) => instance.name),
+      ),
+    });
+  }
+
   const configuring =
     instances.data?.find(
       (instance) => instance.folder === dialogs.configuringFolder,
@@ -195,6 +209,7 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
       prepareInstance,
       stopInstance,
       openConfigure: dialogs.openConfigure,
+      openCreate: dialogs.openCreate,
     }),
     [
       instances,
@@ -216,6 +231,7 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
       prepareInstance,
       stopInstance,
       dialogs.openConfigure,
+      dialogs.openCreate,
     ],
   );
 
@@ -259,7 +275,7 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
             onOpenSettings={dialogs.openGlobalSettings}
           />
         </TitleBar>
-        {pathname === "/downloads" || onWizard ? (
+        {pathname === "/downloads" ? (
           content
         ) : (
           <ResizablePanelGroup
@@ -302,7 +318,7 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
                       dialogs.openRename(instance.folder, instance.name);
                       break;
                     case "duplicate":
-                      dialogs.openDuplicate(instance.folder, instance.name);
+                      duplicateNumbered(instance.folder, instance.name);
                       break;
                     case "delete":
                       dialogs.openDelete(instance.folder, instance.name);
@@ -337,17 +353,17 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
         >
           <div className="grid min-h-8 w-full grid-cols-4 items-center">
             <div className="flex items-center justify-start">
-              <Button
-                asChild
-                variant="ghost"
-                size="sm"
-                className={footerActionClassName}
-              >
-                <Link to="/instances/new" search={{ step: "source" }}>
+              <CreateInstanceMenu onScratch={dialogs.openCreate} side="top">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className={footerActionClassName}
+                >
                   <PlusIcon aria-hidden className="size-3.5" />
                   Create instance
-                </Link>
-              </Button>
+                </Button>
+              </CreateInstanceMenu>
             </div>
             <div className="col-span-2 flex min-w-0 items-center justify-center">
               <DownloadsPopover
@@ -377,12 +393,15 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
         </footer>
       </div>
 
+      <CreateInstanceDialog
+        open={dialogs.createOpen}
+        onOpenChange={dialogs.setCreateOpen}
+      />
       <InstanceDialogs
         configuring={configuring}
         busy={busy}
         mutations={{
           rename,
-          duplicate,
           remove,
           openFolder,
           changeVersion,
@@ -409,7 +428,7 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
           if (!configuring) {
             return;
           }
-          dialogs.openDuplicate(configuring.folder, configuring.name);
+          duplicateNumbered(configuring.folder, configuring.name);
         }}
         onOpenDelete={() => {
           if (!configuring) {

@@ -144,3 +144,24 @@ fn template() -> GlobalLaunch {
 fn root(name: &str) -> std::path::PathBuf {
     std::env::temp_dir().join(format!("licht-pending-{name}-{}", std::process::id()))
 }
+
+#[tokio::test]
+async fn a_pending_instance_may_share_a_name_and_gets_its_own_folder() {
+    let root = root("pending-twin");
+    let service = super::database(&root).await;
+    let client = service.client();
+    let source = InstanceSource::Vanilla {
+        game_version: "1.20.1".into(),
+    };
+
+    let first = create_pending_instance(&client, &root, "My pack", source.clone(), &template())
+        .await
+        .expect("first");
+    let second = create_pending_instance(&client, &root, " my pack ", source, &template())
+        .await
+        .expect("second");
+
+    assert_eq!(first.folder, "My-pack");
+    assert_eq!(second.name, "my pack");
+    assert_eq!(second.folder, "my-pack-1");
+}

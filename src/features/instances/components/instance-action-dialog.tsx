@@ -11,7 +11,6 @@ import { Input } from "@/components/ui/input";
 
 export type InstanceAction =
   | { kind: "rename"; folder: string; name: string }
-  | { kind: "duplicate"; folder: string; name: string }
   | { kind: "delete"; folder: string; name: string };
 
 export function InstanceActionDialog({
@@ -20,7 +19,6 @@ export function InstanceActionDialog({
   busy,
   onOpenChange,
   onDraftNameChange,
-  onDuplicate,
   onRename,
   onDelete,
 }: {
@@ -29,24 +27,18 @@ export function InstanceActionDialog({
   busy: boolean;
   onOpenChange: (open: boolean) => void;
   onDraftNameChange: (name: string) => void;
-  onDuplicate: () => void;
   onRename: () => void;
   onDelete: () => void;
 }) {
   return (
     <Dialog open={action !== null} onOpenChange={onOpenChange}>
       <DialogContent>
-        {action?.kind === "duplicate" || action?.kind === "rename" ? (
+        {action?.kind === "rename" ? (
           <>
             <DialogHeader>
-              <DialogTitle>
-                {action.kind === "rename" ? "Rename" : "Duplicate"}{" "}
-                {action.name}
-              </DialogTitle>
+              <DialogTitle>Rename {action.name}</DialogTitle>
               <DialogDescription>
-                {action.kind === "rename"
-                  ? "Change the display name. The folder on disk stays the same."
-                  : "Saves are copied into the new instance."}
+                Change the display name. The folder on disk stays the same.
               </DialogDescription>
             </DialogHeader>
             <label
@@ -68,13 +60,11 @@ export function InstanceActionDialog({
                 disabled={
                   busy ||
                   draftName.trim() === "" ||
-                  (action.kind === "rename" && draftName.trim() === action.name)
+                  draftName.trim() === action.name
                 }
-                onClick={action.kind === "rename" ? onRename : onDuplicate}
+                onClick={onRename}
               >
-                {action.kind === "rename"
-                  ? "Rename instance"
-                  : "Duplicate instance"}
+                Rename instance
               </Button>
             </DialogFooter>
           </>

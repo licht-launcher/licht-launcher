@@ -6,6 +6,7 @@ import { onOpenSettingsRequest } from "@/lib/shell-events";
 
 export function useInstanceDialogs() {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SectionId>("account");
   const [configuringFolder, setConfiguringFolder] = useState<string | null>(
     null,
@@ -25,6 +26,10 @@ export function useInstanceDialogs() {
     setAction(null);
   }
 
+  function openCreate() {
+    setCreateOpen(true);
+  }
+
   function openConfigure(folder: string) {
     setConfiguringFolder(folder);
   }
@@ -33,11 +38,6 @@ export function useInstanceDialogs() {
     setConfiguringFolder(null);
     setSettingsSection(section);
     setSettingsOpen(true);
-  }
-
-  function openDuplicate(folder: string, name: string) {
-    setDraftName("");
-    setAction({ kind: "duplicate", folder, name });
   }
 
   function openRename(folder: string, name: string) {
@@ -53,6 +53,9 @@ export function useInstanceDialogs() {
   return {
     settingsOpen,
     setSettingsOpen,
+    createOpen,
+    setCreateOpen,
+    openCreate,
     settingsSection,
     configuringFolder,
     setConfiguringFolder,
@@ -62,7 +65,6 @@ export function useInstanceDialogs() {
     clearAction,
     openConfigure,
     openGlobalSettings,
-    openDuplicate,
     openRename,
     openDelete,
   };

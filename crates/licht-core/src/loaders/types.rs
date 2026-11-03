@@ -42,3 +42,12 @@ impl LoaderChannel {
         }
     }
 }
+
+/// One loader build for a game version, as listed by its metadata service.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LoaderBuild {
+    pub version: String,
+    /// Whether the loader's own metadata marks this build as a stable release.
+    pub stable: bool,
+}
