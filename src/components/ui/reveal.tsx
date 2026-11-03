@@ -25,12 +25,17 @@ export function Reveal({
   useEffect(() => {
     if (open) {
       setMounted(true);
-      // Grow on the next frame, so there is a collapsed state to animate from.
-      const frame = requestAnimationFrame(() => {
-        setExpanded(true);
+      // The collapsed state has to be painted once before growing, or the
+      // browser has nothing to animate from. One frame is not enough for that.
+      let inner = 0;
+      const outer = requestAnimationFrame(() => {
+        inner = requestAnimationFrame(() => {
+          setExpanded(true);
+        });
       });
       return () => {
-        cancelAnimationFrame(frame);
+        cancelAnimationFrame(outer);
+        cancelAnimationFrame(inner);
       };
     }
     setExpanded(false);
