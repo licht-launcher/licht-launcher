@@ -13,10 +13,12 @@ export function PlatformPicker({
   onChange: (platform: PlatformId) => void;
 }) {
   return (
-    <div className="grid gap-2 sm:grid-cols-2">
+    <fieldset className="flex min-w-0 flex-wrap gap-2">
+      <legend className="sr-only">Platform</legend>
       {PLATFORMS.map((platform) => (
         <ChoiceCard
           key={platform.id}
+          className="w-auto"
           title={platform.label}
           icon={<PlatformIcon platform={platform.id} />}
           iconNeutral
@@ -26,6 +28,6 @@ export function PlatformPicker({
           }}
         />
       ))}
-    </div>
+    </fieldset>
   );
 }
