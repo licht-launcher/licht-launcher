@@ -96,20 +96,11 @@ describe("unique names", () => {
     expect(isNameTaken("   ", ["Survival"])).toBe(false);
   });
 
-  it("treats names that share a folder as the same name", () => {
-    expect(isNameTaken("Pack!", ["Pack"])).toBe(true);
-    expect(isNameTaken("Pack (1)", ["Pack 1"])).toBe(true);
-    expect(isNameTaken("My--Pack", ["my pack"])).toBe(true);
-    expect(isNameTaken("Pack 2", ["Pack"])).toBe(false);
-  });
-
-  it("numbers around a name that only shares the folder", () => {
-    expect(uniqueName("Pack", ["Pack!"])).toBe("Pack (1)");
-    expect(uniqueName("Pack", ["Pack!", "Pack 1"])).toBe("Pack (2)");
-  });
-
-  it("does not take a name that has no folder to clash with", () => {
-    expect(isNameTaken("***", ["!!!"])).toBe(false);
+  it("keeps names that differ in punctuation apart", () => {
+    expect(isNameTaken("Pack!", ["Pack"])).toBe(false);
+    expect(isNameTaken("Pack (1)", ["Pack 1"])).toBe(false);
+    expect(isNameTaken("My-Pack", ["My Pack"])).toBe(false);
+    expect(uniqueName("Pack", ["Pack!"])).toBe("Pack");
   });
 
   it("numbers the default instance name when it is taken", () => {

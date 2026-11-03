@@ -1,6 +1,7 @@
 use super::{
-    GlobalLaunch, Instance, InstanceEntry, display_name, entry_from, folder_id, instance_dir,
-    instance_from_template, load_instance, profile_guard, single_component, write_instance,
+    GlobalLaunch, Instance, InstanceEntry, available_folder, display_name, entry_from,
+    instance_dir, instance_from_template, load_instance, profile_guard, single_component,
+    write_instance,
 };
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -129,16 +130,10 @@ pub async fn create_pending_instance(
     let _guard = profile_guard().await;
     source.validate()?;
     let name = display_name(name)?;
-    let folder = folder_id(&name)?;
     fs::create_dir_all(instances_dir)?;
+    let folder = available_folder(instances_dir, &name)?;
     let dir = instances_dir.join(&folder);
-    fs::create_dir(&dir).map_err(|error| {
-        if error.kind() == std::io::ErrorKind::AlreadyExists {
-            CoreError::InstanceExists
-        } else {
-            CoreError::Io(error)
-        }
-    })?;
+    fs::create_dir(&dir)?;
     let mut instance = instance_from_template(name, String::new(), template);
     instance.version_id = source.game_version().map(str::to_string);
     instance.installation = Some(InstanceInstallation {

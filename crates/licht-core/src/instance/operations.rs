@@ -1,9 +1,9 @@
 use super::{
-    GlobalLaunch, InstanceEntry, InstanceSettings, copy_tree, display_name, entry_from, folder_id,
-    instance_dir, instance_from_template, load_instance, normalize_java_path, profile_guard,
-    single_component, utc_now_rfc3339, validate, write_instance,
+    GlobalLaunch, InstanceEntry, InstanceSettings, available_folder, copy_tree, display_name,
+    entry_from, instance_dir, instance_from_template, load_instance, normalize_java_path,
+    profile_guard, single_component, utc_now_rfc3339, validate, write_instance,
 };
-use crate::{CoreError, Result};
+use crate::Result;
 use std::fs;
 use std::path::Path;
 
@@ -40,12 +40,9 @@ pub async fn create_instance(
     let _guard = profile_guard().await;
     let name = display_name(name)?;
     single_component(version_id)?;
-    let folder = folder_id(&name)?;
     fs::create_dir_all(instances_dir)?;
+    let folder = available_folder(instances_dir, &name)?;
     let dir = instances_dir.join(&folder);
-    if dir.exists() {
-        return Err(CoreError::InstanceExists);
-    }
     fs::create_dir(&dir)?;
     let instance = instance_from_template(name, version_id.to_string(), template);
     if let Err(error) = write_instance(database, &dir, &instance).await {
@@ -78,11 +75,8 @@ pub async fn duplicate_instance(
     let name = display_name(name)?;
     let source = instance_dir(instances_dir, folder)?;
     let original = load_instance(database, &source).await?;
-    let new_folder = folder_id(&name)?;
+    let new_folder = available_folder(instances_dir, &name)?;
     let destination = instances_dir.join(&new_folder);
-    if destination.exists() {
-        return Err(CoreError::InstanceExists);
-    }
     let mut instance = original.clone();
     instance.name = name;
     instance.last_opened_at = None;

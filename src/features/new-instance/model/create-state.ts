@@ -44,33 +44,20 @@ export function platformNeedsLoader(platform: PlatformId | null): boolean {
   return PLATFORMS.some((entry) => entry.id === platform && entry.needsLoader);
 }
 
-/**
- * The folder an instance name maps to, the way the backend derives it: only
- * letters, digits, `.` and `_` survive, and runs of spaces and hyphens become
- * one hyphen. Case is dropped because Windows folders ignore it.
- */
-function folderKey(name: string): string {
-  let key = "";
-  let hyphen = false;
-  for (const character of name) {
-    if (/^[A-Za-z0-9._]$/.test(character)) {
-      key += hyphen && key !== "" ? `-${character}` : character;
-      hyphen = false;
-    } else if (/^[\s-]$/.test(character)) {
-      hyphen = true;
-    }
-  }
-  return key.toLowerCase();
+function normalizeName(name: string): string {
+  return name.trim().toLowerCase();
 }
 
 /**
- * Instance names are unique by the folder they would get, so `Pack!` and
- * `Pack` count as the same name, and so do `Pack (1)` and `Pack 1`.
- * Pass folders as well as names to also avoid folders of renamed instances.
+ * Instance names are unique, ignoring case and surrounding spaces. Other
+ * differences count, so `Pack` and `Pack!` are two names; the backend gives
+ * each its own folder.
  */
 export function isNameTaken(name: string, taken: readonly string[]): boolean {
-  const wanted = folderKey(name);
-  return wanted !== "" && taken.some((other) => folderKey(other) === wanted);
+  const wanted = normalizeName(name);
+  return (
+    wanted !== "" && taken.some((other) => normalizeName(other) === wanted)
+  );
 }
 
 /** `name` itself if free, else the first of `name (1)`, `name (2)`, … that is. */

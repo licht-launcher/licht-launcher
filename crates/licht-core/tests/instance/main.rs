@@ -212,10 +212,14 @@ async fn create_rename_duplicate_and_delete_keep_the_folder_stable() {
         .expect("icon path");
     assert!(path.ends_with("icon.png"));
     assert!(std::path::Path::new(path).is_file());
-    assert!(matches!(
-        create_instance(&client, &instances, "My World", "1.20.1", &plain_template()).await,
-        Err(CoreError::InstanceExists)
-    ));
+    let twin = create_instance(&client, &instances, "My World", "1.20.1", &plain_template())
+        .await
+        .expect("a folder that is taken gets a numbered one");
+    assert_eq!(twin.folder, "My-World-2");
+    assert_eq!(twin.name, "My World");
+    delete_instance(&client, &instances, "My-World-2")
+        .await
+        .expect("remove twin");
     assert!(matches!(
         create_instance(&client, &instances, "   ", "1.20.1", &plain_template()).await,
         Err(CoreError::InstanceName)
@@ -605,3 +609,78 @@ async fn database(root: &Path) -> licht_core::DatabaseService {
 
 mod preparation;
 mod sqlite;
+
+#[tokio::test]
+async fn names_that_differ_in_punctuation_get_their_own_folders() {
+    let root = scratch("punctuation");
+    let instances = root.join("instances");
+    let service = database(&root).await;
+    let client = service.client();
+
+    let mut folders = Vec::new();
+    for name in [
+        "Pack", "Pack!", "Pack (1)", "Pack 1", "pack", "My-Pack", "My Pack",
+    ] {
+        let entry = create_instance(&client, &instances, name, "1.20.1", &plain_template())
+            .await
+            .expect(name);
+        assert_eq!(entry.name, name);
+        folders.push(entry.folder);
+    }
+
+    assert_eq!(
+        folders,
+        [
+            "Pack",
+            "Pack-2",
+            "Pack-1",
+            "Pack-1-2",
+            "pack-3",
+            "My-Pack",
+            "My-Pack-2"
+        ]
+    );
+    service.shutdown().await.expect("shutdown");
+    let _ = fs::remove_dir_all(root);
+}
+
+#[tokio::test]
+async fn a_name_without_letters_still_gets_a_folder() {
+    let root = scratch("symbols");
+    let instances = root.join("instances");
+    let service = database(&root).await;
+    let client = service.client();
+
+    let first = create_instance(&client, &instances, "***", "1.20.1", &plain_template())
+        .await
+        .expect("symbols only");
+    let second = create_instance(&client, &instances, "!!!", "1.20.1", &plain_template())
+        .await
+        .expect("other symbols");
+
+    assert_eq!(first.name, "***");
+    assert_eq!(first.folder, "instance");
+    assert_eq!(second.folder, "instance-2");
+    service.shutdown().await.expect("shutdown");
+    let _ = fs::remove_dir_all(root);
+}
+
+#[tokio::test]
+async fn duplicating_into_a_taken_folder_numbers_it() {
+    let root = scratch("duplicate-taken");
+    let instances = root.join("instances");
+    let service = database(&root).await;
+    let client = service.client();
+    create_instance(&client, &instances, "Pack", "1.20.1", &plain_template())
+        .await
+        .expect("source");
+
+    let copy = duplicate_instance(&client, &instances, "Pack", "Pack!")
+        .await
+        .expect("copy");
+
+    assert_eq!(copy.name, "Pack!");
+    assert_eq!(copy.folder, "Pack-2");
+    service.shutdown().await.expect("shutdown");
+    let _ = fs::remove_dir_all(root);
+}
