@@ -71,7 +71,7 @@ pub fn run() -> anyhow::Result<()> {
             commands::downloads::cancel_download_job,
             commands::instances::list_instances,
             commands::instances::create_instance,
-            commands::instances::list_loader_versions,
+            commands::instances::list_loader_builds,
             commands::instances::create_instance_with_platform,
             commands::modpacks::search_modpacks,
             commands::modpacks::list_modpack_versions,

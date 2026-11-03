@@ -23,6 +23,7 @@ import type { InstanceSettings } from "@/lib/generated/InstanceSettings";
 import type { JavaDetections } from "@/lib/generated/JavaDetections";
 import type { JavaPaths } from "@/lib/generated/JavaPaths";
 import type { JavaStatus } from "@/lib/generated/JavaStatus";
+import type { LoaderBuild } from "@/lib/generated/LoaderBuild";
 import type { Settings } from "@/lib/generated/Settings";
 import type { SettingsSnapshot } from "@/lib/generated/SettingsSnapshot";
 import type { StartupPreviewScenario } from "@/lib/generated/StartupPreviewScenario";
@@ -125,12 +126,11 @@ export function cancelDownloadJob(jobId: string): Promise<DownloadJobSnapshot> {
   return invoke("cancel_download_job", { jobId });
 }
 
-export function listLoaderVersions(
+export function listLoaderBuilds(
   platform: PlatformId | string,
   gameVersion: string,
-  channel: LoaderChannel,
-): Promise<string[]> {
-  return invoke("list_loader_versions", { platform, gameVersion, channel });
+): Promise<LoaderBuild[]> {
+  return invoke("list_loader_builds", { platform, gameVersion });
 }
 
 export function createInstanceWithPlatform(input: {

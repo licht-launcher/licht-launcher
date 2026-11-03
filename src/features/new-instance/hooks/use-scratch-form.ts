@@ -9,7 +9,7 @@ import {
   platformNeedsLoader,
   type ScratchState,
 } from "@/features/new-instance/model/create-state";
-import { listLoaderVersions } from "@/lib/commands";
+import { listLoaderBuilds } from "@/lib/commands";
 
 /**
  * The from-scratch form: its state, the version lists it depends on, and the
@@ -28,36 +28,26 @@ export function useScratchForm() {
   const loaderListed =
     platformNeedsLoader(state.platform) && state.gameVersion !== "";
 
-  // Whether the loader has any stable build; it shares its cache with the
-  // list below while the stable channel is the one selected.
-  const stableVersions = useQuery({
-    queryKey: ["loader-versions", state.platform, state.gameVersion, "stable"],
-    queryFn: () =>
-      listLoaderVersions(state.platform, state.gameVersion, "stable"),
+  // One request lists every build with its stability; the channels only pick
+  // from it, so switching between them never asks again.
+  const builds = useQuery({
+    queryKey: ["loader-builds", state.platform, state.gameVersion],
+    queryFn: () => listLoaderBuilds(state.platform, state.gameVersion),
     enabled: loaderListed,
     retry: false,
   });
   const stableMissing =
     loaderListed &&
-    stableVersions.data !== undefined &&
-    stableVersions.data.length === 0;
-
-  const loaderVersions = useQuery({
-    queryKey: [
-      "loader-versions",
-      state.platform,
-      state.gameVersion,
-      state.loaderChannel,
-    ],
-    queryFn: () =>
-      listLoaderVersions(
-        state.platform,
-        state.gameVersion,
-        state.loaderChannel,
-      ),
-    enabled: loaderListed,
-    retry: false,
-  });
+    builds.data !== undefined &&
+    !builds.data.some((build) => build.stable);
+  const loaderVersions = {
+    isError: builds.isError,
+    data: builds.data?.map((build) => build.version),
+  };
+  const newestLoader =
+    state.loaderChannel === "stable"
+      ? builds.data?.find((build) => build.stable)?.version
+      : builds.data?.[0]?.version;
 
   useEffect(() => {
     if (state.gameVersion !== "") {
@@ -86,7 +76,7 @@ export function useScratchForm() {
     if (!platformNeedsLoader(state.platform)) {
       return;
     }
-    const newest = loaderVersions.data?.[0];
+    const newest = newestLoader;
     if (newest === undefined) {
       return;
     }
@@ -101,7 +91,7 @@ export function useScratchForm() {
     state.platform,
     state.loaderChannel,
     state.loaderVersion,
-    loaderVersions.data,
+    newestLoader,
   ]);
 
   return {

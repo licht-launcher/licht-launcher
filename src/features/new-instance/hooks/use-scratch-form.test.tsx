@@ -4,18 +4,24 @@ import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useScratchForm } from "@/features/new-instance/hooks/use-scratch-form";
-import { listLoaderVersions, listVersions } from "@/lib/commands";
+import { listLoaderBuilds, listVersions } from "@/lib/commands";
+import type { LoaderBuild } from "@/lib/generated/LoaderBuild";
 import type { VersionSummary } from "@/lib/generated/VersionSummary";
 
 vi.mock("@/lib/commands", () => ({
   listVersions: vi.fn(),
-  listLoaderVersions: vi.fn(),
+  listLoaderBuilds: vi.fn(),
 }));
 
 const versions: VersionSummary[] = [
   { id: "24w14a", versionType: "snapshot", installed: false },
   { id: "1.20.1", versionType: "release", installed: false },
   { id: "1.19.4", versionType: "release", installed: false },
+];
+
+const builds: LoaderBuild[] = [
+  { version: "0.16.0", stable: true },
+  { version: "0.15.11", stable: true },
 ];
 
 function setup() {
@@ -30,9 +36,7 @@ function setup() {
 
 beforeEach(() => {
   vi.mocked(listVersions).mockReset().mockResolvedValue(versions);
-  vi.mocked(listLoaderVersions)
-    .mockReset()
-    .mockResolvedValue(["0.16.0", "0.15.11"]);
+  vi.mocked(listLoaderBuilds).mockReset().mockResolvedValue(builds);
 });
 
 describe("useScratchForm", () => {
@@ -80,11 +84,7 @@ describe("useScratchForm", () => {
     await waitFor(() =>
       expect(result.current.state.loaderVersion).toBe("0.16.0"),
     );
-    expect(listLoaderVersions).toHaveBeenCalledWith(
-      "fabric",
-      "1.20.1",
-      "stable",
-    );
+    expect(listLoaderBuilds).toHaveBeenCalledWith("fabric", "1.20.1");
   });
 
   it("keeps a loader version chosen by hand", async () => {
@@ -100,7 +100,7 @@ describe("useScratchForm", () => {
         loaderVersion: "0.15.11",
       });
     });
-    await waitFor(() => expect(listLoaderVersions).toHaveBeenCalled());
+    await waitFor(() => expect(listLoaderBuilds).toHaveBeenCalled());
     expect(result.current.state.loaderVersion).toBe("0.15.11");
   });
 
@@ -120,13 +120,6 @@ describe("useScratchForm", () => {
       result.current.update({ loaderChannel: "manual", loaderVersion: "" });
     });
     await waitFor(() =>
-      expect(listLoaderVersions).toHaveBeenCalledWith(
-        "fabric",
-        "1.20.1",
-        "manual",
-      ),
-    );
-    await waitFor(() =>
       expect(result.current.state.loaderVersion).toBe("0.16.0"),
     );
   });
@@ -145,7 +138,7 @@ describe("useScratchForm", () => {
   });
 
   it("flags a loader without builds for the game version", async () => {
-    vi.mocked(listLoaderVersions).mockResolvedValue([]);
+    vi.mocked(listLoaderBuilds).mockResolvedValue([]);
     const { result } = setup();
     await waitFor(() =>
       expect(result.current.state.gameVersion).toBe("1.20.1"),
@@ -158,7 +151,7 @@ describe("useScratchForm", () => {
   });
 
   it("flags a loader whose builds could not be checked", async () => {
-    vi.mocked(listLoaderVersions).mockRejectedValue(new Error("404"));
+    vi.mocked(listLoaderBuilds).mockRejectedValue(new Error("404"));
     const { result } = setup();
     await waitFor(() =>
       expect(result.current.state.gameVersion).toBe("1.20.1"),
@@ -171,10 +164,10 @@ describe("useScratchForm", () => {
   });
 
   it("uses the latest channel when the loader has no stable build", async () => {
-    vi.mocked(listLoaderVersions).mockImplementation(
-      async (_platform, _version, channel) =>
-        channel === "stable" ? [] : ["0.31.0-beta.5", "0.31.0-beta.4"],
-    );
+    vi.mocked(listLoaderBuilds).mockResolvedValue([
+      { version: "0.31.0-beta.5", stable: false },
+      { version: "0.31.0-beta.4", stable: false },
+    ]);
     const { result } = setup();
     await waitFor(() =>
       expect(result.current.state.gameVersion).toBe("1.20.1"),
@@ -208,7 +201,7 @@ describe("useScratchForm", () => {
   });
 
   it("does not switch channel when the stable check itself fails", async () => {
-    vi.mocked(listLoaderVersions).mockRejectedValue(new Error("offline"));
+    vi.mocked(listLoaderBuilds).mockRejectedValue(new Error("offline"));
     const { result } = setup();
     await waitFor(() =>
       expect(result.current.state.gameVersion).toBe("1.20.1"),
@@ -222,12 +215,58 @@ describe("useScratchForm", () => {
     expect(result.current.stableMissing).toBe(false);
   });
 
+  it("follows the newest stable build on stable and the newest on latest", async () => {
+    vi.mocked(listLoaderBuilds).mockResolvedValue([
+      { version: "0.17.0-beta.1", stable: false },
+      { version: "0.16.0", stable: true },
+    ]);
+    const { result } = setup();
+    await waitFor(() =>
+      expect(result.current.state.gameVersion).toBe("1.20.1"),
+    );
+
+    act(() => {
+      result.current.update({ platform: "fabric" });
+    });
+    await waitFor(() =>
+      expect(result.current.state.loaderVersion).toBe("0.16.0"),
+    );
+
+    act(() => {
+      result.current.update({ loaderChannel: "latest" });
+    });
+    await waitFor(() =>
+      expect(result.current.state.loaderVersion).toBe("0.17.0-beta.1"),
+    );
+  });
+
+  it("asks for the builds once whichever channel is picked", async () => {
+    const { result } = setup();
+    await waitFor(() =>
+      expect(result.current.state.gameVersion).toBe("1.20.1"),
+    );
+
+    act(() => {
+      result.current.update({ platform: "fabric" });
+    });
+    await waitFor(() => expect(result.current.loaderState).toBe("ready"));
+    act(() => {
+      result.current.update({ loaderChannel: "latest" });
+    });
+    act(() => {
+      result.current.update({ loaderChannel: "manual", loaderVersion: "" });
+    });
+    await waitFor(() => expect(result.current.loaderState).toBe("ready"));
+
+    expect(listLoaderBuilds).toHaveBeenCalledOnce();
+  });
+
   it("does not ask for loader versions on vanilla", async () => {
     const { result } = setup();
     await waitFor(() =>
       expect(result.current.state.gameVersion).toBe("1.20.1"),
     );
 
-    expect(listLoaderVersions).not.toHaveBeenCalled();
+    expect(listLoaderBuilds).not.toHaveBeenCalled();
   });
 });

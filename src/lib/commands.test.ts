@@ -40,7 +40,7 @@ import {
   listInstanceContent,
   listInstanceEntries,
   listInstances,
-  listLoaderVersions,
+  listLoaderBuilds,
   listMicrosoftAccounts,
   listRunningGames,
   listVersions,
@@ -230,11 +230,10 @@ describe("launcher commands", () => {
       loaderChannel: "stable",
       loaderVersion: null,
     });
-    await listLoaderVersions("fabric", "1.20.1", "stable");
-    expect(invoke).toHaveBeenCalledWith("list_loader_versions", {
+    await listLoaderBuilds("fabric", "1.20.1");
+    expect(invoke).toHaveBeenCalledWith("list_loader_builds", {
       platform: "fabric",
       gameVersion: "1.20.1",
-      channel: "stable",
     });
     vi.mocked(open).mockResolvedValueOnce("C:\\packs\\cobble.mrpack");
     await expect(browseModpackFile()).resolves.toBe("C:\\packs\\cobble.mrpack");

@@ -11,6 +11,7 @@ import {
   openDialog,
   renderApp,
 } from "@/features/new-instance/fixtures/render-create-dialog";
+import type { LoaderBuild } from "@/lib/generated/LoaderBuild";
 
 async function openDetails() {
   const dialog = await openCreateDialog();
@@ -219,7 +220,7 @@ describe("CreateInstanceDialog", () => {
 
   it("does not let a loader without builds be created", async () => {
     mockCreateCommands((command) => {
-      if (command === "list_loader_versions") {
+      if (command === "list_loader_builds") {
         return [];
       }
     });
@@ -237,14 +238,9 @@ describe("CreateInstanceDialog", () => {
   });
 
   it("creates with the latest channel when the loader has no stable build", async () => {
-    mockCreateCommands((command, args) => {
-      if (
-        command === "list_loader_versions" &&
-        typeof args === "object" &&
-        args !== null &&
-        "channel" in args
-      ) {
-        return args.channel === "stable" ? [] : ["0.31.0-beta.5"];
+    mockCreateCommands((command) => {
+      if (command === "list_loader_builds") {
+        return [{ version: "0.31.0-beta.5", stable: false }];
       }
     });
     await renderApp();
@@ -272,12 +268,12 @@ describe("CreateInstanceDialog", () => {
   });
 
   it("blocks creating while the loader builds are still loading", async () => {
-    let finish: (versions: string[]) => void = () => {};
-    const pending = new Promise<string[]>((resolve) => {
+    let finish: (builds: LoaderBuild[]) => void = () => {};
+    const pending = new Promise<LoaderBuild[]>((resolve) => {
       finish = resolve;
     });
     mockCreateCommands((command) => {
-      if (command === "list_loader_versions") {
+      if (command === "list_loader_builds") {
         return pending;
       }
     });
@@ -288,7 +284,7 @@ describe("CreateInstanceDialog", () => {
     await screen.findByRole("group", { name: "Loader channel" });
     expect(screen.queryByText(/Checking/)).toBeNull();
     expect(screen.getByRole("button", { name: "Create" })).toBeDisabled();
-    finish(["0.16.0"]);
+    finish([{ version: "0.16.0", stable: true }]);
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "Create" })).toBeEnabled(),
     );

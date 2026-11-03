@@ -120,8 +120,11 @@ export function mockCreateCommands(
         return { receivedBytes: 0, writtenBytes: 0, paused: false };
       case "prepare_instance_download":
         return completedDownload();
-      case "list_loader_versions":
-        return ["0.16.0", "0.15.11"];
+      case "list_loader_builds":
+        return [
+          { version: "0.16.0", stable: true },
+          { version: "0.15.11", stable: true },
+        ];
       case "create_instance_with_platform":
       case "create_instance_from_modpack_file": {
         if (
