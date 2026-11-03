@@ -8,7 +8,6 @@ import { NameField } from "@/features/new-instance/components/name-field";
 import { PlatformPicker } from "@/features/new-instance/components/platform-picker";
 import {
   defaultInstanceName,
-  isNameTaken,
   type LoaderState,
   platformNeedsLoader,
   type ScratchState,
@@ -46,11 +45,6 @@ export function ScratchDetails({
           value={state.name}
           placeholder={
             defaultInstanceName(state, takenNames) || "Instance name"
-          }
-          error={
-            isNameTaken(state.name, takenNames)
-              ? "An instance with this name already exists."
-              : undefined
           }
           onChange={(name) => {
             onChange({ name });

@@ -212,15 +212,14 @@ async fn create_rename_duplicate_and_delete_keep_the_folder_stable() {
         .expect("icon path");
     assert!(path.ends_with("icon.png"));
     assert!(std::path::Path::new(path).is_file());
-    for repeated in ["My World", "  my world ", "MY WORLD"] {
-        assert!(
-            matches!(
-                create_instance(&client, &instances, repeated, "1.20.1", &plain_template()).await,
-                Err(CoreError::InstanceExists)
-            ),
-            "{repeated}"
-        );
-    }
+    let twin = create_instance(&client, &instances, "my world", "1.20.1", &plain_template())
+        .await
+        .expect("the same name may be used again");
+    assert_eq!(twin.name, "my world");
+    assert_eq!(twin.folder, "my-world-1");
+    delete_instance(&client, &instances, "my-world-1")
+        .await
+        .expect("remove twin");
     assert!(matches!(
         create_instance(&client, &instances, "   ", "1.20.1", &plain_template()).await,
         Err(CoreError::InstanceName)
@@ -612,7 +611,7 @@ mod preparation;
 mod sqlite;
 
 #[tokio::test]
-async fn names_that_differ_in_punctuation_get_their_own_folders() {
+async fn every_instance_gets_its_own_folder_whatever_its_name() {
     let root = scratch("punctuation");
     let instances = root.join("instances");
     let service = database(&root).await;
@@ -630,23 +629,26 @@ async fn names_that_differ_in_punctuation_get_their_own_folders() {
         folders,
         [
             "Pack",
-            "Pack-2",
             "Pack-1",
+            "Pack-1-1",
             "Pack-1-2",
             "My-Pack",
-            "My-Pack-2"
+            "My-Pack-1"
         ]
     );
 
+    // Names do not have to be unique; only the folders are.
     for repeated in ["pack", " Pack (1) ", "MY PACK", "pack!"] {
-        assert!(
-            matches!(
-                create_instance(&client, &instances, repeated, "1.20.1", &plain_template()).await,
-                Err(CoreError::InstanceExists)
-            ),
-            "{repeated}"
-        );
+        let entry = create_instance(&client, &instances, repeated, "1.20.1", &plain_template())
+            .await
+            .expect(repeated);
+        assert_eq!(entry.name, repeated.trim());
+        folders.push(entry.folder);
     }
+    let mut distinct: Vec<String> = folders.iter().map(|f| f.to_ascii_lowercase()).collect();
+    distinct.sort();
+    distinct.dedup();
+    assert_eq!(distinct.len(), folders.len());
     service.shutdown().await.expect("shutdown");
     let _ = fs::remove_dir_all(root);
 }
@@ -667,7 +669,7 @@ async fn a_name_without_letters_still_gets_a_folder() {
 
     assert_eq!(first.name, "***");
     assert_eq!(first.folder, "instance");
-    assert_eq!(second.folder, "instance-2");
+    assert_eq!(second.folder, "instance-1");
     service.shutdown().await.expect("shutdown");
     let _ = fs::remove_dir_all(root);
 }
@@ -682,10 +684,11 @@ async fn duplicating_into_a_taken_folder_numbers_it() {
         .await
         .expect("source");
 
-    assert!(matches!(
-        duplicate_instance(&client, &instances, "Pack", "pack ").await,
-        Err(CoreError::InstanceExists)
-    ));
+    let same = duplicate_instance(&client, &instances, "Pack", "Pack")
+        .await
+        .expect("a copy may keep the name");
+    assert_eq!(same.name, "Pack");
+    assert_eq!(same.folder, "Pack-1");
     let copy = duplicate_instance(&client, &instances, "Pack", "Pack!")
         .await
         .expect("copy");
@@ -697,7 +700,7 @@ async fn duplicating_into_a_taken_folder_numbers_it() {
 }
 
 #[tokio::test]
-async fn renaming_cannot_take_the_name_of_another_instance() {
+async fn renaming_may_take_the_name_of_another_instance() {
     let root = scratch("rename-taken");
     let instances = root.join("instances");
     let service = database(&root).await;
@@ -708,10 +711,11 @@ async fn renaming_cannot_take_the_name_of_another_instance() {
             .expect(name);
     }
 
-    assert!(matches!(
-        rename_instance(&client, &instances, "Other", " pack").await,
-        Err(CoreError::InstanceExists)
-    ));
+    let shared = rename_instance(&client, &instances, "Other", " pack")
+        .await
+        .expect("two instances may share a name");
+    assert_eq!(shared.name, "pack");
+    assert_eq!(shared.folder, "Other");
     let recased = rename_instance(&client, &instances, "Pack", "PACK")
         .await
         .expect("an instance may change its own name's case");

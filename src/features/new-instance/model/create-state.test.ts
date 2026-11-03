@@ -4,7 +4,6 @@ import {
   canCreateScratch,
   defaultInstanceName,
   initialScratchState,
-  isNameTaken,
   platformNeedsLoader,
   resolveInstanceName,
   uniqueName,
@@ -89,18 +88,11 @@ describe("unique names", () => {
     expect(uniqueName("Pack", ["pack ", "Pack (2)"])).toBe("Pack (1)");
   });
 
-  it("tells whether a typed name is taken", () => {
-    expect(isNameTaken("survival", ["Survival"])).toBe(true);
-    expect(isNameTaken("  Survival  ", ["Survival"])).toBe(true);
-    expect(isNameTaken("Creative", ["Survival"])).toBe(false);
-    expect(isNameTaken("   ", ["Survival"])).toBe(false);
-  });
-
-  it("keeps names that differ in punctuation apart", () => {
-    expect(isNameTaken("Pack!", ["Pack"])).toBe(false);
-    expect(isNameTaken("Pack (1)", ["Pack 1"])).toBe(false);
-    expect(isNameTaken("My-Pack", ["My Pack"])).toBe(false);
+  it("only numbers a name that is really the same", () => {
     expect(uniqueName("Pack", ["Pack!"])).toBe("Pack");
+    expect(uniqueName("Pack (1)", ["Pack 1"])).toBe("Pack (1)");
+    expect(uniqueName("My-Pack", ["My Pack"])).toBe("My-Pack");
+    expect(uniqueName("Pack", ["pack "])).toBe("Pack (1)");
   });
 
   it("numbers the default instance name when it is taken", () => {
@@ -128,18 +120,17 @@ describe("unique names", () => {
       platform: "fabric" as const,
       gameVersion: "26.3",
     };
-    expect(canCreateScratch(state, [], true)).toBe(true);
-    expect(canCreateScratch(state, [], false)).toBe(false);
+    expect(canCreateScratch(state, true)).toBe(true);
+    expect(canCreateScratch(state, false)).toBe(false);
   });
 
-  it("blocks creating with a typed name that is already used", () => {
+  it("allows a typed name that another instance already has", () => {
     const state = {
       ...initialScratchState,
       name: "survival",
       gameVersion: "1",
     };
-    expect(canCreateScratch(state, ["Survival"])).toBe(false);
-    expect(canCreateScratch({ ...state, name: "" }, ["Vanilla 1"])).toBe(true);
+    expect(canCreateScratch(state)).toBe(true);
   });
 });
 

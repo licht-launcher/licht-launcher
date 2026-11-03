@@ -50,7 +50,6 @@ export function CreateFlow({ onClose }: { onClose: () => void }) {
         creating={create.isPending}
         canCreate={canCreateScratch(
           state,
-          takenNames,
           loaderState === "none" || loaderState === "ready",
         )}
         onCancel={onClose}

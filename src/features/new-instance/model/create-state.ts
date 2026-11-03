@@ -48,19 +48,18 @@ function normalizeName(name: string): string {
   return name.trim().toLowerCase();
 }
 
-/**
- * Instance names are unique, ignoring case and surrounding spaces. Other
- * differences count, so `Pack` and `Pack!` are two names; the backend gives
- * each its own folder.
- */
-export function isNameTaken(name: string, taken: readonly string[]): boolean {
+/** Whether `name` is already used, ignoring case and surrounding spaces. */
+function isNameTaken(name: string, taken: readonly string[]): boolean {
   const wanted = normalizeName(name);
   return (
     wanted !== "" && taken.some((other) => normalizeName(other) === wanted)
   );
 }
 
-/** `name` itself if free, else the first of `name (1)`, `name (2)`, … that is. */
+/**
+ * `name` itself if free, else the first of `name (1)`, `name (2)`, … that is.
+ * Only suggested names are numbered; a typed name is kept as typed.
+ */
 export function uniqueName(name: string, taken: readonly string[]): string {
   const base = name.trim();
   if (!isNameTaken(base, taken)) {
@@ -76,14 +75,9 @@ export function uniqueName(name: string, taken: readonly string[]): string {
 
 export function canCreateScratch(
   state: ScratchState,
-  taken: readonly string[] = [],
   loaderReady = true,
 ): boolean {
-  if (
-    state.gameVersion === "" ||
-    isNameTaken(state.name, taken) ||
-    !loaderReady
-  ) {
+  if (state.gameVersion === "" || !loaderReady) {
     return false;
   }
   if (platformNeedsLoader(state.platform) && state.loaderChannel === "manual") {

@@ -187,35 +187,27 @@ describe("CreateInstanceDialog", () => {
     );
   });
 
-  it("accepts a name that only differs in punctuation", async () => {
+  it("creates with a typed name that another instance already has", async () => {
     mockCreateCommands(undefined, [createdInstance("Survival")]);
     await renderApp();
     await openDetails();
 
-    await typeName("Survival!");
+    await typeName("Survival");
 
     expect(
       screen.queryByText("An instance with this name already exists."),
     ).toBeNull();
-    expect(screen.getByRole("button", { name: "Create" })).toBeEnabled();
-  });
-
-  it("refuses a typed name that another instance already has", async () => {
-    mockCreateCommands(undefined, [createdInstance("Survival")]);
-    await renderApp();
-    await openDetails();
-
-    await typeName("survival");
-    expect(
-      await screen.findByText("An instance with this name already exists."),
-    ).toBeVisible();
-    expect(screen.getByRole("button", { name: "Create" })).toBeDisabled();
-    expect(screen.getByLabelText("Instance Name")).toBeInvalid();
-    await typeName("Survival 2");
-    expect(
-      screen.queryByText("An instance with this name already exists."),
-    ).toBeNull();
-    expect(screen.getByRole("button", { name: "Create" })).toBeEnabled();
+    expect(screen.getByLabelText("Instance Name")).toBeValid();
+    await submit();
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("create_instance_with_platform", {
+        name: "Survival",
+        platform: "vanilla",
+        gameVersion: "1.20.1",
+        loaderChannel: "stable",
+        loaderVersion: null,
+      }),
+    );
   });
 
   it("numbers an uploaded pack whose name is already taken", async () => {

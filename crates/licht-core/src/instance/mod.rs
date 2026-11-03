@@ -277,38 +277,11 @@ fn display_name(name: &str) -> Result<String> {
     Ok(name.to_string())
 }
 
-/// Instance names are unique, ignoring case and surrounding spaces. Any other
-/// difference counts, so `Pack (1)`, `Pack 1` and `Pack!` are three names.
-/// `own_folder` is the instance being renamed, which may keep its own name.
-async fn ensure_name_free(
-    database: &crate::DatabaseClient,
-    instances_dir: &Path,
-    name: &str,
-    own_folder: Option<&str>,
-) -> Result<()> {
-    if !instances_dir.exists() {
-        return Ok(());
-    }
-    let wanted = name.trim().to_lowercase();
-    let taken =
-        database
-            .instance_profiles(instances_dir)
-            .await?
-            .iter()
-            .any(|(folder, instance)| {
-                Some(folder.as_str()) != own_folder && instance.name.trim().to_lowercase() == wanted
-            });
-    if taken {
-        return Err(CoreError::InstanceExists);
-    }
-    Ok(())
-}
-
 /// The folder a new instance gets: the name reduced to filesystem-safe
-/// characters, numbered (`-2`, `-3`, …) when that folder is already taken.
+/// characters, numbered (`-1`, `-2`, …) when that folder is already taken.
 ///
-/// Names that differ only in punctuation or case (`Pack` and `Pack!`) are
-/// different instances, so they end up in different folders.
+/// Instance names do not have to be unique (`Pack` twice, or `Pack` and
+/// `Pack!`), so the folder is what keeps each instance apart.
 fn available_folder(instances_dir: &Path, name: &str) -> Result<String> {
     let base = folder_id(name);
     let taken: Vec<String> = match fs::read_dir(instances_dir) {
@@ -323,7 +296,7 @@ fn available_folder(instances_dir: &Path, name: &str) -> Result<String> {
     if is_free(&base) {
         return Ok(base);
     }
-    (2..)
+    (1..)
         .map(|number| format!("{base}-{number}"))
         .find(|folder| is_free(folder))
         .ok_or(CoreError::InstanceName)
