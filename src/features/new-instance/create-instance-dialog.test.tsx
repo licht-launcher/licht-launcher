@@ -72,20 +72,25 @@ describe("CreateInstanceDialog", () => {
     ).toBeVisible();
   });
 
-  it("styles the header as a full-width band like the footer", async () => {
+  it("styles the header as a full-width band on the same background as the content", async () => {
     await renderApp();
     const dialog = await openCreateDialog();
 
     const header = dialog.querySelector("[data-slot='dialog-header']");
-    expect(header).toHaveClass(
-      "-mx-6",
-      "-mt-6",
-      "border-b",
-      "bg-muted/50",
-      "px-6",
-      "py-5",
-    );
+    expect(header).toHaveClass("-mx-4", "-mt-6", "border-b", "px-4", "py-5");
+    expect(header).not.toHaveClass("bg-muted/50");
     expect(header).not.toHaveClass("border-border/40");
+  });
+
+  it("uses less side padding and no tinted footer", async () => {
+    await renderApp();
+    const dialog = await openDetails();
+
+    expect(dialog).toHaveClass("px-4", "py-6");
+    expect(dialog).not.toHaveClass("p-6");
+    const footer = dialog.querySelector("[data-slot='dialog-footer']");
+    expect(footer).toHaveClass("-mx-4", "-mb-6", "px-4", "bg-transparent");
+    expect(footer).not.toHaveClass("bg-muted/50");
   });
 
   it("closes with the same corner button as the other dialogs", async () => {

@@ -17,7 +17,7 @@ export function ScratchActions({
   onCreate: () => void;
 }) {
   return (
-    <DialogFooter className="-mx-6 -mb-6 px-6 py-4 sm:justify-between">
+    <DialogFooter className="-mx-4 -mb-6 bg-transparent px-4 py-4 sm:justify-between">
       <Button type="button" variant="outline" disabled={busy} onClick={onBack}>
         <ArrowLeftIcon data-icon="inline-start" aria-hidden />
         Back
