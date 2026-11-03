@@ -1,14 +1,17 @@
+import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 
 /** A titled block of the create form: icon, title, optional description, then content. */
 export function FormSection({
+  icon: Icon,
   title,
   description,
   divided = true,
   children,
 }: {
+  icon: LucideIcon;
   title: string;
   description?: string;
   /** Draws a divider above the section; the first one omits it. */
@@ -23,6 +26,7 @@ export function FormSection({
       )}
     >
       <div className="flex items-center gap-3">
+        <Icon aria-hidden className="size-4 shrink-0 text-muted-foreground" />
         <div>
           <h3 className="text-sm font-medium">{title}</h3>
           {description === undefined ? null : (

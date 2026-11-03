@@ -87,12 +87,7 @@ export function useScratchForm() {
     if (!keepsChoice && state.loaderVersion !== newest) {
       setState((current) => ({ ...current, loaderVersion: newest }));
     }
-  }, [
-    state.platform,
-    state.loaderChannel,
-    state.loaderVersion,
-    newestLoader,
-  ]);
+  }, [state.platform, state.loaderChannel, state.loaderVersion, newestLoader]);
 
   return {
     state,

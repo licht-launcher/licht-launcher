@@ -1,3 +1,4 @@
+import { PuzzleIcon } from "lucide-react";
 import { Reveal } from "@/components/ui/reveal";
 import {
   Select,
@@ -34,6 +35,7 @@ export function LoaderOptions({
 
   return (
     <FormSection
+      icon={PuzzleIcon}
       title="Loader version"
       description="Stable and Latest are picked for you. Other lets you choose a build."
     >
