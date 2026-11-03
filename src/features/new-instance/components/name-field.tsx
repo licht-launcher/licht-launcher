@@ -1,5 +1,3 @@
-import { TagIcon } from "lucide-react";
-
 import { Input } from "@/components/ui/input";
 import { FormSection } from "@/features/new-instance/components/form-section";
 
@@ -17,9 +15,7 @@ export function NameField({
 }) {
   return (
     <FormSection
-      divided={false}
-      icon={<TagIcon aria-hidden className="size-4" strokeWidth={2} />}
-      title="Name your instance"
+      title="Name"
       description="You can rename it later from the library."
     >
       <label

@@ -1,5 +1,3 @@
-import { BoxIcon } from "lucide-react";
-
 import { Reveal } from "@/components/ui/reveal";
 import { FormSection } from "@/features/new-instance/components/form-section";
 import { GameVersionField } from "@/features/new-instance/components/game-version-field";
@@ -57,8 +55,7 @@ export function ScratchDetails({
           }}
         />
         <FormSection
-          icon={<BoxIcon aria-hidden className="size-4" strokeWidth={2} />}
-          title="Choose a platform"
+          title="Platform"
           description="Vanilla is the official game. Loaders add mod support."
         >
           <PlatformPicker

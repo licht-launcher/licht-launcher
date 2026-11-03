@@ -1,5 +1,3 @@
-import { LayersIcon } from "lucide-react";
-
 import { Button } from "@/components/ui/button";
 import { Combobox } from "@/components/ui/combobox";
 import { Switch } from "@/components/ui/switch";
@@ -43,7 +41,6 @@ export function GameVersionField({
 
   return (
     <FormSection
-      icon={<LayersIcon aria-hidden className="size-4" strokeWidth={2} />}
       title="Game version"
       description="Type to search. Missing versions install when you play."
     >

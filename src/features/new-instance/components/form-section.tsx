@@ -1,39 +1,26 @@
 import type { ReactNode } from "react";
 
-import { cn } from "@/lib/utils";
+import { Card } from "@/components/ui/card";
 
-/** A titled block of the create form: icon, title, description, then content. */
+/**
+ * A block of the create form, laid out like the settings sections: a small
+ * title above a bordered card, with an optional muted hint at the top of it.
+ */
 export function FormSection({
-  icon,
   title,
   description,
-  divided = true,
   children,
 }: {
-  icon: ReactNode;
   title: string;
-  description: string;
-  /** Draws a divider above the section; the first one omits it. */
-  divided?: boolean;
+  description?: string;
   children: ReactNode;
 }) {
   return (
-    <section
-      className={cn(
-        "flex flex-col gap-3",
-        divided && "border-t border-border/40 pt-5",
+    <Card title={title}>
+      {description === undefined ? null : (
+        <p className="text-sm text-muted-foreground">{description}</p>
       )}
-    >
-      <div className="flex items-center gap-3">
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-instance/20 text-instance">
-          {icon}
-        </span>
-        <div>
-          <h3 className="text-sm font-medium">{title}</h3>
-          <p className="text-xs text-muted-foreground">{description}</p>
-        </div>
-      </div>
       {children}
-    </section>
+    </Card>
   );
 }

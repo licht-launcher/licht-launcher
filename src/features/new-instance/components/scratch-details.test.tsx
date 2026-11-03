@@ -57,11 +57,7 @@ describe("ScratchDetails", () => {
     const headings = screen
       .getAllByRole("heading", { level: 3 })
       .map((heading) => heading.textContent);
-    expect(headings).toEqual([
-      "Name your instance",
-      "Choose a platform",
-      "Game version",
-    ]);
+    expect(headings).toEqual(["Name", "Platform", "Game version"]);
   });
 
   it("grows the loader section in when a loader platform is picked", async () => {
@@ -97,9 +93,7 @@ describe("ScratchDetails", () => {
     const reveal = container.querySelector("[data-slot='reveal']");
     expect(reveal).not.toBeNull();
     await waitFor(() => expect(reveal).toHaveAttribute("data-state", "open"));
-    expect(
-      screen.getByRole("heading", { name: "Loader version" }),
-    ).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Loader" })).toBeVisible();
   });
 
   it("puts the loader after the game version for platforms with a loader", () => {
@@ -108,12 +102,7 @@ describe("ScratchDetails", () => {
     const headings = screen
       .getAllByRole("heading", { level: 3 })
       .map((heading) => heading.textContent);
-    expect(headings).toEqual([
-      "Name your instance",
-      "Choose a platform",
-      "Game version",
-      "Loader version",
-    ]);
+    expect(headings).toEqual(["Name", "Platform", "Game version", "Loader"]);
   });
 
   it("goes back to the stable channel whenever the platform changes", () => {

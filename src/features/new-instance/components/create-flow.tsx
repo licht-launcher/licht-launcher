@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { PageTransition } from "@/components/ui/page-transition";
 import { CreateHeader } from "@/features/new-instance/components/create-header";
 import { ScratchActions } from "@/features/new-instance/components/scratch-actions";
 import { ScratchDetails } from "@/features/new-instance/components/scratch-details";
 import { SourcePicker } from "@/features/new-instance/components/source-picker";
+import { useAnimatedDialogHeight } from "@/features/new-instance/hooks/use-animated-dialog-height";
 import { useCreateInstance } from "@/features/new-instance/hooks/use-create-instance";
 import { useInstanceNames } from "@/features/new-instance/hooks/use-instance-names";
 import { useScratchForm } from "@/features/new-instance/hooks/use-scratch-form";
@@ -17,6 +18,8 @@ import {
 export function CreateFlow({ onClose }: { onClose: () => void }) {
   const [view, setView] = useState<CreateView>("source");
   const [direction, setDirection] = useState<"left" | "right">("left");
+  const anchor = useRef<HTMLSpanElement>(null);
+  useAnimatedDialogHeight(anchor, view);
 
   const takenNames = useInstanceNames();
   const {
@@ -40,6 +43,7 @@ export function CreateFlow({ onClose }: { onClose: () => void }) {
 
   return (
     <>
+      <span ref={anchor} hidden />
       <CreateHeader />
       <PageTransition animationKey={view} direction={direction}>
         {view === "source" ? (
