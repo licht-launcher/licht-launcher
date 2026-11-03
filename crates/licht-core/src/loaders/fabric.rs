@@ -37,12 +37,27 @@ pub async fn list_fabric_like_versions(
     let response = client.get(&url).send().await?;
     let status = response.status().as_u16();
     let body = response.text().await?;
+    loader_list_from_response(status, &body, channel)
+}
+
+/// Turns the metadata service's answer into a loader list.
+///
+/// A game version the service does not know is a normal "no builds" answer
+/// (Fabric replies 400, Quilt 404), so it is an empty list and not an error.
+fn loader_list_from_response(
+    status: u16,
+    body: &str,
+    channel: LoaderChannel,
+) -> Result<Vec<String>> {
+    if status == 400 || status == 404 {
+        return Ok(Vec::new());
+    }
     if !(200..300).contains(&status) {
         return Err(CoreError::LoaderMeta {
             detail: format!("loader_list_http_{status}"),
         });
     }
-    parse_fabric_loader_list(&body, channel)
+    parse_fabric_loader_list(body, channel)
 }
 
 pub fn parse_fabric_loader_list(body: &str, channel: LoaderChannel) -> Result<Vec<String>> {
@@ -296,6 +311,34 @@ mod tests {
         let manual = parse_fabric_loader_list(QUILT_BODY, LoaderChannel::Manual).expect("ok");
         assert_eq!(manual.first().map(String::as_str), Some("0.24.0"));
         assert_eq!(manual.len(), 6);
+    }
+
+    #[test]
+    fn game_versions_the_service_does_not_know_have_no_builds() {
+        // Fabric answers 400 and Quilt 404; neither is worth retrying.
+        for status in [400, 404] {
+            let list = loader_list_from_response(status, "not found", LoaderChannel::Latest)
+                .expect("no builds, not an error");
+            assert!(list.is_empty(), "status {status}");
+        }
+    }
+
+    #[test]
+    fn other_http_errors_still_fail() {
+        for status in [429, 500, 503] {
+            let result = loader_list_from_response(status, "", LoaderChannel::Latest);
+            assert!(
+                matches!(result, Err(CoreError::LoaderMeta { .. })),
+                "status {status}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_successful_response_is_parsed() {
+        let list =
+            loader_list_from_response(200, QUILT_BODY, LoaderChannel::Stable).expect("parsed");
+        assert_eq!(list, vec!["0.24.0".to_string(), "0.23.1".to_string()]);
     }
 
     #[test]
