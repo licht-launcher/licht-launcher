@@ -324,17 +324,66 @@ describe("CreateInstanceDialog", () => {
     ).toBe(false);
   });
 
+  it("lets the channel be changed with the cards and sends it", async () => {
+    await renderApp();
+    await openDetails();
+    fireEvent.click(screen.getByRole("button", { name: /^Fabric/ }));
+    await screen.findByRole("group", { name: "Loader channel" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Latest" }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Latest" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      ),
+    );
+    await submit();
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("create_instance_with_platform", {
+        name: "Fabric 1.20.1",
+        platform: "fabric",
+        gameVersion: "1.20.1",
+        loaderChannel: "latest",
+        loaderVersion: null,
+      }),
+    );
+  });
+
+  it("lets Other pick a loader version by hand", async () => {
+    await renderApp();
+    await openDetails();
+    fireEvent.click(screen.getByRole("button", { name: /^Fabric/ }));
+    await screen.findByRole("group", { name: "Loader channel" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Other" }));
+    expect(
+      await screen.findByRole("combobox", { name: "Loader version" }),
+    ).toBeVisible();
+    await submit();
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("create_instance_with_platform", {
+        name: "Fabric 1.20.1",
+        platform: "fabric",
+        gameVersion: "1.20.1",
+        loaderChannel: "manual",
+        loaderVersion: "0.16.0",
+      }),
+    );
+  });
+
   it("asks for a loader channel on Fabric and sends it", async () => {
     await renderApp();
     await openDetails();
 
-    expect(
-      screen.queryByRole("combobox", { name: "Loader channel" }),
-    ).toBeNull();
+    expect(screen.queryByRole("group", { name: "Loader channel" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /^Fabric/ }));
     expect(
-      await screen.findByRole("combobox", { name: "Loader channel" }),
+      await screen.findByRole("group", { name: "Loader channel" }),
     ).toBeVisible();
+    expect(screen.getByRole("button", { name: "Stable" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
     await typeName("Modded");
     await submit();
 

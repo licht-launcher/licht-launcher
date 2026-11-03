@@ -8,6 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ChannelPicker } from "@/features/new-instance/components/channel-picker";
 import { FormSection } from "@/features/new-instance/components/form-section";
 import {
   type LoaderState,
@@ -39,27 +40,18 @@ export function LoaderOptions({
     <FormSection
       icon={<PuzzleIcon aria-hidden className="size-4" strokeWidth={2} />}
       title="Loader version"
-      description="Stable and latest are picked for the game version."
+      description="Stable and Latest are picked for you. Other lets you choose a build."
     >
-      <Select
+      <ChannelPicker
         value={state.loaderChannel}
-        onValueChange={(value) => {
-          if (value === "stable" || value === "latest" || value === "manual") {
-            onChange({ loaderChannel: value, loaderVersion: "" });
-          }
+        loader={loader}
+        gameVersion={state.gameVersion}
+        stableMissing={stableMissing}
+        noBuilds={loaderState === "empty"}
+        onChange={(loaderChannel) => {
+          onChange({ loaderChannel, loaderVersion: "" });
         }}
-      >
-        <SelectTrigger aria-label="Loader channel">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="stable" disabled={stableMissing}>
-            Stable
-          </SelectItem>
-          <SelectItem value="latest">Latest</SelectItem>
-          <SelectItem value="manual">Select manually</SelectItem>
-        </SelectContent>
-      </Select>
+      />
       {stableMissing && state.loaderChannel === "latest" ? (
         <p className="text-sm text-muted-foreground">
           No stable {loader} build for {state.gameVersion}. The latest build is
