@@ -1,3 +1,4 @@
+import { BoxesIcon, FilePlusIcon, UploadIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import {
@@ -32,14 +33,21 @@ export function CreateInstanceMenu({
         side={side}
         aria-label="Create instance"
       >
-        <DropdownMenuItem onSelect={onScratch}>From scratch</DropdownMenuItem>
-        <DropdownMenuItem disabled>From a modpack</DropdownMenuItem>
+        <DropdownMenuItem onSelect={onScratch}>
+          <FilePlusIcon aria-hidden />
+          From scratch
+        </DropdownMenuItem>
+        <DropdownMenuItem disabled>
+          <BoxesIcon aria-hidden />
+          From a modpack
+        </DropdownMenuItem>
         <DropdownMenuItem
           disabled={upload.isPending}
           onSelect={() => {
             upload.mutate();
           }}
         >
+          <UploadIcon aria-hidden />
           Upload a pack file
         </DropdownMenuItem>
       </DropdownMenuContent>
