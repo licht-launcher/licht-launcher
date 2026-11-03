@@ -42,6 +42,16 @@ describe("SourcePicker", () => {
     expect(word).not.toHaveClass("font-semibold");
   });
 
+  it("keeps the row text compact, with the title close to its description", () => {
+    renderPicker();
+
+    const title = screen.getByText("From scratch");
+    expect(title).toHaveClass("text-sm");
+    expect(title).not.toHaveClass("text-base");
+    expect(title.parentElement).not.toHaveClass("gap-0.5");
+    expect(title.nextElementSibling).toHaveClass("text-xs");
+  });
+
   it("keeps the modpack source disabled and marked as coming soon", () => {
     renderPicker();
 
