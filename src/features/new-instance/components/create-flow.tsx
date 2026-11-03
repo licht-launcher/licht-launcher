@@ -6,6 +6,7 @@ import { ScratchActions } from "@/features/new-instance/components/scratch-actio
 import { ScratchDetails } from "@/features/new-instance/components/scratch-details";
 import { SourcePicker } from "@/features/new-instance/components/source-picker";
 import { useCreateInstance } from "@/features/new-instance/hooks/use-create-instance";
+import { useInstanceNames } from "@/features/new-instance/hooks/use-instance-names";
 import { useScratchForm } from "@/features/new-instance/hooks/use-scratch-form";
 import {
   type CreateView,
@@ -17,11 +18,13 @@ export function CreateFlow({ onClose }: { onClose: () => void }) {
   const [view, setView] = useState<CreateView>("source");
   const [direction, setDirection] = useState<"left" | "right">("left");
 
+  const takenNames = useInstanceNames();
   const { state, update, versions, loaderVersions } = useScratchForm(
     view === "details",
   );
   const { fromScratch, fromUpload, busy } = useCreateInstance({
     scratch: state,
+    takenNames,
     onCreated: onClose,
   });
 
@@ -45,23 +48,30 @@ export function CreateFlow({ onClose }: { onClose: () => void }) {
             }}
           />
         ) : (
-          <div className="flex flex-col gap-5">
-            <ScratchDetails
-              state={state}
-              versions={versions.data ?? []}
-              versionsPending={versions.isPending}
-              versionsError={versions.isError}
-              loaderVersions={loaderVersions.data ?? []}
-              loaderVersionsPending={loaderVersions.isPending}
-              onRetryVersions={() => {
-                void versions.refetch();
-              }}
-              onChange={update}
-            />
+          <>
+            {/* Only the form scrolls; the header and the actions stay in view. */}
+            <div
+              data-slot="create-scroll"
+              className="min-h-0 flex-1 overflow-y-auto"
+            >
+              <ScratchDetails
+                state={state}
+                takenNames={takenNames}
+                versions={versions.data ?? []}
+                versionsPending={versions.isPending}
+                versionsError={versions.isError}
+                loaderVersions={loaderVersions.data ?? []}
+                loaderVersionsPending={loaderVersions.isPending}
+                onRetryVersions={() => {
+                  void versions.refetch();
+                }}
+                onChange={update}
+              />
+            </div>
             <ScratchActions
               busy={busy}
               creating={fromScratch.isPending}
-              canCreate={canCreateScratch(state)}
+              canCreate={canCreateScratch(state, takenNames)}
               onBack={() => {
                 goTo("source");
               }}
@@ -69,7 +79,7 @@ export function CreateFlow({ onClose }: { onClose: () => void }) {
                 fromScratch.mutate();
               }}
             />
-          </div>
+          </>
         )}
       </PageTransition>
     </>

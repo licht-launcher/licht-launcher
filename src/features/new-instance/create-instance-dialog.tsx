@@ -13,7 +13,7 @@ export function CreateInstanceDialog({
       <DialogContent
         showCloseButton={false}
         aria-describedby={undefined}
-        className="max-h-[calc(100%-2rem)] gap-5 overflow-y-auto p-6 sm:max-w-xl"
+        className="flex max-h-[calc(100%-2rem)] flex-col gap-5 overflow-hidden p-6 sm:max-w-xl"
       >
         {/* Unmounted on close, so every opening starts from the sources. */}
         <CreateFlow

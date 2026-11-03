@@ -5,9 +5,14 @@ import { FormSection } from "@/features/new-instance/components/form-section";
 
 export function NameField({
   value,
+  placeholder,
+  error,
   onChange,
 }: {
   value: string;
+  placeholder: string;
+  /** Shown under the field, which is then marked invalid. */
+  error?: string;
   onChange: (name: string) => void;
 }) {
   return (
@@ -24,14 +29,23 @@ export function NameField({
         <Input
           id="instance-name"
           aria-label="Instance Name"
+          aria-invalid={error !== undefined}
+          aria-describedby={
+            error === undefined ? undefined : "instance-name-error"
+          }
           value={value}
           autoComplete="off"
-          placeholder="Survival"
+          placeholder={placeholder}
           onChange={(event) => {
             onChange(event.target.value);
           }}
         />
       </label>
+      {error === undefined ? null : (
+        <p id="instance-name-error" className="text-xs text-destructive">
+          {error}
+        </p>
+      )}
     </FormSection>
   );
 }

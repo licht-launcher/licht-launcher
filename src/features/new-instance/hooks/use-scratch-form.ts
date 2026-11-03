@@ -32,9 +32,15 @@ export function useScratchForm(enabled: boolean) {
       state.loaderChannel,
     ],
     queryFn: () =>
-      listLoaderVersions(state.platform, state.gameVersion, state.loaderChannel),
+      listLoaderVersions(
+        state.platform,
+        state.gameVersion,
+        state.loaderChannel,
+      ),
     enabled:
-      enabled && platformNeedsLoader(state.platform) && state.gameVersion !== "",
+      enabled &&
+      platformNeedsLoader(state.platform) &&
+      state.gameVersion !== "",
     retry: false,
   });
 
@@ -52,16 +58,19 @@ export function useScratchForm(enabled: boolean) {
   }, [enabled, state.gameVersion, state.includeSnapshots, versions.data]);
 
   useEffect(() => {
-    if (
-      !enabled ||
-      !platformNeedsLoader(state.platform) ||
-      state.loaderChannel === "manual"
-    ) {
+    if (!enabled || !platformNeedsLoader(state.platform)) {
       return;
     }
-    const first = loaderVersions.data?.[0];
-    if (first !== undefined && state.loaderVersion !== first) {
-      setState((current) => ({ ...current, loaderVersion: first }));
+    const newest = loaderVersions.data?.[0];
+    if (newest === undefined) {
+      return;
+    }
+    // Stable and latest always follow the newest build; "manual" starts there
+    // too, and then keeps whatever the user picks.
+    const keepsChoice =
+      state.loaderChannel === "manual" && state.loaderVersion !== "";
+    if (!keepsChoice && state.loaderVersion !== newest) {
+      setState((current) => ({ ...current, loaderVersion: newest }));
     }
   }, [
     enabled,

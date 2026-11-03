@@ -2,6 +2,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  createdInstance,
   invoke,
   mockCreateCommands,
   mockVersionViewport,
@@ -125,7 +126,6 @@ describe("CreateInstanceDialog", () => {
     await openDetails();
 
     const version = screen.getByRole("combobox", { name: "Game version" });
-    expect(screen.getByRole("button", { name: "Create" })).toBeDisabled();
     await typeName("Survival");
     fireEvent.focus(version);
     fireEvent.change(version, { target: { value: "1.19" } });
@@ -146,6 +146,102 @@ describe("CreateInstanceDialog", () => {
       await screen.findByRole("heading", { name: "Survival" }),
     ).toBeVisible();
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("creates with the default name when the field is left empty", async () => {
+    await renderApp();
+    await openDetails();
+
+    await submit();
+
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("create_instance_with_platform", {
+        name: "Vanilla 1.20.1",
+        platform: "vanilla",
+        gameVersion: "1.20.1",
+        loaderChannel: "stable",
+        loaderVersion: null,
+      }),
+    );
+  });
+
+  it("numbers the default name when an instance already has it", async () => {
+    mockCreateCommands(undefined, [
+      createdInstance("Vanilla 1.20.1"),
+      createdInstance("Vanilla 1.20.1 (1)"),
+    ]);
+    await renderApp();
+    await openDetails();
+
+    expect(screen.getByLabelText("Instance Name")).toHaveAttribute(
+      "placeholder",
+      "Vanilla 1.20.1 (2)",
+    );
+    await submit();
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("create_instance_with_platform", {
+        name: "Vanilla 1.20.1 (2)",
+        platform: "vanilla",
+        gameVersion: "1.20.1",
+        loaderChannel: "stable",
+        loaderVersion: null,
+      }),
+    );
+  });
+
+  it("refuses a typed name that another instance already has", async () => {
+    mockCreateCommands(undefined, [createdInstance("Survival")]);
+    await renderApp();
+    await openDetails();
+
+    await typeName("survival");
+    expect(
+      await screen.findByText("An instance with this name already exists."),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "Create" })).toBeDisabled();
+    expect(screen.getByLabelText("Instance Name")).toBeInvalid();
+    await typeName("Survival 2");
+    expect(
+      screen.queryByText("An instance with this name already exists."),
+    ).toBeNull();
+    expect(screen.getByRole("button", { name: "Create" })).toBeEnabled();
+  });
+
+  it("numbers an uploaded pack whose name is already taken", async () => {
+    openDialog.mockResolvedValueOnce("C:\\packs\\Cobble Pack.mrpack");
+    mockCreateCommands(undefined, [createdInstance("Cobble Pack")]);
+    await renderApp();
+    const dialog = await openCreateDialog();
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: /Upload a pack file/ }),
+    );
+
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("create_instance_from_modpack_file", {
+        name: "Cobble Pack (1)",
+        path: "C:\\packs\\Cobble Pack.mrpack",
+      }),
+    );
+  });
+
+  it("keeps the header and the actions out of the scrolling area", async () => {
+    await renderApp();
+    const dialog = await openDetails();
+
+    const scroll = dialog.querySelector("[data-slot='create-scroll']");
+    expect(scroll).not.toBeNull();
+    expect(scroll?.contains(screen.getByLabelText("Instance Name"))).toBe(true);
+    expect(
+      scroll?.contains(screen.getByRole("button", { name: "Create" })),
+    ).toBe(false);
+    expect(scroll?.contains(screen.getByRole("button", { name: "Back" }))).toBe(
+      false,
+    );
+    expect(
+      scroll?.contains(
+        within(dialog).getByRole("heading", { name: "Create instance" }),
+      ),
+    ).toBe(false);
   });
 
   it("asks for a loader channel on Fabric and sends it", async () => {

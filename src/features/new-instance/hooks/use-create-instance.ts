@@ -4,7 +4,9 @@ import { toast } from "sonner";
 
 import { VERSIONS_QUERY_KEY } from "@/features/instances/lib/versions-query";
 import {
+  resolveInstanceName,
   type ScratchState,
+  uniqueName,
   uploadInstanceName,
 } from "@/features/new-instance/model/create-state";
 import {
@@ -21,9 +23,11 @@ import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
  */
 export function useCreateInstance({
   scratch,
+  takenNames,
   onCreated,
 }: {
   scratch: ScratchState;
+  takenNames: readonly string[];
   onCreated: () => void;
 }) {
   const navigate = useNavigate();
@@ -43,7 +47,7 @@ export function useCreateInstance({
   const fromScratch = useMutation({
     mutationFn: () =>
       createInstanceWithPlatform({
-        name: scratch.name.trim(),
+        name: resolveInstanceName(scratch, takenNames),
         platform: scratch.platform,
         gameVersion: scratch.gameVersion,
         loaderChannel: scratch.loaderChannel,
@@ -61,7 +65,7 @@ export function useCreateInstance({
         return null;
       }
       return createInstanceFromModpackFile({
-        name: uploadInstanceName(path),
+        name: uniqueName(uploadInstanceName(path), takenNames),
         path,
       });
     },

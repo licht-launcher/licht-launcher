@@ -2,8 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   canCreateScratch,
+  defaultInstanceName,
   initialScratchState,
+  isNameTaken,
   platformNeedsLoader,
+  resolveInstanceName,
+  uniqueName,
   uploadInstanceName,
 } from "@/features/new-instance/model/create-state";
 
@@ -13,13 +17,13 @@ describe("canCreateScratch", () => {
     expect(canCreateScratch(initialScratchState)).toBe(false);
   });
 
-  it("needs a name and a game version", () => {
+  it("needs a game version but not a typed name", () => {
     const state = { ...initialScratchState, name: "Survival" };
     expect(canCreateScratch(state)).toBe(false);
     expect(canCreateScratch({ ...state, gameVersion: "1.20.1" })).toBe(true);
     expect(
-      canCreateScratch({ ...state, gameVersion: "1.20.1", name: "   " }),
-    ).toBe(false);
+      canCreateScratch({ ...state, gameVersion: "1.20.1", name: "" }),
+    ).toBe(true);
   });
 
   it("requires a manual loader version only for loader platforms", () => {
@@ -33,6 +37,92 @@ describe("canCreateScratch", () => {
     expect(canCreateScratch(state)).toBe(false);
     expect(canCreateScratch({ ...state, loaderVersion: "0.16.0" })).toBe(true);
     expect(canCreateScratch({ ...state, platform: "vanilla" })).toBe(true);
+  });
+});
+
+describe("instance names", () => {
+  it("defaults to the platform and the game version", () => {
+    const state = { ...initialScratchState, gameVersion: "26.3" };
+    expect(defaultInstanceName(state)).toBe("Vanilla 26.3");
+    expect(defaultInstanceName({ ...state, platform: "fabric" })).toBe(
+      "Fabric 26.3",
+    );
+    expect(defaultInstanceName({ ...state, platform: "neoforge" })).toBe(
+      "NeoForge 26.3",
+    );
+  });
+
+  it("has no default until a game version is chosen", () => {
+    expect(defaultInstanceName(initialScratchState)).toBe("");
+  });
+
+  it("uses the typed name when there is one and the default otherwise", () => {
+    const state = {
+      ...initialScratchState,
+      platform: "fabric" as const,
+      gameVersion: "1.20.1",
+    };
+    expect(resolveInstanceName({ ...state, name: "  Survival  " })).toBe(
+      "Survival",
+    );
+    expect(resolveInstanceName({ ...state, name: "   " })).toBe(
+      "Fabric 1.20.1",
+    );
+    expect(resolveInstanceName(state)).toBe("Fabric 1.20.1");
+  });
+});
+
+describe("unique names", () => {
+  it("keeps a free name as it is", () => {
+    expect(uniqueName("Fabric 26.3", [])).toBe("Fabric 26.3");
+    expect(uniqueName("Fabric 26.3", ["Vanilla 26.3"])).toBe("Fabric 26.3");
+  });
+
+  it("numbers a name that is already used, starting at (1)", () => {
+    expect(uniqueName("Fabric 26.3", ["Fabric 26.3"])).toBe("Fabric 26.3 (1)");
+    expect(uniqueName("Fabric 26.3", ["Fabric 26.3", "Fabric 26.3 (1)"])).toBe(
+      "Fabric 26.3 (2)",
+    );
+  });
+
+  it("reuses the first free number and ignores case and spacing", () => {
+    expect(uniqueName("Pack", ["pack ", "Pack (2)"])).toBe("Pack (1)");
+  });
+
+  it("tells whether a typed name is taken", () => {
+    expect(isNameTaken("survival", ["Survival"])).toBe(true);
+    expect(isNameTaken("  Survival  ", ["Survival"])).toBe(true);
+    expect(isNameTaken("Creative", ["Survival"])).toBe(false);
+    expect(isNameTaken("   ", ["Survival"])).toBe(false);
+  });
+
+  it("numbers the default instance name when it is taken", () => {
+    const state = {
+      ...initialScratchState,
+      platform: "fabric" as const,
+      gameVersion: "26.3",
+    };
+    expect(defaultInstanceName(state, ["Fabric 26.3"])).toBe("Fabric 26.3 (1)");
+    expect(resolveInstanceName(state, ["Fabric 26.3"])).toBe("Fabric 26.3 (1)");
+  });
+
+  it("keeps a typed name as typed, even when it is taken", () => {
+    const state = {
+      ...initialScratchState,
+      name: " Survival ",
+      gameVersion: "1",
+    };
+    expect(resolveInstanceName(state, ["Survival"])).toBe("Survival");
+  });
+
+  it("blocks creating with a typed name that is already used", () => {
+    const state = {
+      ...initialScratchState,
+      name: "survival",
+      gameVersion: "1",
+    };
+    expect(canCreateScratch(state, ["Survival"])).toBe(false);
+    expect(canCreateScratch({ ...state, name: "" }, ["Vanilla 1"])).toBe(true);
   });
 });
 

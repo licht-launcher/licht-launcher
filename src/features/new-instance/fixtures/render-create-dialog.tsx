@@ -85,8 +85,9 @@ export function createdInstance(name: string, versionId = "1.20.1") {
 
 export function mockCreateCommands(
   implement?: (command: string, args?: unknown) => unknown,
+  existing: InstanceEntry[] = [],
 ) {
-  let instances: InstanceEntry[] = [];
+  let instances: InstanceEntry[] = [...existing];
   unexpectedCommands = [];
   invoke.mockReset();
   invoke.mockImplementation(async (command, args) => {

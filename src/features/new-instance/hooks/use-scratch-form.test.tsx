@@ -45,14 +45,18 @@ describe("useScratchForm", () => {
     expect(listVersions).not.toHaveBeenCalled();
     expect(result.current.state.gameVersion).toBe("");
     rerender({ on: true });
-    await waitFor(() => expect(result.current.state.gameVersion).toBe("1.20.1"));
+    await waitFor(() =>
+      expect(result.current.state.gameVersion).toBe("1.20.1"),
+    );
     expect(listVersions).toHaveBeenCalledOnce();
   });
 
   it("selects the newest release, skipping snapshots", async () => {
     const { result } = setup(true);
 
-    await waitFor(() => expect(result.current.state.gameVersion).toBe("1.20.1"));
+    await waitFor(() =>
+      expect(result.current.state.gameVersion).toBe("1.20.1"),
+    );
   });
 
   it("merges patches without dropping the other fields", async () => {
@@ -72,7 +76,9 @@ describe("useScratchForm", () => {
 
   it("fills the newest loader version for a loader platform", async () => {
     const { result } = setup(true);
-    await waitFor(() => expect(result.current.state.gameVersion).toBe("1.20.1"));
+    await waitFor(() =>
+      expect(result.current.state.gameVersion).toBe("1.20.1"),
+    );
 
     act(() => {
       result.current.update({ platform: "fabric" });
@@ -89,7 +95,9 @@ describe("useScratchForm", () => {
 
   it("keeps a loader version chosen by hand", async () => {
     const { result } = setup(true);
-    await waitFor(() => expect(result.current.state.gameVersion).toBe("1.20.1"));
+    await waitFor(() =>
+      expect(result.current.state.gameVersion).toBe("1.20.1"),
+    );
 
     act(() => {
       result.current.update({
@@ -102,9 +110,38 @@ describe("useScratchForm", () => {
     expect(result.current.state.loaderVersion).toBe("0.15.11");
   });
 
+  it("selects the newest loader version when switching to manual", async () => {
+    const { result } = setup(true);
+    await waitFor(() =>
+      expect(result.current.state.gameVersion).toBe("1.20.1"),
+    );
+    act(() => {
+      result.current.update({ platform: "fabric" });
+    });
+    await waitFor(() =>
+      expect(result.current.state.loaderVersion).toBe("0.16.0"),
+    );
+
+    act(() => {
+      result.current.update({ loaderChannel: "manual", loaderVersion: "" });
+    });
+    await waitFor(() =>
+      expect(listLoaderVersions).toHaveBeenCalledWith(
+        "fabric",
+        "1.20.1",
+        "manual",
+      ),
+    );
+    await waitFor(() =>
+      expect(result.current.state.loaderVersion).toBe("0.16.0"),
+    );
+  });
+
   it("does not ask for loader versions on vanilla", async () => {
     const { result } = setup(true);
-    await waitFor(() => expect(result.current.state.gameVersion).toBe("1.20.1"));
+    await waitFor(() =>
+      expect(result.current.state.gameVersion).toBe("1.20.1"),
+    );
 
     expect(listLoaderVersions).not.toHaveBeenCalled();
   });

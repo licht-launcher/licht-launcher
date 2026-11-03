@@ -6,6 +6,8 @@ import { LoaderOptions } from "@/features/new-instance/components/loader-options
 import { NameField } from "@/features/new-instance/components/name-field";
 import { PlatformPicker } from "@/features/new-instance/components/platform-picker";
 import {
+  defaultInstanceName,
+  isNameTaken,
   platformNeedsLoader,
   type ScratchState,
 } from "@/features/new-instance/model/create-state";
@@ -13,6 +15,7 @@ import type { VersionSummary } from "@/lib/generated/VersionSummary";
 
 export function ScratchDetails({
   state,
+  takenNames,
   versions,
   versionsPending,
   versionsError,
@@ -22,6 +25,8 @@ export function ScratchDetails({
   onChange,
 }: {
   state: ScratchState;
+  /** Names already used by other instances. */
+  takenNames: readonly string[];
   versions: VersionSummary[];
   versionsPending: boolean;
   versionsError: boolean;
@@ -34,6 +39,12 @@ export function ScratchDetails({
     <div className="flex flex-col gap-5">
       <NameField
         value={state.name}
+        placeholder={defaultInstanceName(state, takenNames) || "Instance name"}
+        error={
+          isNameTaken(state.name, takenNames)
+            ? "An instance with this name already exists."
+            : undefined
+        }
         onChange={(name) => {
           onChange({ name });
         }}
@@ -46,7 +57,7 @@ export function ScratchDetails({
         <PlatformPicker
           value={state.platform}
           onChange={(platform) => {
-            onChange({ platform, loaderVersion: "" });
+            onChange({ platform, loaderChannel: "stable", loaderVersion: "" });
           }}
         />
       </FormSection>

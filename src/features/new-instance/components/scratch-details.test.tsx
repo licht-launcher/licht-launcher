@@ -35,6 +35,7 @@ function renderDetails(
   render(
     <ScratchDetails
       state={{ ...initialScratchState, gameVersion: "1.20.1", ...state }}
+      takenNames={[]}
       versions={versions}
       versionsPending={false}
       versionsError={false}
@@ -74,6 +75,38 @@ describe("ScratchDetails", () => {
       "Game version",
       "Loader version",
     ]);
+  });
+
+  it("goes back to the stable channel whenever the platform changes", () => {
+    const { onChange } = renderDetails({
+      platform: "fabric",
+      loaderChannel: "manual",
+      loaderVersion: "0.15.11",
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /^Forge/ }));
+    expect(onChange).toHaveBeenCalledWith({
+      platform: "forge",
+      loaderChannel: "stable",
+      loaderVersion: "",
+    });
+  });
+
+  it("suggests the default name as a placeholder", () => {
+    renderDetails({ platform: "fabric", gameVersion: "26.3" });
+
+    expect(screen.getByLabelText("Instance Name")).toHaveAttribute(
+      "placeholder",
+      "Fabric 26.3",
+    );
+  });
+
+  it("tints the snapshots switch yellow", () => {
+    renderDetails();
+
+    expect(
+      screen.getByRole("switch", { name: "Include snapshots" }),
+    ).toHaveClass("data-[state=checked]:bg-warning");
   });
 
   it("selects the game version from a typeable select", () => {
@@ -128,6 +161,7 @@ describe("ScratchDetails", () => {
     render(
       <ScratchDetails
         state={initialScratchState}
+        takenNames={[]}
         versions={[]}
         versionsPending={false}
         versionsError

@@ -81,6 +81,7 @@ export function GameVersionField({
               id="include-snapshots"
               aria-label="Include snapshots"
               checked={state.includeSnapshots}
+              className="data-[state=checked]:bg-warning"
               disabled={pending}
               onCheckedChange={changeSnapshots}
             />
