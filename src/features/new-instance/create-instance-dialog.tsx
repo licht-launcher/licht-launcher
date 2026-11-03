@@ -1,12 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { ArrowLeftIcon, PlusIcon, WrenchIcon } from "lucide-react";
+import { ArrowLeftIcon, PlusIcon, WrenchIcon, XIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -158,17 +159,30 @@ function CreateInstanceFlow({ onClose }: { onClose: () => void }) {
 
   return (
     <>
-      <DialogHeader className="flex-row items-center gap-4 border-b border-border/40 pr-8 pb-5">
+      <DialogHeader className="flex-row items-center gap-4 border-b border-border/40 pb-5">
         <span
           data-slot="create-header-icon"
           className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-instance/20 text-instance"
         >
           <HeaderIcon aria-hidden className="size-5" strokeWidth={2} />
         </span>
-        <div className="flex min-w-0 flex-col gap-1">
-          <DialogTitle className="text-lg leading-tight">
-            Create instance
-          </DialogTitle>
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <div className="flex items-center justify-between gap-2">
+            <DialogTitle className="text-lg leading-tight">
+              Create instance
+            </DialogTitle>
+            <DialogClose asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className="-my-1"
+              >
+                <XIcon aria-hidden />
+                <span className="sr-only">Close</span>
+              </Button>
+            </DialogClose>
+          </div>
           <DialogDescription>
             {view === "source"
               ? "How do you want to start?"
@@ -243,7 +257,10 @@ export function CreateInstanceDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[calc(100%-2rem)] gap-5 overflow-y-auto p-6 sm:max-w-xl">
+      <DialogContent
+        showCloseButton={false}
+        className="max-h-[calc(100%-2rem)] gap-5 overflow-y-auto p-6 sm:max-w-xl"
+      >
         <CreateInstanceFlow
           onClose={() => {
             onOpenChange(false);

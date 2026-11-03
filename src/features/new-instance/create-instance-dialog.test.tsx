@@ -83,6 +83,22 @@ describe("CreateInstanceDialog", () => {
     ).toBeVisible();
   });
 
+  it("keeps the close button on the same row as the title", async () => {
+    await renderApp();
+    const dialog = await openCreateDialog();
+
+    const closeButtons = within(dialog).getAllByRole("button", {
+      name: "Close",
+    });
+    expect(closeButtons).toHaveLength(1);
+    const title = within(dialog).getByRole("heading", {
+      name: "Create instance",
+    });
+    expect(closeButtons[0]?.parentElement).toBe(title.parentElement);
+    fireEvent.click(closeButtons[0] as HTMLElement);
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
   it("slides between the steps in the direction of travel", async () => {
     await renderApp();
     const dialog = await openCreateDialog();
