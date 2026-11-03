@@ -24,7 +24,6 @@ export function ScratchDetails({
   versionsError,
   loaderVersions,
   onRetryVersions,
-  onRetryLoader,
   onChange,
 }: {
   state: ScratchState;
@@ -37,7 +36,6 @@ export function ScratchDetails({
   versionsError: boolean;
   loaderVersions: string[];
   onRetryVersions: () => void;
-  onRetryLoader: () => void;
   onChange: (patch: Partial<ScratchState>) => void;
 }) {
   return (
@@ -81,7 +79,6 @@ export function ScratchDetails({
           stableMissing={stableMissing}
           loaderVersions={loaderVersions}
           onChange={onChange}
-          onRetry={onRetryLoader}
         />
       ) : null}
     </div>

@@ -38,7 +38,6 @@ function renderDetails(
       takenNames={[]}
       loaderState="ready"
       stableMissing={false}
-      onRetryLoader={() => {}}
       versions={versions}
       versionsPending={false}
       versionsError={false}
@@ -179,7 +178,6 @@ describe("ScratchDetails", () => {
         takenNames={[]}
         loaderState="none"
         stableMissing={false}
-        onRetryLoader={() => {}}
         versions={[]}
         versionsPending={false}
         versionsError

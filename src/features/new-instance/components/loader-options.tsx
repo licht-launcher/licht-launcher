@@ -1,6 +1,5 @@
 import { PuzzleIcon } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -22,7 +21,6 @@ export function LoaderOptions({
   stableMissing,
   loaderVersions,
   onChange,
-  onRetry,
 }: {
   state: ScratchState;
   loaderState: LoaderState;
@@ -30,7 +28,6 @@ export function LoaderOptions({
   stableMissing: boolean;
   loaderVersions: string[];
   onChange: (patch: Partial<ScratchState>) => void;
-  onRetry: () => void;
 }) {
   const loader =
     PLATFORMS.find((platform) => platform.id === state.platform)?.label ??
@@ -53,16 +50,6 @@ export function LoaderOptions({
           onChange({ loaderChannel, loaderVersion: "" });
         }}
       />
-      {loaderState === "error" ? (
-        <Button
-          type="button"
-          variant="outline"
-          className="self-start"
-          onClick={onRetry}
-        >
-          Retry loader check
-        </Button>
-      ) : null}
       {loaderState === "ready" && state.loaderChannel === "manual" ? (
         <Select
           value={state.loaderVersion}

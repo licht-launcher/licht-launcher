@@ -71,9 +71,6 @@ export function CreateFlow({ onClose }: { onClose: () => void }) {
                 onRetryVersions={() => {
                   void versions.refetch();
                 }}
-                onRetryLoader={() => {
-                  void loaderVersions.refetch();
-                }}
                 onChange={update}
               />
             </div>

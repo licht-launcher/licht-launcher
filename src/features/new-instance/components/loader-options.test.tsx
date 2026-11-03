@@ -24,7 +24,6 @@ function renderOptions(
       stableMissing={false}
       loaderVersions={["0.30.2", "0.30.1"]}
       onChange={onChange}
-      onRetry={() => {}}
       {...props}
     />,
   );
@@ -122,7 +121,6 @@ describe("LoaderOptions", () => {
           stableMissing
           loaderVersions={[]}
           onChange={() => {}}
-          onRetry={() => {}}
         />,
       );
       expect(screen.queryByText(/Checking .* builds/)).toBeNull();
@@ -132,9 +130,8 @@ describe("LoaderOptions", () => {
     }
   });
 
-  it("disables the channels with a reason and offers a retry when the check failed", async () => {
-    const onRetry = vi.fn();
-    renderOptions({}, { loaderState: "error", onRetry });
+  it("disables the channels with a reason when the check failed, without a retry button", async () => {
+    renderOptions({}, { loaderState: "error" });
 
     for (const name of ["Stable", "Latest", "Other"]) {
       expect(screen.getByRole("button", { name })).toBeDisabled();
@@ -147,8 +144,7 @@ describe("LoaderOptions", () => {
     expect(await screen.findByRole("tooltip")).toHaveTextContent(
       "Could not check Quilt builds for 26.3.",
     );
-    fireEvent.click(screen.getByRole("button", { name: "Retry loader check" }));
-    expect(onRetry).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("button", { name: /retry/i })).toBeNull();
   });
 
   it("keeps every channel available while the builds are still loading", () => {
@@ -171,7 +167,6 @@ describe("LoaderOptions", () => {
         stableMissing={false}
         loaderVersions={["0.30.2", "0.30.1"]}
         onChange={() => {}}
-        onRetry={() => {}}
       />,
     );
     expect(
@@ -191,7 +186,6 @@ describe("LoaderOptions", () => {
         stableMissing={false}
         loaderVersions={["0.30.2", "0.30.1"]}
         onChange={() => {}}
-        onRetry={() => {}}
       />,
     );
     expect(
