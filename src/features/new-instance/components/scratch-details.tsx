@@ -18,6 +18,7 @@ export function ScratchDetails({
   state,
   takenNames,
   loaderState,
+  stableMissing,
   versions,
   versionsPending,
   versionsError,
@@ -30,6 +31,7 @@ export function ScratchDetails({
   /** Names already used by other instances. */
   takenNames: readonly string[];
   loaderState: LoaderState;
+  stableMissing: boolean;
   versions: VersionSummary[];
   versionsPending: boolean;
   versionsError: boolean;
@@ -76,6 +78,7 @@ export function ScratchDetails({
         <LoaderOptions
           state={state}
           loaderState={loaderState}
+          stableMissing={stableMissing}
           loaderVersions={loaderVersions}
           onChange={onChange}
           onRetry={onRetryLoader}

@@ -242,6 +242,38 @@ describe("CreateInstanceDialog", () => {
     expect(screen.getByRole("button", { name: "Create" })).toBeDisabled();
   });
 
+  it("creates with the latest channel when the loader has no stable build", async () => {
+    mockCreateCommands((command, args) => {
+      if (
+        command === "list_loader_versions" &&
+        typeof args === "object" &&
+        args !== null &&
+        "channel" in args
+      ) {
+        return args.channel === "stable" ? [] : ["0.31.0-beta.5"];
+      }
+    });
+    await renderApp();
+    await openDetails();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Quilt/ }));
+    expect(
+      await screen.findByText(
+        "No stable Quilt build for 1.20.1. The latest build is used instead.",
+      ),
+    ).toBeVisible();
+    await submit();
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("create_instance_with_platform", {
+        name: "Quilt 1.20.1",
+        platform: "quilt",
+        gameVersion: "1.20.1",
+        loaderChannel: "latest",
+        loaderVersion: null,
+      }),
+    );
+  });
+
   it("blocks creating while the loader builds are still loading", async () => {
     let finish: (versions: string[]) => void = () => {};
     const pending = new Promise<string[]>((resolve) => {

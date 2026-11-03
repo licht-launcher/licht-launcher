@@ -25,6 +25,23 @@ export function useScratchForm(enabled: boolean) {
 
   const versions = useQuery({ ...versionsQueryOptions, enabled });
 
+  const loaderListed =
+    enabled && platformNeedsLoader(state.platform) && state.gameVersion !== "";
+
+  // Whether the loader has any stable build; it shares its cache with the
+  // list below while the stable channel is the one selected.
+  const stableVersions = useQuery({
+    queryKey: ["loader-versions", state.platform, state.gameVersion, "stable"],
+    queryFn: () =>
+      listLoaderVersions(state.platform, state.gameVersion, "stable"),
+    enabled: loaderListed,
+    retry: false,
+  });
+  const stableMissing =
+    loaderListed &&
+    stableVersions.data !== undefined &&
+    stableVersions.data.length === 0;
+
   const loaderVersions = useQuery({
     queryKey: [
       "loader-versions",
@@ -59,6 +76,16 @@ export function useScratchForm(enabled: boolean) {
   }, [enabled, state.gameVersion, state.includeSnapshots, versions.data]);
 
   useEffect(() => {
+    if (stableMissing && state.loaderChannel === "stable") {
+      setState((current) => ({
+        ...current,
+        loaderChannel: "latest",
+        loaderVersion: "",
+      }));
+    }
+  }, [stableMissing, state.loaderChannel]);
+
+  useEffect(() => {
     if (!enabled || !platformNeedsLoader(state.platform)) {
       return;
     }
@@ -87,6 +114,7 @@ export function useScratchForm(enabled: boolean) {
     versions,
     loaderVersions,
     loaderState: loaderStateOf(state, loaderVersions),
+    stableMissing,
   };
 }
 

@@ -37,6 +37,7 @@ function renderDetails(
       state={{ ...initialScratchState, gameVersion: "1.20.1", ...state }}
       takenNames={[]}
       loaderState="ready"
+      stableMissing={false}
       onRetryLoader={() => {}}
       versions={versions}
       versionsPending={false}
@@ -137,6 +138,25 @@ describe("ScratchDetails", () => {
     expect(onRetryLoader).toHaveBeenCalledOnce();
   });
 
+  it("explains that the latest channel is used when there is no stable build", () => {
+    renderDetails(
+      { platform: "quilt", gameVersion: "26.3", loaderChannel: "latest" },
+      { stableMissing: true },
+    );
+
+    expect(
+      screen.getByText(
+        "No stable Quilt build for 26.3. The latest build is used instead.",
+      ),
+    ).toBeVisible();
+  });
+
+  it("stays quiet about stable builds when they exist", () => {
+    renderDetails({ platform: "fabric" }, { stableMissing: false });
+
+    expect(screen.queryByText(/No stable/)).toBeNull();
+  });
+
   it("says it is checking while the loader builds load", () => {
     renderDetails({ platform: "fabric" }, { loaderState: "checking" });
 
@@ -197,6 +217,7 @@ describe("ScratchDetails", () => {
         state={initialScratchState}
         takenNames={[]}
         loaderState="none"
+        stableMissing={false}
         onRetryLoader={() => {}}
         versions={[]}
         versionsPending={false}

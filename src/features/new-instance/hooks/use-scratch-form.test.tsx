@@ -176,6 +176,58 @@ describe("useScratchForm", () => {
     await waitFor(() => expect(result.current.loaderState).toBe("error"));
   });
 
+  it("uses the latest channel when the loader has no stable build", async () => {
+    vi.mocked(listLoaderVersions).mockImplementation(
+      async (_platform, _version, channel) =>
+        channel === "stable" ? [] : ["0.31.0-beta.5", "0.31.0-beta.4"],
+    );
+    const { result } = setup(true);
+    await waitFor(() =>
+      expect(result.current.state.gameVersion).toBe("1.20.1"),
+    );
+
+    act(() => {
+      result.current.update({ platform: "quilt" });
+    });
+    await waitFor(() =>
+      expect(result.current.state.loaderChannel).toBe("latest"),
+    );
+    await waitFor(() =>
+      expect(result.current.state.loaderVersion).toBe("0.31.0-beta.5"),
+    );
+    expect(result.current.stableMissing).toBe(true);
+    expect(result.current.loaderState).toBe("ready");
+  });
+
+  it("stays on stable when the loader has a stable build", async () => {
+    const { result } = setup(true);
+    await waitFor(() =>
+      expect(result.current.state.gameVersion).toBe("1.20.1"),
+    );
+
+    act(() => {
+      result.current.update({ platform: "fabric" });
+    });
+    await waitFor(() => expect(result.current.loaderState).toBe("ready"));
+    expect(result.current.state.loaderChannel).toBe("stable");
+    expect(result.current.stableMissing).toBe(false);
+  });
+
+  it("does not switch channel when the stable check itself fails", async () => {
+    vi.mocked(listLoaderVersions).mockRejectedValue(new Error("offline"));
+    const { result } = setup(true);
+    await waitFor(() =>
+      expect(result.current.state.gameVersion).toBe("1.20.1"),
+    );
+
+    act(() => {
+      result.current.update({ platform: "quilt" });
+    });
+    await waitFor(() => expect(result.current.loaderState).toBe("error"));
+    expect(result.current.state.loaderChannel).toBe("stable");
+    expect(result.current.stableMissing).toBe(false);
+  });
+
   it("does not ask for loader versions on vanilla", async () => {
     const { result } = setup(true);
     await waitFor(() =>

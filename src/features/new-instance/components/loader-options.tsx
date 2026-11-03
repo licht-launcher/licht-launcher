@@ -18,12 +18,15 @@ import {
 export function LoaderOptions({
   state,
   loaderState,
+  stableMissing,
   loaderVersions,
   onChange,
   onRetry,
 }: {
   state: ScratchState;
   loaderState: LoaderState;
+  /** The loader has no stable build for this game version. */
+  stableMissing: boolean;
   loaderVersions: string[];
   onChange: (patch: Partial<ScratchState>) => void;
   onRetry: () => void;
@@ -50,11 +53,19 @@ export function LoaderOptions({
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="stable">Stable</SelectItem>
+          <SelectItem value="stable" disabled={stableMissing}>
+            Stable
+          </SelectItem>
           <SelectItem value="latest">Latest</SelectItem>
           <SelectItem value="manual">Select manually</SelectItem>
         </SelectContent>
       </Select>
+      {stableMissing && state.loaderChannel === "latest" ? (
+        <p className="text-sm text-muted-foreground">
+          No stable {loader} build for {state.gameVersion}. The latest build is
+          used instead.
+        </p>
+      ) : null}
       {loaderState === "checking" ? (
         <p className="text-sm text-muted-foreground">
           Checking {loader} builds…

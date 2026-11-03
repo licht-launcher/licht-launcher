@@ -19,8 +19,14 @@ export function CreateFlow({ onClose }: { onClose: () => void }) {
   const [direction, setDirection] = useState<"left" | "right">("left");
 
   const takenNames = useInstanceNames();
-  const { state, update, versions, loaderVersions, loaderState } =
-    useScratchForm(view === "details");
+  const {
+    state,
+    update,
+    versions,
+    loaderVersions,
+    loaderState,
+    stableMissing,
+  } = useScratchForm(view === "details");
   const { fromScratch, fromUpload, busy } = useCreateInstance({
     scratch: state,
     takenNames,
@@ -57,6 +63,7 @@ export function CreateFlow({ onClose }: { onClose: () => void }) {
                 state={state}
                 takenNames={takenNames}
                 loaderState={loaderState}
+                stableMissing={stableMissing}
                 versions={versions.data ?? []}
                 versionsPending={versions.isPending}
                 versionsError={versions.isError}
