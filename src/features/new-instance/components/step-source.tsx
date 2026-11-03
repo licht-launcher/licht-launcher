@@ -3,9 +3,33 @@ import type { ReactNode } from "react";
 
 import { ChoiceCard } from "@/components/ui/choice-card";
 import type { InstanceSource } from "@/features/new-instance/model/wizard";
+import { cn } from "@/lib/utils";
 
-function Key({ children }: { children: ReactNode }) {
-  return <strong className="font-semibold text-foreground">{children}</strong>;
+const keyTones = {
+  cool: "text-accent-cool",
+  warning: "text-warning",
+  file: "text-accent-file",
+} as const;
+
+/** Highlights a keyword with the card's tone instead of a heavier weight. */
+function Key({
+  tone,
+  children,
+}: {
+  tone: keyof typeof keyTones;
+  children: ReactNode;
+}) {
+  return (
+    <strong className={cn("font-medium", keyTones[tone])}>{children}</strong>
+  );
+}
+
+function Code({ children }: { children: ReactNode }) {
+  return (
+    <code className="rounded bg-black/25 px-1 py-0.5 font-mono text-xs text-foreground">
+      {children}
+    </code>
+  );
 }
 
 function SelectedMark({ selected }: { selected: boolean }) {
@@ -42,8 +66,9 @@ export function StepSource({
           title="From scratch"
           description={
             <>
-              Choose a <Key>platform</Key>, a <Key>name</Key> and a{" "}
-              <Key>game version</Key>.
+              Choose a <Key tone="cool">platform</Key>, a{" "}
+              <Key tone="cool">name</Key> and a{" "}
+              <Key tone="cool">game version</Key>.
             </>
           }
           icon={<WrenchIcon aria-hidden strokeWidth={2} />}
@@ -61,8 +86,8 @@ export function StepSource({
           title="From a modpack"
           description={
             <>
-              Browse popular packs from <Key>Modrinth</Key> and{" "}
-              <Key>CurseForge</Key>.
+              Browse popular packs from <Key tone="warning">Modrinth</Key> and{" "}
+              <Key tone="warning">CurseForge</Key>.
             </>
           }
           icon={<PackageIcon aria-hidden strokeWidth={2} />}
@@ -80,7 +105,7 @@ export function StepSource({
           title="Import a pack file"
           description={
             <>
-              Use a local <Key>.mrpack</Key> or CurseForge <Key>.zip</Key>.
+              Use a local <Code>.mrpack</Code> or CurseForge <Code>.zip</Code>.
             </>
           }
           icon={<FileUpIcon aria-hidden strokeWidth={2} />}

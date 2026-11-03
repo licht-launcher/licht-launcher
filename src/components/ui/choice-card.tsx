@@ -77,7 +77,7 @@ export function ChoiceCard({
           <span
             className={cn(
               "block text-sm",
-              size === "lg" && "font-brand text-lg font-semibold",
+              size === "lg" && "text-base font-medium tracking-tight",
             )}
           >
             {title}

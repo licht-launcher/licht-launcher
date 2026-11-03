@@ -19,9 +19,25 @@ describe("StepSource", () => {
   it("highlights the key words of each description", () => {
     render(<StepSource value="scratch" onChange={() => {}} />);
 
-    for (const word of ["platform", "game version", "Modrinth", ".mrpack"]) {
+    for (const word of ["platform", "game version", "Modrinth"]) {
       expect(screen.getByText(word, { selector: "strong" })).toBeVisible();
     }
+    for (const extension of [".mrpack", ".zip"]) {
+      expect(screen.getByText(extension, { selector: "code" })).toBeVisible();
+    }
+  });
+
+  it("keeps the emphasis light instead of bold", () => {
+    render(<StepSource value="scratch" onChange={() => {}} />);
+
+    const word = screen.getByText("platform", { selector: "strong" });
+    expect(word).toHaveClass("font-medium");
+    expect(word).not.toHaveClass("font-semibold");
+    expect(
+      screen
+        .getByRole("button", { name: /From scratch/ })
+        .querySelector(".font-brand"),
+    ).toBeNull();
   });
 
   it("reports the source the user picks", () => {
