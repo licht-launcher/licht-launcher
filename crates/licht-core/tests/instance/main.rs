@@ -695,3 +695,31 @@ async fn duplicating_into_a_taken_folder_numbers_it() {
     service.shutdown().await.expect("shutdown");
     let _ = fs::remove_dir_all(root);
 }
+
+#[tokio::test]
+async fn renaming_cannot_take_the_name_of_another_instance() {
+    let root = scratch("rename-taken");
+    let instances = root.join("instances");
+    let service = database(&root).await;
+    let client = service.client();
+    for name in ["Pack", "Other"] {
+        create_instance(&client, &instances, name, "1.20.1", &plain_template())
+            .await
+            .expect(name);
+    }
+
+    assert!(matches!(
+        rename_instance(&client, &instances, "Other", " pack").await,
+        Err(CoreError::InstanceExists)
+    ));
+    let recased = rename_instance(&client, &instances, "Pack", "PACK")
+        .await
+        .expect("an instance may change its own name's case");
+    assert_eq!(recased.name, "PACK");
+    let punctuated = rename_instance(&client, &instances, "Other", "Pack!")
+        .await
+        .expect("a different name is free");
+    assert_eq!(punctuated.name, "Pack!");
+    service.shutdown().await.expect("shutdown");
+    let _ = fs::remove_dir_all(root);
+}

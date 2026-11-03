@@ -41,7 +41,7 @@ pub async fn create_instance(
     let _guard = profile_guard().await;
     let name = display_name(name)?;
     single_component(version_id)?;
-    ensure_name_free(database, instances_dir, &name).await?;
+    ensure_name_free(database, instances_dir, &name, None).await?;
     fs::create_dir_all(instances_dir)?;
     let folder = available_folder(instances_dir, &name)?;
     let dir = instances_dir.join(&folder);
@@ -61,6 +61,7 @@ pub async fn rename_instance(
 ) -> Result<InstanceEntry> {
     let _guard = profile_guard().await;
     let name = display_name(name)?;
+    ensure_name_free(database, instances_dir, &name, Some(folder)).await?;
     let dir = instance_dir(instances_dir, folder)?;
     let mut instance = load_instance(database, &dir).await?;
     instance.name = name;
@@ -77,7 +78,7 @@ pub async fn duplicate_instance(
     let name = display_name(name)?;
     let source = instance_dir(instances_dir, folder)?;
     let original = load_instance(database, &source).await?;
-    ensure_name_free(database, instances_dir, &name).await?;
+    ensure_name_free(database, instances_dir, &name, None).await?;
     let new_folder = available_folder(instances_dir, &name)?;
     let destination = instances_dir.join(&new_folder);
     let mut instance = original.clone();

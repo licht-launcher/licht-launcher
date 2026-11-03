@@ -130,7 +130,7 @@ pub async fn create_pending_instance(
     let _guard = profile_guard().await;
     source.validate()?;
     let name = display_name(name)?;
-    ensure_name_free(database, instances_dir, &name).await?;
+    ensure_name_free(database, instances_dir, &name, None).await?;
     fs::create_dir_all(instances_dir)?;
     let folder = available_folder(instances_dir, &name)?;
     let dir = instances_dir.join(&folder);
