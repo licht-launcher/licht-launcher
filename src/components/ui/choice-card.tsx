@@ -51,7 +51,7 @@ export function ChoiceCard({
         "disabled:pointer-events-none disabled:opacity-50",
         "border-border/60 ring-3",
         size === "lg" &&
-          "min-h-44 gap-4 px-4 py-4 motion-safe:hover:-translate-y-0.5",
+          "group/choice min-h-44 gap-4 px-4 py-4 motion-safe:hover:-translate-y-0.5",
         selected
           ? "bg-muted ring-primary"
           : "ring-primary/0 hover:border-border hover:bg-muted/50",
@@ -59,13 +59,20 @@ export function ChoiceCard({
       )}
       onClick={onSelect}
     >
-      <span className="flex flex-col items-start w-full gap-2">
+      <span
+        className={cn(
+          "flex w-full flex-col items-start gap-2",
+          size === "lg" && "flex-1",
+        )}
+      >
         <div className="flex items-center gap-2">
           {icon !== undefined ? (
             <span
               className={cn(
-                "flex shrink-0 items-center justify-center overflow-hidden rounded-md transition-colors duration-200 ease-out",
-                size === "lg" ? "size-10" : "size-7",
+                "flex shrink-0 items-center justify-center overflow-hidden rounded-md transition-[background-color,transform] duration-200 ease-out",
+                size === "lg"
+                  ? "size-10 motion-safe:group-hover/choice:scale-110"
+                  : "size-7",
                 iconNeutral
                   ? "bg-black/20 text-muted-foreground"
                   : iconTones[iconTone],
