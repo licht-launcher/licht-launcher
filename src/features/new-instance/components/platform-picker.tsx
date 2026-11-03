@@ -5,14 +5,6 @@ import {
   type PlatformId,
 } from "@/features/new-instance/model/create-state";
 
-const PLATFORM_HINTS: Record<PlatformId, string> = {
-  vanilla: "Official game, no mod loader.",
-  fabric: "Lightweight mods, fast updates.",
-  neoforge: "Modern Forge fork for recent versions.",
-  forge: "Classic mod ecosystem.",
-  quilt: "Fabric-compatible loader fork.",
-};
-
 export function PlatformPicker({
   value,
   onChange,
@@ -26,7 +18,6 @@ export function PlatformPicker({
         <ChoiceCard
           key={platform.id}
           title={platform.label}
-          description={PLATFORM_HINTS[platform.id]}
           icon={<PlatformIcon platform={platform.id} />}
           iconNeutral
           selected={value === platform.id}

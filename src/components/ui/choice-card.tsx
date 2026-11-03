@@ -42,7 +42,7 @@ export function ChoiceCard({
       aria-pressed={selected}
       disabled={disabled}
       className={cn(
-        "flex h-auto w-full cursor-pointer flex-col items-start gap-3 rounded-lg border px-3 py-3 text-left text-foreground outline-none select-none",
+        "flex h-auto w-full cursor-pointer flex-col items-start gap-3 rounded-lg border px-2 py-2 text-left text-foreground outline-none select-none",
         "transition-[background-color,border-color,box-shadow] duration-200 ease-out",
         "focus-visible:ring-3 focus-visible:ring-ring/50",
         "disabled:pointer-events-none disabled:opacity-50",
@@ -57,7 +57,7 @@ export function ChoiceCard({
           {icon !== undefined ? (
             <span
               className={cn(
-                "flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-md transition-colors duration-200 ease-out",
+                "flex border size-7 p-1.5 shrink-0 items-center justify-center overflow-hidden rounded-md transition-colors duration-200 ease-out",
                 iconNeutral
                   ? "bg-black/20 text-muted-foreground"
                   : iconTones[iconTone],

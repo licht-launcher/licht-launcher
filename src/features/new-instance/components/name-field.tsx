@@ -21,9 +21,9 @@ export function NameField({
         className="flex flex-col gap-1.5 text-sm font-medium"
         htmlFor="instance-name"
       >
-        Instance Name
         <Input
           id="instance-name"
+          aria-label="Instance Name"
           value={value}
           autoComplete="off"
           placeholder="Survival"

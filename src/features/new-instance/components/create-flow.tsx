@@ -32,7 +32,7 @@ export function CreateFlow({ onClose }: { onClose: () => void }) {
 
   return (
     <>
-      <CreateHeader view={view} />
+      <CreateHeader />
       <PageTransition animationKey={view} direction={direction}>
         {view === "source" ? (
           <SourcePicker
