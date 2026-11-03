@@ -46,17 +46,17 @@ describe("SourcePicker", () => {
     renderPicker();
 
     const title = screen.getByText("From scratch");
-    expect(title).toHaveClass("text-base");
+    expect(title).toHaveClass("text-[15px]");
     expect(title.parentElement).toHaveClass("gap-0.5");
     expect(title.nextElementSibling).toHaveClass("text-xs");
   });
 
-  it("keeps the modpack source disabled and marked as coming soon", () => {
+  it("keeps the modpack source disabled until Discover exists", () => {
     renderPicker();
 
-    const modpack = screen.getByRole("button", { name: /From a modpack/ });
-    expect(modpack).toBeDisabled();
-    expect(within(modpack).getByText("Soon")).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: /From a modpack/ }),
+    ).toBeDisabled();
   });
 
   it("starts the matching flow when a row is chosen", () => {

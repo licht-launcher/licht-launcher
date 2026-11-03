@@ -43,7 +43,6 @@ function SourceRow({
   title,
   description,
   disabled,
-  soon = false,
   onSelect,
 }: {
   tone: Tone;
@@ -51,7 +50,6 @@ function SourceRow({
   title: string;
   description: ReactNode;
   disabled: boolean;
-  soon?: boolean;
   onSelect: () => void;
 }) {
   return (
@@ -61,7 +59,7 @@ function SourceRow({
         disabled={disabled}
         onClick={onSelect}
         className={cn(
-          "group flex w-full cursor-pointer items-center gap-4 rounded-lg border border-border/60 px-4 py-3 text-left outline-none",
+          "group flex w-full cursor-pointer items-center gap-4 rounded-xl border border-border/60 px-3 py-3 text-left outline-none",
           "transition-[background-color,border-color,transform] duration-200 ease-out",
           "hover:border-border hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50",
           "disabled:pointer-events-none disabled:opacity-60",
@@ -69,28 +67,25 @@ function SourceRow({
       >
         <span
           className={cn(
-            "flex size-11 shrink-0 items-center justify-center rounded-lg transition-transform duration-200 ease-out motion-safe:group-hover:scale-105",
+            "flex size-11 shrink-0 items-center justify-center rounded-xl transition-transform duration-200 ease-out motion-safe:group-hover:scale-105",
             tones[tone].well,
           )}
         >
           {icon}
         </span>
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="text-base font-medium tracking-tight">{title}</span>
+          <span className="text-[15px] font-medium tracking-tight">
+            {title}
+          </span>
           <span className="text-xs leading-snug text-muted-foreground">
             {description}
           </span>
         </span>
-        {soon ? (
-          <span className="shrink-0 rounded-full border border-warning/40 px-2 py-0.5 text-xs text-warning">
-            Soon
-          </span>
-        ) : (
-          <ChevronRightIcon
-            aria-hidden
-            className="size-5 shrink-0 text-muted-foreground transition-[transform,color] duration-200 ease-out group-hover:text-foreground motion-safe:group-hover:translate-x-0.5"
-          />
-        )}
+
+        <ChevronRightIcon
+          aria-hidden
+          className="size-5 shrink-0 text-muted-foreground transition-[transform,color] duration-200 ease-out group-hover:text-foreground motion-safe:group-hover:translate-x-0.5"
+        />
       </button>
     </li>
   );
@@ -132,7 +127,6 @@ export function SourcePicker({
           </>
         }
         disabled
-        soon
         onSelect={() => {}}
       />
       <SourceRow

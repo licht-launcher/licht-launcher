@@ -45,7 +45,7 @@ describe("CreateInstanceDialog", () => {
     vi.restoreAllMocks();
   });
 
-  it("offers the three sources and marks modpack as coming soon", async () => {
+  it("offers the three sources with modpack disabled", async () => {
     await renderApp();
     const dialog = await openCreateDialog();
 
@@ -59,10 +59,9 @@ describe("CreateInstanceDialog", () => {
       name: /From a modpack/,
     });
     expect(modpack).toBeDisabled();
-    expect(within(modpack).getByText("Soon")).toBeVisible();
   });
 
-  it("introduces the dialog with an icon, a title and a description", async () => {
+  it("introduces the dialog with an icon and a title", async () => {
     await renderApp();
     const dialog = await openCreateDialog();
 
@@ -71,15 +70,6 @@ describe("CreateInstanceDialog", () => {
     ).not.toBeNull();
     expect(
       within(dialog).getByRole("heading", { name: "Create instance" }),
-    ).toBeVisible();
-    expect(within(dialog).getByText("How do you want to start?")).toBeVisible();
-    fireEvent.click(
-      within(dialog).getByRole("button", { name: /From scratch/ }),
-    );
-    expect(
-      await within(dialog).findByText(
-        "Name it, pick a platform and a game version.",
-      ),
     ).toBeVisible();
   });
 

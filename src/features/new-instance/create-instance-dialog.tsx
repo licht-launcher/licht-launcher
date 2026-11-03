@@ -9,7 +9,6 @@ import {
   Dialog,
   DialogClose,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -183,11 +182,6 @@ function CreateInstanceFlow({ onClose }: { onClose: () => void }) {
               </Button>
             </DialogClose>
           </div>
-          <DialogDescription>
-            {view === "source"
-              ? "How do you want to start?"
-              : "Name it, pick a platform and a game version."}
-          </DialogDescription>
         </div>
       </DialogHeader>
 
@@ -259,6 +253,7 @@ export function CreateInstanceDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton={false}
+        aria-describedby={undefined}
         className="max-h-[calc(100%-2rem)] gap-5 overflow-y-auto p-6 sm:max-w-xl"
       >
         <CreateInstanceFlow
