@@ -18,17 +18,14 @@ const versions: VersionSummary[] = [
   { id: "1.19.4", versionType: "release", installed: false },
 ];
 
-function setup(enabled: boolean) {
+function setup() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
-  return renderHook(({ on }) => useScratchForm(on), {
-    wrapper,
-    initialProps: { on: enabled },
-  });
+  return renderHook(() => useScratchForm(), { wrapper });
 }
 
 beforeEach(() => {
@@ -39,12 +36,9 @@ beforeEach(() => {
 });
 
 describe("useScratchForm", () => {
-  it("does not load anything until it is enabled", async () => {
-    const { result, rerender } = setup(false);
+  it("starts loading the game versions as soon as it mounts", async () => {
+    const { result } = setup();
 
-    expect(listVersions).not.toHaveBeenCalled();
-    expect(result.current.state.gameVersion).toBe("");
-    rerender({ on: true });
     await waitFor(() =>
       expect(result.current.state.gameVersion).toBe("1.20.1"),
     );
@@ -52,7 +46,7 @@ describe("useScratchForm", () => {
   });
 
   it("selects the newest release, skipping snapshots", async () => {
-    const { result } = setup(true);
+    const { result } = setup();
 
     await waitFor(() =>
       expect(result.current.state.gameVersion).toBe("1.20.1"),
@@ -60,7 +54,7 @@ describe("useScratchForm", () => {
   });
 
   it("merges patches without dropping the other fields", async () => {
-    const { result } = setup(true);
+    const { result } = setup();
 
     act(() => {
       result.current.update({ name: "Modded" });
@@ -75,7 +69,7 @@ describe("useScratchForm", () => {
   });
 
   it("fills the newest loader version for a loader platform", async () => {
-    const { result } = setup(true);
+    const { result } = setup();
     await waitFor(() =>
       expect(result.current.state.gameVersion).toBe("1.20.1"),
     );
@@ -94,7 +88,7 @@ describe("useScratchForm", () => {
   });
 
   it("keeps a loader version chosen by hand", async () => {
-    const { result } = setup(true);
+    const { result } = setup();
     await waitFor(() =>
       expect(result.current.state.gameVersion).toBe("1.20.1"),
     );
@@ -111,7 +105,7 @@ describe("useScratchForm", () => {
   });
 
   it("selects the newest loader version when switching to manual", async () => {
-    const { result } = setup(true);
+    const { result } = setup();
     await waitFor(() =>
       expect(result.current.state.gameVersion).toBe("1.20.1"),
     );
@@ -138,7 +132,7 @@ describe("useScratchForm", () => {
   });
 
   it("reports whether the loader has a build for the game version", async () => {
-    const { result } = setup(true);
+    const { result } = setup();
     await waitFor(() =>
       expect(result.current.state.gameVersion).toBe("1.20.1"),
     );
@@ -152,7 +146,7 @@ describe("useScratchForm", () => {
 
   it("flags a loader without builds for the game version", async () => {
     vi.mocked(listLoaderVersions).mockResolvedValue([]);
-    const { result } = setup(true);
+    const { result } = setup();
     await waitFor(() =>
       expect(result.current.state.gameVersion).toBe("1.20.1"),
     );
@@ -165,7 +159,7 @@ describe("useScratchForm", () => {
 
   it("flags a loader whose builds could not be checked", async () => {
     vi.mocked(listLoaderVersions).mockRejectedValue(new Error("404"));
-    const { result } = setup(true);
+    const { result } = setup();
     await waitFor(() =>
       expect(result.current.state.gameVersion).toBe("1.20.1"),
     );
@@ -181,7 +175,7 @@ describe("useScratchForm", () => {
       async (_platform, _version, channel) =>
         channel === "stable" ? [] : ["0.31.0-beta.5", "0.31.0-beta.4"],
     );
-    const { result } = setup(true);
+    const { result } = setup();
     await waitFor(() =>
       expect(result.current.state.gameVersion).toBe("1.20.1"),
     );
@@ -200,7 +194,7 @@ describe("useScratchForm", () => {
   });
 
   it("stays on stable when the loader has a stable build", async () => {
-    const { result } = setup(true);
+    const { result } = setup();
     await waitFor(() =>
       expect(result.current.state.gameVersion).toBe("1.20.1"),
     );
@@ -215,7 +209,7 @@ describe("useScratchForm", () => {
 
   it("does not switch channel when the stable check itself fails", async () => {
     vi.mocked(listLoaderVersions).mockRejectedValue(new Error("offline"));
-    const { result } = setup(true);
+    const { result } = setup();
     await waitFor(() =>
       expect(result.current.state.gameVersion).toBe("1.20.1"),
     );
@@ -229,7 +223,7 @@ describe("useScratchForm", () => {
   });
 
   it("does not ask for loader versions on vanilla", async () => {
-    const { result } = setup(true);
+    const { result } = setup();
     await waitFor(() =>
       expect(result.current.state.gameVersion).toBe("1.20.1"),
     );

@@ -155,8 +155,16 @@ describe("Instance library", () => {
     expect(
       screen.queryByRole("textbox", { name: "Search content" }),
     ).not.toBeInTheDocument();
+    const footer = screen.getByRole("contentinfo");
+    const welcomeButton = screen
+      .getAllByRole("button", { name: "Create instance" })
+      .find((button) => !footer.contains(button));
+    expect(welcomeButton).toBeDefined();
+    fireEvent.keyDown(welcomeButton as Element, { key: "Enter" });
     fireEvent.click(
-      screen.getAllByRole("button", { name: "Create instance" })[0] as Element,
+      within(
+        await screen.findByRole("menu", { name: "Create instance" }),
+      ).getByRole("menuitem", { name: "From scratch" }),
     );
     expect(
       await screen.findByRole("dialog", { name: "Create instance" }),
@@ -188,8 +196,14 @@ describe("Instance library", () => {
     const { router } = await renderAt("/?instance=next");
     await screen.findByRole("heading", { name: "Next" });
     const footer = screen.getByRole("contentinfo");
-    fireEvent.click(
+    fireEvent.pointerDown(
       within(footer).getByRole("button", { name: "Create instance" }),
+      { button: 0, ctrlKey: false, pointerType: "mouse" },
+    );
+    fireEvent.click(
+      within(
+        await screen.findByRole("menu", { name: "Create instance" }),
+      ).getByRole("menuitem", { name: "From scratch" }),
     );
     expect(
       await screen.findByRole("dialog", { name: "Create instance" }),

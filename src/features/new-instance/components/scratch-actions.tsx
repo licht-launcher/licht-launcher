@@ -1,28 +1,34 @@
-import { ArrowLeftIcon, PlusIcon } from "lucide-react";
+import { PlusIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
 
 export function ScratchActions({
-  busy,
   creating,
   canCreate,
-  onBack,
+  onCancel,
   onCreate,
 }: {
-  busy: boolean;
   creating: boolean;
   canCreate: boolean;
-  onBack: () => void;
+  onCancel: () => void;
   onCreate: () => void;
 }) {
   return (
     <DialogFooter className="-mx-4 -mb-6 bg-transparent px-4 py-4 sm:justify-between">
-      <Button type="button" variant="outline" disabled={busy} onClick={onBack}>
-        <ArrowLeftIcon data-icon="inline-start" aria-hidden />
-        Back
+      <Button
+        type="button"
+        variant="outline"
+        disabled={creating}
+        onClick={onCancel}
+      >
+        Cancel
       </Button>
-      <Button type="button" disabled={!canCreate || busy} onClick={onCreate}>
+      <Button
+        type="button"
+        disabled={!canCreate || creating}
+        onClick={onCreate}
+      >
         <PlusIcon data-icon="inline-start" aria-hidden />
         {creating ? "Creating…" : "Create"}
       </Button>

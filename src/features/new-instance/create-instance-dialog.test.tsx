@@ -7,13 +7,13 @@ import {
   mockCreateCommands,
   mockVersionViewport,
   openCreateDialog,
+  openCreateMenu,
   openDialog,
   renderApp,
 } from "@/features/new-instance/fixtures/render-create-dialog";
 
 async function openDetails() {
   const dialog = await openCreateDialog();
-  fireEvent.click(within(dialog).getByRole("button", { name: /From scratch/ }));
   await screen.findByLabelText("Instance Name");
   await waitFor(() =>
     expect(screen.getByRole("combobox", { name: "Game version" })).toHaveValue(
@@ -21,6 +21,13 @@ async function openDetails() {
     ),
   );
   return dialog;
+}
+
+async function chooseUpload() {
+  const menu = await openCreateMenu();
+  fireEvent.click(
+    within(menu).getByRole("menuitem", { name: "Upload a pack file" }),
+  );
 }
 
 async function typeName(name: string) {
@@ -46,20 +53,19 @@ describe("CreateInstanceDialog", () => {
     vi.restoreAllMocks();
   });
 
-  it("offers the three sources with modpack disabled", async () => {
+  it("offers scratch, modpack and upload in a menu, with no popup yet", async () => {
     await renderApp();
-    const dialog = await openCreateDialog();
+    const menu = await openCreateMenu();
 
     expect(
-      within(dialog).getByRole("button", { name: /From scratch/ }),
-    ).toBeEnabled();
+      within(menu)
+        .getAllByRole("menuitem")
+        .map((item) => item.textContent),
+    ).toEqual(["From scratch", "From a modpack", "Upload a pack file"]);
     expect(
-      within(dialog).getByRole("button", { name: /Upload a pack file/ }),
-    ).toBeEnabled();
-    const modpack = within(dialog).getByRole("button", {
-      name: /From a modpack/,
-    });
-    expect(modpack).toBeDisabled();
+      within(menu).getByRole("menuitem", { name: "From a modpack" }),
+    ).toHaveAttribute("aria-disabled", "true");
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("introduces the dialog with a title and no icon", async () => {
@@ -109,37 +115,6 @@ describe("CreateInstanceDialog", () => {
     ).toBe(false);
     fireEvent.click(close);
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-  });
-
-  it("slides between the steps in the direction of travel", async () => {
-    await renderApp();
-    const dialog = await openCreateDialog();
-    const direction = () =>
-      dialog
-        .querySelector("[data-slot='page-transition']")
-        ?.getAttribute("data-direction");
-
-    fireEvent.click(
-      within(dialog).getByRole("button", { name: /From scratch/ }),
-    );
-    await screen.findByLabelText("Instance Name");
-    expect(direction()).toBe("left");
-    fireEvent.click(screen.getByRole("button", { name: "Back" }));
-    await within(dialog).findByRole("button", { name: /From scratch/ });
-    expect(direction()).toBe("right");
-  });
-
-  it("opens from the welcome screen as well", async () => {
-    await renderApp();
-    fireEvent.click(
-      await screen.findByRole("button", {
-        name: "Create instance",
-        description: "",
-      }),
-    );
-    expect(
-      await screen.findByRole("dialog", { name: "Create instance" }),
-    ).toBeVisible();
   });
 
   it("creates a vanilla instance with the newest version preselected", async () => {
@@ -232,10 +207,7 @@ describe("CreateInstanceDialog", () => {
     openDialog.mockResolvedValueOnce("C:\\packs\\Cobble Pack.mrpack");
     mockCreateCommands(undefined, [createdInstance("Cobble Pack")]);
     await renderApp();
-    const dialog = await openCreateDialog();
-    fireEvent.click(
-      within(dialog).getByRole("button", { name: /Upload a pack file/ }),
-    );
+    await chooseUpload();
 
     await waitFor(() =>
       expect(invoke).toHaveBeenCalledWith("create_instance_from_modpack_file", {
@@ -340,9 +312,9 @@ describe("CreateInstanceDialog", () => {
     expect(
       scroll?.contains(screen.getByRole("button", { name: "Create" })),
     ).toBe(false);
-    expect(scroll?.contains(screen.getByRole("button", { name: "Back" }))).toBe(
-      false,
-    );
+    expect(
+      scroll?.contains(screen.getByRole("button", { name: "Cancel" })),
+    ).toBe(false);
     expect(
       scroll?.contains(
         within(dialog).getByRole("heading", { name: "Create instance" }),
@@ -438,24 +410,24 @@ describe("CreateInstanceDialog", () => {
     expect(await screen.findByRole("option", { name: "24w14a" })).toBeVisible();
   });
 
-  it("goes back to the sources without losing the dialog", async () => {
+  it("cancels without creating anything", async () => {
     await renderApp();
-    const dialog = await openDetails();
+    await openDetails();
 
-    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(
-      await within(dialog).findByRole("button", { name: /From scratch/ }),
-    ).toBeVisible();
-    expect(screen.queryByLabelText("Instance Name")).toBeNull();
+      invoke.mock.calls.some(
+        ([command]) => command === "create_instance_with_platform",
+      ),
+    ).toBe(false);
   });
 
   it("uploads a pack file through the system picker", async () => {
     openDialog.mockResolvedValueOnce("C:\\packs\\Cobble Pack.mrpack");
     await renderApp();
-    const dialog = await openCreateDialog();
-    fireEvent.click(
-      within(dialog).getByRole("button", { name: /Upload a pack file/ }),
-    );
+    await chooseUpload();
 
     await waitFor(() =>
       expect(invoke).toHaveBeenCalledWith("create_instance_from_modpack_file", {
@@ -469,18 +441,13 @@ describe("CreateInstanceDialog", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("stays on the sources when the picker is cancelled", async () => {
+  it("does nothing when the picker is cancelled", async () => {
     openDialog.mockResolvedValueOnce(null);
     await renderApp();
-    const dialog = await openCreateDialog();
-    fireEvent.click(
-      within(dialog).getByRole("button", { name: /Upload a pack file/ }),
-    );
+    await chooseUpload();
 
     await waitFor(() => expect(openDialog).toHaveBeenCalledOnce());
-    expect(
-      within(dialog).getByRole("button", { name: /Upload a pack file/ }),
-    ).toBeEnabled();
+    expect(screen.queryByRole("dialog")).toBeNull();
     expect(
       invoke.mock.calls.some(
         ([command]) => command === "create_instance_from_modpack_file",
@@ -488,7 +455,7 @@ describe("CreateInstanceDialog", () => {
     ).toBe(false);
   });
 
-  it("reports an upload that the backend rejects and keeps the dialog open", async () => {
+  it("reports an upload that the backend rejects", async () => {
     openDialog.mockResolvedValueOnce("C:\\packs\\broken.zip");
     mockCreateCommands((command) => {
       if (command === "create_instance_from_modpack_file") {
@@ -496,14 +463,9 @@ describe("CreateInstanceDialog", () => {
       }
     });
     await renderApp();
-    const dialog = await openCreateDialog();
-    fireEvent.click(
-      within(dialog).getByRole("button", { name: /Upload a pack file/ }),
-    );
+    await chooseUpload();
 
     expect(await screen.findByText(/archive could not be read/i)).toBeVisible();
-    expect(
-      screen.getByRole("dialog", { name: "Create instance" }),
-    ).toBeVisible();
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 });

@@ -13,20 +13,20 @@ import { listLoaderVersions } from "@/lib/commands";
 
 /**
  * The from-scratch form: its state, the version lists it depends on, and the
- * defaults that fill in once those lists load. `enabled` keeps the network
- * quiet until the form is actually on screen.
+ * defaults that fill in once those lists load. It lives as long as the popup
+ * does, so the lists start loading when the popup opens.
  */
-export function useScratchForm(enabled: boolean) {
+export function useScratchForm() {
   const [state, setState] = useState<ScratchState>(initialScratchState);
 
   const update = useCallback((patch: Partial<ScratchState>) => {
     setState((current) => ({ ...current, ...patch }));
   }, []);
 
-  const versions = useQuery({ ...versionsQueryOptions, enabled });
+  const versions = useQuery(versionsQueryOptions);
 
   const loaderListed =
-    enabled && platformNeedsLoader(state.platform) && state.gameVersion !== "";
+    platformNeedsLoader(state.platform) && state.gameVersion !== "";
 
   // Whether the loader has any stable build; it shares its cache with the
   // list below while the stable channel is the one selected.
@@ -55,15 +55,12 @@ export function useScratchForm(enabled: boolean) {
         state.gameVersion,
         state.loaderChannel,
       ),
-    enabled:
-      enabled &&
-      platformNeedsLoader(state.platform) &&
-      state.gameVersion !== "",
+    enabled: loaderListed,
     retry: false,
   });
 
   useEffect(() => {
-    if (!enabled || state.gameVersion !== "") {
+    if (state.gameVersion !== "") {
       return;
     }
     const newest = createVersionChoices(
@@ -73,7 +70,7 @@ export function useScratchForm(enabled: boolean) {
     if (newest !== undefined) {
       setState((current) => ({ ...current, gameVersion: newest.id }));
     }
-  }, [enabled, state.gameVersion, state.includeSnapshots, versions.data]);
+  }, [state.gameVersion, state.includeSnapshots, versions.data]);
 
   useEffect(() => {
     if (stableMissing && state.loaderChannel === "stable") {
@@ -86,7 +83,7 @@ export function useScratchForm(enabled: boolean) {
   }, [stableMissing, state.loaderChannel]);
 
   useEffect(() => {
-    if (!enabled || !platformNeedsLoader(state.platform)) {
+    if (!platformNeedsLoader(state.platform)) {
       return;
     }
     const newest = loaderVersions.data?.[0];
@@ -101,7 +98,6 @@ export function useScratchForm(enabled: boolean) {
       setState((current) => ({ ...current, loaderVersion: newest }));
     }
   }, [
-    enabled,
     state.platform,
     state.loaderChannel,
     state.loaderVersion,

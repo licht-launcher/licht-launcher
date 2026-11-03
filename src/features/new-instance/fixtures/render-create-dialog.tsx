@@ -165,11 +165,19 @@ export async function renderApp(initialEntry = "/") {
   );
 }
 
-/** Opens the dialog from the library footer. */
-export async function openCreateDialog() {
+/** Opens the "Create instance" menu from the library footer. */
+export async function openCreateMenu() {
   const footer = await screen.findByRole("contentinfo");
-  fireEvent.click(
+  fireEvent.pointerDown(
     within(footer).getByRole("button", { name: "Create instance" }),
+    { button: 0, ctrlKey: false, pointerType: "mouse" },
   );
+  return screen.findByRole("menu", { name: "Create instance" });
+}
+
+/** Opens the scratch popup through the footer menu. */
+export async function openCreateDialog() {
+  const menu = await openCreateMenu();
+  fireEvent.click(within(menu).getByRole("menuitem", { name: "From scratch" }));
   return screen.findByRole("dialog", { name: "Create instance" });
 }

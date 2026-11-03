@@ -36,6 +36,7 @@ import {
   SIDEBAR_PANEL_IDS,
   sidebarLayoutStorage,
 } from "@/features/instances/lib/sidebar-layout";
+import { CreateInstanceMenu } from "@/features/new-instance/components/create-instance-menu";
 import { CreateInstanceDialog } from "@/features/new-instance/create-instance-dialog";
 import { PlayerAccountButton } from "@/features/settings/components/player-account-button";
 import { useCustomTitleBar } from "@/hooks/use-custom-title-bar";
@@ -339,16 +340,17 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
         >
           <div className="grid min-h-8 w-full grid-cols-4 items-center">
             <div className="flex items-center justify-start">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className={footerActionClassName}
-                onClick={dialogs.openCreate}
-              >
-                <PlusIcon aria-hidden className="size-3.5" />
-                Create instance
-              </Button>
+              <CreateInstanceMenu onScratch={dialogs.openCreate} side="top">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className={footerActionClassName}
+                >
+                  <PlusIcon aria-hidden className="size-3.5" />
+                  Create instance
+                </Button>
+              </CreateInstanceMenu>
             </div>
             <div className="col-span-2 flex min-w-0 items-center justify-center">
               <DownloadsPopover
