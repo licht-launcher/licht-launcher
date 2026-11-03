@@ -2,25 +2,6 @@ export type PlatformId = "vanilla" | "fabric" | "neoforge" | "forge" | "quilt";
 
 export type LoaderChannel = "stable" | "latest" | "manual";
 
-export type ModpackSource = "modrinth" | "curseforge";
-
-export type ModpackListItem = {
-  id: string;
-  source: ModpackSource;
-  name: string;
-  description: string;
-  downloads: number;
-  iconUrl: string | null;
-  author: string;
-};
-
-export type ModpackVersionItem = {
-  id: string;
-  name: string;
-  gameVersions: string[];
-  loaders: string[];
-};
-
 /** What the user fills in when creating an instance from scratch. */
 export type ScratchState = {
   name: string;

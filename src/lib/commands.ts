@@ -3,9 +3,6 @@ import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import type {
   LoaderChannel,
-  ModpackListItem,
-  ModpackSource,
-  ModpackVersionItem,
   PlatformId,
 } from "@/features/new-instance/model/create-state";
 import { parseAppUpdateState } from "@/lib/app-update-state";
@@ -128,13 +125,6 @@ export function cancelDownloadJob(jobId: string): Promise<DownloadJobSnapshot> {
   return invoke("cancel_download_job", { jobId });
 }
 
-export function createInstance(
-  name: string,
-  versionId: string,
-): Promise<InstanceEntry> {
-  return invoke("create_instance", { name, versionId });
-}
-
 export function listLoaderVersions(
   platform: PlatformId | string,
   gameVersion: string,
@@ -156,33 +146,6 @@ export function createInstanceWithPlatform(input: {
     gameVersion: input.gameVersion,
     loaderChannel: input.loaderChannel,
     loaderVersion: input.loaderVersion,
-  });
-}
-
-export function searchModpacks(query: string): Promise<ModpackListItem[]> {
-  return invoke("search_modpacks", { query });
-}
-
-export function listModpackVersions(
-  source: ModpackSource,
-  projectId: string,
-): Promise<ModpackVersionItem[]> {
-  return invoke("list_modpack_versions", { source, projectId });
-}
-
-export function createInstanceFromModpack(input: {
-  name: string;
-  source: ModpackSource;
-  projectId: string;
-  versionId: string;
-  iconUrl?: string | null;
-}): Promise<InstanceEntry> {
-  return invoke("create_instance_from_modpack", {
-    name: input.name,
-    source: input.source,
-    projectId: input.projectId,
-    versionId: input.versionId,
-    iconUrl: input.iconUrl ?? null,
   });
 }
 

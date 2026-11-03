@@ -15,8 +15,6 @@ import {
   checkAppUpdate,
   clearLastPlayedFolder,
   closeStartupPreview,
-  createInstance,
-  createInstanceFromModpack,
   createInstanceFromModpackFile,
   createInstanceWithPlatform,
   customTitleBarActive,
@@ -44,7 +42,6 @@ import {
   listInstances,
   listLoaderVersions,
   listMicrosoftAccounts,
-  listModpackVersions,
   listRunningGames,
   listVersions,
   logoutMicrosoftAccount,
@@ -64,7 +61,6 @@ import {
   runtimeJava,
   saveInstance,
   saveSettings,
-  searchModpacks,
   setActiveMicrosoftAccount,
   setInstanceVersion,
   setLastPlayedFolder,
@@ -220,11 +216,6 @@ describe("launcher commands", () => {
   });
 
   it("creates, renames, duplicates, and deletes an instance", async () => {
-    await createInstance("Survival", "1.20.1");
-    expect(invoke).toHaveBeenCalledWith("create_instance", {
-      name: "Survival",
-      versionId: "1.20.1",
-    });
     await createInstanceWithPlatform({
       name: "Fabric",
       platform: "fabric",
@@ -244,26 +235,6 @@ describe("launcher commands", () => {
       platform: "fabric",
       gameVersion: "1.20.1",
       channel: "stable",
-    });
-    await searchModpacks("cobble");
-    expect(invoke).toHaveBeenCalledWith("search_modpacks", { query: "cobble" });
-    await listModpackVersions("modrinth", "ABC");
-    expect(invoke).toHaveBeenCalledWith("list_modpack_versions", {
-      source: "modrinth",
-      projectId: "ABC",
-    });
-    await createInstanceFromModpack({
-      name: "Cobblemon",
-      source: "modrinth",
-      projectId: "ABC",
-      versionId: "v1",
-    });
-    expect(invoke).toHaveBeenCalledWith("create_instance_from_modpack", {
-      name: "Cobblemon",
-      source: "modrinth",
-      projectId: "ABC",
-      versionId: "v1",
-      iconUrl: null,
     });
     vi.mocked(open).mockResolvedValueOnce("C:\\packs\\cobble.mrpack");
     await expect(browseModpackFile()).resolves.toBe("C:\\packs\\cobble.mrpack");
