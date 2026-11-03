@@ -74,6 +74,23 @@ describe("CreateInstanceDialog", () => {
     ).toBeVisible();
   });
 
+  it("styles the header as a full-width band like the footer, with the close button at the corner", async () => {
+    await renderApp();
+    const dialog = await openCreateDialog();
+
+    const header = dialog.querySelector("[data-slot='dialog-header']");
+    expect(header).toHaveClass(
+      "-mx-6",
+      "-mt-6",
+      "border-b",
+      "bg-muted/50",
+      "py-4",
+      "pl-6",
+      "pr-3",
+    );
+    expect(header).not.toHaveClass("border-border/40");
+  });
+
   it("keeps the close button on the same row as the title", async () => {
     await renderApp();
     const dialog = await openCreateDialog();
