@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { ArrowLeftIcon, PlusIcon } from "lucide-react";
+import { ArrowLeftIcon, PlusIcon, WrenchIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -13,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { PageTransition } from "@/components/ui/page-transition";
 import {
   VERSIONS_QUERY_KEY,
   versionsQueryOptions,
@@ -42,6 +43,7 @@ function CreateInstanceFlow({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [view, setView] = useState<View>("source");
+  const [direction, setDirection] = useState<"left" | "right">("left");
   const [scratch, setScratch] = useState<ScratchState>(initialScratchState);
 
   function update(patch: Partial<ScratchState>) {
@@ -152,66 +154,82 @@ function CreateInstanceFlow({ onClose }: { onClose: () => void }) {
 
   const busy = createFromScratch.isPending || upload.isPending;
 
+  const HeaderIcon = view === "source" ? PlusIcon : WrenchIcon;
+
   return (
     <>
-      <DialogHeader>
-        <DialogTitle>Create instance</DialogTitle>
-        <DialogDescription>
-          {view === "source"
-            ? "How do you want to start?"
-            : "Name it, pick a platform and a game version."}
-        </DialogDescription>
+      <DialogHeader className="flex-row items-center gap-4 border-b border-border/40 pr-8 pb-5">
+        <span
+          data-slot="create-header-icon"
+          className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-instance/20 text-instance"
+        >
+          <HeaderIcon aria-hidden className="size-5" strokeWidth={2} />
+        </span>
+        <div className="flex min-w-0 flex-col gap-1">
+          <DialogTitle className="text-lg leading-tight">
+            Create instance
+          </DialogTitle>
+          <DialogDescription>
+            {view === "source"
+              ? "How do you want to start?"
+              : "Name it, pick a platform and a game version."}
+          </DialogDescription>
+        </div>
       </DialogHeader>
 
-      {view === "source" ? (
-        <SourcePicker
-          busy={busy}
-          onScratch={() => {
-            setView("details");
-          }}
-          onUpload={() => {
-            upload.mutate();
-          }}
-        />
-      ) : (
-        <>
-          <ScratchDetails
-            state={scratch}
-            versions={versions.data ?? []}
-            versionsPending={versions.isPending}
-            versionsError={versions.isError}
-            loaderVersions={loaderVersions.data ?? []}
-            loaderVersionsPending={loaderVersions.isPending}
-            onRetryVersions={() => {
-              void versions.refetch();
+      <PageTransition animationKey={view} direction={direction}>
+        {view === "source" ? (
+          <SourcePicker
+            busy={busy}
+            onScratch={() => {
+              setDirection("left");
+              setView("details");
             }}
-            onChange={update}
+            onUpload={() => {
+              upload.mutate();
+            }}
           />
-          <DialogFooter className="sm:justify-between">
-            <Button
-              type="button"
-              variant="outline"
-              disabled={busy}
-              onClick={() => {
-                setView("source");
+        ) : (
+          <div className="flex flex-col gap-5">
+            <ScratchDetails
+              state={scratch}
+              versions={versions.data ?? []}
+              versionsPending={versions.isPending}
+              versionsError={versions.isError}
+              loaderVersions={loaderVersions.data ?? []}
+              loaderVersionsPending={loaderVersions.isPending}
+              onRetryVersions={() => {
+                void versions.refetch();
               }}
-            >
-              <ArrowLeftIcon data-icon="inline-start" aria-hidden />
-              Back
-            </Button>
-            <Button
-              type="button"
-              disabled={!canCreateScratch(scratch) || busy}
-              onClick={() => {
-                createFromScratch.mutate();
-              }}
-            >
-              <PlusIcon data-icon="inline-start" aria-hidden />
-              {createFromScratch.isPending ? "Creating…" : "Create"}
-            </Button>
-          </DialogFooter>
-        </>
-      )}
+              onChange={update}
+            />
+            <DialogFooter className="-mx-6 -mb-6 px-6 py-4 sm:justify-between">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={busy}
+                onClick={() => {
+                  setDirection("right");
+                  setView("source");
+                }}
+              >
+                <ArrowLeftIcon data-icon="inline-start" aria-hidden />
+                Back
+              </Button>
+              <Button
+                type="button"
+                disabled={!canCreateScratch(scratch) || busy}
+                onClick={() => {
+                  createFromScratch.mutate();
+                }}
+              >
+                <PlusIcon data-icon="inline-start" aria-hidden />
+                {createFromScratch.isPending ? "Creating…" : "Create"}
+              </Button>
+            </DialogFooter>
+          </div>
+        )}
+      </PageTransition>
     </>
   );
 }
@@ -225,7 +243,7 @@ export function CreateInstanceDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[calc(100%-2rem)] overflow-y-auto sm:max-w-xl">
+      <DialogContent className="max-h-[calc(100%-2rem)] gap-5 overflow-y-auto p-6 sm:max-w-xl">
         <CreateInstanceFlow
           onClose={() => {
             onOpenChange(false);

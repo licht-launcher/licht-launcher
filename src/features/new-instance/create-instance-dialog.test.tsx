@@ -62,6 +62,45 @@ describe("CreateInstanceDialog", () => {
     expect(within(modpack).getByText("Soon")).toBeVisible();
   });
 
+  it("introduces the dialog with an icon, a title and a description", async () => {
+    await renderApp();
+    const dialog = await openCreateDialog();
+
+    expect(
+      dialog.querySelector("[data-slot='create-header-icon']"),
+    ).not.toBeNull();
+    expect(
+      within(dialog).getByRole("heading", { name: "Create instance" }),
+    ).toBeVisible();
+    expect(within(dialog).getByText("How do you want to start?")).toBeVisible();
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: /From scratch/ }),
+    );
+    expect(
+      await within(dialog).findByText(
+        "Name it, pick a platform and a game version.",
+      ),
+    ).toBeVisible();
+  });
+
+  it("slides between the steps in the direction of travel", async () => {
+    await renderApp();
+    const dialog = await openCreateDialog();
+    const direction = () =>
+      dialog
+        .querySelector("[data-slot='page-transition']")
+        ?.getAttribute("data-direction");
+
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: /From scratch/ }),
+    );
+    await screen.findByLabelText("Instance Name");
+    expect(direction()).toBe("left");
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    await within(dialog).findByRole("button", { name: /From scratch/ });
+    expect(direction()).toBe("right");
+  });
+
   it("opens from the welcome screen as well", async () => {
     await renderApp();
     fireEvent.click(
