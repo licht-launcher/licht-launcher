@@ -62,19 +62,17 @@ describe("CreateInstanceDialog", () => {
     expect(modpack).toBeDisabled();
   });
 
-  it("introduces the dialog with an icon and a title", async () => {
+  it("introduces the dialog with a title and no icon", async () => {
     await renderApp();
     const dialog = await openCreateDialog();
 
-    expect(
-      dialog.querySelector("[data-slot='create-header-icon']"),
-    ).not.toBeNull();
+    expect(dialog.querySelector("[data-slot='create-header-icon']")).toBeNull();
     expect(
       within(dialog).getByRole("heading", { name: "Create instance" }),
     ).toBeVisible();
   });
 
-  it("styles the header as a full-width band like the footer, with the close button at the corner", async () => {
+  it("styles the header as a full-width band like the footer", async () => {
     await renderApp();
     const dialog = await openCreateDialog();
 
@@ -84,14 +82,13 @@ describe("CreateInstanceDialog", () => {
       "-mt-6",
       "border-b",
       "bg-muted/50",
-      "py-4",
-      "pl-6",
-      "pr-3",
+      "px-6",
+      "py-3",
     );
     expect(header).not.toHaveClass("border-border/40");
   });
 
-  it("keeps the close button on the same row as the title", async () => {
+  it("closes with the same corner button as the other dialogs", async () => {
     await renderApp();
     const dialog = await openCreateDialog();
 
@@ -99,11 +96,13 @@ describe("CreateInstanceDialog", () => {
       name: "Close",
     });
     expect(closeButtons).toHaveLength(1);
-    const title = within(dialog).getByRole("heading", {
-      name: "Create instance",
-    });
-    expect(closeButtons[0]?.parentElement).toBe(title.parentElement);
-    fireEvent.click(closeButtons[0] as HTMLElement);
+    const close = closeButtons[0] as HTMLElement;
+    expect(close).toHaveAttribute("data-slot", "dialog-close");
+    expect(close).toHaveClass("absolute", "top-2", "right-2");
+    expect(
+      dialog.querySelector("[data-slot='dialog-header']")?.contains(close),
+    ).toBe(false);
+    fireEvent.click(close);
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 

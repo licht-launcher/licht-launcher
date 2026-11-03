@@ -11,7 +11,6 @@ export function CreateInstanceDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        showCloseButton={false}
         aria-describedby={undefined}
         className="flex max-h-[calc(100%-2rem)] flex-col gap-5 overflow-hidden p-6 sm:max-w-xl"
       >
