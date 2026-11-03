@@ -19,6 +19,10 @@ async fn a_modpack_instance_exists_before_its_version_is_resolved_and_cannot_lau
     let entry = create_pending_instance(&client, &root, "My pack", source.clone(), &template())
         .await
         .expect("create");
+    assert!(matches!(
+        create_pending_instance(&client, &root, " MY PACK", source.clone(), &template()).await,
+        Err(CoreError::InstanceExists)
+    ));
     assert!(!root.join(&entry.folder).join("instance.json").exists());
     assert_eq!(entry.version_id, None);
     assert_eq!(

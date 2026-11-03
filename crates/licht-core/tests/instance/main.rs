@@ -212,14 +212,15 @@ async fn create_rename_duplicate_and_delete_keep_the_folder_stable() {
         .expect("icon path");
     assert!(path.ends_with("icon.png"));
     assert!(std::path::Path::new(path).is_file());
-    let twin = create_instance(&client, &instances, "My World", "1.20.1", &plain_template())
-        .await
-        .expect("a folder that is taken gets a numbered one");
-    assert_eq!(twin.folder, "My-World-2");
-    assert_eq!(twin.name, "My World");
-    delete_instance(&client, &instances, "My-World-2")
-        .await
-        .expect("remove twin");
+    for repeated in ["My World", "  my world ", "MY WORLD"] {
+        assert!(
+            matches!(
+                create_instance(&client, &instances, repeated, "1.20.1", &plain_template()).await,
+                Err(CoreError::InstanceExists)
+            ),
+            "{repeated}"
+        );
+    }
     assert!(matches!(
         create_instance(&client, &instances, "   ", "1.20.1", &plain_template()).await,
         Err(CoreError::InstanceName)
@@ -618,16 +619,13 @@ async fn names_that_differ_in_punctuation_get_their_own_folders() {
     let client = service.client();
 
     let mut folders = Vec::new();
-    for name in [
-        "Pack", "Pack!", "Pack (1)", "Pack 1", "pack", "My-Pack", "My Pack",
-    ] {
+    for name in ["Pack", "Pack!", "Pack (1)", "Pack 1", "My-Pack", "My Pack"] {
         let entry = create_instance(&client, &instances, name, "1.20.1", &plain_template())
             .await
             .expect(name);
         assert_eq!(entry.name, name);
         folders.push(entry.folder);
     }
-
     assert_eq!(
         folders,
         [
@@ -635,11 +633,20 @@ async fn names_that_differ_in_punctuation_get_their_own_folders() {
             "Pack-2",
             "Pack-1",
             "Pack-1-2",
-            "pack-3",
             "My-Pack",
             "My-Pack-2"
         ]
     );
+
+    for repeated in ["pack", " Pack (1) ", "MY PACK", "pack!"] {
+        assert!(
+            matches!(
+                create_instance(&client, &instances, repeated, "1.20.1", &plain_template()).await,
+                Err(CoreError::InstanceExists)
+            ),
+            "{repeated}"
+        );
+    }
     service.shutdown().await.expect("shutdown");
     let _ = fs::remove_dir_all(root);
 }
@@ -675,6 +682,10 @@ async fn duplicating_into_a_taken_folder_numbers_it() {
         .await
         .expect("source");
 
+    assert!(matches!(
+        duplicate_instance(&client, &instances, "Pack", "pack ").await,
+        Err(CoreError::InstanceExists)
+    ));
     let copy = duplicate_instance(&client, &instances, "Pack", "Pack!")
         .await
         .expect("copy");

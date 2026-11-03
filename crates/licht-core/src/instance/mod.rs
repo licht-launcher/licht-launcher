@@ -277,6 +277,28 @@ fn display_name(name: &str) -> Result<String> {
     Ok(name.to_string())
 }
 
+/// Instance names are unique, ignoring case and surrounding spaces. Any other
+/// difference counts, so `Pack (1)`, `Pack 1` and `Pack!` are three names.
+async fn ensure_name_free(
+    database: &crate::DatabaseClient,
+    instances_dir: &Path,
+    name: &str,
+) -> Result<()> {
+    if !instances_dir.exists() {
+        return Ok(());
+    }
+    let wanted = name.trim().to_lowercase();
+    let taken = database
+        .instance_profiles(instances_dir)
+        .await?
+        .iter()
+        .any(|(_, instance)| instance.name.trim().to_lowercase() == wanted);
+    if taken {
+        return Err(CoreError::InstanceExists);
+    }
+    Ok(())
+}
+
 /// The folder a new instance gets: the name reduced to filesystem-safe
 /// characters, numbered (`-2`, `-3`, …) when that folder is already taken.
 ///
