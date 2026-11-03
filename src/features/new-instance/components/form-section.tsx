@@ -26,7 +26,9 @@ export function FormSection({
       )}
     >
       <div className="flex items-center gap-3">
-        <Icon aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+          <Icon aria-hidden className="size-4" />
+        </div>
         <div>
           <h3 className="text-sm font-medium">{title}</h3>
           {description === undefined ? null : (
