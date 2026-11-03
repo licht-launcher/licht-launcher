@@ -55,7 +55,7 @@ export const createVersions: VersionSummary[] = [
 export function mockVersionViewport() {
   vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(
     function (this: HTMLElement) {
-      return this.dataset.slot === "version-viewport" ? 288 : 0;
+      return this.dataset.slot === "combobox-viewport" ? 256 : 0;
     },
   );
   vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(400);

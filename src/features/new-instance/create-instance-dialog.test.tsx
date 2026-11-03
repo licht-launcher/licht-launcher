@@ -14,7 +14,11 @@ async function openDetails() {
   const dialog = await openCreateDialog();
   fireEvent.click(within(dialog).getByRole("button", { name: /From scratch/ }));
   await screen.findByLabelText("Instance Name");
-  await screen.findByRole("button", { name: "1.20.1" });
+  await waitFor(() =>
+    expect(screen.getByRole("combobox", { name: "Game version" })).toHaveValue(
+      "1.20.1",
+    ),
+  );
   return dialog;
 }
 
@@ -75,13 +79,13 @@ describe("CreateInstanceDialog", () => {
     await renderApp();
     await openDetails();
 
-    expect(screen.getByRole("button", { name: "1.20.1" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    const version = screen.getByRole("combobox", { name: "Game version" });
     expect(screen.getByRole("button", { name: "Create" })).toBeDisabled();
     await typeName("Survival");
-    fireEvent.click(screen.getByRole("button", { name: "1.19.4" }));
+    fireEvent.focus(version);
+    fireEvent.change(version, { target: { value: "1.19" } });
+    fireEvent.click(screen.getByRole("option", { name: "1.19.4" }));
+    expect(version).toHaveValue("1.19.4");
     await submit();
 
     await waitFor(() =>
@@ -128,9 +132,14 @@ describe("CreateInstanceDialog", () => {
     await renderApp();
     await openDetails();
 
-    expect(screen.queryByRole("button", { name: "24w14a" })).toBeNull();
+    const version = screen.getByRole("combobox", { name: "Game version" });
+    fireEvent.focus(version);
+    fireEvent.change(version, { target: { value: "24w" } });
+    expect(screen.queryByRole("option", { name: "24w14a" })).toBeNull();
     fireEvent.click(screen.getByRole("switch", { name: "Include snapshots" }));
-    expect(await screen.findByRole("button", { name: "24w14a" })).toBeVisible();
+    fireEvent.focus(version);
+    fireEvent.change(version, { target: { value: "24w" } });
+    expect(await screen.findByRole("option", { name: "24w14a" })).toBeVisible();
   });
 
   it("goes back to the sources without losing the dialog", async () => {

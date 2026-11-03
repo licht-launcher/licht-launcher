@@ -1,5 +1,6 @@
 export { Button, buttonVariants } from "@/components/ui/button";
 export { Card } from "@/components/ui/card";
+export { Combobox } from "@/components/ui/combobox";
 export {
   Dialog,
   DialogClose,

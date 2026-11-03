@@ -1,5 +1,7 @@
 import { BoxIcon, LayersIcon, PuzzleIcon, TagIcon } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+import { Combobox } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -8,9 +10,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { createVersionChoices } from "@/features/instances/model/create-versions";
 import { PlatformPicker } from "@/features/new-instance/components/platform-picker";
 import { SectionHeader } from "@/features/new-instance/components/section-header";
-import { VersionList } from "@/features/new-instance/components/version-list";
 import {
   platformNeedsLoader,
   type ScratchState,
@@ -29,7 +32,7 @@ function LoaderOptions({
   onChange: (patch: Partial<ScratchState>) => void;
 }) {
   return (
-    <section className="flex flex-col gap-3 border-t border-border/40 pt-4">
+    <section className="flex flex-col gap-3 border-t border-border/40 pt-5">
       <SectionHeader
         icon={<PuzzleIcon aria-hidden className="size-4" strokeWidth={2} />}
         title="Loader version"
@@ -117,72 +120,106 @@ export function ScratchDetails({
     });
   }
 
+  const choices = createVersionChoices(versions, state.includeSnapshots).map(
+    (version) => ({ value: version.id, label: version.id }),
+  );
+  const versionsFailed = versionsError && versions.length === 0;
+
   return (
-    <div className="grid gap-6 md:grid-cols-2">
-      <div className="flex flex-col gap-5">
-        <section className="flex flex-col gap-3">
-          <SectionHeader
-            icon={<TagIcon aria-hidden className="size-4" strokeWidth={2} />}
-            title="Name your instance"
-            description="You can rename it later from the library."
-          />
-          <label
-            className="flex flex-col gap-1.5 text-sm font-medium"
-            htmlFor="instance-name"
-          >
-            Instance Name
-            <Input
-              id="instance-name"
-              value={state.name}
-              autoComplete="off"
-              placeholder="Survival"
-              onChange={(event) => {
-                onChange({ name: event.target.value });
-              }}
-            />
-          </label>
-        </section>
-        <section className="flex flex-col gap-3 border-t border-border/40 pt-4">
-          <SectionHeader
-            icon={<BoxIcon aria-hidden className="size-4" strokeWidth={2} />}
-            title="Choose a platform"
-            description="Vanilla is the official game. Loaders add mod support."
-          />
-          <PlatformPicker
-            value={state.platform}
-            onChange={(platform) => {
-              onChange({ platform, loaderVersion: "" });
+    <div className="flex flex-col gap-5">
+      <section className="flex flex-col gap-3">
+        <SectionHeader
+          icon={<TagIcon aria-hidden className="size-4" strokeWidth={2} />}
+          title="Name your instance"
+          description="You can rename it later from the library."
+        />
+        <label
+          className="flex flex-col gap-1.5 text-sm font-medium"
+          htmlFor="instance-name"
+        >
+          Instance Name
+          <Input
+            id="instance-name"
+            value={state.name}
+            autoComplete="off"
+            placeholder="Survival"
+            onChange={(event) => {
+              onChange({ name: event.target.value });
             }}
           />
-        </section>
-        {platformNeedsLoader(state.platform) ? (
-          <LoaderOptions
-            state={state}
-            loaderVersions={loaderVersions}
-            loaderVersionsPending={loaderVersionsPending}
-            onChange={onChange}
-          />
-        ) : null}
-      </div>
-      <section className="flex min-h-0 flex-col gap-3">
+        </label>
+      </section>
+      <section className="flex flex-col gap-3 border-t border-border/40 pt-5">
+        <SectionHeader
+          icon={<BoxIcon aria-hidden className="size-4" strokeWidth={2} />}
+          title="Choose a platform"
+          description="Vanilla is the official game. Loaders add mod support."
+        />
+        <PlatformPicker
+          value={state.platform}
+          onChange={(platform) => {
+            onChange({ platform, loaderVersion: "" });
+          }}
+        />
+      </section>
+      <section className="flex flex-col gap-3 border-t border-border/40 pt-5">
         <SectionHeader
           icon={<LayersIcon aria-hidden className="size-4" strokeWidth={2} />}
           title="Game version"
-          description="Missing versions install when you play."
+          description="Type to search. Missing versions install when you play."
         />
-        <VersionList
-          versions={versions}
-          selected={state.gameVersion}
-          pending={versionsPending}
-          error={versionsError}
-          includeSnapshots={state.includeSnapshots}
-          onSelect={(gameVersion) => {
-            onChange({ gameVersion, loaderVersion: "" });
-          }}
-          onIncludeSnapshotsChange={changeSnapshots}
-          onRetry={onRetryVersions}
-        />
+        {versionsFailed ? (
+          <div className="flex flex-col gap-2">
+            <p className="text-sm text-muted-foreground">
+              Could not load the version list. Check your connection and try
+              again.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              className="self-start"
+              onClick={onRetryVersions}
+            >
+              Retry
+            </Button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3">
+            <Combobox
+              aria-label="Game version"
+              className="flex-1"
+              options={choices}
+              value={state.gameVersion}
+              disabled={versionsPending}
+              placeholder={
+                versionsPending ? "Loading versions…" : "Search versions"
+              }
+              emptyText="No versions match."
+              onValueChange={(gameVersion) => {
+                onChange({ gameVersion, loaderVersion: "" });
+              }}
+            />
+            <div className="flex shrink-0 items-center gap-2 text-sm text-muted-foreground">
+              <Switch
+                id="include-snapshots"
+                aria-label="Include snapshots"
+                checked={state.includeSnapshots}
+                disabled={versionsPending}
+                onCheckedChange={changeSnapshots}
+              />
+              <label htmlFor="include-snapshots">Snapshots</label>
+            </div>
+          </div>
+        )}
       </section>
+      {platformNeedsLoader(state.platform) ? (
+        <LoaderOptions
+          state={state}
+          loaderVersions={loaderVersions}
+          loaderVersionsPending={loaderVersionsPending}
+          onChange={onChange}
+        />
+      ) : null}
     </div>
   );
 }
