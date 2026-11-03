@@ -1,3 +1,5 @@
+import { TagIcon } from "lucide-react";
+
 import { Input } from "@/components/ui/input";
 import { FormSection } from "@/features/new-instance/components/form-section";
 
@@ -14,10 +16,7 @@ export function NameField({
   onChange: (name: string) => void;
 }) {
   return (
-    <FormSection
-      title="Name"
-      description="You can rename it later from the library."
-    >
+    <FormSection divided={false} title="Name your instance">
       <label
         className="flex flex-col gap-1.5 text-sm font-medium"
         htmlFor="instance-name"

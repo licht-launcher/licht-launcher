@@ -1,3 +1,5 @@
+import { BoxIcon } from "lucide-react";
+
 import { Reveal } from "@/components/ui/reveal";
 import { FormSection } from "@/features/new-instance/components/form-section";
 import { GameVersionField } from "@/features/new-instance/components/game-version-field";
@@ -55,7 +57,7 @@ export function ScratchDetails({
           }}
         />
         <FormSection
-          title="Platform"
+          title="Choose a platform"
           description="Vanilla is the official game. Loaders add mod support."
         >
           <PlatformPicker
