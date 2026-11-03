@@ -352,6 +352,7 @@ export function NewInstancePage() {
           {state.step === "platform" ? (
             <StepPlatform
               value={state.platform}
+              name={state.name}
               onChange={(platform) => {
                 replaceState({
                   ...state,
@@ -359,12 +360,14 @@ export function NewInstancePage() {
                   loaderVersion: "",
                 });
               }}
+              onNameChange={(name) => {
+                replaceState({ ...state, name });
+              }}
             />
           ) : null}
           {state.step === "details" ? (
             <StepDetails
               platform={state.platform}
-              name={state.name}
               gameVersion={state.gameVersion}
               includeSnapshots={state.includeSnapshots}
               versions={versions.data ?? []}
@@ -377,9 +380,6 @@ export function NewInstancePage() {
               loaderVersion={state.loaderVersion}
               loaderVersions={loaderVersions.data ?? []}
               loaderVersionsPending={loaderVersions.isPending}
-              onNameChange={(name) => {
-                replaceState({ ...state, name });
-              }}
               onGameVersionChange={(gameVersion) => {
                 replaceState({
                   ...state,

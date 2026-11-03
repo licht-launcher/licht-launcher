@@ -106,9 +106,9 @@ export function canAdvance(state: WizardState): boolean {
     case "source":
       return state.source !== null;
     case "platform":
-      return state.platform !== null;
+      return state.platform !== null && state.name.trim() !== "";
     case "details": {
-      if (state.name.trim() === "" || state.gameVersion === "") {
+      if (state.gameVersion === "") {
         return false;
       }
       if (

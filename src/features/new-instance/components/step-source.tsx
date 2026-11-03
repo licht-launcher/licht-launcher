@@ -1,32 +1,23 @@
-import {
-  CheckCircle2Icon,
-  FileUpIcon,
-  PackageIcon,
-  WrenchIcon,
-} from "lucide-react";
+import { CheckIcon, FileUpIcon, PackageIcon, WrenchIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { ChoiceCard } from "@/components/ui/choice-card";
 import type { InstanceSource } from "@/features/new-instance/model/wizard";
 
-function SelectedBadge({ selected }: { selected: boolean }) {
-  return (
-    <span
-      className={
-        selected
-          ? "mt-auto flex items-center gap-1 text-xs font-medium text-instance"
-          : "mt-auto flex items-center gap-1 text-xs text-transparent"
-      }
-      aria-hidden={!selected}
-    >
-      <CheckCircle2Icon aria-hidden className="size-3.5" />
-      {selected ? "Selected" : ""}
-    </span>
-  );
+function Key({ children }: { children: ReactNode }) {
+  return <strong className="font-semibold text-foreground">{children}</strong>;
 }
 
-function Hint({ children }: { children: ReactNode }) {
-  return <span className="text-xs text-muted-foreground">{children}</span>;
+function SelectedMark({ selected }: { selected: boolean }) {
+  if (!selected) {
+    return null;
+  }
+  return (
+    <span className="absolute top-3 right-3 flex size-6 items-center justify-center rounded-full bg-primary text-primary-foreground">
+      <CheckIcon aria-hidden className="size-3.5" strokeWidth={3} />
+      <span className="sr-only">Selected</span>
+    </span>
+  );
 }
 
 export function StepSource({
@@ -47,22 +38,33 @@ export function StepSource({
       <div className="grid gap-3 sm:grid-cols-3">
         <ChoiceCard
           size="lg"
+          className="relative"
           title="From scratch"
-          description="Choose a platform, name, and game version."
+          description={
+            <>
+              Choose a <Key>platform</Key>, a <Key>name</Key> and a{" "}
+              <Key>game version</Key>.
+            </>
+          }
           icon={<WrenchIcon aria-hidden strokeWidth={2} />}
-          iconTone="instance"
+          iconTone="cool"
           selected={value === "scratch"}
           onSelect={() => {
             onChange("scratch");
           }}
         >
-          <Hint>Vanilla, Fabric, NeoForge, Forge or Quilt.</Hint>
-          <SelectedBadge selected={value === "scratch"} />
+          <SelectedMark selected={value === "scratch"} />
         </ChoiceCard>
         <ChoiceCard
           size="lg"
+          className="relative"
           title="From a modpack"
-          description="Browse popular packs from Modrinth and CurseForge."
+          description={
+            <>
+              Browse popular packs from <Key>Modrinth</Key> and{" "}
+              <Key>CurseForge</Key>.
+            </>
+          }
           icon={<PackageIcon aria-hidden strokeWidth={2} />}
           iconTone="warning"
           selected={value === "modpack"}
@@ -70,13 +72,17 @@ export function StepSource({
             onChange("modpack");
           }}
         >
-          <Hint>Ready to play, with mods already chosen.</Hint>
-          <SelectedBadge selected={value === "modpack"} />
+          <SelectedMark selected={value === "modpack"} />
         </ChoiceCard>
         <ChoiceCard
           size="lg"
+          className="relative"
           title="Import a pack file"
-          description="Use a local .mrpack or CurseForge .zip."
+          description={
+            <>
+              Use a local <Key>.mrpack</Key> or CurseForge <Key>.zip</Key>.
+            </>
+          }
           icon={<FileUpIcon aria-hidden strokeWidth={2} />}
           iconTone="file"
           selected={value === "file"}
@@ -84,8 +90,7 @@ export function StepSource({
             onChange("file");
           }}
         >
-          <Hint>Works offline for the pack itself.</Hint>
-          <SelectedBadge selected={value === "file"} />
+          <SelectedMark selected={value === "file"} />
         </ChoiceCard>
       </div>
     </div>

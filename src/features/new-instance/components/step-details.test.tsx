@@ -16,7 +16,6 @@ function Details() {
   return (
     <StepDetails
       platform="vanilla"
-      name="Survival"
       gameVersion={gameVersion}
       includeSnapshots={includeSnapshots}
       versions={versions}
@@ -27,7 +26,6 @@ function Details() {
       loaderVersion=""
       loaderVersions={[]}
       loaderVersionsPending={false}
-      onNameChange={() => {}}
       onGameVersionChange={setGameVersion}
       onIncludeSnapshotsChange={setIncludeSnapshots}
       onLoaderChannelChange={() => {}}

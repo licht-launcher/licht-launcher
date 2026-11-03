@@ -24,12 +24,15 @@ describe("NewInstancePage navigation and recovery", () => {
     await renderWizard();
     await continueWizard();
     await selectChoice(/^Fabric/);
+    const name = await screen.findByLabelText("Instance Name");
+    fireEvent.change(name, { target: { value: "Modded" } });
     await continueWizard();
-    await screen.findByLabelText("Instance Name");
+    await screen.findByRole("combobox", { name: "Loader channel" });
     fireEvent.click(screen.getByRole("button", { name: /Platform/ }));
     expect(
       await screen.findByRole("button", { name: /^Fabric/ }),
     ).toHaveAttribute("aria-pressed", "true");
+    expect(await screen.findByLabelText("Instance Name")).toHaveValue("Modded");
     const progress = screen.getByRole("list", { name: "Wizard progress" });
     expect(
       within(progress).getByText("Platform").closest("[aria-current]"),
@@ -40,12 +43,23 @@ describe("NewInstancePage navigation and recovery", () => {
     await renderWizard(
       "/instances/new?step=details&source=scratch&platform=vanilla&name=Survival&gameVersion=1.20.1",
     );
-    expect(await screen.findByLabelText("Instance Name")).toHaveValue(
-      "Survival",
-    );
     expect(
       await screen.findByRole("button", { name: "1.20.1" }),
     ).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByLabelText("Instance Name")).toBeNull();
+  });
+
+  it("restores the name and platform on the platform step", async () => {
+    await renderWizard(
+      "/instances/new?step=platform&source=scratch&platform=fabric&name=Survival",
+    );
+    expect(await screen.findByLabelText("Instance Name")).toHaveValue(
+      "Survival",
+    );
+    expect(screen.getByRole("button", { name: /^Fabric/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
   });
 
   it("retries a failed version request and recovers the version picker", async () => {

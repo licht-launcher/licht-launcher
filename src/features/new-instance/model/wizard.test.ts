@@ -77,6 +77,32 @@ describe("wizard steps", () => {
     ]);
   });
 
+  it("needs a platform and a name to leave the platform step", () => {
+    const state = {
+      ...initialWizardState,
+      step: "platform" as const,
+      source: "scratch" as const,
+      platform: "fabric" as const,
+    };
+    expect(canAdvance(state)).toBe(false);
+    expect(canAdvance({ ...state, name: "   " })).toBe(false);
+    expect(canAdvance({ ...state, name: "Modded" })).toBe(true);
+    expect(canAdvance({ ...state, platform: null, name: "Modded" })).toBe(
+      false,
+    );
+  });
+
+  it("only needs a game version on the details step", () => {
+    const state = {
+      ...initialWizardState,
+      step: "details" as const,
+      source: "scratch" as const,
+      platform: "vanilla" as const,
+    };
+    expect(canAdvance(state)).toBe(false);
+    expect(canAdvance({ ...state, gameVersion: "1.20.1" })).toBe(true);
+  });
+
   it("builds the local file path", () => {
     const state = {
       ...initialWizardState,

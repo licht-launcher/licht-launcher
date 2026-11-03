@@ -18,10 +18,10 @@ describe("NewInstancePage creation", () => {
     await selectChoice(/From scratch/);
     await continueWizard();
     await selectChoice(/^Vanilla/);
-    await continueWizard();
     const name = await screen.findByLabelText("Instance Name");
     fireEvent.change(name, { target: { value: "Survival" } });
     await waitFor(() => expect(name).toHaveValue("Survival"));
+    await continueWizard();
     await selectChoice("1.20.1");
     await continueWizard();
     fireEvent.click(

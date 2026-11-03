@@ -16,6 +16,14 @@ describe("StepSource", () => {
     expect(screen.getAllByText("Selected")).toHaveLength(1);
   });
 
+  it("highlights the key words of each description", () => {
+    render(<StepSource value="scratch" onChange={() => {}} />);
+
+    for (const word of ["platform", "game version", "Modrinth", ".mrpack"]) {
+      expect(screen.getByText(word, { selector: "strong" })).toBeVisible();
+    }
+  });
+
   it("reports the source the user picks", () => {
     const onChange = vi.fn();
     render(<StepSource value="scratch" onChange={onChange} />);

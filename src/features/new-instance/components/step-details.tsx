@@ -1,5 +1,4 @@
 import {
-  BoxIcon,
   CheckIcon,
   ChevronDownIcon,
   CuboidIcon,
@@ -195,7 +194,6 @@ function useScrollFog(
 
 export function StepDetails({
   platform,
-  name,
   gameVersion,
   includeSnapshots,
   versions,
@@ -206,14 +204,12 @@ export function StepDetails({
   loaderVersion,
   loaderVersions,
   loaderVersionsPending,
-  onNameChange,
   onGameVersionChange,
   onIncludeSnapshotsChange,
   onLoaderChannelChange,
   onLoaderVersionChange,
 }: {
   platform: PlatformId | null;
-  name: string;
   gameVersion: string;
   includeSnapshots: boolean;
   versions: VersionSummary[];
@@ -224,7 +220,6 @@ export function StepDetails({
   loaderVersion: string;
   loaderVersions: string[];
   loaderVersionsPending: boolean;
-  onNameChange: (name: string) => void;
   onGameVersionChange: (versionId: string) => void;
   onIncludeSnapshotsChange: (include: boolean) => void;
   onLoaderChannelChange: (channel: LoaderChannel) => void;
@@ -295,24 +290,6 @@ export function StepDetails({
     }
     setOpenMajors(new Set(visibleGroups.map((group) => group.major)));
   }
-
-  const nameField = (
-    <IconField
-      htmlFor="instance-name"
-      label="Instance Name"
-      icon={<BoxIcon aria-hidden className="size-4" strokeWidth={2} />}
-    >
-      <Input
-        id="instance-name"
-        value={name}
-        autoComplete="off"
-        placeholder="Survival"
-        onChange={(event) => {
-          onNameChange(event.target.value);
-        }}
-      />
-    </IconField>
-  );
 
   const versionToolbar = (
     <div className="flex flex-wrap items-center gap-2 pr-2">
@@ -593,7 +570,6 @@ export function StepDetails({
     return (
       <div className="flex min-h-0 w-full max-w-4xl flex-1 flex-col gap-4">
         {header}
-        <div className="max-w-md">{nameField}</div>
         <IconField
           className="min-h-0 flex-1"
           label="Game version"
@@ -611,7 +587,6 @@ export function StepDetails({
   return (
     <div className="flex max-w-md flex-col gap-4">
       {header}
-      {nameField}
       {loaderVersionSelect}
       {showLoader ? (
         <div className="flex flex-col gap-3 border-t border-border/40 pt-4">
