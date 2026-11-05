@@ -52,12 +52,12 @@ async fn initialize_at_with_progress(
         migration::migrate(legacy, home, reporter).await?;
     }
     relocation::apply(home, reporter).await?;
-    let game = settings::game_cache(home)?;
+    let game = settings::game_cache(home).await?;
     tokio::fs::create_dir_all(game.root()).await?;
     tokio::fs::create_dir_all(game.cache_dir()?).await?;
     tokio::fs::create_dir_all(game.instances_dir()?).await?;
     if !home.root().join("settings.json").exists() {
-        settings::save_settings(home, &settings::load_settings(home)?)?;
+        settings::save_settings(home, &settings::load_settings(home).await?).await?;
     }
     reporter.phase(StartupPhase::RestoringCache)?;
     installation::migrate(home, &game, reporter).await?;
@@ -67,7 +67,7 @@ async fn initialize_at_with_progress(
 pub fn startup_settings() -> Result<crate::Settings> {
     let home = SharedCache::system()?;
     if std::env::var_os("LICHT_DATA_DIR").is_some() {
-        return settings::load_settings(&home);
+        return settings::load_settings_blocking(&home);
     }
     let legacy = directories::ProjectDirs::from("app.licht", "Licht", "Licht Launcher")
         .ok_or(CoreError::DataDirectory)?;
@@ -75,7 +75,7 @@ pub fn startup_settings() -> Result<crate::Settings> {
 }
 
 fn startup_settings_at(home: &SharedCache, legacy: &SharedCache) -> Result<crate::Settings> {
-    settings::load_settings(if home.root().join("settings.json").is_file() {
+    settings::load_settings_blocking(if home.root().join("settings.json").is_file() {
         home
     } else {
         legacy
@@ -92,7 +92,7 @@ pub async fn run_startup_migration_preview(fail: bool, reporter: StartupReporter
     let home = SharedCache::at(root.join("destination"));
     let result = async {
         std::fs::create_dir_all(legacy.root().join("versions"))?;
-        settings::save_settings(&legacy, &settings::load_settings(&legacy)?)?;
+        settings::save_settings(&legacy, &settings::load_settings(&legacy).await?).await?;
         let instance = legacy.instance_dir("Preview")?;
         std::fs::create_dir_all(instance.join("mods"))?;
         for index in 0..100 {

@@ -190,9 +190,9 @@ pub(super) async fn download_libraries(
             client,
             &pending.into_values().collect::<Vec<_>>(),
             crate::DownloadOptions {
-                limits: crate::settings::configured_transfer_limits(cache, settings)?,
-                download_concurrency: crate::download_concurrency(cache, settings)?,
-                write_concurrency: crate::write_concurrency(cache, settings)?,
+                limits: crate::settings::configured_transfer_limits(cache, settings).await?,
+                download_concurrency: crate::download_concurrency(cache, settings).await?,
+                write_concurrency: crate::write_concurrency(cache, settings).await?,
                 retry: DEFAULT_RETRY,
             },
         )

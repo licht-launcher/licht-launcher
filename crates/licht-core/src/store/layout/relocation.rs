@@ -123,7 +123,7 @@ fn validate_no_links(path: &Path) -> Result<()> {
 }
 
 pub(super) async fn apply(home: &SharedCache, reporter: &StartupReporter) -> Result<()> {
-    let desired = crate::game_cache(home)?;
+    let desired = crate::game_cache(home).await?;
     let mut state: DirectoryState = match fs::read(state_path(home)) {
         Ok(bytes) => serde_json::from_slice(&bytes).map_err(CoreError::Settings)?,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
@@ -200,7 +200,7 @@ pub(super) async fn apply(home: &SharedCache, reporter: &StartupReporter) -> Res
     }
     reporter.phase(StartupPhase::MigratingDatabase)?;
     database::remap(home, &mappings).await?;
-    let mut settings = crate::load_settings(home)?;
+    let mut settings = crate::load_settings(home).await?;
     for path in [
         &mut settings.java25,
         &mut settings.java21,
@@ -214,7 +214,7 @@ pub(super) async fn apply(home: &SharedCache, reporter: &StartupReporter) -> Res
             .to_string_lossy()
             .into_owned();
     }
-    crate::save_settings(home, &settings)?;
+    crate::save_settings(home, &settings).await?;
     // The checkpoint keeps the original roots until cleanup completes. Remapping is idempotent.
     for mapping in &mappings {
         remove_verified(&mapping.source, &mapping.destination, &mappings, reporter)?;

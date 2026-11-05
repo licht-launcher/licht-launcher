@@ -52,9 +52,9 @@ pub async fn install_version(
             client,
             &pending,
             DownloadOptions {
-                limits: crate::settings::configured_transfer_limits(cache, settings)?,
-                download_concurrency: download_concurrency(cache, settings)?,
-                write_concurrency: crate::write_concurrency(cache, settings)?,
+                limits: crate::settings::configured_transfer_limits(cache, settings).await?,
+                download_concurrency: download_concurrency(cache, settings).await?,
+                write_concurrency: crate::write_concurrency(cache, settings).await?,
                 retry: DEFAULT_RETRY,
             },
         )
@@ -293,7 +293,7 @@ async fn install_local_version(
     };
     let version = parse_version(&crate::load_resolved_version_json(&cache, id)?)?;
     let major = required_java_major(id, &version);
-    let configured = crate::load_settings(settings)?;
+    let configured = crate::load_settings(settings).await?;
     let java = match crate::configured_java(&configured, major) {
         Some(java) => {
             let found = crate::probe_java_major(&java)?;

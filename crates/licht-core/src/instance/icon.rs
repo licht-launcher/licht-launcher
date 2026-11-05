@@ -189,7 +189,9 @@ mod tests {
                 .as_nanos()
         ));
         let instances = root.join("instances");
-        let settings = crate::load_settings(&crate::SharedCache::at(&root)).expect("settings");
+        let settings = crate::load_settings(&crate::SharedCache::at(&root))
+            .await
+            .expect("settings");
         let service = crate::DatabaseService::start(crate::SharedCache::at(&root))
             .await
             .expect("database");

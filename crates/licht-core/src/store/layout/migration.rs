@@ -24,7 +24,7 @@ pub(super) async fn migrate(
         phase = "database-snapshot",
         "Starting launcher storage migration"
     );
-    let mut settings = load_settings(legacy)?;
+    let mut settings = load_settings(legacy).await?;
     let old_game = match &settings.data_directory {
         Some(parent) => SharedCache::at(Path::new(parent).join("Licht Launcher")),
         None => legacy.clone(),
@@ -118,10 +118,10 @@ pub(super) async fn migrate(
     }
     tracing::info!(phase = "settings", "Migrating launcher storage");
     reporter.phase(StartupPhase::MigratingSettings)?;
-    let staged_settings = save_settings(&staging, &settings)?;
+    let staged_settings = save_settings(&staging, &settings).await?;
     let settings_file = home.root().join("settings.json");
     if settings_file.exists() && settings_file != legacy.root().join("settings.json") {
-        if load_settings(home)? != staged_settings {
+        if load_settings(home).await? != staged_settings {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::AlreadyExists,
                 "launcher migration settings destination differs",
@@ -129,7 +129,7 @@ pub(super) async fn migrate(
             .into());
         }
     } else {
-        save_settings(home, &staged_settings)?;
+        save_settings(home, &staged_settings).await?;
     }
     // Publishing the validated database last marks a completed migration.
     fs::rename(super::db::db_path(&staging), super::db::db_path(home))?;

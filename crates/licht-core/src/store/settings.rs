@@ -370,7 +370,11 @@ fn read_stored(path: &Path) -> Result<StoredSettings> {
 }
 
 /// Missing `settings.json` means the defaults. The file is created only when saved.
-pub fn load_settings(cache: &SharedCache) -> Result<Settings> {
+pub async fn load_settings(cache: &SharedCache) -> Result<Settings> {
+    load_settings_blocking(cache)
+}
+
+pub(super) fn load_settings_blocking(cache: &SharedCache) -> Result<Settings> {
     let path = settings_path(cache);
     if !path.is_file() {
         return from_stored(
@@ -408,8 +412,8 @@ pub fn load_settings(cache: &SharedCache) -> Result<Settings> {
     from_stored(cache, read_stored(&path)?)
 }
 
-pub fn settings_snapshot(cache: &SharedCache) -> Result<SettingsSnapshot> {
-    let settings = load_settings(cache)?;
+pub async fn settings_snapshot(cache: &SharedCache) -> Result<SettingsSnapshot> {
+    let settings = load_settings(cache).await?;
     let total = total_memory_mb();
     let application_directory = match &settings.data_directory {
         Some(path) => path.clone(),
@@ -426,7 +430,11 @@ pub fn settings_snapshot(cache: &SharedCache) -> Result<SettingsSnapshot> {
     })
 }
 
-pub fn save_settings(cache: &SharedCache, settings: &Settings) -> Result<Settings> {
+pub async fn save_settings(cache: &SharedCache, settings: &Settings) -> Result<Settings> {
+    save_settings_blocking(cache, settings)
+}
+
+pub(super) fn save_settings_blocking(cache: &SharedCache, settings: &Settings) -> Result<Settings> {
     let path = settings_path(cache);
     if path.is_file() {
         let _existing = from_stored(cache, read_stored(&path)?)?;
@@ -450,8 +458,8 @@ pub fn save_settings(cache: &SharedCache, settings: &Settings) -> Result<Setting
     Ok(settings)
 }
 
-pub fn set_java_path(cache: &SharedCache, major: u32, path: &Path) -> Result<Settings> {
-    let mut settings = load_settings(cache)?;
+pub async fn set_java_path(cache: &SharedCache, major: u32, path: &Path) -> Result<Settings> {
+    let mut settings = load_settings(cache).await?;
     let text = Some(path.display().to_string());
     match major {
         25 => settings.java25 = text,
@@ -460,7 +468,7 @@ pub fn set_java_path(cache: &SharedCache, major: u32, path: &Path) -> Result<Set
         8 => settings.java8 = text,
         _ => return Err(CoreError::SettingsJava),
     }
-    save_settings(cache, &settings)
+    save_settings(cache, &settings).await
 }
 
 fn concurrency_source<'a>(game: &'a SharedCache, settings: &'a SharedCache) -> &'a SharedCache {
@@ -473,20 +481,24 @@ fn concurrency_source<'a>(game: &'a SharedCache, settings: &'a SharedCache) -> &
 
 /// Game files may live in another folder. When that folder has no
 /// `settings.json`, concurrency still comes from the settings folder.
-pub fn download_concurrency(game: &SharedCache, settings: &SharedCache) -> Result<usize> {
-    Ok(load_settings(concurrency_source(game, settings))?.download_concurrency as usize)
+pub async fn download_concurrency(game: &SharedCache, settings: &SharedCache) -> Result<usize> {
+    Ok(load_settings(concurrency_source(game, settings))
+        .await?
+        .download_concurrency as usize)
 }
 
 /// How many files may be written to disk at once across all installs.
-pub fn write_concurrency(game: &SharedCache, settings: &SharedCache) -> Result<usize> {
-    Ok(load_settings(concurrency_source(game, settings))?.write_concurrency as usize)
+pub async fn write_concurrency(game: &SharedCache, settings: &SharedCache) -> Result<usize> {
+    Ok(load_settings(concurrency_source(game, settings))
+        .await?
+        .write_concurrency as usize)
 }
 
-pub(crate) fn configured_transfer_limits(
+pub(crate) async fn configured_transfer_limits(
     game: &SharedCache,
     settings: &SharedCache,
 ) -> Result<std::sync::Arc<crate::TransferLimits>> {
-    let saved = load_settings(concurrency_source(game, settings))?;
+    let saved = load_settings(concurrency_source(game, settings)).await?;
     let limits = crate::shared_transfer_limits();
     limits
         .bandwidth
@@ -496,8 +508,8 @@ pub(crate) fn configured_transfer_limits(
 
 /// Next process: game files go to `{dataDirectory}/Licht Launcher/data`.
 /// The default game directory is `<launcher>/data`.
-pub fn game_cache(defaults: &SharedCache) -> Result<SharedCache> {
-    let settings = load_settings(defaults)?;
+pub async fn game_cache(defaults: &SharedCache) -> Result<SharedCache> {
+    let settings = load_settings(defaults).await?;
     match settings.data_directory {
         Some(path) => Ok(SharedCache::at(
             PathBuf::from(path).join(GAME_FOLDER).join("data"),

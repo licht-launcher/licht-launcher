@@ -87,7 +87,7 @@ async fn initialize(
         client,
         database_client.clone(),
     ));
-    let settings = licht_core::load_settings(&paths.settings)?;
+    let settings = licht_core::load_settings(&paths.settings).await?;
     let custom_title_bar = !settings.disable_custom_title_bar;
     app.manage(database_client);
     app.manage(paths);

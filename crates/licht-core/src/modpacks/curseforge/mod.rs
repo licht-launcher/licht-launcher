@@ -144,7 +144,7 @@ pub(super) async fn download_curseforge_pack_to(
         size: file.size,
     };
     context
-        .verified_queue(&cdn::cdn_client(&key)?, &[task], context.options()?)
+        .verified_queue(&cdn::cdn_client(&key)?, &[task], context.options().await?)
         .await?;
     context.stage(crate::DownloadPhase::Verifying).await?;
     if let Some(expected) = &file.md5 {

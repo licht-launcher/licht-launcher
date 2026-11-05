@@ -145,7 +145,7 @@ mod tests {
             .expect("service");
         let client = service.client();
         let original = index();
-        let settings = crate::load_settings(&cache).expect("settings");
+        let settings = crate::load_settings(&cache).await.expect("settings");
         crate::create_instance(
             &client,
             &instances,

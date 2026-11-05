@@ -97,7 +97,7 @@ impl DownloadManager {
         source: InstanceSource,
     ) -> Result<InstanceEntry> {
         self.accept_work()?;
-        let settings = load_settings(&self.runtime.settings)?;
+        let settings = load_settings(&self.runtime.settings).await?;
         let root = self.runtime.game.instances_dir()?;
         let entry = create_pending_instance(
             &self.runtime.database,
@@ -123,7 +123,7 @@ impl DownloadManager {
     ) -> Result<InstanceEntry> {
         self.accept_work()?;
         let source = crate::modpacks::detect_modpack_source(archive)?;
-        let settings = load_settings(&self.runtime.settings)?;
+        let settings = load_settings(&self.runtime.settings).await?;
         let root = self.runtime.game.instances_dir()?;
         let entry = create_pending_instance(
             &self.runtime.database,

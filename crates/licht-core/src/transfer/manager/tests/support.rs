@@ -35,7 +35,7 @@ fn fixture_executor(
             size: 11,
         };
         context
-            .verified_queue(&runtime.client, &[task], context.options()?)
+            .verified_queue(&runtime.client, &[task], context.options().await?)
             .await?;
         context.checkpoint().await?;
         if let Some(folder) = &job.instance_folder {
@@ -66,7 +66,7 @@ fn fixture_executor(
                 root.join("release"),
                 format!("JAVA_VERSION=\"{major}.0.1\""),
             )?;
-            crate::set_java_path(&runtime.settings, major, &executable)?;
+            crate::set_java_path(&runtime.settings, major, &executable).await?;
         }
         if finish_after_cancel {
             context.control.cancelled().await;
@@ -161,7 +161,7 @@ impl Fixture {
             InstanceSource::Vanilla {
                 game_version: "1.21.1".into(),
             },
-            &global_launch(&load_settings(&self.settings).expect("settings")),
+            &global_launch(&load_settings(&self.settings).await.expect("settings")),
         )
         .await
         .expect("instance before network activity")

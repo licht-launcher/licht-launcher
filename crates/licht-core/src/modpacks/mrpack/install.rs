@@ -87,9 +87,9 @@ async fn install_files(
             client,
             &pending,
             crate::DownloadOptions {
-                limits: crate::settings::configured_transfer_limits(game, settings)?,
-                download_concurrency: download_concurrency(game, settings)?,
-                write_concurrency: write_concurrency(game, settings)?,
+                limits: crate::settings::configured_transfer_limits(game, settings).await?,
+                download_concurrency: download_concurrency(game, settings).await?,
+                write_concurrency: write_concurrency(game, settings).await?,
                 retry: DEFAULT_RETRY,
             },
         )

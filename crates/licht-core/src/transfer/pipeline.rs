@@ -25,7 +25,7 @@ pub(crate) fn execute(
                 context,
             )
             .await?;
-            crate::set_java_path(&runtime.settings, major, &executable)?;
+            crate::set_java_path(&runtime.settings, major, &executable).await?;
             return Ok(());
         }
         let folder = job.instance_folder.ok_or(CoreError::InstancePreparing)?;
