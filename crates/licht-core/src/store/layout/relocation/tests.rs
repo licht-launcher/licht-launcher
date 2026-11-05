@@ -226,6 +226,51 @@ async fn changing_directory_moves_content_after_restart_and_keeps_the_profile() 
         .expect("idempotent restart");
 }
 
+async fn stored_state(home: &SharedCache) -> Option<serde_json::Value> {
+    let mut connection = super::super::db::open_db(home).await.expect("database");
+    let stored = super::super::db::get_meta(&mut connection, super::STATE_KEY)
+        .await
+        .expect("stored state");
+    use sqlx::Connection;
+    connection.close().await.expect("close");
+    stored.map(|json| serde_json::from_str(&json).expect("state JSON"))
+}
+
+#[tokio::test]
+async fn content_directory_state_lives_in_the_database() {
+    let (legacy, home) = fixture("relocation-state");
+    initialize_at(&legacy, &home).await.expect("initialize");
+    let game = crate::game_cache(&home).expect("game");
+    let state = stored_state(&home).await.expect("state in the database");
+    assert_eq!(state["active"], game.root().display().to_string());
+    assert!(state["pending"].is_null());
+    assert!(!home.root().join("content-directory.json").exists());
+}
+
+#[tokio::test]
+async fn legacy_state_file_is_imported_once_and_removed() {
+    let (legacy, home) = fixture("relocation-state-import");
+    initialize_at(&legacy, &home).await.expect("initialize");
+    let game = crate::game_cache(&home).expect("game");
+    let mut connection = super::super::db::open_db(&home).await.expect("database");
+    super::super::db::clear_meta(&mut connection, super::STATE_KEY)
+        .await
+        .expect("clear state");
+    use sqlx::Connection;
+    connection.close().await.expect("close");
+    let file = home.root().join("content-directory.json");
+    fs::write(
+        &file,
+        serde_json::to_vec(&serde_json::json!({"active": game.root(), "pending": null}))
+            .expect("legacy state"),
+    )
+    .expect("legacy state file");
+    initialize_at(&legacy, &home).await.expect("import");
+    assert!(!file.exists());
+    let state = stored_state(&home).await.expect("imported state");
+    assert_eq!(state["active"], game.root().display().to_string());
+}
+
 #[tokio::test]
 async fn interrupted_copy_resumes_without_overwriting_different_files() {
     let (legacy, home) = fixture("relocation-interrupted");
@@ -289,6 +334,7 @@ async fn interrupted_cleanup_preserves_changed_source_and_resumes_after_resoluti
             }),
         },
     )
+    .await
     .expect("copied checkpoint");
     assert!(initialize_at(&legacy, &home).await.is_err());
     assert_eq!(
