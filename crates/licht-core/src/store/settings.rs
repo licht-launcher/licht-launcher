@@ -257,7 +257,12 @@ fn normalize_directory(cache: &SharedCache, value: Option<&str>) -> Result<Optio
     Ok(Some(path.display().to_string()))
 }
 
-pub(super) fn validated(cache: &SharedCache, settings: Settings) -> Result<Settings> {
+/// `total_mb` is the machine RAM, probed once by the caller for the whole load or save.
+pub(super) fn validated(
+    cache: &SharedCache,
+    settings: Settings,
+    total_mb: u32,
+) -> Result<Settings> {
     if settings.schema != SCHEMA {
         return Err(CoreError::SettingsSchema {
             schema: settings.schema,
@@ -279,7 +284,7 @@ pub(super) fn validated(cache: &SharedCache, settings: Settings) -> Result<Setti
     {
         return Err(CoreError::SettingsDownloadSpeed);
     }
-    validate_memory_allocation(settings.max_memory_mb, total_memory_mb())?;
+    validate_memory_allocation(settings.max_memory_mb, total_mb)?;
     if matches!(settings.width, Some(0)) || matches!(settings.height, Some(0)) {
         return Err(CoreError::SettingsWindow);
     }
@@ -314,13 +319,12 @@ pub(super) fn validated(cache: &SharedCache, settings: Settings) -> Result<Setti
     })
 }
 
-fn from_stored(cache: &SharedCache, stored: StoredSettings) -> Result<Settings> {
+fn from_stored(cache: &SharedCache, stored: StoredSettings, total: u32) -> Result<Settings> {
     if stored.schema != SCHEMA {
         return Err(CoreError::SettingsSchema {
             schema: stored.schema,
         });
     }
-    let total = total_memory_mb();
     let max_memory_mb = match stored.max_memory_mb {
         Some(value) => value,
         None => recommended_max_memory_mb(total),
@@ -363,6 +367,7 @@ fn from_stored(cache: &SharedCache, stored: StoredSettings) -> Result<Settings> 
             minimize_on_game_start: stored.minimize_on_game_start,
             restore_on_game_exit: stored.restore_on_game_exit,
         },
+        total,
     )
 }
 
@@ -435,22 +440,29 @@ async fn blocking<T: Send + 'static>(
 
 /// Missing `settings.json` and database mean the defaults. Nothing is created until a save.
 pub async fn load_settings(cache: &SharedCache) -> Result<Settings> {
+    Ok(load_with_memory(cache).await?.0)
+}
+
+/// Loads the settings together with the machine RAM they were checked against.
+async fn load_with_memory(cache: &SharedCache) -> Result<(Settings, u32)> {
     let file = cache.clone();
-    let mut settings = blocking(move || load_file_settings(&file)).await?;
+    let (mut settings, total) = blocking(move || {
+        let total = total_memory_mb();
+        Ok((load_file_settings(&file, total)?, total))
+    })
+    .await?;
     // Until the first save stores a row, older settings files still carry every value.
     if !db::db_path(cache).is_file() {
-        return Ok(settings);
+        return Ok((settings, total));
     }
     let mut connection = db::open_db(cache).await?;
     let stored = SettingsRepository::load_into(&mut connection, &mut settings).await;
     if !db::complete_operation(connection, stored).await? {
-        return Ok(settings);
+        return Ok((settings, total));
     }
     // A saved allocation can come from a machine with more RAM.
-    settings.max_memory_mb = settings
-        .max_memory_mb
-        .min(memory_slider_max(total_memory_mb()));
-    validated(cache, settings)
+    settings.max_memory_mb = settings.max_memory_mb.min(memory_slider_max(total));
+    Ok((validated(cache, settings, total)?, total))
 }
 
 pub(super) async fn stored_in_database(cache: &SharedCache) -> Result<bool> {
@@ -463,10 +475,13 @@ pub(super) async fn stored_in_database(cache: &SharedCache) -> Result<bool> {
 }
 
 pub(super) fn load_startup_preferences(cache: &SharedCache) -> Result<StartupPreferences> {
-    Ok(StartupPreferences::from(&load_file_settings(cache)?))
+    Ok(StartupPreferences::from(&load_file_settings(
+        cache,
+        total_memory_mb(),
+    )?))
 }
 
-fn load_file_settings(cache: &SharedCache) -> Result<Settings> {
+fn load_file_settings(cache: &SharedCache, total: u32) -> Result<Settings> {
     let path = settings_path(cache);
     if !path.is_file() {
         return from_stored(
@@ -499,14 +514,14 @@ fn load_file_settings(cache: &SharedCache) -> Result<Settings> {
                 minimize_on_game_start: false,
                 restore_on_game_exit: false,
             },
+            total,
         );
     }
-    from_stored(cache, read_stored(&path)?)
+    from_stored(cache, read_stored(&path)?, total)
 }
 
 pub async fn settings_snapshot(cache: &SharedCache) -> Result<SettingsSnapshot> {
-    let settings = load_settings(cache).await?;
-    let total = total_memory_mb();
+    let (settings, total) = load_with_memory(cache).await?;
     let application_directory = match &settings.data_directory {
         Some(path) => path.clone(),
         None => cache.root().display().to_string(),
@@ -530,11 +545,12 @@ async fn write_settings(cache: SharedCache, settings: Settings) -> Result<Settin
     let checked = cache.clone();
     let settings = blocking(move || {
         let path = settings_path(&checked);
+        let total = total_memory_mb();
         // An unreadable or newer file is left in place rather than overwritten.
         if path.is_file() {
-            let _existing = from_stored(&checked, read_stored(&path)?)?;
+            let _existing = from_stored(&checked, read_stored(&path)?, total)?;
         }
-        validated(&checked, settings)
+        validated(&checked, settings, total)
     })
     .await?;
     // The row is written first, so an interrupted save keeps the previous startup
