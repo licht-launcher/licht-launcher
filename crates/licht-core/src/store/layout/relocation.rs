@@ -2,7 +2,8 @@ use std::fs;
 use std::path::{Component, Path, PathBuf};
 
 use super::progress::{StartupPhase, StartupReporter};
-use super::{Relocation, database, db, files, migration, relocate};
+use super::{Relocation, database, files, migration, relocate};
+use crate::store::db::Database;
 use crate::store::repositories::settings::{ContentRoots, SettingsRepository};
 use crate::{CoreError, Result, SharedCache};
 
@@ -20,10 +21,9 @@ struct PendingMove {
 }
 
 /// `None` until the active root has been recorded for this profile.
-async fn read_state(home: &SharedCache) -> Result<Option<DirectoryState>> {
-    let mut connection = db::open_db(home).await?;
-    let roots = SettingsRepository::content_roots(&mut connection).await;
-    let roots = db::complete_operation(connection, roots)
+async fn read_state(database: &Database) -> Result<Option<DirectoryState>> {
+    let mut connection = database.acquire().await?;
+    let roots = SettingsRepository::content_roots(&mut connection)
         .await?
         .ok_or_else(SettingsRepository::missing_row)?;
     Ok(roots.active.map(|active| DirectoryState {
@@ -35,7 +35,7 @@ async fn read_state(home: &SharedCache) -> Result<Option<DirectoryState>> {
     }))
 }
 
-async fn write_state(home: &SharedCache, state: &DirectoryState) -> Result<()> {
+async fn write_state(database: &Database, state: &DirectoryState) -> Result<()> {
     let text = |path: &Path| {
         path.to_str()
             .map(str::to_string)
@@ -50,9 +50,8 @@ async fn write_state(home: &SharedCache, state: &DirectoryState) -> Result<()> {
             .transpose()?,
         copied: state.pending.as_ref().is_some_and(|pending| pending.copied),
     };
-    let mut connection = db::open_db(home).await?;
-    let result = SettingsRepository::set_content_roots(&mut connection, &roots).await;
-    db::complete_operation(connection, result).await
+    let mut connection = database.acquire().await?;
+    SettingsRepository::set_content_roots(&mut connection, &roots).await
 }
 
 fn validate_path(path: &Path) -> Result<()> {
@@ -138,12 +137,13 @@ fn validate_no_links(path: &Path) -> Result<()> {
     Ok(())
 }
 
-pub(super) async fn apply(home: &SharedCache, reporter: &StartupReporter) -> Result<()> {
+pub(super) async fn apply(database: &Database, reporter: &StartupReporter) -> Result<()> {
+    let home = database.cache();
     let desired = crate::game_cache(home).await?;
-    let Some(mut state) = read_state(home).await? else {
+    let Some(mut state) = read_state(database).await? else {
         // Existing installations already use their configured directory.
         write_state(
-            home,
+            database,
             &DirectoryState {
                 active: desired.root().to_path_buf(),
                 pending: None,
@@ -158,7 +158,7 @@ pub(super) async fn apply(home: &SharedCache, reporter: &StartupReporter) -> Res
     {
         if state.pending.is_some() {
             state.pending = None;
-            write_state(home, &state).await?;
+            write_state(database, &state).await?;
         }
         return Ok(());
     }
@@ -167,7 +167,7 @@ pub(super) async fn apply(home: &SharedCache, reporter: &StartupReporter) -> Res
             destination: desired.root().to_path_buf(),
             copied: false,
         });
-        write_state(home, &state).await?;
+        write_state(database, &state).await?;
     }
     let pending = state.pending.as_ref().ok_or(CoreError::CachePath)?;
     validate_path(&pending.destination)?;
@@ -209,10 +209,10 @@ pub(super) async fn apply(home: &SharedCache, reporter: &StartupReporter) -> Res
             files::copy_tree_with_progress(&mapping.source, &mapping.destination, reporter)?;
         }
         state.pending.as_mut().ok_or(CoreError::CachePath)?.copied = true;
-        write_state(home, &state).await?;
+        write_state(database, &state).await?;
     }
     reporter.phase(StartupPhase::MigratingDatabase)?;
-    database::remap(home, &mappings).await?;
+    database::remap(database, &mappings).await?;
     let mut settings = crate::load_settings(home).await?;
     for path in [
         &mut settings.java25,
@@ -238,7 +238,7 @@ pub(super) async fn apply(home: &SharedCache, reporter: &StartupReporter) -> Res
     }
     state.active = destination.root().to_path_buf();
     state.pending = None;
-    write_state(home, &state).await?;
+    write_state(database, &state).await?;
     tracing::info!("Content directory move completed");
     Ok(())
 }

@@ -64,9 +64,13 @@ mod tests {
         let _ = fs::remove_dir_all(&root);
         let instances = root.join("instances");
         fs::create_dir_all(&instances).unwrap();
-        let service = crate::DatabaseService::start(crate::SharedCache::at(&root))
-            .await
-            .expect("database");
+        let service = crate::DatabaseService::start(
+            crate::Database::open(&crate::SharedCache::at(&root))
+                .await
+                .expect("database"),
+        )
+        .await
+        .expect("database");
         let pending = pending(&service.client(), &instances).await;
         let entry = import_mrpack_into(&service.client(), &instances, &pending, &bytes)
             .await
@@ -120,9 +124,13 @@ mod tests {
             let root = temp_dir("override");
             let instances = root.join("instances");
             fs::create_dir_all(&instances).unwrap();
-            let service = crate::DatabaseService::start(crate::SharedCache::at(&root))
-                .await
-                .expect("database");
+            let service = crate::DatabaseService::start(
+                crate::Database::open(&crate::SharedCache::at(&root))
+                    .await
+                    .expect("database"),
+            )
+            .await
+            .expect("database");
             let pending = pending(&service.client(), &instances).await;
             let error = import_mrpack_into(&service.client(), &instances, &pending, &bytes)
                 .await

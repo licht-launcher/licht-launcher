@@ -602,9 +602,13 @@ fn missing_last_opened_at_defaults_to_none() {
     let _ = fs::remove_dir_all(root);
 }
 async fn database(root: &Path) -> licht_core::DatabaseService {
-    licht_core::DatabaseService::start(licht_core::SharedCache::at(root))
-        .await
-        .expect("database")
+    licht_core::DatabaseService::start(
+        licht_core::Database::open(&licht_core::SharedCache::at(root))
+            .await
+            .expect("database"),
+    )
+    .await
+    .expect("database")
 }
 
 mod preparation;

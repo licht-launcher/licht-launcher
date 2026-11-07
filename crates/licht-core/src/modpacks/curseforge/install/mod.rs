@@ -205,9 +205,13 @@ mod tests {
         let root = temp_dir("import");
         let instances = root.join("instances");
         fs::create_dir_all(&instances).unwrap();
-        let service = crate::DatabaseService::start(SharedCache::at(&root))
-            .await
-            .expect("database");
+        let service = crate::DatabaseService::start(
+            crate::Database::open(&SharedCache::at(&root))
+                .await
+                .expect("database"),
+        )
+        .await
+        .expect("database");
         let pending = pending(&service.client(), &instances).await;
         let entry = import_planned(
             &service.client(),
@@ -274,9 +278,13 @@ mod tests {
         let root = temp_dir("blocked");
         let instances = root.join("instances");
         fs::create_dir_all(&instances).unwrap();
-        let service = crate::DatabaseService::start(SharedCache::at(&root))
-            .await
-            .expect("database");
+        let service = crate::DatabaseService::start(
+            crate::Database::open(&SharedCache::at(&root))
+                .await
+                .expect("database"),
+        )
+        .await
+        .expect("database");
         let pending = pending(&service.client(), &instances).await;
         let profile = crate::load_instance(&service.client(), &instances.join(&pending.folder))
             .await
@@ -323,9 +331,13 @@ mod tests {
         let root = temp_dir("override");
         let instances = root.join("instances");
         fs::create_dir_all(&instances).unwrap();
-        let service = crate::DatabaseService::start(SharedCache::at(&root))
-            .await
-            .expect("database");
+        let service = crate::DatabaseService::start(
+            crate::Database::open(&SharedCache::at(&root))
+                .await
+                .expect("database"),
+        )
+        .await
+        .expect("database");
         let pending = pending(&service.client(), &instances).await;
         let profile = crate::load_instance(&service.client(), &instances.join(&pending.folder))
             .await

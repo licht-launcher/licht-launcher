@@ -92,9 +92,10 @@ async fn migration_preserves_files_settings_committed_wal_and_job_paths() {
         serde_json::to_vec(&serde_json::json!({"javaPath": artifact})).expect("profile"),
     )
     .expect("profile file");
-    let service = crate::DatabaseService::start(legacy.clone())
-        .await
-        .expect("legacy service");
+    let service =
+        crate::DatabaseService::start(crate::Database::open(&legacy).await.expect("database"))
+            .await
+            .expect("legacy service");
     let job = service
         .client()
         .create_pending_download_job(

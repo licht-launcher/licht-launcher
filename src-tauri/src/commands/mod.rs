@@ -29,10 +29,14 @@ pub struct LauncherPaths {
 }
 
 impl LauncherPaths {
-    pub async fn load(reporter: licht_core::StartupReporter) -> Result<Self, CoreError> {
-        let settings = licht_core::initialize_launcher_with_progress(reporter).await?;
+    /// Prepares the profile and returns its paths with the database pool startup opened.
+    pub async fn load(
+        reporter: licht_core::StartupReporter,
+    ) -> Result<(Self, licht_core::Database), CoreError> {
+        let database = licht_core::initialize_launcher_with_progress(reporter).await?;
+        let settings = database.cache().clone();
         let game = game_cache(&settings).await?;
-        Ok(Self { settings, game })
+        Ok((Self { settings, game }, database))
     }
 }
 

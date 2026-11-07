@@ -3,6 +3,7 @@ use std::path::Path;
 
 use super::progress::{StartupPhase, StartupReporter};
 use super::{Relocation, database, files, relocate};
+use crate::store::db::Database;
 use crate::{CoreError, Result, SharedCache, load_settings, save_settings};
 
 const GAME_DIRECTORIES: &[&str] = &[
@@ -64,7 +65,11 @@ pub(super) async fn migrate(
     }
     fs::create_dir_all(staging.root())?;
     database::snapshot(&legacy.root().join("licht.sqlite"), &staging).await?;
-    database::remap(&staging, &mappings).await?;
+    // The pool closes before the file copies, so a failed copy leaves nothing open.
+    let staged_database = Database::open(&staging).await?;
+    let remapped = database::remap(&staged_database, &mappings).await;
+    staged_database.close().await;
+    remapped?;
 
     let mut scopes = vec![(legacy, &default_game)];
     if old_game != *legacy || new_game != default_game {
@@ -119,8 +124,12 @@ pub(super) async fn migrate(
     tracing::info!(phase = "settings", "Migrating launcher storage");
     reporter.phase(StartupPhase::MigratingSettings)?;
     let staged_settings = save_settings(&staging, &settings).await?;
+    let staged_database = Database::open(&staging).await?;
     // Only licht.db is published, so the settings row must not stay in its WAL.
-    database::checkpoint(&staging).await?;
+    let checkpointed = database::checkpoint(&staged_database).await;
+    // The staged file is renamed below, so no connection may stay open on it.
+    staged_database.close().await;
+    checkpointed?;
     let settings_file = home.root().join("settings.json");
     if settings_file.exists() && settings_file != legacy.root().join("settings.json") {
         // An interrupted attempt may already have published this same file.

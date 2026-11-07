@@ -1,12 +1,11 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use sqlx::Connection;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 
-use super::db::{self, META_LAST_PLAYED};
-use crate::{CoreError, Result, SharedCache};
+use super::db::{self, Database, META_LAST_PLAYED};
+use crate::{CoreError, Result};
 
 const QUEUE_CAPACITY: usize = 64;
 
@@ -30,7 +29,8 @@ enum Request {
     Stop,
 }
 
-/// Owns the dispatcher and persistent SQLx connection. Shutdown waits for accepted work and closure.
+/// Owns the dispatcher, which keeps one pooled connection. Shutdown waits for accepted work,
+/// then closes the pool: the service is the last database user when the launcher exits.
 #[derive(Debug)]
 pub struct DatabaseService {
     client: DatabaseClient,
@@ -45,13 +45,13 @@ pub struct DatabaseClient {
 }
 
 impl DatabaseService {
-    pub async fn start(cache: SharedCache) -> Result<Self> {
+    pub async fn start(database: Database) -> Result<Self> {
         let (requests, incoming) = mpsc::channel(QUEUE_CAPACITY);
         let (initialized, ready) = oneshot::channel();
         let closing = Arc::new(AtomicBool::new(false));
         let worker_closing = Arc::clone(&closing);
         let worker = tokio::spawn(async move {
-            let result = run(cache, incoming, initialized, worker_closing).await;
+            let result = run(database, incoming, initialized, worker_closing).await;
             if result.is_err() {
                 tracing::error!("Database worker failed");
             }
@@ -149,17 +149,18 @@ impl DatabaseClient {
 }
 
 async fn run(
-    cache: SharedCache,
+    database: Database,
     mut incoming: mpsc::Receiver<Request>,
     initialized: oneshot::Sender<Result<()>>,
     closing: Arc<AtomicBool>,
 ) -> Result<()> {
-    let mut connection = match db::open_db(&cache).await {
+    let mut connection = match database.acquire().await {
         Ok(connection) => connection,
         Err(error) => {
             if let Err(Err(_)) = initialized.send(Err(error)) {
                 tracing::error!("Database initialization failed after its caller disconnected");
             }
+            database.close().await;
             return Ok(());
         }
     };
@@ -225,7 +226,9 @@ async fn run(
         }
     }
 
-    connection.close().await.map_err(Into::into)
+    drop(connection);
+    database.close().await;
+    Ok(())
 }
 
 fn respond<T>(reply: oneshot::Sender<Result<T>>, result: Result<T>) {
@@ -245,13 +248,17 @@ mod tests {
     use std::time::Duration;
 
     use super::*;
+    use crate::SharedCache;
 
     #[tokio::test]
     async fn dropping_the_owner_stops_the_worker_even_when_a_client_survives() {
         let cache = SharedCache::at(
             std::env::temp_dir().join(format!("licht-database-owner-drop-{}", std::process::id())),
         );
-        let mut service = DatabaseService::start(cache.clone()).await.expect("start");
+        let mut service =
+            DatabaseService::start(crate::Database::open(&cache).await.expect("database"))
+                .await
+                .expect("start");
         let client = service.client();
         let worker = service.worker.take().expect("worker handle");
         drop(service);
