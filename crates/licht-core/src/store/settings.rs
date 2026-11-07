@@ -626,7 +626,9 @@ pub(crate) async fn download_options(
 /// Next process: game files go to `{dataDirectory}/Licht Launcher/data`.
 /// The default game directory is `<launcher>/data`.
 pub async fn game_cache(defaults: &SharedCache) -> Result<SharedCache> {
-    let settings = load_settings(defaults).await?;
+    // The application directory is a startup preference, so the database is not needed.
+    let file = defaults.clone();
+    let settings = blocking(move || load_file_settings(&file)).await?;
     match settings.data_directory {
         Some(path) => Ok(SharedCache::at(
             PathBuf::from(path).join(GAME_FOLDER).join("data"),

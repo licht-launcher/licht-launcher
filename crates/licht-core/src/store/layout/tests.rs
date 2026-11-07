@@ -304,6 +304,56 @@ async fn migration_retries_after_a_late_settings_conflict_without_rewriting_orig
 }
 
 #[tokio::test]
+async fn migration_retries_after_its_settings_file_was_published_without_the_database() {
+    let (legacy, home) = fixture("published-settings");
+    let mut settings = crate::load_settings(&legacy).await.expect("defaults");
+    settings.username = "Alex".to_string();
+    settings.download_concurrency = 3;
+    let legacy_file = serde_json::to_value(&settings).expect("settings JSON");
+    fs::create_dir_all(legacy.root()).expect("legacy");
+    fs::write(
+        legacy.root().join("settings.json"),
+        serde_json::to_vec(&legacy_file).expect("legacy JSON"),
+    )
+    .expect("legacy settings");
+    // An earlier attempt stopped after publishing settings.json and before licht.db.
+    let published = legacy_file
+        .as_object()
+        .expect("object")
+        .iter()
+        .filter(|(key, _)| {
+            [
+                "schema",
+                "theme",
+                "language",
+                "hardwareAcceleration",
+                "minimizeToTray",
+                "minimizeOnGameStart",
+                "restoreOnGameExit",
+                "automaticUpdates",
+                "dataDirectory",
+            ]
+            .contains(&key.as_str())
+        })
+        .map(|(key, value)| (key.clone(), value.clone()))
+        .collect::<serde_json::Map<_, _>>();
+    fs::create_dir_all(home.root()).expect("home");
+    fs::write(
+        home.root().join("settings.json"),
+        serde_json::to_vec(&published).expect("published JSON"),
+    )
+    .expect("published settings");
+    initialize_at(&legacy, &home)
+        .await
+        .expect("retry migration");
+    let migrated = crate::load_settings(&home)
+        .await
+        .expect("migrated settings");
+    assert_eq!(migrated.username, "Alex");
+    assert_eq!(migrated.download_concurrency, 3);
+}
+
+#[tokio::test]
 async fn concurrent_initializations_share_one_complete_migration() {
     let (legacy, home) = fixture("concurrent");
     fs::create_dir_all(legacy.root().join("versions")).expect("versions");

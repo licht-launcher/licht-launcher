@@ -379,6 +379,28 @@ async fn legacy_file_values_are_used_until_they_move_to_the_database() {
 }
 
 #[tokio::test]
+async fn a_detected_java_is_stored_in_the_database() {
+    let cache = cache("java-in-database");
+    save_settings(&cache, &sample(4)).await.expect("save");
+    let java = cache.root().join("java21");
+    licht_core::set_java_path(&cache, 21, &java)
+        .await
+        .expect("set Java");
+    assert!(saved_file(&cache).get("java21").is_none());
+    assert_eq!(
+        load_settings(&cache).await.expect("reload").java21,
+        Some(java.display().to_string())
+    );
+    assert_eq!(
+        load_settings(&cache)
+            .await
+            .expect("reload")
+            .download_concurrency,
+        4
+    );
+}
+
+#[tokio::test]
 async fn database_values_win_over_stale_file_keys() {
     let cache = cache("stale-file-keys");
     save_settings(&cache, &sample(4)).await.expect("save");

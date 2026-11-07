@@ -30,6 +30,21 @@ pub(super) async fn snapshot(legacy: &Path, staging: &SharedCache) -> Result<()>
     Ok(())
 }
 
+pub(super) async fn checkpoint(cache: &SharedCache) -> Result<()> {
+    let mut connection = super::db::open_db(cache).await?;
+    let result = async {
+        let (busy, _, _): (i64, i64, i64) = sqlx::query_as("PRAGMA wal_checkpoint(TRUNCATE)")
+            .fetch_one(&mut connection)
+            .await?;
+        if busy != 0 {
+            return Err(std::io::Error::other("could not checkpoint the staged database").into());
+        }
+        Ok(())
+    }
+    .await;
+    super::db::complete_operation(connection, result).await
+}
+
 pub(super) async fn remap(staging: &SharedCache, mappings: &[Relocation]) -> Result<()> {
     let mut connection = super::db::open_db(staging).await?;
     let result = async {

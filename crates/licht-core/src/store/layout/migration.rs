@@ -119,9 +119,14 @@ pub(super) async fn migrate(
     tracing::info!(phase = "settings", "Migrating launcher storage");
     reporter.phase(StartupPhase::MigratingSettings)?;
     let staged_settings = save_settings(&staging, &settings).await?;
+    // Only licht.db is published, so the settings row must not stay in its WAL.
+    database::checkpoint(&staging).await?;
     let settings_file = home.root().join("settings.json");
     if settings_file.exists() && settings_file != legacy.root().join("settings.json") {
-        if load_settings(home).await? != staged_settings {
+        // An interrupted attempt may already have published this same file.
+        let published =
+            read_json(&settings_file)? == read_json(&staging.root().join("settings.json"))?;
+        if !published && load_settings(home).await? != staged_settings {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::AlreadyExists,
                 "launcher migration settings destination differs",
@@ -141,6 +146,10 @@ pub(super) async fn migrate(
     fs::remove_dir_all(staging.root())?;
     tracing::info!("Launcher storage migration completed");
     Ok(())
+}
+
+fn read_json(path: &Path) -> Result<serde_json::Value> {
+    serde_json::from_slice(&fs::read(path)?).map_err(CoreError::Settings)
 }
 
 pub(super) fn copy_instances(
