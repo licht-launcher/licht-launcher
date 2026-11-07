@@ -40,14 +40,7 @@ async fn read_state(home: &SharedCache) -> Result<Option<DirectoryState>> {
 async fn write_state(home: &SharedCache, state: &DirectoryState) -> Result<()> {
     let json = serde_json::to_string(state).map_err(CoreError::Settings)?;
     let mut connection = db::open_db(home).await?;
-    let result = async {
-        // The source is deleted right after a checkpoint, so it must survive power loss.
-        sqlx::query("PRAGMA synchronous = FULL")
-            .execute(&mut connection)
-            .await?;
-        db::set_meta(&mut connection, STATE_KEY, &json).await
-    }
-    .await;
+    let result = db::set_meta(&mut connection, STATE_KEY, &json).await;
     db::complete_operation(connection, result).await
 }
 

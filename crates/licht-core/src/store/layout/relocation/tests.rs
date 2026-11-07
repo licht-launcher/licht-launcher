@@ -247,28 +247,96 @@ async fn content_directory_state_lives_in_the_database() {
     assert!(!home.root().join("content-directory.json").exists());
 }
 
-#[tokio::test]
-async fn legacy_state_file_is_imported_once_and_removed() {
-    let (legacy, home) = fixture("relocation-state-import");
-    initialize_at(&legacy, &home).await.expect("initialize");
-    let game = crate::game_cache(&home).expect("game");
-    let mut connection = super::super::db::open_db(&home).await.expect("database");
+async fn replace_state_with_legacy_file(home: &SharedCache, state: serde_json::Value) {
+    let mut connection = super::super::db::open_db(home).await.expect("database");
     super::super::db::clear_meta(&mut connection, super::STATE_KEY)
         .await
         .expect("clear state");
     use sqlx::Connection;
     connection.close().await.expect("close");
-    let file = home.root().join("content-directory.json");
     fs::write(
-        &file,
-        serde_json::to_vec(&serde_json::json!({"active": game.root(), "pending": null}))
-            .expect("legacy state"),
+        home.root().join("content-directory.json"),
+        serde_json::to_vec(&state).expect("legacy state"),
     )
     .expect("legacy state file");
+}
+
+#[tokio::test]
+async fn legacy_state_file_is_imported_once_and_removed() {
+    let (legacy, home) = fixture("relocation-state-import");
+    initialize_at(&legacy, &home).await.expect("initialize");
+    let game = crate::game_cache(&home).expect("game");
+    let file = home.root().join("content-directory.json");
+    replace_state_with_legacy_file(
+        &home,
+        serde_json::json!({"active": game.root(), "pending": null}),
+    )
+    .await;
     initialize_at(&legacy, &home).await.expect("import");
     assert!(!file.exists());
     let state = stored_state(&home).await.expect("imported state");
     assert_eq!(state["active"], game.root().display().to_string());
+
+    // A leftover file must not override the state already in the database.
+    let elsewhere = home.root().parent().expect("parent").join("elsewhere/data");
+    fs::write(
+        &file,
+        serde_json::to_vec(&serde_json::json!({"active": elsewhere, "pending": null}))
+            .expect("stale state"),
+    )
+    .expect("stale state file");
+    initialize_at(&legacy, &home)
+        .await
+        .expect("ignore stale file");
+    assert!(!file.exists());
+    let state = stored_state(&home).await.expect("database state");
+    assert_eq!(state["active"], game.root().display().to_string());
+}
+
+#[tokio::test]
+async fn a_move_pending_in_the_legacy_file_finishes_after_import() {
+    for copied in [false, true] {
+        let (legacy, home) = fixture(&format!("relocation-state-pending-{copied}"));
+        initialize_at(&legacy, &home).await.expect("initialize");
+        let source = crate::game_cache(&home).expect("source");
+        fs::write(source.root().join("file"), b"original").expect("file");
+        let mut settings = crate::load_settings(&home).expect("settings");
+        settings.data_directory = Some(
+            home.root()
+                .parent()
+                .expect("parent")
+                .join("chosen")
+                .display()
+                .to_string(),
+        );
+        crate::save_settings(&home, &settings).expect("save destination");
+        let target = crate::game_cache(&home).expect("target");
+        if copied {
+            // The copy finished and cleanup already removed the source; only the
+            // imported `copied` flag lets startup finish instead of failing.
+            fs::create_dir_all(target.root()).expect("target");
+            fs::write(target.root().join("file"), b"original").expect("copied file");
+            fs::remove_dir_all(source.root()).expect("cleaned source");
+        }
+        replace_state_with_legacy_file(
+            &home,
+            serde_json::json!({
+                "active": source.root(),
+                "pending": {"destination": target.root(), "copied": copied},
+            }),
+        )
+        .await;
+        initialize_at(&legacy, &home).await.expect("finish move");
+        assert_eq!(
+            fs::read(target.root().join("file")).expect("moved file"),
+            b"original"
+        );
+        assert!(!source.root().exists());
+        assert!(!home.root().join("content-directory.json").exists());
+        let state = stored_state(&home).await.expect("final state");
+        assert_eq!(state["active"], target.root().display().to_string());
+        assert!(state["pending"].is_null());
+    }
 }
 
 #[tokio::test]
