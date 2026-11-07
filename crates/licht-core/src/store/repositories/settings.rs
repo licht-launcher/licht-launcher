@@ -15,6 +15,14 @@ pub(crate) struct ContentRoots {
 }
 
 impl SettingsRepository {
+    /// Startup saves the row before checking the content directory, so this means it was removed.
+    pub fn missing_row() -> CoreError {
+        std::io::Error::other(
+            "the launcher settings row is missing from licht.db, so the content directory cannot be checked",
+        )
+        .into()
+    }
+
     pub async fn exists(connection: &mut SqliteConnection) -> Result<bool> {
         Ok(
             sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM settings WHERE id = 1)")
@@ -84,10 +92,7 @@ impl SettingsRepository {
         .execute(connection)
         .await?;
         if updated.rows_affected() != 1 {
-            return Err(std::io::Error::other(
-                "settings must be saved before the content directory",
-            )
-            .into());
+            return Err(Self::missing_row());
         }
         Ok(())
     }

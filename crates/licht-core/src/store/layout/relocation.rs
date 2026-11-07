@@ -25,9 +25,7 @@ async fn read_state(home: &SharedCache) -> Result<Option<DirectoryState>> {
     let roots = SettingsRepository::content_roots(&mut connection).await;
     let roots = db::complete_operation(connection, roots)
         .await?
-        .ok_or_else(|| {
-            std::io::Error::other("settings must be saved before the content directory")
-        })?;
+        .ok_or_else(SettingsRepository::missing_row)?;
     Ok(roots.active.map(|active| DirectoryState {
         active: PathBuf::from(active),
         pending: roots.pending.map(|destination| PendingMove {

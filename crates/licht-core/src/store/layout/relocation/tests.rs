@@ -262,6 +262,31 @@ async fn content_roots_live_in_the_settings_row() {
 }
 
 #[tokio::test]
+async fn a_row_from_before_content_roots_adopts_the_current_directory() {
+    let (legacy, home) = fixture("relocation-state-upgrade");
+    initialize_at(&legacy, &home).await.expect("initialize");
+    let game = crate::game_cache(&home).await.expect("game");
+    fs::write(game.root().join("file"), b"original").expect("file");
+    // Rows written before schema 12 have no content roots yet.
+    let mut connection = super::super::db::open_db(&home).await.expect("database");
+    sqlx::query("UPDATE settings SET active_content_root = NULL, pending_content_root = NULL, pending_copied = 0")
+        .execute(&mut connection)
+        .await
+        .expect("clear roots");
+    use sqlx::Connection;
+    connection.close().await.expect("close");
+    initialize_at(&legacy, &home).await.expect("upgrade");
+    assert_eq!(
+        stored_roots(&home).await,
+        (Some(game.root().display().to_string()), None, false)
+    );
+    assert_eq!(
+        fs::read(game.root().join("file")).expect("content stays"),
+        b"original"
+    );
+}
+
+#[tokio::test]
 async fn saving_settings_keeps_the_move_checkpoint() {
     let (legacy, home) = fixture("relocation-state-save");
     initialize_at(&legacy, &home).await.expect("initialize");
