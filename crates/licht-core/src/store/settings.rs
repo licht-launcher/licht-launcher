@@ -673,6 +673,24 @@ pub(crate) mod testing {
 }
 
 #[cfg(test)]
+mod folder_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn reading_a_folder_without_a_database_creates_nothing() {
+        let cache = SharedCache::at(
+            std::env::temp_dir().join(format!("licht-settings-read-{}", std::process::id())),
+        );
+        let _ = std::fs::remove_dir_all(cache.root());
+
+        let settings = load_settings_at(&cache).await.expect("defaults");
+
+        assert_eq!(settings.schema, SCHEMA);
+        assert!(!cache.root().exists());
+    }
+}
+
+#[cfg(test)]
 mod memory_tests {
     use super::*;
 

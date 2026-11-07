@@ -581,6 +581,28 @@ async fn a_custom_directory_is_remembered_without_moving_files() {
     );
 }
 
+#[tokio::test]
+async fn a_game_folder_with_its_own_settings_file_keeps_its_concurrency() {
+    let home = database("own-game-settings").await;
+    save_settings(&home, &sample(4)).await.expect("profile");
+    let game = SharedCache::at(home.cache().root().join("legacy-game"));
+    std::fs::create_dir_all(game.root()).expect("game folder");
+    std::fs::write(
+        game.root().join("settings.json"),
+        serde_json::to_vec(&serde_json::json!({"schema": 1, "downloadConcurrency": 3}))
+            .expect("JSON"),
+    )
+    .expect("game settings");
+
+    assert_eq!(
+        download_concurrency(&game, &home)
+            .await
+            .expect("concurrency"),
+        3
+    );
+    assert!(!game.root().join("licht.db").exists());
+}
+
 #[test]
 fn a_configured_java_is_used_only_when_the_file_exists() {
     let cache = SharedCache::at(
