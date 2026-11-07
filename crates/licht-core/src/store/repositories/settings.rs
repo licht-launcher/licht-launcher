@@ -5,6 +5,15 @@ use crate::{CoreError, Result, Settings};
 /// The settings kept in the database. Startup preferences stay in `settings.json`.
 pub(crate) struct SettingsRepository;
 
+/// Where content lives now and the move in progress, if any. Kept apart from
+/// `Settings` so that saving preferences never rewrites the move checkpoint.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ContentRoots {
+    pub active: Option<String>,
+    pub pending: Option<String>,
+    pub copied: bool,
+}
+
 impl SettingsRepository {
     pub async fn exists(connection: &mut SqliteConnection) -> Result<bool> {
         Ok(
@@ -44,7 +53,43 @@ impl SettingsRepository {
             .transpose()
             .map_err(|error| sqlx::Error::Decode(Box::new(error)))?;
         settings.disable_custom_title_bar = row.try_get("disable_custom_title_bar")?;
+        settings.data_directory = row.try_get("data_directory")?;
         Ok(true)
+    }
+
+    /// `None` when no settings row exists yet.
+    pub async fn content_roots(connection: &mut SqliteConnection) -> Result<Option<ContentRoots>> {
+        let row: Option<(Option<String>, Option<String>, bool)> = sqlx::query_as(
+            "SELECT active_content_root, pending_content_root, pending_copied FROM settings WHERE id = 1",
+        )
+        .fetch_optional(connection)
+        .await?;
+        Ok(row.map(|(active, pending, copied)| ContentRoots {
+            active,
+            pending,
+            copied,
+        }))
+    }
+
+    pub async fn set_content_roots(
+        connection: &mut SqliteConnection,
+        roots: &ContentRoots,
+    ) -> Result<()> {
+        let updated = sqlx::query(
+            "UPDATE settings SET active_content_root = ?1, pending_content_root = ?2, pending_copied = ?3 WHERE id = 1",
+        )
+        .bind(&roots.active)
+        .bind(&roots.pending)
+        .bind(roots.copied)
+        .execute(connection)
+        .await?;
+        if updated.rows_affected() != 1 {
+            return Err(std::io::Error::other(
+                "settings must be saved before the content directory",
+            )
+            .into());
+        }
+        Ok(())
     }
 
     pub async fn save(connection: &mut SqliteConnection, settings: &Settings) -> Result<()> {
@@ -55,13 +100,14 @@ impl SettingsRepository {
             .map(i64::try_from)
             .transpose()
             .map_err(|_| CoreError::SettingsDownloadSpeed)?;
-        sqlx::query("INSERT INTO settings (id, username, fullscreen, width, height, max_memory_mb, jvm_arguments, java25, java21, java17, java8, download_concurrency, write_concurrency, download_speed_limit_bytes_per_second, disable_custom_title_bar)
-            VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
-            ON CONFLICT (id) DO UPDATE SET username = excluded.username, fullscreen = excluded.fullscreen, width = excluded.width, height = excluded.height, max_memory_mb = excluded.max_memory_mb, jvm_arguments = excluded.jvm_arguments, java25 = excluded.java25, java21 = excluded.java21, java17 = excluded.java17, java8 = excluded.java8, download_concurrency = excluded.download_concurrency, write_concurrency = excluded.write_concurrency, download_speed_limit_bytes_per_second = excluded.download_speed_limit_bytes_per_second, disable_custom_title_bar = excluded.disable_custom_title_bar")
+        sqlx::query("INSERT INTO settings (id, username, fullscreen, width, height, max_memory_mb, jvm_arguments, java25, java21, java17, java8, download_concurrency, write_concurrency, download_speed_limit_bytes_per_second, disable_custom_title_bar, data_directory)
+            VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
+            ON CONFLICT (id) DO UPDATE SET username = excluded.username, fullscreen = excluded.fullscreen, width = excluded.width, height = excluded.height, max_memory_mb = excluded.max_memory_mb, jvm_arguments = excluded.jvm_arguments, java25 = excluded.java25, java21 = excluded.java21, java17 = excluded.java17, java8 = excluded.java8, download_concurrency = excluded.download_concurrency, write_concurrency = excluded.write_concurrency, download_speed_limit_bytes_per_second = excluded.download_speed_limit_bytes_per_second, disable_custom_title_bar = excluded.disable_custom_title_bar, data_directory = excluded.data_directory")
             .bind(&settings.username).bind(settings.fullscreen).bind(settings.width).bind(settings.height)
             .bind(settings.max_memory_mb).bind(arguments).bind(&settings.java25).bind(&settings.java21)
             .bind(&settings.java17).bind(&settings.java8).bind(settings.download_concurrency)
             .bind(settings.write_concurrency).bind(speed_limit).bind(settings.disable_custom_title_bar)
+            .bind(&settings.data_directory)
             .execute(connection).await?;
         Ok(())
     }

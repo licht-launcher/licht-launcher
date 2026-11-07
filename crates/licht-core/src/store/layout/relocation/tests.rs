@@ -228,75 +228,74 @@ async fn changing_directory_moves_content_after_restart_and_keeps_the_profile() 
         .expect("idempotent restart");
 }
 
-async fn stored_state(home: &SharedCache) -> Option<serde_json::Value> {
+async fn stored_roots(home: &SharedCache) -> (Option<String>, Option<String>, bool) {
     let mut connection = super::super::db::open_db(home).await.expect("database");
-    let stored = super::super::db::get_meta(&mut connection, super::STATE_KEY)
-        .await
-        .expect("stored state");
+    let roots = sqlx::query_as(
+        "SELECT active_content_root, pending_content_root, pending_copied FROM settings",
+    )
+    .fetch_one(&mut connection)
+    .await
+    .expect("stored roots");
     use sqlx::Connection;
     connection.close().await.expect("close");
-    stored.map(|json| serde_json::from_str(&json).expect("state JSON"))
+    roots
 }
 
 #[tokio::test]
-async fn content_directory_state_lives_in_the_database() {
+async fn content_roots_live_in_the_settings_row() {
     let (legacy, home) = fixture("relocation-state");
     initialize_at(&legacy, &home).await.expect("initialize");
     let game = crate::game_cache(&home).await.expect("game");
-    let state = stored_state(&home).await.expect("state in the database");
-    assert_eq!(state["active"], game.root().display().to_string());
-    assert!(state["pending"].is_null());
-    assert!(!home.root().join("content-directory.json").exists());
-}
-
-async fn replace_state_with_legacy_file(home: &SharedCache, state: serde_json::Value) {
-    let mut connection = super::super::db::open_db(home).await.expect("database");
-    super::super::db::clear_meta(&mut connection, super::STATE_KEY)
-        .await
-        .expect("clear state");
+    assert_eq!(
+        stored_roots(&home).await,
+        (Some(game.root().display().to_string()), None, false)
+    );
+    let mut connection = super::super::db::open_db(&home).await.expect("database");
+    let legacy_state: Option<String> =
+        sqlx::query_scalar("SELECT value FROM meta WHERE key = 'content_directory_state'")
+            .fetch_optional(&mut connection)
+            .await
+            .expect("meta");
     use sqlx::Connection;
     connection.close().await.expect("close");
-    fs::write(
-        home.root().join("content-directory.json"),
-        serde_json::to_vec(&state).expect("legacy state"),
-    )
-    .expect("legacy state file");
+    assert!(legacy_state.is_none());
 }
 
 #[tokio::test]
-async fn legacy_state_file_is_imported_once_and_removed() {
-    let (legacy, home) = fixture("relocation-state-import");
+async fn saving_settings_keeps_the_move_checkpoint() {
+    let (legacy, home) = fixture("relocation-state-save");
     initialize_at(&legacy, &home).await.expect("initialize");
-    let game = crate::game_cache(&home).await.expect("game");
-    let file = home.root().join("content-directory.json");
-    replace_state_with_legacy_file(
+    let source = crate::game_cache(&home).await.expect("source");
+    let destination = home.root().parent().expect("parent").join("chosen/data");
+    write_state(
         &home,
-        serde_json::json!({"active": game.root(), "pending": null}),
+        &DirectoryState {
+            active: source.root().to_path_buf(),
+            pending: Some(PendingMove {
+                destination: destination.clone(),
+                copied: true,
+            }),
+        },
     )
-    .await;
-    initialize_at(&legacy, &home).await.expect("import");
-    assert!(!file.exists());
-    let state = stored_state(&home).await.expect("imported state");
-    assert_eq!(state["active"], game.root().display().to_string());
-
-    // A leftover file must not override the state already in the database.
-    let elsewhere = home.root().parent().expect("parent").join("elsewhere/data");
-    fs::write(
-        &file,
-        serde_json::to_vec(&serde_json::json!({"active": elsewhere, "pending": null}))
-            .expect("stale state"),
-    )
-    .expect("stale state file");
-    initialize_at(&legacy, &home)
+    .await
+    .expect("checkpoint");
+    let mut settings = crate::load_settings(&home).await.expect("settings");
+    settings.username = "Alex".to_string();
+    crate::save_settings(&home, &settings)
         .await
-        .expect("ignore stale file");
-    assert!(!file.exists());
-    let state = stored_state(&home).await.expect("database state");
-    assert_eq!(state["active"], game.root().display().to_string());
+        .expect("save settings");
+    assert_eq!(
+        stored_roots(&home).await,
+        (
+            Some(source.root().display().to_string()),
+            Some(destination.display().to_string()),
+            true
+        )
+    );
 }
 
 #[tokio::test]
-async fn a_move_pending_in_the_legacy_file_finishes_after_import() {
+async fn a_copied_move_finishes_after_its_source_was_cleaned() {
     for copied in [false, true] {
         let (legacy, home) = fixture(&format!("relocation-state-pending-{copied}"));
         initialize_at(&legacy, &home).await.expect("initialize");
@@ -317,29 +316,33 @@ async fn a_move_pending_in_the_legacy_file_finishes_after_import() {
         let target = crate::game_cache(&home).await.expect("target");
         if copied {
             // The copy finished and cleanup already removed the source; only the
-            // imported `copied` flag lets startup finish instead of failing.
+            // stored `copied` flag lets startup finish instead of failing.
             fs::create_dir_all(target.root()).expect("target");
             fs::write(target.root().join("file"), b"original").expect("copied file");
             fs::remove_dir_all(source.root()).expect("cleaned source");
         }
-        replace_state_with_legacy_file(
+        write_state(
             &home,
-            serde_json::json!({
-                "active": source.root(),
-                "pending": {"destination": target.root(), "copied": copied},
-            }),
+            &DirectoryState {
+                active: source.root().to_path_buf(),
+                pending: Some(PendingMove {
+                    destination: target.root().to_path_buf(),
+                    copied,
+                }),
+            },
         )
-        .await;
+        .await
+        .expect("checkpoint");
         initialize_at(&legacy, &home).await.expect("finish move");
         assert_eq!(
             fs::read(target.root().join("file")).expect("moved file"),
             b"original"
         );
         assert!(!source.root().exists());
-        assert!(!home.root().join("content-directory.json").exists());
-        let state = stored_state(&home).await.expect("final state");
-        assert_eq!(state["active"], target.root().display().to_string());
-        assert!(state["pending"].is_null());
+        assert_eq!(
+            stored_roots(&home).await,
+            (Some(target.root().display().to_string()), None, false)
+        );
     }
 }
 
