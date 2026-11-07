@@ -65,14 +65,15 @@ async fn initialize_at_with_progress(
 }
 
 async fn prepare_profile(database: &Database, reporter: &StartupReporter) -> Result<()> {
-    let home = database.cache();
     // Older profiles keep every setting in settings.json until one save moves them.
     // The content move checkpoint lives in the same row, so it must exist first.
-    if !home.root().join("settings.json").exists() || !settings::stored_in_database(home).await? {
-        settings::save_settings(home, &settings::load_settings(home).await?).await?;
+    if !database.cache().root().join("settings.json").exists()
+        || !settings::stored_in_database(database).await?
+    {
+        settings::save_settings(database, &settings::load_settings(database).await?).await?;
     }
     relocation::apply(database, reporter).await?;
-    let game = settings::game_cache(home).await?;
+    let game = settings::game_cache(database).await?;
     tokio::fs::create_dir_all(game.root()).await?;
     tokio::fs::create_dir_all(game.cache_dir()?).await?;
     tokio::fs::create_dir_all(game.instances_dir()?).await?;
@@ -111,7 +112,13 @@ pub async fn run_startup_migration_preview(fail: bool, reporter: StartupReporter
     let home = SharedCache::at(root.join("destination"));
     let result = async {
         std::fs::create_dir_all(legacy.root().join("versions"))?;
-        settings::save_settings(&legacy, &settings::load_settings(&legacy).await?).await?;
+        let database = Database::open(&legacy).await?;
+        let saved = async {
+            settings::save_settings(&database, &settings::load_settings(&database).await?).await
+        }
+        .await;
+        database.close().await;
+        saved?;
         let instance = legacy.instance_dir("Preview")?;
         std::fs::create_dir_all(instance.join("mods"))?;
         for index in 0..100 {

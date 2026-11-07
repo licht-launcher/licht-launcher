@@ -1,6 +1,6 @@
 use licht_core::{
-    CoreError, SharedCache, clear_last_played_folder, db_path, last_played_folder, open_db,
-    set_last_played_folder,
+    CoreError, Database, SharedCache, clear_last_played_folder, db_path, last_played_folder,
+    open_db, set_last_played_folder,
 };
 use sqlx::{Connection, Row, SqliteConnection, sqlite::SqliteConnectOptions};
 
@@ -58,8 +58,9 @@ async fn version_nine_downloads_gain_a_persistent_fifo_order_without_losing_stat
         .close()
         .await
         .expect("close");
+    let database = Database::open(&cache).await.expect("database");
     let first = licht_core::create_pending_download_job(
-        &cache,
+        &database,
         &game,
         "First",
         Some("1.21.1"),
@@ -68,7 +69,7 @@ async fn version_nine_downloads_gain_a_persistent_fifo_order_without_losing_stat
     .await
     .expect("first");
     let second = licht_core::create_pending_download_job(
-        &cache,
+        &database,
         &game,
         "Second",
         Some("1.21.1"),
@@ -76,6 +77,7 @@ async fn version_nine_downloads_gain_a_persistent_fifo_order_without_losing_stat
     )
     .await
     .expect("second");
+    database.close().await;
     let mut connection = open_db(&cache).await.expect("legacy fixture");
     sqlx::raw_sql("DROP TABLE settings; DROP INDEX download_jobs_queue; ALTER TABLE download_jobs DROP COLUMN queue_order; PRAGMA user_version = 9;")
         .execute(&mut connection).await.expect("version nine schema");
@@ -88,12 +90,14 @@ async fn version_nine_downloads_gain_a_persistent_fifo_order_without_losing_stat
             .expect("queue order");
     assert_eq!(order, vec![(1, 1), (2, 2)]);
     migrated.close().await.expect("close migrated");
+    let database = Database::open(&cache).await.expect("database");
     assert_eq!(
-        licht_core::list_download_jobs(&cache, &game)
+        licht_core::list_download_jobs(&database, &game)
             .await
             .expect("preserved jobs"),
         vec![first, second]
     );
+    database.close().await;
 }
 
 #[tokio::test]
@@ -288,7 +292,8 @@ async fn version_two_jobs_keep_their_identity_and_progress_when_targets_become_o
     .await
     .expect("legacy job");
     connection.close().await.expect("close");
-    let job = licht_core::get_download_job(&cache, &game, "42")
+    let database = Database::open(&cache).await.expect("database");
+    let job = licht_core::get_download_job(&database, &game, "42")
         .await
         .expect("migrated job");
     assert_eq!(job.progress, progress);
@@ -301,7 +306,7 @@ async fn version_two_jobs_keep_their_identity_and_progress_when_targets_become_o
         Some("Survival".into())
     );
     let pending = licht_core::create_pending_download_job(
-        &cache,
+        &database,
         &game,
         "Pending",
         None,
@@ -309,6 +314,7 @@ async fn version_two_jobs_keep_their_identity_and_progress_when_targets_become_o
     )
     .await
     .expect("unresolved version");
+    database.close().await;
     assert!(pending.id.parse::<u64>().expect("id") > 42);
     assert_eq!(pending.version_id, None);
 }
@@ -347,7 +353,8 @@ async fn version_three_gains_indexed_artifact_lookup_without_changing_stored_dat
         vec![(42, "exclusive.jar".into()), (42, "shared.jar".into())]
     );
     connection.close().await.expect("close");
-    let job = licht_core::get_download_job(&cache, &game, "42")
+    let database = Database::open(&cache).await.expect("database");
+    let job = licht_core::get_download_job(&database, &game, "42")
         .await
         .expect("preserved job");
     assert_eq!(job.progress, progress);
@@ -359,12 +366,15 @@ async fn version_three_gains_indexed_artifact_lookup_without_changing_stored_dat
         last_played_folder(&cache).await.expect("metadata"),
         Some("Survival".into())
     );
+    database.close().await;
+    let database = Database::open(&cache).await.expect("reopen");
     assert_eq!(
-        licht_core::get_download_job(&cache, &game, "42")
+        licht_core::get_download_job(&database, &game, "42")
             .await
             .expect("reopened job"),
         job
     );
+    database.close().await;
 }
 
 #[tokio::test]

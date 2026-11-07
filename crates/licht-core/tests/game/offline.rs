@@ -67,13 +67,12 @@ async fn an_installed_version_launches_offline_with_its_client_jar() {
     let directory = std::env::temp_dir().join(format!("licht-offline-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&directory);
     let cache = SharedCache::at(&directory);
-    let database = licht_core::DatabaseService::start(
-        licht_core::Database::open(&SharedCache::at(directory.join("settings")))
-            .await
-            .expect("database"),
-    )
-    .await
-    .expect("database");
+    let settings = licht_core::Database::open(&SharedCache::at(directory.join("settings")))
+        .await
+        .expect("database");
+    let database = licht_core::DatabaseService::start(settings.clone())
+        .await
+        .expect("database");
     let base = serve().await;
     let asset_hash = sha1_hex(ASSET);
     let index_json = index_json(&asset_hash);
@@ -85,7 +84,7 @@ async fn an_installed_version_launches_offline_with_its_client_jar() {
     install_version(
         &reqwest::Client::new(),
         &cache,
-        &cache,
+        &settings,
         InstallPlan {
             version_id: "demo",
             version: &version,

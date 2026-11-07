@@ -61,7 +61,9 @@ async fn resuming_an_item_does_not_report_a_user_pause_while_reordering_is_block
         .await
         .expect("second");
     manager.pause(&b.id).await.expect("pause waiting job");
-    let mut database = crate::open_db(&fixture.settings).await.expect("database");
+    let mut database = crate::open_db(fixture.settings.cache())
+        .await
+        .expect("database");
     let lock = database
         .begin_with("BEGIN IMMEDIATE")
         .await
@@ -324,7 +326,9 @@ async fn a_failed_reorder_rolls_back_database_positions_and_preserves_the_live_q
         .start(&third.folder, DownloadJobOperation::Install)
         .await
         .expect("third");
-    let mut database = crate::open_db(&fixture.settings).await.expect("database");
+    let mut database = crate::open_db(fixture.settings.cache())
+        .await
+        .expect("database");
     sqlx::query("CREATE TRIGGER reject_reorder BEFORE UPDATE OF queue_order ON download_jobs WHEN NEW.id = (SELECT id FROM download_jobs ORDER BY id LIMIT 1 OFFSET 1) AND NEW.queue_order != OLD.queue_order BEGIN SELECT RAISE(ABORT, 'fixture reorder failure'); END").execute(&mut database).await.expect("failure trigger");
     assert!(
         manager

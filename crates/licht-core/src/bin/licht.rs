@@ -61,7 +61,7 @@ fn runtime() -> licht_core::Result<tokio::runtime::Runtime> {
 
 async fn install(args: &[String]) -> licht_core::Result<()> {
     let args = parse_install_args(args)?;
-    let settings_home = licht_core::initialize_launcher().await?.cache().clone();
+    let settings_home = licht_core::initialize_launcher().await?;
     let cache = match &args.cache {
         Some(root) => SharedCache::at(root),
         None => game_cache(&settings_home).await?,
@@ -142,7 +142,7 @@ async fn versions(args: &[String]) -> licht_core::Result<i32> {
     let args = parse_versions_args(args)?;
     let cache = match &args.cache {
         Some(root) => SharedCache::at(root),
-        None => game_cache(licht_core::initialize_launcher().await?.cache()).await?,
+        None => game_cache(&licht_core::initialize_launcher().await?).await?,
     };
     let client = reqwest::Client::builder()
         .timeout(licht_core::MANIFEST_REQUEST_TIMEOUT)
@@ -158,12 +158,11 @@ async fn versions(args: &[String]) -> licht_core::Result<i32> {
 async fn launch(args: &[String]) -> licht_core::Result<i32> {
     let args = parse_launch_args(args)?;
     let pool = licht_core::initialize_launcher().await?;
-    let settings_home = pool.cache().clone();
     let cache = match &args.cache {
         Some(root) => SharedCache::at(root),
-        None => game_cache(&settings_home).await?,
+        None => game_cache(&pool).await?,
     };
-    let settings = load_settings(&settings_home).await?;
+    let settings = load_settings(&pool).await?;
     let json = std::fs::read_to_string(cache.version_json(&args.version_id)?)?;
     let version = parse_version(&json)?;
     let environment = host_environment()?;

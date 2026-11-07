@@ -24,19 +24,16 @@ use licht_core::{
 /// next start, so this process keeps the folders it opened with.
 #[derive(Clone)]
 pub struct LauncherPaths {
-    pub settings: SharedCache,
+    /// The profile's database pool; its cache is the settings folder.
+    pub settings: licht_core::Database,
     pub game: SharedCache,
 }
 
 impl LauncherPaths {
-    /// Prepares the profile and returns its paths with the database pool startup opened.
-    pub async fn load(
-        reporter: licht_core::StartupReporter,
-    ) -> Result<(Self, licht_core::Database), CoreError> {
-        let database = licht_core::initialize_launcher_with_progress(reporter).await?;
-        let settings = database.cache().clone();
+    pub async fn load(reporter: licht_core::StartupReporter) -> Result<Self, CoreError> {
+        let settings = licht_core::initialize_launcher_with_progress(reporter).await?;
         let game = game_cache(&settings).await?;
-        Ok((Self { settings, game }, database))
+        Ok(Self { settings, game })
     }
 }
 

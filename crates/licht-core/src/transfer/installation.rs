@@ -27,7 +27,7 @@ pub struct InstallationContext {
 
 #[derive(Clone)]
 struct InstallationJob {
-    settings: SharedCache,
+    settings: crate::Database,
     game: SharedCache,
     id: String,
     database: DatabaseClient,
@@ -70,7 +70,7 @@ impl InstallationContext {
         }
     }
     pub(crate) fn for_job(
-        settings: SharedCache,
+        settings: crate::Database,
         game: SharedCache,
         id: String,
         control: DownloadControl,

@@ -9,7 +9,7 @@ use licht_core::{
 
 #[tokio::test]
 async fn a_new_job_round_trips_as_a_queued_snapshot_with_a_string_id() {
-    let fixture = Fixture::new("round-trip");
+    let fixture = Fixture::new("round-trip").await;
     let job = fixture.create("Survival").await;
     assert!(job.id.parse::<u64>().expect("numeric ID") > 0);
     assert_eq!(job.status, DownloadJobStatus::Queued);
@@ -30,11 +30,12 @@ async fn a_new_job_round_trips_as_a_queued_snapshot_with_a_string_id() {
     assert_eq!(json["instanceFolder"], "Survival");
     assert!(json["createdAt"].is_number());
     assert!(json.get("dataDirectory").is_none());
+    fixture.close().await;
 }
 
 #[tokio::test]
 async fn phase_component_progress_and_lifecycle_survive_reopening_the_database() {
-    let fixture = Fixture::new("lifecycle");
+    let fixture = Fixture::new("lifecycle").await;
     let job = fixture.create("Fabric world").await;
     let running = fixture
         .update(&job.id, DownloadJobStatus::Running, progress(0, 5, 11))
@@ -76,11 +77,12 @@ async fn phase_component_progress_and_lifecycle_survive_reopening_the_database()
         .await;
     assert_eq!(fixture.get(&job.id).await, completed);
     assert!(fixture.list().await.is_empty());
+    fixture.close().await;
 }
 
 #[tokio::test]
 async fn startup_recovery_interrupts_only_queued_and_running_jobs_in_the_selected_directory() {
-    let fixture = Fixture::new("recovery");
+    let fixture = Fixture::new("recovery").await;
     let queued = fixture.create("queued").await;
     let running = fixture.create("running").await;
     fixture
@@ -117,7 +119,7 @@ async fn startup_recovery_interrupts_only_queued_and_running_jobs_in_the_selecte
             progress(0, 0, 11),
         )
         .await;
-    let other_game = SharedCache::at(fixture.settings.root().join("other-data"));
+    let other_game = SharedCache::at(fixture.settings.cache().root().join("other-data"));
     let other = create_download_job(
         &fixture.settings,
         &other_game,
@@ -176,11 +178,12 @@ async fn startup_recovery_interrupts_only_queued_and_running_jobs_in_the_selecte
         0
     );
     assert_eq!(std::fs::read(part).expect("preserved partial"), b"hello");
+    fixture.close().await;
 }
 
 #[tokio::test]
 async fn completed_and_cancelled_jobs_cannot_restart() {
-    let fixture = Fixture::new("terminal");
+    let fixture = Fixture::new("terminal").await;
     for status in [DownloadJobStatus::Completed, DownloadJobStatus::Cancelled] {
         let job = fixture.create(&format!("terminal-{status:?}")).await;
         fixture
@@ -198,11 +201,12 @@ async fn completed_and_cancelled_jobs_cannot_restart() {
         assert!(matches!(error, CoreError::DownloadJobTransition));
         assert_eq!(fixture.get(&job.id).await, terminal);
     }
+    fixture.close().await;
 }
 
 #[tokio::test]
 async fn pending_cancellation_survives_recovery_and_cannot_restart_installation() {
-    let fixture = Fixture::new("pending-cancellation");
+    let fixture = Fixture::new("pending-cancellation").await;
     let job = fixture.create("Pending removal").await;
     let mut pending = update(DownloadJobStatus::Cancelling, progress(0, 0, 0));
     pending.error = Some("Instance file is locked".into());
@@ -239,11 +243,12 @@ async fn pending_cancellation_survives_recovery_and_cannot_restart_installation(
         .await;
     assert_eq!(cancelled.error, None);
     assert!(fixture.list().await.is_empty());
+    fixture.close().await;
 }
 
 #[tokio::test]
 async fn one_unfinished_job_per_instance_is_allowed_and_new_jobs_get_fresh_ids() {
-    let fixture = Fixture::new("duplicate");
+    let fixture = Fixture::new("duplicate").await;
     let job = fixture.create("Survival").await;
     let error = create_download_job(
         &fixture.settings,
@@ -270,11 +275,12 @@ async fn one_unfinished_job_per_instance_is_allowed_and_new_jobs_get_fresh_ids()
     assert_ne!(job.id, repair.id);
     assert_eq!(repair.operation, DownloadJobOperation::Repair);
     assert_eq!(fixture.list().await, vec![repair]);
+    fixture.close().await;
 }
 
 #[tokio::test]
 async fn pending_instance_removal_rejects_repairs_and_standalone_java_tasks() {
-    let fixture = Fixture::new("pending-removal-targets");
+    let fixture = Fixture::new("pending-removal-targets").await;
     let repair = create_download_job(
         &fixture.settings,
         &fixture.game,
@@ -285,7 +291,7 @@ async fn pending_instance_removal_rejects_repairs_and_standalone_java_tasks() {
     .await
     .expect("repair");
     let java = fixture.create("Java target").await;
-    let mut connection = open_db(&fixture.settings).await.expect("database");
+    let mut connection = open_db(fixture.settings.cache()).await.expect("database");
     sqlx::query("UPDATE download_jobs SET instance_folder = NULL, java_major = 21 WHERE id = ?1")
         .bind(&java.id)
         .execute(&mut connection)
@@ -319,11 +325,12 @@ async fn pending_instance_removal_rejects_repairs_and_standalone_java_tasks() {
         .close()
         .await
         .expect("close database before fixture cleanup");
+    fixture.close().await;
 }
 
 #[tokio::test]
 async fn concurrent_requests_cannot_create_duplicate_active_jobs() {
-    let fixture = Fixture::new("concurrent");
+    let fixture = Fixture::new("concurrent").await;
     let barrier = tokio::sync::Barrier::new(4);
     let results = futures_util::future::join_all((0..4).map(|_| async {
         barrier.wait().await;
@@ -346,13 +353,14 @@ async fn concurrent_requests_cannot_create_duplicate_active_jobs() {
         3
     );
     assert_eq!(fixture.list().await.len(), 1);
+    fixture.close().await;
 }
 
 #[tokio::test]
 async fn job_lookup_cannot_cross_data_directories_and_rejects_invalid_ids() {
-    let fixture = Fixture::new("lookup");
+    let fixture = Fixture::new("lookup").await;
     let job = fixture.create("Survival").await;
-    let other_game = SharedCache::at(fixture.settings.root().join("other-data"));
+    let other_game = SharedCache::at(fixture.settings.cache().root().join("other-data"));
     assert!(
         list_download_jobs(&fixture.settings, &other_game)
             .await
@@ -373,11 +381,12 @@ async fn job_lookup_cannot_cross_data_directories_and_rejects_invalid_ids() {
         get_download_job(&fixture.settings, &fixture.game, "99999").await,
         Err(CoreError::DownloadJobMissing)
     ));
+    fixture.close().await;
 }
 
 #[tokio::test]
 async fn unsafe_contexts_and_invalid_progress_are_rejected_without_changing_the_job() {
-    let fixture = Fixture::new("validation");
+    let fixture = Fixture::new("validation").await;
     for (folder, version) in [
         ("../escape", "1.21.1"),
         ("Survival", "../escape"),
@@ -449,13 +458,14 @@ async fn unsafe_contexts_and_invalid_progress_are_rejected_without_changing_the_
         .await,
         Err(CoreError::DownloadJobInvalid { .. })
     ));
+    fixture.close().await;
 }
 
 #[tokio::test]
 async fn invalid_database_payloads_fail_explicitly_instead_of_disappearing_from_the_list() {
-    let fixture = Fixture::new("corrupt-data");
+    let fixture = Fixture::new("corrupt-data").await;
     let job = fixture.create("Survival").await;
-    let mut connection = open_db(&fixture.settings).await.expect("database");
+    let mut connection = open_db(fixture.settings.cache()).await.expect("database");
     sqlx::query("UPDATE download_jobs SET progress = 'not JSON' WHERE id = ?1")
         .bind(&job.id)
         .execute(&mut connection)
@@ -479,11 +489,12 @@ async fn invalid_database_payloads_fail_explicitly_instead_of_disappearing_from_
         .close()
         .await
         .expect("close database before fixture cleanup");
+    fixture.close().await;
 }
 
 #[tokio::test]
 async fn indexed_cleanup_preserves_active_shared_partials_and_complete_files() {
-    let fixture = Fixture::new("indexed-cleanup");
+    let fixture = Fixture::new("indexed-cleanup").await;
     let cancelled = create_download_job(
         &fixture.settings,
         &fixture.game,
@@ -512,7 +523,7 @@ async fn indexed_cleanup_preserves_active_shared_partials_and_complete_files() {
             progress(1, 11, 11),
         )
         .await;
-    let mut connection = open_db(&fixture.settings).await.expect("database");
+    let mut connection = open_db(fixture.settings.cache()).await.expect("database");
     for (id, name) in [
         (&cancelled.id, "exclusive.jar"),
         (&cancelled.id, "shared.jar"),
@@ -540,13 +551,9 @@ async fn indexed_cleanup_preserves_active_shared_partials_and_complete_files() {
     }
     let complete_file = fixture.game.root().join("complete.jar");
     std::fs::write(&complete_file, b"complete bytes").expect("complete file");
-    let database = licht_core::DatabaseService::start(
-        licht_core::Database::open(&fixture.settings)
-            .await
-            .expect("database"),
-    )
-    .await
-    .expect("service");
+    let database = licht_core::DatabaseService::start(fixture.settings.clone())
+        .await
+        .expect("service");
     let manager = DownloadManager::new(
         fixture.settings.clone(),
         fixture.game.clone(),
@@ -580,6 +587,7 @@ async fn indexed_cleanup_preserves_active_shared_partials_and_complete_files() {
         DownloadJobStatus::Completed
     );
     database.shutdown().await.expect("close service");
+    fixture.close().await;
 }
 
 fn progress(finished: u32, bytes_done: u64, bytes_total: u64) -> DownloadProgress {
@@ -603,19 +611,28 @@ fn update(status: DownloadJobStatus, progress: DownloadProgress) -> DownloadJobU
 }
 
 struct Fixture {
-    settings: SharedCache,
+    settings: licht_core::Database,
     game: SharedCache,
 }
 
 impl Fixture {
-    fn new(name: &str) -> Self {
+    async fn new(name: &str) -> Self {
         let root =
             std::env::temp_dir().join(format!("licht-download-jobs-{name}-{}", std::process::id()));
         std::fs::create_dir_all(&root).expect("fixture directory");
         Self {
-            settings: SharedCache::at(root.join("settings")),
+            settings: licht_core::Database::open(&SharedCache::at(root.join("settings")))
+                .await
+                .expect("database"),
             game: SharedCache::at(root.join("data")),
         }
+    }
+
+    /// The pool closes first: Windows cannot delete a database that is still open.
+    async fn close(self) {
+        self.settings.close().await;
+        std::fs::remove_dir_all(self.settings.cache().root().parent().expect("fixture root"))
+            .expect("cleanup");
     }
 
     async fn create(&self, folder: &str) -> DownloadJobSnapshot {
@@ -651,12 +668,5 @@ impl Fixture {
         update_download_job(&self.settings, &self.game, id, update(status, progress))
             .await
             .expect("update job")
-    }
-}
-
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        std::fs::remove_dir_all(self.settings.root().parent().expect("fixture root"))
-            .expect("cleanup");
     }
 }

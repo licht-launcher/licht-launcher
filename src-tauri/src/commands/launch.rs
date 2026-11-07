@@ -70,7 +70,7 @@ async fn launch_one(
     app: &AppHandle,
     database: &licht_core::DatabaseClient,
     game: &SharedCache,
-    settings_home: &SharedCache,
+    settings_home: &licht_core::Database,
     sessions: &LaunchSessions,
     folder: &str,
     username: &str,
@@ -100,7 +100,7 @@ async fn launch_one(
     let codec = log_codec(major);
     let launch = resolved_launch(&profile, &global_launch(&settings));
     let http = http_client()?;
-    let prepared = match session_for_launch(&http, settings_home).await {
+    let prepared = match session_for_launch(&http, settings_home.cache()).await {
         Ok(session) => {
             prepare_microsoft_launch(
                 database,

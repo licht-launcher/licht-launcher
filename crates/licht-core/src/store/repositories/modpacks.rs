@@ -140,13 +140,13 @@ mod tests {
         let cache = fixture();
         let instances = cache.root().join("instances");
         let other = cache.root().join("other-instances");
-        let service =
-            DatabaseService::start(crate::Database::open(&cache).await.expect("database"))
-                .await
-                .expect("service");
+        let database = crate::Database::open(&cache).await.expect("database");
+        let service = DatabaseService::start(database.clone())
+            .await
+            .expect("service");
         let client = service.client();
         let original = index();
-        let settings = crate::load_settings(&cache).await.expect("settings");
+        let settings = crate::load_settings(&database).await.expect("settings");
         crate::create_instance(
             &client,
             &instances,

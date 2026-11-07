@@ -317,7 +317,7 @@ pub(crate) async fn install_forge_like_with_context(
 pub(crate) async fn prepare(
     client: &Client,
     cache: &SharedCache,
-    settings: &SharedCache,
+    settings: &crate::Database,
     id: &str,
     java: &Path,
     environment: &LaunchEnvironment,
