@@ -369,9 +369,29 @@ fn read_stored(path: &Path) -> Result<StoredSettings> {
     serde_json::from_str(&text).map_err(CoreError::Settings)
 }
 
+// Every save goes through one temporary file, so writers in this process take turns.
+// The guard lives inside the blocking task, so a cancelled caller cannot release it early.
+static SETTINGS_WRITES: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn settings_write_guard() -> std::sync::MutexGuard<'static, ()> {
+    // The lock protects no data, so a writer that panicked leaves nothing to repair.
+    SETTINGS_WRITES
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+async fn blocking<T: Send + 'static>(
+    work: impl FnOnce() -> Result<T> + Send + 'static,
+) -> Result<T> {
+    tokio::task::spawn_blocking(work)
+        .await
+        .map_err(|_| std::io::Error::other("could not join settings file access"))?
+}
+
 /// Missing `settings.json` means the defaults. The file is created only when saved.
 pub async fn load_settings(cache: &SharedCache) -> Result<Settings> {
-    load_settings_blocking(cache)
+    let cache = cache.clone();
+    blocking(move || load_settings_blocking(&cache)).await
 }
 
 pub(super) fn load_settings_blocking(cache: &SharedCache) -> Result<Settings> {
@@ -431,15 +451,21 @@ pub async fn settings_snapshot(cache: &SharedCache) -> Result<SettingsSnapshot> 
 }
 
 pub async fn save_settings(cache: &SharedCache, settings: &Settings) -> Result<Settings> {
-    save_settings_blocking(cache, settings)
+    let cache = cache.clone();
+    let settings = settings.clone();
+    blocking(move || {
+        let _write = settings_write_guard();
+        write_settings_file(&cache, settings)
+    })
+    .await
 }
 
-pub(super) fn save_settings_blocking(cache: &SharedCache, settings: &Settings) -> Result<Settings> {
+fn write_settings_file(cache: &SharedCache, settings: Settings) -> Result<Settings> {
     let path = settings_path(cache);
     if path.is_file() {
         let _existing = from_stored(cache, read_stored(&path)?)?;
     }
-    let settings = validated(cache, settings.clone())?;
+    let settings = validated(cache, settings)?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
@@ -459,16 +485,22 @@ pub(super) fn save_settings_blocking(cache: &SharedCache, settings: &Settings) -
 }
 
 pub async fn set_java_path(cache: &SharedCache, major: u32, path: &Path) -> Result<Settings> {
-    let mut settings = load_settings(cache).await?;
+    let cache = cache.clone();
     let text = Some(path.display().to_string());
-    match major {
-        25 => settings.java25 = text,
-        21 => settings.java21 = text,
-        17 => settings.java17 = text,
-        8 => settings.java8 = text,
-        _ => return Err(CoreError::SettingsJava),
-    }
-    save_settings(cache, &settings).await
+    blocking(move || {
+        // Held across the read so a concurrent save cannot be overwritten with stale values.
+        let _write = settings_write_guard();
+        let mut settings = load_settings_blocking(&cache)?;
+        match major {
+            25 => settings.java25 = text,
+            21 => settings.java21 = text,
+            17 => settings.java17 = text,
+            8 => settings.java8 = text,
+            _ => return Err(CoreError::SettingsJava),
+        }
+        write_settings_file(&cache, settings)
+    })
+    .await
 }
 
 fn concurrency_source<'a>(game: &'a SharedCache, settings: &'a SharedCache) -> &'a SharedCache {
@@ -487,23 +519,22 @@ pub async fn download_concurrency(game: &SharedCache, settings: &SharedCache) ->
         .download_concurrency as usize)
 }
 
-/// How many files may be written to disk at once across all installs.
-pub async fn write_concurrency(game: &SharedCache, settings: &SharedCache) -> Result<usize> {
-    Ok(load_settings(concurrency_source(game, settings))
-        .await?
-        .write_concurrency as usize)
-}
-
-pub(crate) async fn configured_transfer_limits(
+/// Bandwidth, concurrency, and retry for one download batch, from a single settings read.
+pub(crate) async fn download_options(
     game: &SharedCache,
     settings: &SharedCache,
-) -> Result<std::sync::Arc<crate::TransferLimits>> {
+) -> Result<crate::DownloadOptions> {
     let saved = load_settings(concurrency_source(game, settings)).await?;
     let limits = crate::shared_transfer_limits();
     limits
         .bandwidth
         .set_limit(saved.download_speed_limit_bytes_per_second)?;
-    Ok(limits)
+    Ok(crate::DownloadOptions {
+        limits,
+        download_concurrency: saved.download_concurrency as usize,
+        write_concurrency: saved.write_concurrency as usize,
+        retry: crate::DEFAULT_RETRY,
+    })
 }
 
 /// Next process: game files go to `{dataDirectory}/Licht Launcher/data`.

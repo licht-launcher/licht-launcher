@@ -317,6 +317,23 @@ async fn legacy_transparency_preferences_are_ignored_and_removed_on_save() {
     }
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn concurrent_saves_leave_a_valid_file() {
+    let cache = cache("concurrent-saves");
+    save_settings(&cache, &sample(1)).await.expect("initial");
+    let saves = (1..=16)
+        .map(|value| {
+            let cache = cache.clone();
+            tokio::spawn(async move { save_settings(&cache, &sample(value)).await })
+        })
+        .collect::<Vec<_>>();
+    for save in saves {
+        save.await.expect("join").expect("save");
+    }
+    let loaded = load_settings(&cache).await.expect("valid file");
+    assert!((1..=16).contains(&loaded.download_concurrency));
+}
+
 #[tokio::test]
 async fn values_outside_one_to_sixteen_are_rejected_without_writing() {
     let cache = cache("range");

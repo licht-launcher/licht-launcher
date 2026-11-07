@@ -3,10 +3,9 @@ use std::path::{Path, PathBuf};
 use crate::hashes::{file_matches_sha1, sha1_hex};
 use crate::natives::{classifier_matches, native_classifier};
 use crate::{
-    ADOPTIUM_API, AssetIndexFile, CoreError, DEFAULT_RETRY, DownloadComponent, DownloadOptions,
-    DownloadPhase, DownloadTask, InstallationContext, LaunchEnvironment, Result, SharedCache,
-    Version, applicable_libraries, download_concurrency, install_temurin, parse_asset_index,
-    parse_version, required_java_major, use_custom_java,
+    ADOPTIUM_API, AssetIndexFile, CoreError, DownloadComponent, DownloadPhase, DownloadTask,
+    InstallationContext, LaunchEnvironment, Result, SharedCache, Version, applicable_libraries,
+    install_temurin, parse_asset_index, parse_version, required_java_major, use_custom_java,
 };
 
 pub const ASSET_OBJECT_BASE: &str = "https://resources.download.minecraft.net";
@@ -51,12 +50,7 @@ pub async fn install_version(
         .queue(
             client,
             &pending,
-            DownloadOptions {
-                limits: crate::settings::configured_transfer_limits(cache, settings).await?,
-                download_concurrency: download_concurrency(cache, settings).await?,
-                write_concurrency: crate::write_concurrency(cache, settings).await?,
-                retry: DEFAULT_RETRY,
-            },
+            crate::settings::download_options(cache, settings).await?,
         )
         .await
 }

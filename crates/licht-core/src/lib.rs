@@ -118,7 +118,6 @@ pub use settings::{
     GlobalLaunch, LauncherLanguage, LauncherTheme, Settings, SettingsSnapshot, configured_java,
     download_concurrency, game_cache, global_launch, load_settings, memory_slider_max,
     recommended_max_memory_mb, save_settings, set_java_path, settings_snapshot, total_memory_mb,
-    write_concurrency,
 };
 pub use store::layout::progress::{
     StartupPhase, StartupPreviewScenario, StartupProgress, StartupReporter, StartupUpdateStatus,

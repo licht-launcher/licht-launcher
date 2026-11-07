@@ -16,11 +16,9 @@ use self::overrides::{extract_override_files, list_override_files, override_pref
 use self::plan::{Plan, format_blocked, resolve_plan};
 use super::cdn::cdn_client;
 use super::{CURSEFORGE_INDEX_FILE, curseforge_api_key};
-use crate::download::DEFAULT_RETRY;
 use crate::instance::InstanceEntry;
 use crate::modpacks::MODPACK_INDEX_FILE;
 use crate::modpacks::file_hashes::ensure_md5;
-use crate::settings::{download_concurrency, write_concurrency};
 use crate::transfer::verification::VerificationProgress;
 use crate::{CoreError, Result, SharedCache};
 
@@ -84,12 +82,7 @@ pub async fn install_curseforge_files(
         .verified_queue(
             &client,
             &tasks,
-            crate::DownloadOptions {
-                limits: crate::settings::configured_transfer_limits(game, settings).await?,
-                download_concurrency: download_concurrency(game, settings).await?,
-                write_concurrency: write_concurrency(game, settings).await?,
-                retry: DEFAULT_RETRY,
-            },
+            crate::settings::download_options(game, settings).await?,
         )
         .await?;
     let mut verification = VerificationProgress::start(&progress, pending.len()).await?;

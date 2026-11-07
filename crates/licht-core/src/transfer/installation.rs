@@ -65,13 +65,7 @@ impl InstallationContext {
 
     pub(crate) async fn options(&self) -> Result<DownloadOptions> {
         match &self.job {
-            Some(job) => Ok(DownloadOptions {
-                limits: crate::settings::configured_transfer_limits(&job.game, &job.settings)
-                    .await?,
-                download_concurrency: crate::download_concurrency(&job.game, &job.settings).await?,
-                write_concurrency: crate::write_concurrency(&job.game, &job.settings).await?,
-                retry: crate::DEFAULT_RETRY,
-            }),
+            Some(job) => crate::settings::download_options(&job.game, &job.settings).await,
             None => Ok(DownloadOptions::default()),
         }
     }
