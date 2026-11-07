@@ -40,6 +40,12 @@ pub enum CoreError {
     DataDirectory,
     #[error("storage information is unavailable for the game data directory")]
     StorageUnavailable,
+    #[error(
+        "not enough free space for the new application directory: {} MB needed, {} MB free",
+        .required.div_ceil(1_000_000),
+        .available / 1_000_000
+    )]
+    InsufficientSpace { required: u64, available: u64 },
     #[error("settings JSON is invalid")]
     Settings(#[source] serde_json::Error),
     #[error("settings schema {schema} is not supported")]
