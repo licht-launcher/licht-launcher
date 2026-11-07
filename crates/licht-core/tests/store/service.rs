@@ -3,9 +3,10 @@ use std::future::Future;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::task::Poll;
 
+use crate::{open_migrated, stored_last_played};
 use licht_core::{
     CoreError, Database, DatabaseService, DownloadJobOperation, DownloadJobStatus,
-    DownloadJobUpdate, DownloadPhase, DownloadProgress, SharedCache, db_path, open_db,
+    DownloadJobUpdate, DownloadPhase, DownloadProgress, SharedCache, db_path,
 };
 
 static NEXT_FIXTURE: AtomicU64 = AtomicU64::new(0);
@@ -46,7 +47,7 @@ async fn assert_pending(mut future: std::pin::Pin<&mut impl Future>) {
 }
 
 async fn hold_writer(cache: &SharedCache) -> SqliteConnection {
-    let mut connection = open_db(cache).await.expect("writer connection");
+    let mut connection = open_migrated(cache).await.expect("writer connection");
     sqlx::query("BEGIN IMMEDIATE")
         .execute(&mut connection)
         .await
@@ -148,7 +149,9 @@ async fn a_sql_error_is_returned_and_the_service_accepts_subsequent_requests() {
     .await
     .expect("start");
     let client = service.client();
-    let mut connection = open_db(&fixture.cache).await.expect("fixture connection");
+    let mut connection = open_migrated(&fixture.cache)
+        .await
+        .expect("fixture connection");
     sqlx::raw_sql(
         "CREATE TRIGGER reject_metadata BEFORE INSERT ON meta
          BEGIN SELECT RAISE(FAIL, 'fixture write failure'); END;",
@@ -310,7 +313,7 @@ async fn shutdown_drains_a_full_queue_and_rejects_requests_still_waiting_for_cap
     // At most one write is in flight in addition to the 64 pending queue slots.
     assert!((64..=65).contains(&accepted), "accepted {accepted} writes");
     assert_eq!(
-        licht_core::last_played_folder(&fixture.cache)
+        stored_last_played(&fixture.cache)
             .await
             .expect("drained metadata"),
         Some(format!("world-{}", accepted - 1))
@@ -342,7 +345,7 @@ async fn shutdown_drains_an_accepted_write_after_its_caller_disconnects() {
     release_writer(writer).await;
     shutdown.await.expect("drain and close");
     assert_eq!(
-        licht_core::last_played_folder(&fixture.cache)
+        stored_last_played(&fixture.cache)
             .await
             .expect("committed write"),
         Some("survival".into())
@@ -372,7 +375,7 @@ fn job_update(status: DownloadJobStatus) -> DownloadJobUpdate {
 #[tokio::test]
 async fn account_identifiers_preserve_legacy_metadata_and_do_not_lose_concurrent_updates() {
     let fixture = Fixture::new();
-    let mut connection = open_db(&fixture.cache).await.expect("database");
+    let mut connection = open_migrated(&fixture.cache).await.expect("database");
     licht_core::set_meta(
         &mut connection,
         "microsoft_account_uuids",
