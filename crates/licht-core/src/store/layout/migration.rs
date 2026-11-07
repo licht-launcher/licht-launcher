@@ -129,7 +129,12 @@ pub(super) async fn migrate(
             .into());
         }
     } else {
-        save_settings(home, &staged_settings).await?;
+        // Saving into the profile would create its database before the staged one is
+        // published, so the staged file is moved into place instead.
+        fs::rename(
+            staging.root().join("settings.json"),
+            home.root().join("settings.json"),
+        )?;
     }
     // Publishing the validated database last marks a completed migration.
     fs::rename(super::db::db_path(&staging), super::db::db_path(home))?;

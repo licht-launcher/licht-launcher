@@ -317,6 +317,84 @@ async fn legacy_transparency_preferences_are_ignored_and_removed_on_save() {
     }
 }
 
+fn saved_file(cache: &SharedCache) -> serde_json::Value {
+    serde_json::from_slice(&std::fs::read(settings_file(cache)).expect("settings file"))
+        .expect("settings JSON")
+}
+
+#[tokio::test]
+async fn the_file_keeps_only_startup_preferences_and_the_rest_roundtrips() {
+    let cache = cache("split-storage");
+    let mut settings = sample(4);
+    settings.username = "Alex".to_string();
+    settings.jvm_arguments = vec!["-XX:+UseG1GC".to_string()];
+    settings.java21 = Some("/opt/java21/bin/java".to_string());
+    settings.width = None;
+    settings.download_speed_limit_bytes_per_second = Some(9_007_199_254_740_991);
+    settings.disable_custom_title_bar = true;
+    let saved = save_settings(&cache, &settings).await.expect("save");
+    let mut keys = saved_file(&cache)
+        .as_object()
+        .expect("object")
+        .keys()
+        .cloned()
+        .collect::<Vec<_>>();
+    keys.sort();
+    assert_eq!(
+        keys,
+        [
+            "automaticUpdates",
+            "dataDirectory",
+            "hardwareAcceleration",
+            "language",
+            "minimizeOnGameStart",
+            "minimizeToTray",
+            "restoreOnGameExit",
+            "schema",
+            "theme"
+        ]
+    );
+    assert_eq!(load_settings(&cache).await.expect("reload"), saved);
+}
+
+#[tokio::test]
+async fn legacy_file_values_are_used_until_they_move_to_the_database() {
+    let cache = cache("legacy-split");
+    std::fs::create_dir_all(cache.root()).expect("root");
+    std::fs::write(
+        settings_file(&cache),
+        r#"{"schema":1,"username":"Alex","downloadConcurrency":4}"#,
+    )
+    .expect("legacy settings");
+    let loaded = load_settings(&cache).await.expect("legacy values");
+    assert_eq!(loaded.username, "Alex");
+    assert_eq!(loaded.download_concurrency, 4);
+    save_settings(&cache, &loaded)
+        .await
+        .expect("move to database");
+    let file = saved_file(&cache);
+    assert!(file.get("username").is_none());
+    assert!(file.get("downloadConcurrency").is_none());
+    assert_eq!(load_settings(&cache).await.expect("reload"), loaded);
+}
+
+#[tokio::test]
+async fn database_values_win_over_stale_file_keys() {
+    let cache = cache("stale-file-keys");
+    save_settings(&cache, &sample(4)).await.expect("save");
+    let mut file = saved_file(&cache);
+    file["downloadConcurrency"] = 9.into();
+    file["username"] = "Stale".into();
+    std::fs::write(
+        settings_file(&cache),
+        serde_json::to_vec(&file).expect("JSON"),
+    )
+    .expect("stale keys");
+    let loaded = load_settings(&cache).await.expect("load");
+    assert_eq!(loaded.download_concurrency, 4);
+    assert_eq!(loaded.username, "Steve");
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn concurrent_saves_leave_a_valid_file() {
     let cache = cache("concurrent-saves");
@@ -399,13 +477,18 @@ async fn exact_memory_values_survive_save_and_relocated_settings_fit_the_current
         load_settings(&cache).await.expect("reload").max_memory_mb,
         513
     );
-    let mut stored = serde_json::to_value(settings).expect("json");
-    stored["maxMemoryMb"] = u32::MAX.into();
-    std::fs::write(
-        settings_file(&cache),
-        serde_json::to_vec(&stored).expect("json"),
+    use sqlx::Connection;
+    let mut connection = sqlx::SqliteConnection::connect_with(
+        &sqlx::sqlite::SqliteConnectOptions::new().filename(cache.root().join("licht.db")),
     )
-    .expect("settings from another machine");
+    .await
+    .expect("database");
+    sqlx::query("UPDATE settings SET max_memory_mb = ?1")
+        .bind(u32::MAX)
+        .execute(&mut connection)
+        .await
+        .expect("settings from another machine");
+    connection.close().await.expect("close");
     assert_eq!(
         load_settings(&cache)
             .await

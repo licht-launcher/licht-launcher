@@ -3,6 +3,8 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use super::db;
+use super::repositories::settings::SettingsRepository;
 use crate::{CoreError, DEFAULT_CONCURRENCY, Result, SharedCache};
 
 const SCHEMA: u32 = 1;
@@ -369,15 +371,59 @@ fn read_stored(path: &Path) -> Result<StoredSettings> {
     serde_json::from_str(&text).map_err(CoreError::Settings)
 }
 
-// Every save goes through one temporary file, so writers in this process take turns.
-// The guard lives inside the blocking task, so a cancelled caller cannot release it early.
-static SETTINGS_WRITES: std::sync::Mutex<()> = std::sync::Mutex::new(());
+/// Preferences kept in `settings.json`, readable before the database opens.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StartupPreferences {
+    pub theme: LauncherTheme,
+    pub language: LauncherLanguage,
+    pub hardware_acceleration: bool,
+    pub minimize_to_tray: bool,
+    pub minimize_on_game_start: bool,
+    pub restore_on_game_exit: bool,
+    pub automatic_updates: bool,
+}
 
-fn settings_write_guard() -> std::sync::MutexGuard<'static, ()> {
-    // The lock protects no data, so a writer that panicked leaves nothing to repair.
-    SETTINGS_WRITES
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
+impl From<&Settings> for StartupPreferences {
+    fn from(settings: &Settings) -> Self {
+        Self {
+            theme: settings.theme,
+            language: settings.language,
+            hardware_acceleration: settings.hardware_acceleration,
+            minimize_to_tray: settings.minimize_to_tray,
+            minimize_on_game_start: settings.minimize_on_game_start,
+            restore_on_game_exit: settings.restore_on_game_exit,
+            automatic_updates: settings.automatic_updates,
+        }
+    }
+}
+
+/// What `settings.json` holds. Every other setting lives in the database.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct FileSettings<'a> {
+    schema: u32,
+    #[serde(flatten)]
+    preferences: StartupPreferences,
+    data_directory: &'a Option<String>,
+}
+
+// Every save goes through one temporary file and one database row, so writers in this
+// process take turns. The write runs in its own task, so a cancelled caller cannot
+// release the lock while the write is still in progress.
+static SETTINGS_WRITES: std::sync::LazyLock<std::sync::Arc<tokio::sync::Mutex<()>>> =
+    std::sync::LazyLock::new(Default::default);
+
+async fn exclusive_write<T: Send + 'static>(
+    work: impl std::future::Future<Output = Result<T>> + Send + 'static,
+) -> Result<T> {
+    let guard = std::sync::Arc::clone(&SETTINGS_WRITES).lock_owned().await;
+    tokio::spawn(async move {
+        let _guard = guard;
+        work.await
+    })
+    .await
+    .map_err(|_| std::io::Error::other("could not join settings write"))?
 }
 
 async fn blocking<T: Send + 'static>(
@@ -388,13 +434,40 @@ async fn blocking<T: Send + 'static>(
         .map_err(|_| std::io::Error::other("could not join settings file access"))?
 }
 
-/// Missing `settings.json` means the defaults. The file is created only when saved.
+/// Missing `settings.json` and database mean the defaults. Nothing is created until a save.
 pub async fn load_settings(cache: &SharedCache) -> Result<Settings> {
-    let cache = cache.clone();
-    blocking(move || load_settings_blocking(&cache)).await
+    let file = cache.clone();
+    let mut settings = blocking(move || load_file_settings(&file)).await?;
+    // Until the first save stores a row, older settings files still carry every value.
+    if !db::db_path(cache).is_file() {
+        return Ok(settings);
+    }
+    let mut connection = db::open_db(cache).await?;
+    let stored = SettingsRepository::load_into(&mut connection, &mut settings).await;
+    if !db::complete_operation(connection, stored).await? {
+        return Ok(settings);
+    }
+    // A saved allocation can come from a machine with more RAM.
+    settings.max_memory_mb = settings
+        .max_memory_mb
+        .min(memory_slider_max(total_memory_mb()));
+    validated(cache, settings)
 }
 
-pub(super) fn load_settings_blocking(cache: &SharedCache) -> Result<Settings> {
+pub(super) async fn stored_in_database(cache: &SharedCache) -> Result<bool> {
+    if !db::db_path(cache).is_file() {
+        return Ok(false);
+    }
+    let mut connection = db::open_db(cache).await?;
+    let exists = SettingsRepository::exists(&mut connection).await;
+    db::complete_operation(connection, exists).await
+}
+
+pub(super) fn load_startup_preferences(cache: &SharedCache) -> Result<StartupPreferences> {
+    Ok(StartupPreferences::from(&load_file_settings(cache)?))
+}
+
+fn load_file_settings(cache: &SharedCache) -> Result<Settings> {
     let path = settings_path(cache);
     if !path.is_file() {
         return from_stored(
@@ -451,25 +524,39 @@ pub async fn settings_snapshot(cache: &SharedCache) -> Result<SettingsSnapshot> 
 }
 
 pub async fn save_settings(cache: &SharedCache, settings: &Settings) -> Result<Settings> {
-    let cache = cache.clone();
-    let settings = settings.clone();
-    blocking(move || {
-        let _write = settings_write_guard();
-        write_settings_file(&cache, settings)
+    exclusive_write(write_settings(cache.clone(), settings.clone())).await
+}
+
+async fn write_settings(cache: SharedCache, settings: Settings) -> Result<Settings> {
+    let checked = cache.clone();
+    let settings = blocking(move || {
+        let path = settings_path(&checked);
+        // An unreadable or newer file is left in place rather than overwritten.
+        if path.is_file() {
+            let _existing = from_stored(&checked, read_stored(&path)?)?;
+        }
+        validated(&checked, settings)
     })
-    .await
+    .await?;
+    // The row is written first, so an interrupted save keeps the previous startup
+    // preferences in the file; the next save writes both again.
+    let mut connection = db::open_db(&cache).await?;
+    let stored = SettingsRepository::save(&mut connection, &settings).await;
+    db::complete_operation(connection, stored).await?;
+    blocking(move || write_settings_file(&cache, settings)).await
 }
 
 fn write_settings_file(cache: &SharedCache, settings: Settings) -> Result<Settings> {
     let path = settings_path(cache);
-    if path.is_file() {
-        let _existing = from_stored(cache, read_stored(&path)?)?;
-    }
-    let settings = validated(cache, settings)?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let json = serde_json::to_string_pretty(&settings).map_err(CoreError::Settings)?;
+    let file = FileSettings {
+        schema: settings.schema,
+        preferences: StartupPreferences::from(&settings),
+        data_directory: &settings.data_directory,
+    };
+    let json = serde_json::to_string_pretty(&file).map_err(CoreError::Settings)?;
     // Directory moves must be able to retry after an interrupted settings update.
     let temporary = path.with_extension("json.tmp");
     let mut file = std::fs::File::create(&temporary)?;
@@ -487,10 +574,9 @@ fn write_settings_file(cache: &SharedCache, settings: Settings) -> Result<Settin
 pub async fn set_java_path(cache: &SharedCache, major: u32, path: &Path) -> Result<Settings> {
     let cache = cache.clone();
     let text = Some(path.display().to_string());
-    blocking(move || {
-        // Held across the read so a concurrent save cannot be overwritten with stale values.
-        let _write = settings_write_guard();
-        let mut settings = load_settings_blocking(&cache)?;
+    exclusive_write(async move {
+        // Read inside the lock so a concurrent save cannot be overwritten with stale values.
+        let mut settings = load_settings(&cache).await?;
         match major {
             25 => settings.java25 = text,
             21 => settings.java21 = text,
@@ -498,7 +584,7 @@ pub async fn set_java_path(cache: &SharedCache, major: u32, path: &Path) -> Resu
             8 => settings.java8 = text,
             _ => return Err(CoreError::SettingsJava),
         }
-        write_settings_file(&cache, settings)
+        write_settings(cache, settings).await
     })
     .await
 }

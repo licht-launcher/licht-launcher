@@ -8,7 +8,7 @@ use super::repositories::metadata::MetadataRepository;
 use crate::{CoreError, Result, SharedCache};
 
 const DB_FILE: &str = "licht.db";
-const SCHEMA_VERSION: u32 = 10;
+const SCHEMA_VERSION: u32 = 11;
 pub(super) const META_LAST_PLAYED: &str = "last_played_folder";
 
 pub fn db_path(cache: &SharedCache) -> PathBuf {
@@ -252,6 +252,29 @@ async fn migrate(connection: &mut SqliteConnection) -> Result<()> {
         sqlx::raw_sql(
             "CREATE INDEX IF NOT EXISTS download_jobs_queue ON download_jobs (data_directory, queue_order, id);
              PRAGMA user_version = 10;",
+        )
+        .execute(&mut *transaction)
+        .await?;
+    }
+    if version < 11 {
+        // Startup preferences stay in settings.json; everything else lives in this single row.
+        sqlx::raw_sql(
+            "CREATE TABLE settings (
+                id INTEGER PRIMARY KEY CHECK(id = 1),
+                username TEXT NOT NULL,
+                fullscreen INTEGER NOT NULL CHECK(fullscreen IN (0, 1)),
+                width INTEGER CHECK(width BETWEEN 1 AND 4294967295),
+                height INTEGER CHECK(height BETWEEN 1 AND 4294967295),
+                max_memory_mb INTEGER NOT NULL CHECK(max_memory_mb BETWEEN 1 AND 4294967295),
+                jvm_arguments TEXT NOT NULL,
+                java25 TEXT, java21 TEXT, java17 TEXT, java8 TEXT,
+                download_concurrency INTEGER NOT NULL CHECK(download_concurrency BETWEEN 1 AND 16),
+                write_concurrency INTEGER NOT NULL CHECK(write_concurrency BETWEEN 1 AND 16),
+                download_speed_limit_bytes_per_second INTEGER
+                    CHECK(download_speed_limit_bytes_per_second BETWEEN 1 AND 9007199254740991),
+                disable_custom_title_bar INTEGER NOT NULL CHECK(disable_custom_title_bar IN (0, 1))
+            );
+            PRAGMA user_version = 11;",
         )
         .execute(&mut *transaction)
         .await?;
