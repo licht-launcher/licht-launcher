@@ -569,7 +569,7 @@ async fn cancelling_an_existing_legacy_instance_update_keeps_its_files() {
         &root,
         "Legacy",
         "1.20.1",
-        &global_launch(&load_settings(&fixture.settings).expect("settings")),
+        &global_launch(&load_settings(&fixture.settings).await.expect("settings")),
     )
     .await
     .expect("legacy instance");
@@ -711,7 +711,10 @@ async fn standalone_java_has_no_fake_instance_and_cancellation_returns_no_path()
         .expect("path");
     assert!(Path::new(&path).is_file());
     assert_eq!(
-        load_settings(&fixture.settings).expect("settings").java21,
+        load_settings(&fixture.settings)
+            .await
+            .expect("settings")
+            .java21,
         Some(path)
     );
     fixture.close().await;

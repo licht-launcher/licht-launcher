@@ -31,7 +31,7 @@ pub struct LauncherPaths {
 impl LauncherPaths {
     pub async fn load(reporter: licht_core::StartupReporter) -> Result<Self, CoreError> {
         let settings = licht_core::initialize_launcher_with_progress(reporter).await?;
-        let game = game_cache(&settings)?;
+        let game = game_cache(&settings).await?;
         Ok(Self { settings, game })
     }
 }

@@ -176,7 +176,7 @@ async fn installer(
                 checksum: DownloadChecksum::Sha1(hash.clone()),
                 size: 0,
             }],
-            context.options()?,
+            context.options().await?,
         )
         .await?;
     context.stage(DownloadPhase::Verifying).await?;

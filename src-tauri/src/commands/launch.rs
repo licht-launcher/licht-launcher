@@ -76,7 +76,7 @@ async fn launch_one(
     username: &str,
 ) -> Result<GameExit, CoreError> {
     let cache = game.clone();
-    let settings = load_settings(settings_home)?;
+    let settings = load_settings(settings_home).await?;
     let dir = cache.instance_dir(folder)?;
     let profile = load_instance(database, &dir).await?;
     let version_id = licht_core::instance_version_for_launch(&profile)?.to_string();

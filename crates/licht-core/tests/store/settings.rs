@@ -44,8 +44,8 @@ fn sample(download_concurrency: u32) -> Settings {
     }
 }
 
-#[test]
-fn automatic_updates_migrate_without_enabling_previously_disabled_downloads() {
+#[tokio::test]
+async fn automatic_updates_migrate_without_enabling_previously_disabled_downloads() {
     for (index, (check, install, expected)) in [
         (true, true, true),
         (true, false, false),
@@ -58,9 +58,11 @@ fn automatic_updates_migrate_without_enabling_previously_disabled_downloads() {
         let cache = cache(&format!("old-update-preferences-{index}"));
         std::fs::create_dir_all(cache.root()).expect("root");
         std::fs::write(settings_file(&cache), serde_json::to_vec(&serde_json::json!({"schema":1,"checkForUpdates":check,"installUpdatesOnRestart":install})).expect("json")).expect("legacy settings");
-        let loaded = load_settings(&cache).expect("migrate preferences");
+        let loaded = load_settings(&cache).await.expect("migrate preferences");
         assert_eq!(loaded.automatic_updates, expected);
-        save_settings(&cache, &loaded).expect("save new preference");
+        save_settings(&cache, &loaded)
+            .await
+            .expect("save new preference");
         let saved: serde_json::Value =
             serde_json::from_slice(&std::fs::read(settings_file(&cache)).expect("saved file"))
                 .expect("json");
@@ -80,11 +82,11 @@ fn recommended_memory_is_half_the_ram_inside_the_bounds() {
     assert!(total_memory_mb() >= 512);
 }
 
-#[test]
-fn a_missing_file_returns_defaults_and_is_not_created() {
+#[tokio::test]
+async fn a_missing_file_returns_defaults_and_is_not_created() {
     let cache = cache("missing");
 
-    let settings = load_settings(&cache).expect("default");
+    let settings = load_settings(&cache).await.expect("default");
 
     assert_eq!(settings.schema, 1);
     assert!(settings.automatic_updates);
@@ -107,12 +109,12 @@ fn a_missing_file_returns_defaults_and_is_not_created() {
     assert!(!cache.root().exists());
 }
 
-#[test]
-fn a_saved_value_roundtrips() {
+#[tokio::test]
+async fn a_saved_value_roundtrips() {
     let cache = cache("roundtrip");
 
-    let saved = save_settings(&cache, &sample(4)).expect("save");
-    let loaded = load_settings(&cache).expect("load");
+    let saved = save_settings(&cache, &sample(4)).await.expect("save");
+    let loaded = load_settings(&cache).await.expect("load");
 
     assert_eq!(saved.schema, 1);
     assert_eq!(saved.download_concurrency, 4);
@@ -120,12 +122,12 @@ fn a_saved_value_roundtrips() {
     assert!(settings_file(&cache).is_file());
 }
 
-#[test]
-fn general_preferences_roundtrip_and_legacy_files_use_defaults() {
+#[tokio::test]
+async fn general_preferences_roundtrip_and_legacy_files_use_defaults() {
     let cache = cache("general-preferences");
     std::fs::create_dir_all(cache.root()).expect("root");
     std::fs::write(settings_file(&cache), r#"{"schema":1}"#).expect("legacy settings");
-    let mut settings = load_settings(&cache).expect("legacy defaults");
+    let mut settings = load_settings(&cache).await.expect("legacy defaults");
     assert!(settings.hardware_acceleration);
     assert!(settings.minimize_to_tray);
     assert!(!settings.minimize_on_game_start);
@@ -134,8 +136,10 @@ fn general_preferences_roundtrip_and_legacy_files_use_defaults() {
     settings.minimize_to_tray = false;
     settings.minimize_on_game_start = true;
     settings.restore_on_game_exit = true;
-    save_settings(&cache, &settings).expect("save preferences");
-    assert_eq!(load_settings(&cache).expect("reload"), settings);
+    save_settings(&cache, &settings)
+        .await
+        .expect("save preferences");
+    assert_eq!(load_settings(&cache).await.expect("reload"), settings);
     let saved: serde_json::Value =
         serde_json::from_slice(&std::fs::read(settings_file(&cache)).expect("settings"))
             .expect("json");
@@ -143,16 +147,19 @@ fn general_preferences_roundtrip_and_legacy_files_use_defaults() {
     assert_eq!(saved["minimizeToTray"], false);
 }
 
-#[test]
-fn unsupported_languages_are_rejected_at_the_settings_boundary() {
+#[tokio::test]
+async fn unsupported_languages_are_rejected_at_the_settings_boundary() {
     let cache = cache("unsupported-language");
     std::fs::create_dir_all(cache.root()).expect("root");
     std::fs::write(settings_file(&cache), r#"{"schema":1,"language":"pt-BR"}"#).expect("settings");
-    assert!(matches!(load_settings(&cache), Err(CoreError::Settings(_))));
+    assert!(matches!(
+        load_settings(&cache).await,
+        Err(CoreError::Settings(_))
+    ));
 }
 
-#[test]
-fn legacy_mib_limits_are_loaded_as_exact_bytes_per_second() {
+#[tokio::test]
+async fn legacy_mib_limits_are_loaded_as_exact_bytes_per_second() {
     let cache = cache("legacy-speed-limit");
     std::fs::create_dir_all(cache.root()).expect("root");
     std::fs::write(
@@ -160,22 +167,24 @@ fn legacy_mib_limits_are_loaded_as_exact_bytes_per_second() {
         r#"{"schema":1,"downloadSpeedLimitMiB":3}"#,
     )
     .expect("legacy settings");
-    let loaded = load_settings(&cache).expect("load legacy limit");
+    let loaded = load_settings(&cache).await.expect("load legacy limit");
     let serialized = serde_json::to_value(&loaded).expect("settings json");
     assert_eq!(
         serialized["downloadSpeedLimitBytesPerSecond"],
         3 * 1024 * 1024
     );
     assert!(serialized.get("downloadSpeedLimitMiB").is_none());
-    save_settings(&cache, &loaded).expect("save migrated settings");
+    save_settings(&cache, &loaded)
+        .await
+        .expect("save migrated settings");
     assert_eq!(
-        load_settings(&cache).expect("reload migrated limit"),
+        load_settings(&cache).await.expect("reload migrated limit"),
         loaded
     );
 }
 
-#[test]
-fn byte_limits_take_precedence_and_remain_safe_for_the_frontend() {
+#[tokio::test]
+async fn byte_limits_take_precedence_and_remain_safe_for_the_frontend() {
     let cache = cache("byte-speed-limit");
     std::fs::create_dir_all(cache.root()).expect("root");
     std::fs::write(
@@ -185,6 +194,7 @@ fn byte_limits_take_precedence_and_remain_safe_for_the_frontend() {
     .expect("settings");
     assert_eq!(
         load_settings(&cache)
+            .await
             .expect("byte limit")
             .download_speed_limit_bytes_per_second,
         Some(1000)
@@ -192,59 +202,67 @@ fn byte_limits_take_precedence_and_remain_safe_for_the_frontend() {
     let mut settings = sample(4);
     settings.download_speed_limit_bytes_per_second = Some(9_007_199_254_740_992);
     assert!(matches!(
-        save_settings(&cache, &settings),
+        save_settings(&cache, &settings).await,
         Err(CoreError::SettingsDownloadSpeed)
     ));
     assert_eq!(
         load_settings(&cache)
+            .await
             .expect("previous limit")
             .download_speed_limit_bytes_per_second,
         Some(1000)
     );
 }
 
-#[test]
-fn global_speed_limit_roundtrips_and_rejects_zero() {
+#[tokio::test]
+async fn global_speed_limit_roundtrips_and_rejects_zero() {
     let cache = cache("speed-limit");
     let mut settings = sample(4);
     assert_eq!(
         load_settings(&cache)
+            .await
             .expect("defaults")
             .download_speed_limit_bytes_per_second,
         None
     );
     settings.download_speed_limit_bytes_per_second = Some(3000);
-    save_settings(&cache, &settings).expect("save speed limit");
+    save_settings(&cache, &settings)
+        .await
+        .expect("save speed limit");
     assert_eq!(
         load_settings(&cache)
+            .await
             .expect("load speed limit")
             .download_speed_limit_bytes_per_second,
         Some(3000)
     );
     settings.download_speed_limit_bytes_per_second = Some(0);
     assert!(matches!(
-        save_settings(&cache, &settings),
+        save_settings(&cache, &settings).await,
         Err(CoreError::SettingsDownloadSpeed)
     ));
     assert_eq!(
         load_settings(&cache)
+            .await
             .expect("previous valid value")
             .download_speed_limit_bytes_per_second,
         Some(3000)
     );
     settings.download_speed_limit_bytes_per_second = None;
-    save_settings(&cache, &settings).expect("remove limit");
+    save_settings(&cache, &settings)
+        .await
+        .expect("remove limit");
 }
 
-#[test]
-fn an_old_file_keeps_concurrency_and_fills_the_new_fields() {
+#[tokio::test]
+async fn an_old_file_keeps_concurrency_and_fills_the_new_fields() {
     let cache = cache("old");
     let path = settings_file(&cache);
     std::fs::create_dir_all(cache.root()).expect("root");
     let original = "{\"schema\":1,\"downloadConcurrency\":4}\n";
     std::fs::write(&path, original).expect("write");
 
-    let loaded = load_settings(&cache).expect("load");
+    let loaded = load_settings(&cache).await.expect("load");
 
     assert_eq!(loaded.download_concurrency, 4);
     assert_eq!(loaded.write_concurrency, 8);
@@ -260,8 +278,8 @@ fn an_old_file_keeps_concurrency_and_fills_the_new_fields() {
     assert_eq!(std::fs::read_to_string(&path).expect("unchanged"), original);
 }
 
-#[test]
-fn an_explicit_null_window_stays_empty() {
+#[tokio::test]
+async fn an_explicit_null_window_stays_empty() {
     let cache = cache("null-window");
     let path = settings_file(&cache);
     std::fs::create_dir_all(cache.root()).expect("root");
@@ -271,14 +289,14 @@ fn an_explicit_null_window_stays_empty() {
     )
     .expect("write");
 
-    let loaded = load_settings(&cache).expect("load");
+    let loaded = load_settings(&cache).await.expect("load");
 
     assert!(loaded.width.is_none());
     assert!(loaded.height.is_none());
 }
 
-#[test]
-fn legacy_transparency_preferences_are_ignored_and_removed_on_save() {
+#[tokio::test]
+async fn legacy_transparency_preferences_are_ignored_and_removed_on_save() {
     let cache = cache("legacy-transparency");
     std::fs::create_dir_all(cache.root()).expect("root");
     for disabled in [true, false] {
@@ -288,54 +306,173 @@ fn legacy_transparency_preferences_are_ignored_and_removed_on_save() {
             serde_json::to_vec(&legacy).expect("json"),
         )
         .expect("legacy settings");
-        let settings = load_settings(&cache).expect("load legacy settings");
+        let settings = load_settings(&cache).await.expect("load legacy settings");
         assert_eq!(settings.theme, licht_core::LauncherTheme::Dark);
-        save_settings(&cache, &settings).expect("save");
+        save_settings(&cache, &settings).await.expect("save");
         let saved: serde_json::Value =
             serde_json::from_slice(&std::fs::read(settings_file(&cache)).expect("saved file"))
                 .expect("json");
         assert!(saved.get("disableTransparency").is_none());
-        assert_eq!(load_settings(&cache).expect("reload"), settings);
+        assert_eq!(load_settings(&cache).await.expect("reload"), settings);
     }
 }
 
-#[test]
-fn values_outside_one_to_sixteen_are_rejected_without_writing() {
+fn saved_file(cache: &SharedCache) -> serde_json::Value {
+    serde_json::from_slice(&std::fs::read(settings_file(cache)).expect("settings file"))
+        .expect("settings JSON")
+}
+
+#[tokio::test]
+async fn the_file_keeps_only_startup_preferences_and_the_rest_roundtrips() {
+    let cache = cache("split-storage");
+    let mut settings = sample(4);
+    settings.username = "Alex".to_string();
+    settings.jvm_arguments = vec!["-XX:+UseG1GC".to_string()];
+    settings.java21 = Some("/opt/java21/bin/java".to_string());
+    settings.width = None;
+    settings.download_speed_limit_bytes_per_second = Some(9_007_199_254_740_991);
+    settings.disable_custom_title_bar = true;
+    let saved = save_settings(&cache, &settings).await.expect("save");
+    let mut keys = saved_file(&cache)
+        .as_object()
+        .expect("object")
+        .keys()
+        .cloned()
+        .collect::<Vec<_>>();
+    keys.sort();
+    assert_eq!(
+        keys,
+        [
+            "automaticUpdates",
+            "dataDirectory",
+            "hardwareAcceleration",
+            "language",
+            "minimizeOnGameStart",
+            "minimizeToTray",
+            "restoreOnGameExit",
+            "schema",
+            "theme"
+        ]
+    );
+    assert_eq!(load_settings(&cache).await.expect("reload"), saved);
+}
+
+#[tokio::test]
+async fn legacy_file_values_are_used_until_they_move_to_the_database() {
+    let cache = cache("legacy-split");
+    std::fs::create_dir_all(cache.root()).expect("root");
+    std::fs::write(
+        settings_file(&cache),
+        r#"{"schema":1,"username":"Alex","downloadConcurrency":4}"#,
+    )
+    .expect("legacy settings");
+    let loaded = load_settings(&cache).await.expect("legacy values");
+    assert_eq!(loaded.username, "Alex");
+    assert_eq!(loaded.download_concurrency, 4);
+    save_settings(&cache, &loaded)
+        .await
+        .expect("move to database");
+    let file = saved_file(&cache);
+    assert!(file.get("username").is_none());
+    assert!(file.get("downloadConcurrency").is_none());
+    assert_eq!(load_settings(&cache).await.expect("reload"), loaded);
+}
+
+#[tokio::test]
+async fn a_detected_java_is_stored_in_the_database() {
+    let cache = cache("java-in-database");
+    save_settings(&cache, &sample(4)).await.expect("save");
+    let java = cache.root().join("java21");
+    licht_core::set_java_path(&cache, 21, &java)
+        .await
+        .expect("set Java");
+    assert!(saved_file(&cache).get("java21").is_none());
+    assert_eq!(
+        load_settings(&cache).await.expect("reload").java21,
+        Some(java.display().to_string())
+    );
+    assert_eq!(
+        load_settings(&cache)
+            .await
+            .expect("reload")
+            .download_concurrency,
+        4
+    );
+}
+
+#[tokio::test]
+async fn database_values_win_over_stale_file_keys() {
+    let cache = cache("stale-file-keys");
+    save_settings(&cache, &sample(4)).await.expect("save");
+    let mut file = saved_file(&cache);
+    file["downloadConcurrency"] = 9.into();
+    file["username"] = "Stale".into();
+    std::fs::write(
+        settings_file(&cache),
+        serde_json::to_vec(&file).expect("JSON"),
+    )
+    .expect("stale keys");
+    let loaded = load_settings(&cache).await.expect("load");
+    assert_eq!(loaded.download_concurrency, 4);
+    assert_eq!(loaded.username, "Steve");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn concurrent_saves_leave_a_valid_file() {
+    let cache = cache("concurrent-saves");
+    save_settings(&cache, &sample(1)).await.expect("initial");
+    let saves = (1..=16)
+        .map(|value| {
+            let cache = cache.clone();
+            tokio::spawn(async move { save_settings(&cache, &sample(value)).await })
+        })
+        .collect::<Vec<_>>();
+    for save in saves {
+        save.await.expect("join").expect("save");
+    }
+    let loaded = load_settings(&cache).await.expect("valid file");
+    assert!((1..=16).contains(&loaded.download_concurrency));
+}
+
+#[tokio::test]
+async fn values_outside_one_to_sixteen_are_rejected_without_writing() {
     let cache = cache("range");
     let path = settings_file(&cache);
 
-    let low = save_settings(&cache, &sample(0)).expect_err("zero");
+    let low = save_settings(&cache, &sample(0)).await.expect_err("zero");
     assert!(matches!(low, CoreError::SettingsConcurrency));
     assert!(!path.exists());
 
-    save_settings(&cache, &sample(8)).expect("valid");
+    save_settings(&cache, &sample(8)).await.expect("valid");
     let before = std::fs::read_to_string(&path).expect("file");
-    let high = save_settings(&cache, &sample(17)).expect_err("seventeen");
+    let high = save_settings(&cache, &sample(17))
+        .await
+        .expect_err("seventeen");
     assert!(matches!(high, CoreError::SettingsConcurrency));
     assert_eq!(std::fs::read_to_string(&path).expect("unchanged"), before);
 }
 
-#[test]
-fn write_concurrency_outside_one_to_sixteen_is_rejected() {
+#[tokio::test]
+async fn write_concurrency_outside_one_to_sixteen_is_rejected() {
     let cache = cache("write-range");
     let mut low = sample(8);
     low.write_concurrency = 0;
     assert!(matches!(
-        save_settings(&cache, &low).expect_err("zero"),
+        save_settings(&cache, &low).await.expect_err("zero"),
         CoreError::SettingsWriteConcurrency
     ));
 
     let mut high = sample(8);
     high.write_concurrency = 17;
     assert!(matches!(
-        save_settings(&cache, &high).expect_err("seventeen"),
+        save_settings(&cache, &high).await.expect_err("seventeen"),
         CoreError::SettingsWriteConcurrency
     ));
     assert!(!settings_file(&cache).exists());
 }
 
-#[test]
-fn unsupported_themes_and_bad_memory_are_rejected() {
+#[tokio::test]
+async fn unsupported_themes_and_bad_memory_are_rejected() {
     let cache = cache("theme");
     let mut settings = serde_json::to_value(sample(8)).expect("settings");
     settings["theme"] = "unknown".into();
@@ -344,36 +481,47 @@ fn unsupported_themes_and_bad_memory_are_rejected() {
     let mut memory = sample(8);
     memory.max_memory_mb = 511;
     assert!(matches!(
-        save_settings(&cache, &memory).expect_err("memory"),
+        save_settings(&cache, &memory).await.expect_err("memory"),
         CoreError::SettingsMemory
     ));
     assert!(!settings_file(&cache).exists());
 }
 
-#[test]
-fn exact_memory_values_survive_save_and_relocated_settings_fit_the_current_machine() {
+#[tokio::test]
+async fn exact_memory_values_survive_save_and_relocated_settings_fit_the_current_machine() {
     let cache = cache("exact-memory");
     let mut settings = sample(8);
     settings.max_memory_mb = 513;
-    save_settings(&cache, &settings).expect("save exact memory");
-    assert_eq!(load_settings(&cache).expect("reload").max_memory_mb, 513);
-    let mut stored = serde_json::to_value(settings).expect("json");
-    stored["maxMemoryMb"] = u32::MAX.into();
-    std::fs::write(
-        settings_file(&cache),
-        serde_json::to_vec(&stored).expect("json"),
+    save_settings(&cache, &settings)
+        .await
+        .expect("save exact memory");
+    assert_eq!(
+        load_settings(&cache).await.expect("reload").max_memory_mb,
+        513
+    );
+    use sqlx::Connection;
+    let mut connection = sqlx::SqliteConnection::connect_with(
+        &sqlx::sqlite::SqliteConnectOptions::new().filename(cache.root().join("licht.db")),
     )
-    .expect("settings from another machine");
+    .await
+    .expect("database");
+    sqlx::query("UPDATE settings SET max_memory_mb = ?1")
+        .bind(u32::MAX)
+        .execute(&mut connection)
+        .await
+        .expect("settings from another machine");
+    connection.close().await.expect("close");
     assert_eq!(
         load_settings(&cache)
+            .await
             .expect("adapt to current RAM")
             .max_memory_mb,
         memory_slider_max(total_memory_mb())
     );
 }
 
-#[test]
-fn all_supported_themes_survive_save_and_reload() {
+#[tokio::test]
+async fn all_supported_themes_survive_save_and_reload() {
     let cache = cache("theme-roundtrip");
     for theme in [
         licht_core::LauncherTheme::Light,
@@ -382,42 +530,54 @@ fn all_supported_themes_survive_save_and_reload() {
     ] {
         let mut settings = sample(8);
         settings.theme = theme;
-        save_settings(&cache, &settings).expect("save theme");
-        assert_eq!(load_settings(&cache).expect("reload theme").theme, theme);
+        save_settings(&cache, &settings).await.expect("save theme");
+        assert_eq!(
+            load_settings(&cache).await.expect("reload theme").theme,
+            theme
+        );
     }
 }
 
-#[test]
-fn a_relative_directory_is_rejected_and_the_default_launcher_root_is_stored_as_empty() {
+#[tokio::test]
+async fn a_relative_directory_is_rejected_and_the_default_launcher_root_is_stored_as_empty() {
     let cache = cache("directory");
     let mut relative = sample(8);
     relative.data_directory = Some("games".to_string());
     assert!(matches!(
-        save_settings(&cache, &relative).expect_err("relative"),
+        save_settings(&cache, &relative)
+            .await
+            .expect_err("relative"),
         CoreError::SettingsDirectory
     ));
 
     let parent = cache.root().display().to_string();
     let mut defaults = sample(8);
     defaults.data_directory = Some(parent);
-    let saved = save_settings(&cache, &defaults).expect("default parent");
+    let saved = save_settings(&cache, &defaults)
+        .await
+        .expect("default parent");
     assert!(saved.data_directory.is_none());
 }
 
-#[test]
-fn a_custom_directory_is_remembered_without_moving_files() {
+#[tokio::test]
+async fn a_custom_directory_is_remembered_without_moving_files() {
     let home = cache("home");
     let chosen = std::env::temp_dir().join(format!("licht-data-dir-{}", std::process::id()));
     let mut settings = sample(4);
     settings.data_directory = Some(chosen.display().to_string());
 
-    save_settings(&home, &settings).expect("save");
-    let game = game_cache(&home).expect("game cache");
+    save_settings(&home, &settings).await.expect("save");
+    let game = game_cache(&home).await.expect("game cache");
 
     assert_eq!(game.root(), chosen.join("Licht Launcher").join("data"));
     assert!(settings_file(&home).is_file());
     assert!(!chosen.join("Licht Launcher").join("settings.json").exists());
-    assert_eq!(download_concurrency(&game, &home).expect("concurrency"), 4);
+    assert_eq!(
+        download_concurrency(&game, &home)
+            .await
+            .expect("concurrency"),
+        4
+    );
 }
 
 #[test]
@@ -487,32 +647,32 @@ fn global_launch_inserts_memory_before_the_main_class() {
     assert!(!fullscreen.iter().any(|part| part == "--height"));
 }
 
-#[test]
-fn an_unknown_schema_is_left_in_place() {
+#[tokio::test]
+async fn an_unknown_schema_is_left_in_place() {
     let cache = cache("schema");
     let path = settings_file(&cache);
     std::fs::create_dir_all(cache.root()).expect("root");
     let original = "{\"schema\":2,\"downloadConcurrency\":8}\n";
     std::fs::write(&path, original).expect("write");
 
-    let loaded = load_settings(&cache).expect_err("schema");
-    let saved = save_settings(&cache, &sample(4)).expect_err("save");
+    let loaded = load_settings(&cache).await.expect_err("schema");
+    let saved = save_settings(&cache, &sample(4)).await.expect_err("save");
 
     assert!(matches!(loaded, CoreError::SettingsSchema { schema: 2 }));
     assert!(matches!(saved, CoreError::SettingsSchema { schema: 2 }));
     assert_eq!(std::fs::read_to_string(&path).expect("unchanged"), original);
 }
 
-#[test]
-fn invalid_json_is_left_in_place() {
+#[tokio::test]
+async fn invalid_json_is_left_in_place() {
     let cache = cache("invalid");
     let path = settings_file(&cache);
     std::fs::create_dir_all(cache.root()).expect("root");
     let original = "{ not json";
     std::fs::write(&path, original).expect("write");
 
-    let loaded = load_settings(&cache).expect_err("json");
-    let saved = save_settings(&cache, &sample(4)).expect_err("save");
+    let loaded = load_settings(&cache).await.expect_err("json");
+    let saved = save_settings(&cache, &sample(4)).await.expect_err("save");
 
     assert!(matches!(loaded, CoreError::Settings(_)));
     assert!(matches!(saved, CoreError::Settings(_)));

@@ -3,10 +3,9 @@ use std::path::{Path, PathBuf};
 use crate::hashes::{file_matches_sha1, sha1_hex};
 use crate::natives::{classifier_matches, native_classifier};
 use crate::{
-    ADOPTIUM_API, AssetIndexFile, CoreError, DEFAULT_RETRY, DownloadComponent, DownloadOptions,
-    DownloadPhase, DownloadTask, InstallationContext, LaunchEnvironment, Result, SharedCache,
-    Version, applicable_libraries, download_concurrency, install_temurin, parse_asset_index,
-    parse_version, required_java_major, use_custom_java,
+    ADOPTIUM_API, AssetIndexFile, CoreError, DownloadComponent, DownloadPhase, DownloadTask,
+    InstallationContext, LaunchEnvironment, Result, SharedCache, Version, applicable_libraries,
+    install_temurin, parse_asset_index, parse_version, required_java_major, use_custom_java,
 };
 
 pub const ASSET_OBJECT_BASE: &str = "https://resources.download.minecraft.net";
@@ -51,12 +50,7 @@ pub async fn install_version(
         .queue(
             client,
             &pending,
-            DownloadOptions {
-                limits: crate::settings::configured_transfer_limits(cache, settings)?,
-                download_concurrency: download_concurrency(cache, settings)?,
-                write_concurrency: crate::write_concurrency(cache, settings)?,
-                retry: DEFAULT_RETRY,
-            },
+            crate::settings::download_options(cache, settings).await?,
         )
         .await
 }
@@ -293,7 +287,7 @@ async fn install_local_version(
     };
     let version = parse_version(&crate::load_resolved_version_json(&cache, id)?)?;
     let major = required_java_major(id, &version);
-    let configured = crate::load_settings(settings)?;
+    let configured = crate::load_settings(settings).await?;
     let java = match crate::configured_java(&configured, major) {
         Some(java) => {
             let found = crate::probe_java_major(&java)?;

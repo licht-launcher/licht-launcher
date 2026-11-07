@@ -3,6 +3,8 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use super::db;
+use super::repositories::settings::SettingsRepository;
 use crate::{CoreError, DEFAULT_CONCURRENCY, Result, SharedCache};
 
 const SCHEMA: u32 = 1;
@@ -369,8 +371,103 @@ fn read_stored(path: &Path) -> Result<StoredSettings> {
     serde_json::from_str(&text).map_err(CoreError::Settings)
 }
 
-/// Missing `settings.json` means the defaults. The file is created only when saved.
-pub fn load_settings(cache: &SharedCache) -> Result<Settings> {
+/// Preferences kept in `settings.json`, readable before the database opens.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StartupPreferences {
+    pub theme: LauncherTheme,
+    pub language: LauncherLanguage,
+    pub hardware_acceleration: bool,
+    pub minimize_to_tray: bool,
+    pub minimize_on_game_start: bool,
+    pub restore_on_game_exit: bool,
+    pub automatic_updates: bool,
+}
+
+impl From<&Settings> for StartupPreferences {
+    fn from(settings: &Settings) -> Self {
+        Self {
+            theme: settings.theme,
+            language: settings.language,
+            hardware_acceleration: settings.hardware_acceleration,
+            minimize_to_tray: settings.minimize_to_tray,
+            minimize_on_game_start: settings.minimize_on_game_start,
+            restore_on_game_exit: settings.restore_on_game_exit,
+            automatic_updates: settings.automatic_updates,
+        }
+    }
+}
+
+/// What `settings.json` holds. Every other setting lives in the database.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct FileSettings<'a> {
+    schema: u32,
+    #[serde(flatten)]
+    preferences: StartupPreferences,
+    data_directory: &'a Option<String>,
+}
+
+// Every save goes through one temporary file and one database row, so writers in this
+// process take turns. The write runs in its own task, so a cancelled caller cannot
+// release the lock while the write is still in progress.
+static SETTINGS_WRITES: std::sync::LazyLock<std::sync::Arc<tokio::sync::Mutex<()>>> =
+    std::sync::LazyLock::new(Default::default);
+
+async fn exclusive_write<T: Send + 'static>(
+    work: impl std::future::Future<Output = Result<T>> + Send + 'static,
+) -> Result<T> {
+    let guard = std::sync::Arc::clone(&SETTINGS_WRITES).lock_owned().await;
+    tokio::spawn(async move {
+        let _guard = guard;
+        work.await
+    })
+    .await
+    .map_err(|_| std::io::Error::other("could not join settings write"))?
+}
+
+async fn blocking<T: Send + 'static>(
+    work: impl FnOnce() -> Result<T> + Send + 'static,
+) -> Result<T> {
+    tokio::task::spawn_blocking(work)
+        .await
+        .map_err(|_| std::io::Error::other("could not join settings file access"))?
+}
+
+/// Missing `settings.json` and database mean the defaults. Nothing is created until a save.
+pub async fn load_settings(cache: &SharedCache) -> Result<Settings> {
+    let file = cache.clone();
+    let mut settings = blocking(move || load_file_settings(&file)).await?;
+    // Until the first save stores a row, older settings files still carry every value.
+    if !db::db_path(cache).is_file() {
+        return Ok(settings);
+    }
+    let mut connection = db::open_db(cache).await?;
+    let stored = SettingsRepository::load_into(&mut connection, &mut settings).await;
+    if !db::complete_operation(connection, stored).await? {
+        return Ok(settings);
+    }
+    // A saved allocation can come from a machine with more RAM.
+    settings.max_memory_mb = settings
+        .max_memory_mb
+        .min(memory_slider_max(total_memory_mb()));
+    validated(cache, settings)
+}
+
+pub(super) async fn stored_in_database(cache: &SharedCache) -> Result<bool> {
+    if !db::db_path(cache).is_file() {
+        return Ok(false);
+    }
+    let mut connection = db::open_db(cache).await?;
+    let exists = SettingsRepository::exists(&mut connection).await;
+    db::complete_operation(connection, exists).await
+}
+
+pub(super) fn load_startup_preferences(cache: &SharedCache) -> Result<StartupPreferences> {
+    Ok(StartupPreferences::from(&load_file_settings(cache)?))
+}
+
+fn load_file_settings(cache: &SharedCache) -> Result<Settings> {
     let path = settings_path(cache);
     if !path.is_file() {
         return from_stored(
@@ -408,8 +505,8 @@ pub fn load_settings(cache: &SharedCache) -> Result<Settings> {
     from_stored(cache, read_stored(&path)?)
 }
 
-pub fn settings_snapshot(cache: &SharedCache) -> Result<SettingsSnapshot> {
-    let settings = load_settings(cache)?;
+pub async fn settings_snapshot(cache: &SharedCache) -> Result<SettingsSnapshot> {
+    let settings = load_settings(cache).await?;
     let total = total_memory_mb();
     let application_directory = match &settings.data_directory {
         Some(path) => path.clone(),
@@ -426,16 +523,40 @@ pub fn settings_snapshot(cache: &SharedCache) -> Result<SettingsSnapshot> {
     })
 }
 
-pub fn save_settings(cache: &SharedCache, settings: &Settings) -> Result<Settings> {
+pub async fn save_settings(cache: &SharedCache, settings: &Settings) -> Result<Settings> {
+    exclusive_write(write_settings(cache.clone(), settings.clone())).await
+}
+
+async fn write_settings(cache: SharedCache, settings: Settings) -> Result<Settings> {
+    let checked = cache.clone();
+    let settings = blocking(move || {
+        let path = settings_path(&checked);
+        // An unreadable or newer file is left in place rather than overwritten.
+        if path.is_file() {
+            let _existing = from_stored(&checked, read_stored(&path)?)?;
+        }
+        validated(&checked, settings)
+    })
+    .await?;
+    // The row is written first, so an interrupted save keeps the previous startup
+    // preferences in the file; the next save writes both again.
+    let mut connection = db::open_db(&cache).await?;
+    let stored = SettingsRepository::save(&mut connection, &settings).await;
+    db::complete_operation(connection, stored).await?;
+    blocking(move || write_settings_file(&cache, settings)).await
+}
+
+fn write_settings_file(cache: &SharedCache, settings: Settings) -> Result<Settings> {
     let path = settings_path(cache);
-    if path.is_file() {
-        let _existing = from_stored(cache, read_stored(&path)?)?;
-    }
-    let settings = validated(cache, settings.clone())?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let json = serde_json::to_string_pretty(&settings).map_err(CoreError::Settings)?;
+    let file = FileSettings {
+        schema: settings.schema,
+        preferences: StartupPreferences::from(&settings),
+        data_directory: &settings.data_directory,
+    };
+    let json = serde_json::to_string_pretty(&file).map_err(CoreError::Settings)?;
     // Directory moves must be able to retry after an interrupted settings update.
     let temporary = path.with_extension("json.tmp");
     let mut file = std::fs::File::create(&temporary)?;
@@ -450,17 +571,22 @@ pub fn save_settings(cache: &SharedCache, settings: &Settings) -> Result<Setting
     Ok(settings)
 }
 
-pub fn set_java_path(cache: &SharedCache, major: u32, path: &Path) -> Result<Settings> {
-    let mut settings = load_settings(cache)?;
+pub async fn set_java_path(cache: &SharedCache, major: u32, path: &Path) -> Result<Settings> {
+    let cache = cache.clone();
     let text = Some(path.display().to_string());
-    match major {
-        25 => settings.java25 = text,
-        21 => settings.java21 = text,
-        17 => settings.java17 = text,
-        8 => settings.java8 = text,
-        _ => return Err(CoreError::SettingsJava),
-    }
-    save_settings(cache, &settings)
+    exclusive_write(async move {
+        // Read inside the lock so a concurrent save cannot be overwritten with stale values.
+        let mut settings = load_settings(&cache).await?;
+        match major {
+            25 => settings.java25 = text,
+            21 => settings.java21 = text,
+            17 => settings.java17 = text,
+            8 => settings.java8 = text,
+            _ => return Err(CoreError::SettingsJava),
+        }
+        write_settings(cache, settings).await
+    })
+    .await
 }
 
 fn concurrency_source<'a>(game: &'a SharedCache, settings: &'a SharedCache) -> &'a SharedCache {
@@ -473,31 +599,36 @@ fn concurrency_source<'a>(game: &'a SharedCache, settings: &'a SharedCache) -> &
 
 /// Game files may live in another folder. When that folder has no
 /// `settings.json`, concurrency still comes from the settings folder.
-pub fn download_concurrency(game: &SharedCache, settings: &SharedCache) -> Result<usize> {
-    Ok(load_settings(concurrency_source(game, settings))?.download_concurrency as usize)
+pub async fn download_concurrency(game: &SharedCache, settings: &SharedCache) -> Result<usize> {
+    Ok(load_settings(concurrency_source(game, settings))
+        .await?
+        .download_concurrency as usize)
 }
 
-/// How many files may be written to disk at once across all installs.
-pub fn write_concurrency(game: &SharedCache, settings: &SharedCache) -> Result<usize> {
-    Ok(load_settings(concurrency_source(game, settings))?.write_concurrency as usize)
-}
-
-pub(crate) fn configured_transfer_limits(
+/// Bandwidth, concurrency, and retry for one download batch, from a single settings read.
+pub(crate) async fn download_options(
     game: &SharedCache,
     settings: &SharedCache,
-) -> Result<std::sync::Arc<crate::TransferLimits>> {
-    let saved = load_settings(concurrency_source(game, settings))?;
+) -> Result<crate::DownloadOptions> {
+    let saved = load_settings(concurrency_source(game, settings)).await?;
     let limits = crate::shared_transfer_limits();
     limits
         .bandwidth
         .set_limit(saved.download_speed_limit_bytes_per_second)?;
-    Ok(limits)
+    Ok(crate::DownloadOptions {
+        limits,
+        download_concurrency: saved.download_concurrency as usize,
+        write_concurrency: saved.write_concurrency as usize,
+        retry: crate::DEFAULT_RETRY,
+    })
 }
 
 /// Next process: game files go to `{dataDirectory}/Licht Launcher/data`.
 /// The default game directory is `<launcher>/data`.
-pub fn game_cache(defaults: &SharedCache) -> Result<SharedCache> {
-    let settings = load_settings(defaults)?;
+pub async fn game_cache(defaults: &SharedCache) -> Result<SharedCache> {
+    // The application directory is a startup preference, so the database is not needed.
+    let file = defaults.clone();
+    let settings = blocking(move || load_file_settings(&file)).await?;
     match settings.data_directory {
         Some(path) => Ok(SharedCache::at(
             PathBuf::from(path).join(GAME_FOLDER).join("data"),

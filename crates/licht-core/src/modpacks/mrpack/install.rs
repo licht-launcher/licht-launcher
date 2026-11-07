@@ -2,10 +2,8 @@ use std::fs;
 use std::path::Path;
 
 use super::index::MRPACK_DOWNLOAD_HOSTS;
-use crate::download::DEFAULT_RETRY;
 use crate::modpacks::file_hashes::{ensure_sha512, prepare_download};
 use crate::modpacks::secure_download::allowlisted_download_client;
-use crate::settings::{download_concurrency, write_concurrency};
 use crate::transfer::verification::VerificationProgress;
 use crate::{CoreError, Result, SharedCache};
 use reqwest::Client;
@@ -86,12 +84,7 @@ async fn install_files(
         .queue(
             client,
             &pending,
-            crate::DownloadOptions {
-                limits: crate::settings::configured_transfer_limits(game, settings)?,
-                download_concurrency: download_concurrency(game, settings)?,
-                write_concurrency: write_concurrency(game, settings)?,
-                retry: DEFAULT_RETRY,
-            },
+            crate::settings::download_options(game, settings).await?,
         )
         .await?;
     let mut verification = VerificationProgress::start(&progress, downloaded_files.len()).await?;

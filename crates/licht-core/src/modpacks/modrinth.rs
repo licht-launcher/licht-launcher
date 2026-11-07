@@ -209,7 +209,7 @@ pub(super) async fn download_modrinth_mrpack_to(
         .verified_queue(
             &super::mrpack::mrpack_download_client()?,
             &[task],
-            context.options()?,
+            context.options().await?,
         )
         .await?;
     context.stage(crate::DownloadPhase::Verifying).await?;

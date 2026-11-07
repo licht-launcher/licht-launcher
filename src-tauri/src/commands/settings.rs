@@ -10,18 +10,20 @@ use tauri_plugin_dialog::{DialogExt, FileDialogBuilder};
 use super::{LauncherPaths, failure, host_environment};
 
 #[tauri::command]
-pub fn get_settings(paths: State<'_, LauncherPaths>) -> Result<SettingsSnapshot, String> {
-    settings_snapshot(&paths.settings).map_err(failure)
+pub async fn get_settings(paths: State<'_, LauncherPaths>) -> Result<SettingsSnapshot, String> {
+    settings_snapshot(&paths.settings).await.map_err(failure)
 }
 
 #[tauri::command]
-pub fn save_settings(
+pub async fn save_settings(
     app: AppHandle,
     updates: State<'_, std::sync::Arc<crate::app_updates::Runtime>>,
     paths: State<'_, LauncherPaths>,
     settings: Settings,
 ) -> Result<Settings, String> {
-    let saved = licht_core::save_settings(&paths.settings, &settings).map_err(failure)?;
+    let saved = licht_core::save_settings(&paths.settings, &settings)
+        .await
+        .map_err(failure)?;
     updates
         .preferences_changed(&app, saved.automatic_updates)
         .map_err(|error| {

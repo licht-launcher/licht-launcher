@@ -29,6 +29,14 @@ Linux:
 LICHT_DATA_DIR=/absolute/path/to/test-profile /path/to/licht
 ```
 
+## Settings storage
+
+`settings.json` holds only what the launcher reads before the database opens:
+theme, language, hardware acceleration, tray and window behavior, automatic
+updates, and the application directory. Every other setting is a single row in
+the `settings` table of `licht.db`. An older `settings.json` that still holds
+those values is read until the next startup moves them into the database.
+
 ## Application directory setting
 
 Content relocation described in this section is pending in

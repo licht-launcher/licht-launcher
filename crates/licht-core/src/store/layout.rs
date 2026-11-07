@@ -52,30 +52,34 @@ async fn initialize_at_with_progress(
         migration::migrate(legacy, home, reporter).await?;
     }
     relocation::apply(home, reporter).await?;
-    let game = settings::game_cache(home)?;
+    let game = settings::game_cache(home).await?;
     tokio::fs::create_dir_all(game.root()).await?;
     tokio::fs::create_dir_all(game.cache_dir()?).await?;
     tokio::fs::create_dir_all(game.instances_dir()?).await?;
-    if !home.root().join("settings.json").exists() {
-        settings::save_settings(home, &settings::load_settings(home)?)?;
+    // Older profiles keep every setting in settings.json until one save moves them.
+    if !home.root().join("settings.json").exists() || !settings::stored_in_database(home).await? {
+        settings::save_settings(home, &settings::load_settings(home).await?).await?;
     }
     reporter.phase(StartupPhase::RestoringCache)?;
     installation::migrate(home, &game, reporter).await?;
     Ok(())
 }
 
-pub fn startup_settings() -> Result<crate::Settings> {
+pub fn startup_preferences() -> Result<settings::StartupPreferences> {
     let home = SharedCache::system()?;
     if std::env::var_os("LICHT_DATA_DIR").is_some() {
-        return settings::load_settings(&home);
+        return settings::load_startup_preferences(&home);
     }
     let legacy = directories::ProjectDirs::from("app.licht", "Licht", "Licht Launcher")
         .ok_or(CoreError::DataDirectory)?;
-    startup_settings_at(&home, &SharedCache::at(legacy.data_dir()))
+    startup_preferences_at(&home, &SharedCache::at(legacy.data_dir()))
 }
 
-fn startup_settings_at(home: &SharedCache, legacy: &SharedCache) -> Result<crate::Settings> {
-    settings::load_settings(if home.root().join("settings.json").is_file() {
+fn startup_preferences_at(
+    home: &SharedCache,
+    legacy: &SharedCache,
+) -> Result<settings::StartupPreferences> {
+    settings::load_startup_preferences(if home.root().join("settings.json").is_file() {
         home
     } else {
         legacy
@@ -92,7 +96,7 @@ pub async fn run_startup_migration_preview(fail: bool, reporter: StartupReporter
     let home = SharedCache::at(root.join("destination"));
     let result = async {
         std::fs::create_dir_all(legacy.root().join("versions"))?;
-        settings::save_settings(&legacy, &settings::load_settings(&legacy)?)?;
+        settings::save_settings(&legacy, &settings::load_settings(&legacy).await?).await?;
         let instance = legacy.instance_dir("Preview")?;
         std::fs::create_dir_all(instance.join("mods"))?;
         for index in 0..100 {

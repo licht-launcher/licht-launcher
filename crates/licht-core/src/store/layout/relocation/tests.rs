@@ -9,7 +9,7 @@ use crate::store::layout::{initialize_at, tests::fixture};
 async fn changing_directory_moves_content_after_restart_and_keeps_the_profile() {
     let (legacy, home) = fixture("relocation");
     initialize_at(&legacy, &home).await.expect("initialize");
-    let source = crate::game_cache(&home).expect("source");
+    let source = crate::game_cache(&home).await.expect("source");
     fs::create_dir_all(source.root().join("runtime")).expect("runtime");
     let java = source.root().join("runtime/java");
     fs::write(&java, b"java").expect("java");
@@ -40,7 +40,7 @@ async fn changing_directory_moves_content_after_restart_and_keeps_the_profile() 
         &source.instances_dir().expect("instances"),
         "Registered",
         "1.21",
-        &crate::global_launch(&crate::load_settings(&home).expect("settings")),
+        &crate::global_launch(&crate::load_settings(&home).await.expect("settings")),
     )
     .await
     .expect("registered instance");
@@ -100,7 +100,7 @@ async fn changing_directory_moves_content_after_restart_and_keeps_the_profile() 
         .expect("modpack dependency");
     use sqlx::Connection;
     connection.close().await.expect("close");
-    let mut settings = crate::load_settings(&home).expect("settings");
+    let mut settings = crate::load_settings(&home).await.expect("settings");
     settings.java21 = Some(java.to_string_lossy().into_owned());
     settings.data_directory = Some(
         home.root()
@@ -110,12 +110,14 @@ async fn changing_directory_moves_content_after_restart_and_keeps_the_profile() 
             .display()
             .to_string(),
     );
-    crate::save_settings(&home, &settings).expect("save destination");
+    crate::save_settings(&home, &settings)
+        .await
+        .expect("save destination");
     assert!(java.exists(), "saving must not move live files");
     initialize_at(&legacy, &home)
         .await
         .expect("move on restart");
-    let target = crate::game_cache(&home).expect("target");
+    let target = crate::game_cache(&home).await.expect("target");
     assert_eq!(
         fs::read(target.root().join("runtime/java")).expect("moved java"),
         b"java"
@@ -162,7 +164,7 @@ async fn changing_directory_moves_content_after_restart_and_keeps_the_profile() 
     assert!(home.root().join("settings.json").is_file());
     assert!(super::super::db::db_path(&home).is_file());
     assert_eq!(
-        crate::load_settings(&home).expect("settings").java21,
+        crate::load_settings(&home).await.expect("settings").java21,
         Some(target.root().join("runtime/java").display().to_string())
     );
     let service = crate::DatabaseService::start(home.clone())
@@ -240,7 +242,7 @@ async fn stored_state(home: &SharedCache) -> Option<serde_json::Value> {
 async fn content_directory_state_lives_in_the_database() {
     let (legacy, home) = fixture("relocation-state");
     initialize_at(&legacy, &home).await.expect("initialize");
-    let game = crate::game_cache(&home).expect("game");
+    let game = crate::game_cache(&home).await.expect("game");
     let state = stored_state(&home).await.expect("state in the database");
     assert_eq!(state["active"], game.root().display().to_string());
     assert!(state["pending"].is_null());
@@ -265,7 +267,7 @@ async fn replace_state_with_legacy_file(home: &SharedCache, state: serde_json::V
 async fn legacy_state_file_is_imported_once_and_removed() {
     let (legacy, home) = fixture("relocation-state-import");
     initialize_at(&legacy, &home).await.expect("initialize");
-    let game = crate::game_cache(&home).expect("game");
+    let game = crate::game_cache(&home).await.expect("game");
     let file = home.root().join("content-directory.json");
     replace_state_with_legacy_file(
         &home,
@@ -298,9 +300,9 @@ async fn a_move_pending_in_the_legacy_file_finishes_after_import() {
     for copied in [false, true] {
         let (legacy, home) = fixture(&format!("relocation-state-pending-{copied}"));
         initialize_at(&legacy, &home).await.expect("initialize");
-        let source = crate::game_cache(&home).expect("source");
+        let source = crate::game_cache(&home).await.expect("source");
         fs::write(source.root().join("file"), b"original").expect("file");
-        let mut settings = crate::load_settings(&home).expect("settings");
+        let mut settings = crate::load_settings(&home).await.expect("settings");
         settings.data_directory = Some(
             home.root()
                 .parent()
@@ -309,8 +311,10 @@ async fn a_move_pending_in_the_legacy_file_finishes_after_import() {
                 .display()
                 .to_string(),
         );
-        crate::save_settings(&home, &settings).expect("save destination");
-        let target = crate::game_cache(&home).expect("target");
+        crate::save_settings(&home, &settings)
+            .await
+            .expect("save destination");
+        let target = crate::game_cache(&home).await.expect("target");
         if copied {
             // The copy finished and cleanup already removed the source; only the
             // imported `copied` flag lets startup finish instead of failing.
@@ -343,9 +347,9 @@ async fn a_move_pending_in_the_legacy_file_finishes_after_import() {
 async fn interrupted_copy_resumes_without_overwriting_different_files() {
     let (legacy, home) = fixture("relocation-interrupted");
     initialize_at(&legacy, &home).await.expect("initialize");
-    let source = crate::game_cache(&home).expect("source");
+    let source = crate::game_cache(&home).await.expect("source");
     fs::write(source.root().join("file"), b"original").expect("file");
-    let mut settings = crate::load_settings(&home).expect("settings");
+    let mut settings = crate::load_settings(&home).await.expect("settings");
     settings.data_directory = Some(
         home.root()
             .parent()
@@ -354,7 +358,7 @@ async fn interrupted_copy_resumes_without_overwriting_different_files() {
             .display()
             .to_string(),
     );
-    crate::save_settings(&home, &settings).expect("save");
+    crate::save_settings(&home, &settings).await.expect("save");
     let interrupted = StartupReporter::new(|progress| {
         if progress.phase == StartupPhase::MigratingDatabase {
             return Err(std::io::Error::other("simulated shutdown after copying").into());
@@ -362,7 +366,7 @@ async fn interrupted_copy_resumes_without_overwriting_different_files() {
         Ok(())
     });
     assert!(super::apply(&home, &interrupted).await.is_err());
-    let target = crate::game_cache(&home).expect("target");
+    let target = crate::game_cache(&home).await.expect("target");
     assert!(source.root().join("file").exists());
     assert!(target.root().join("file").exists());
     initialize_at(&legacy, &home).await.expect("resume");
@@ -377,9 +381,9 @@ async fn interrupted_copy_resumes_without_overwriting_different_files() {
 async fn interrupted_cleanup_preserves_changed_source_and_resumes_after_resolution() {
     let (legacy, home) = fixture("relocation-cleanup");
     initialize_at(&legacy, &home).await.expect("initialize");
-    let source = crate::game_cache(&home).expect("source");
+    let source = crate::game_cache(&home).await.expect("source");
     fs::write(source.root().join("file"), b"original").expect("source");
-    let mut settings = crate::load_settings(&home).expect("settings");
+    let mut settings = crate::load_settings(&home).await.expect("settings");
     settings.data_directory = Some(
         home.root()
             .parent()
@@ -388,8 +392,8 @@ async fn interrupted_cleanup_preserves_changed_source_and_resumes_after_resoluti
             .display()
             .to_string(),
     );
-    crate::save_settings(&home, &settings).expect("save");
-    let target = crate::game_cache(&home).expect("target");
+    crate::save_settings(&home, &settings).await.expect("save");
+    let target = crate::game_cache(&home).await.expect("target");
     fs::create_dir_all(target.root()).expect("target");
     fs::write(target.root().join("file"), b"older copy").expect("interrupted copy");
     write_state(
@@ -421,8 +425,8 @@ async fn rejects_overlapping_roots_and_unavailable_previous_directories() {
     for (name, unavailable) in [("nested", false), ("missing", true)] {
         let (legacy, home) = fixture(name);
         initialize_at(&legacy, &home).await.expect("initialize");
-        let source = crate::game_cache(&home).expect("source");
-        let mut settings = crate::load_settings(&home).expect("settings");
+        let source = crate::game_cache(&home).await.expect("source");
+        let mut settings = crate::load_settings(&home).await.expect("settings");
         let parent = if unavailable {
             fs::remove_dir(source.root()).expect("simulate disconnected source");
             home.root().parent().expect("parent").join("chosen")
@@ -430,13 +434,15 @@ async fn rejects_overlapping_roots_and_unavailable_previous_directories() {
             source.root().join("nested")
         };
         settings.data_directory = Some(parent.display().to_string());
-        crate::save_settings(&home, &settings).expect("save");
+        crate::save_settings(&home, &settings).await.expect("save");
         assert!(initialize_at(&legacy, &home).await.is_err());
         assert!(home.root().join("settings.json").is_file());
         if !unavailable {
             assert!(!source.root().join("nested").exists());
             settings.data_directory = None;
-            crate::save_settings(&home, &settings).expect("restore previous choice");
+            crate::save_settings(&home, &settings)
+                .await
+                .expect("restore previous choice");
             initialize_at(&legacy, &home)
                 .await
                 .expect("cancel invalid move");
@@ -447,9 +453,11 @@ async fn rejects_overlapping_roots_and_unavailable_previous_directories() {
 #[tokio::test]
 async fn isolated_profile_does_not_import_legacy_settings_or_data() {
     let (legacy, default_home) = fixture("isolated");
-    let mut settings = crate::load_settings(&legacy).expect("settings");
+    let mut settings = crate::load_settings(&legacy).await.expect("settings");
     settings.username = "LegacyPlayer".to_string();
-    crate::save_settings(&legacy, &settings).expect("legacy settings");
+    crate::save_settings(&legacy, &settings)
+        .await
+        .expect("legacy settings");
     let isolated = SharedCache::at(
         default_home
             .root()
@@ -462,6 +470,7 @@ async fn isolated_profile_does_not_import_legacy_settings_or_data() {
         .expect("isolated startup");
     assert_eq!(
         crate::load_settings(&isolated)
+            .await
             .expect("isolated settings")
             .username,
         "Steve"
@@ -469,6 +478,7 @@ async fn isolated_profile_does_not_import_legacy_settings_or_data() {
     assert!(!default_home.root().exists());
     assert_eq!(
         crate::load_settings(&legacy)
+            .await
             .expect("legacy unchanged")
             .username,
         "LegacyPlayer"
@@ -480,11 +490,11 @@ async fn isolated_profile_does_not_import_legacy_settings_or_data() {
 async fn source_links_are_rejected_without_touching_external_files() {
     let (legacy, home) = fixture("relocation-link");
     initialize_at(&legacy, &home).await.expect("initialize");
-    let source = crate::game_cache(&home).expect("source");
+    let source = crate::game_cache(&home).await.expect("source");
     let external = home.root().parent().expect("parent").join("external");
     fs::write(&external, b"external data").expect("external");
     std::os::unix::fs::symlink(&external, source.root().join("linked")).expect("link");
-    let mut settings = crate::load_settings(&home).expect("settings");
+    let mut settings = crate::load_settings(&home).await.expect("settings");
     settings.data_directory = Some(
         home.root()
             .parent()
@@ -493,7 +503,7 @@ async fn source_links_are_rejected_without_touching_external_files() {
             .display()
             .to_string(),
     );
-    crate::save_settings(&home, &settings).expect("save");
+    crate::save_settings(&home, &settings).await.expect("save");
     assert!(initialize_at(&legacy, &home).await.is_err());
     assert_eq!(
         fs::read(external).expect("external preserved"),
@@ -511,9 +521,9 @@ async fn source_links_are_rejected_without_touching_external_files() {
 async fn conflicting_destination_preserves_files_and_can_be_retried() {
     let (legacy, home) = fixture("relocation-conflict");
     initialize_at(&legacy, &home).await.expect("initialize");
-    let source = crate::game_cache(&home).expect("source");
+    let source = crate::game_cache(&home).await.expect("source");
     fs::write(source.root().join("file"), b"original").expect("source");
-    let mut settings = crate::load_settings(&home).expect("settings");
+    let mut settings = crate::load_settings(&home).await.expect("settings");
     settings.data_directory = Some(
         home.root()
             .parent()
@@ -522,8 +532,8 @@ async fn conflicting_destination_preserves_files_and_can_be_retried() {
             .display()
             .to_string(),
     );
-    crate::save_settings(&home, &settings).expect("save");
-    let target = crate::game_cache(&home).expect("target");
+    crate::save_settings(&home, &settings).await.expect("save");
+    let target = crate::game_cache(&home).await.expect("target");
     fs::create_dir_all(target.root()).expect("target");
     fs::write(target.root().join("file"), b"different").expect("conflict");
     assert!(initialize_at(&legacy, &home).await.is_err());
@@ -543,7 +553,9 @@ async fn conflicting_destination_preserves_files_and_can_be_retried() {
     );
     assert!(!source.root().join("file").exists());
     settings.data_directory = None;
-    crate::save_settings(&home, &settings).expect("choose default again");
+    crate::save_settings(&home, &settings)
+        .await
+        .expect("choose default again");
     initialize_at(&legacy, &home).await.expect("move back");
     assert_eq!(
         fs::read(source.root().join("file")).expect("moved back"),

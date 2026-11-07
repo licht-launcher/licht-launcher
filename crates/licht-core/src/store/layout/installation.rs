@@ -124,8 +124,10 @@ mod tests {
         let (legacy, home) = fixture("installation-assets");
         let game = SharedCache::at(home.root().join("data"));
         let instances = game.instances_dir().expect("instances");
-        let settings = crate::load_settings(&home).expect("settings");
-        crate::save_settings(&home, &settings).expect("save settings");
+        let settings = crate::load_settings(&home).await.expect("settings");
+        crate::save_settings(&home, &settings)
+            .await
+            .expect("save settings");
         let source = crate::InstanceSource::Modpack {
             source: crate::ModpackSource::Modrinth,
             project_id: "fixture".to_string(),

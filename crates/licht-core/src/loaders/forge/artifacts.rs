@@ -7,7 +7,7 @@ use serde_json::Value;
 
 use super::archive::{Installer, entry};
 use crate::hashes::{file_matches_sha1, sha1_hex};
-use crate::{Artifact, CoreError, DEFAULT_RETRY, DownloadTask, Result, SharedCache};
+use crate::{Artifact, CoreError, DownloadTask, Result, SharedCache};
 
 pub(super) fn failure(detail: &str) -> CoreError {
     CoreError::LoaderInstall {
@@ -189,12 +189,7 @@ pub(super) async fn download_libraries(
         .queue(
             client,
             &pending.into_values().collect::<Vec<_>>(),
-            crate::DownloadOptions {
-                limits: crate::settings::configured_transfer_limits(cache, settings)?,
-                download_concurrency: crate::download_concurrency(cache, settings)?,
-                write_concurrency: crate::write_concurrency(cache, settings)?,
-                retry: DEFAULT_RETRY,
-            },
+            crate::settings::download_options(cache, settings).await?,
         )
         .await
 }

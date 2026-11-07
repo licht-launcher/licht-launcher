@@ -26,8 +26,8 @@ pub fn run() -> anyhow::Result<()> {
     let runtime = startup::state::StartupRuntime::new();
     let updates = app_updates::Runtime::new();
     let startup_runtime = std::sync::Arc::clone(&runtime);
-    let (hardware_acceleration, initial_theme) = licht_core::startup_settings()
-        .map(|settings| (settings.hardware_acceleration, settings.theme))
+    let (hardware_acceleration, initial_theme) = licht_core::startup_preferences()
+        .map(|preferences| (preferences.hardware_acceleration, preferences.theme))
         .unwrap_or_else(|error| {
             tracing::warn!(%error, "Could not read startup appearance preferences; using defaults until settings can be loaded");
             (true, licht_core::LauncherTheme::Dark)

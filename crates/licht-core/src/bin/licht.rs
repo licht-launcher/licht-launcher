@@ -64,7 +64,7 @@ async fn install(args: &[String]) -> licht_core::Result<()> {
     let settings_home = licht_core::initialize_launcher().await?;
     let cache = match &args.cache {
         Some(root) => SharedCache::at(root),
-        None => game_cache(&settings_home)?,
+        None => game_cache(&settings_home).await?,
     };
     let client = reqwest::Client::builder()
         .timeout(licht_core::MANIFEST_REQUEST_TIMEOUT)
@@ -142,7 +142,7 @@ async fn versions(args: &[String]) -> licht_core::Result<i32> {
     let args = parse_versions_args(args)?;
     let cache = match &args.cache {
         Some(root) => SharedCache::at(root),
-        None => game_cache(&licht_core::initialize_launcher().await?)?,
+        None => game_cache(&licht_core::initialize_launcher().await?).await?,
     };
     let client = reqwest::Client::builder()
         .timeout(licht_core::MANIFEST_REQUEST_TIMEOUT)
@@ -160,9 +160,9 @@ async fn launch(args: &[String]) -> licht_core::Result<i32> {
     let settings_home = licht_core::initialize_launcher().await?;
     let cache = match &args.cache {
         Some(root) => SharedCache::at(root),
-        None => game_cache(&settings_home)?,
+        None => game_cache(&settings_home).await?,
     };
-    let settings = load_settings(&settings_home)?;
+    let settings = load_settings(&settings_home).await?;
     let json = std::fs::read_to_string(cache.version_json(&args.version_id)?)?;
     let version = parse_version(&json)?;
     let environment = host_environment()?;

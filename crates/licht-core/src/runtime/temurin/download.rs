@@ -24,6 +24,6 @@ pub(super) async fn download_sha256(
         size,
     };
     progress
-        .verified_queue(client, &[task], progress.options()?)
+        .verified_queue(client, &[task], progress.options().await?)
         .await
 }

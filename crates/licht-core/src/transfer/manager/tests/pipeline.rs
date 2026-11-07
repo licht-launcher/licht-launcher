@@ -56,7 +56,7 @@ async fn pending(fixture: &Fixture) -> InstanceEntry {
         InstanceSource::Vanilla {
             game_version: VERSION.into(),
         },
-        &global_launch(&load_settings(&fixture.settings).expect("settings")),
+        &global_launch(&load_settings(&fixture.settings).await.expect("settings")),
     )
     .await
     .expect("pending instance")
@@ -654,7 +654,7 @@ async fn real_pipeline_resumes_a_persisted_loader_profile_without_reselecting_it
         &root,
         "Persisted loader",
         source.clone(),
-        &global_launch(&load_settings(&fixture.settings).expect("settings")),
+        &global_launch(&load_settings(&fixture.settings).await.expect("settings")),
     )
     .await
     .expect("pending loader");
