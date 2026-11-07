@@ -65,14 +65,15 @@ async fn initialize(
     let reporter = StartupReporter::new(move |progress| {
         progress_session.core_progress(&progress_app, progress)
     });
-    let paths = crate::commands::LauncherPaths::load(reporter)
+    let (paths, pool) = crate::commands::LauncherPaths::load(reporter)
         .await
         .context("Could not prepare launcher storage")?;
     session.update(app, |state| {
         state.phase = StartupPhase::StartingServices;
         state.total_bytes = None;
     })?;
-    let database = licht_core::DatabaseService::start(paths.settings.clone()).await?;
+    // The service closes the pool when the launcher shuts down.
+    let database = licht_core::DatabaseService::start(pool).await?;
     let database_client = database.client();
     *runtime.database.lock().await = Some(database);
     database_client.recover_download_jobs(&paths.game).await?;

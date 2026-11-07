@@ -540,9 +540,13 @@ async fn indexed_cleanup_preserves_active_shared_partials_and_complete_files() {
     }
     let complete_file = fixture.game.root().join("complete.jar");
     std::fs::write(&complete_file, b"complete bytes").expect("complete file");
-    let database = licht_core::DatabaseService::start(fixture.settings.clone())
-        .await
-        .expect("service");
+    let database = licht_core::DatabaseService::start(
+        licht_core::Database::open(&fixture.settings)
+            .await
+            .expect("database"),
+    )
+    .await
+    .expect("service");
     let manager = DownloadManager::new(
         fixture.settings.clone(),
         fixture.game.clone(),

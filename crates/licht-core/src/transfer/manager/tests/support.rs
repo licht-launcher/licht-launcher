@@ -117,9 +117,11 @@ impl Fixture {
             .await
             .expect("close fixture connection");
         let database = Some(
-            crate::DatabaseService::start(settings.clone())
-                .await
-                .expect("database service"),
+            crate::DatabaseService::start(
+                crate::Database::open(&settings).await.expect("database"),
+            )
+            .await
+            .expect("database service"),
         );
         Self {
             root,
@@ -139,9 +141,13 @@ impl Fixture {
             .await
             .expect("shutdown");
         self.database = Some(
-            crate::DatabaseService::start(self.settings.clone())
-                .await
-                .expect("reopen"),
+            crate::DatabaseService::start(
+                crate::Database::open(&self.settings)
+                    .await
+                    .expect("database"),
+            )
+            .await
+            .expect("reopen"),
         );
         self.database()
             .recover_download_jobs(&self.game)

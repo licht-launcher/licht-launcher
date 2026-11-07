@@ -138,9 +138,10 @@ mod tests {
         let executable = crate::runtime::archive::java_executable(&runtime, environment().os);
         std::fs::create_dir_all(executable.parent().expect("bin")).expect("runtime directory");
         std::fs::write(&executable, b"installed Java").expect("runtime");
-        let service = crate::DatabaseService::start(home.clone())
-            .await
-            .expect("database");
+        let service =
+            crate::DatabaseService::start(crate::Database::open(&home).await.expect("database"))
+                .await
+                .expect("database");
         let job = service
             .client()
             .create_java_download_job(&cache, 21)
@@ -207,9 +208,11 @@ mod tests {
                     .expect("runtime directory");
                 std::fs::write(&expected, b"temurin").expect("installed Java");
             }
-            let database = crate::DatabaseService::start(settings.clone())
-                .await
-                .expect("database");
+            let database = crate::DatabaseService::start(
+                crate::Database::open(&settings).await.expect("database"),
+            )
+            .await
+            .expect("database");
             let job = database
                 .client()
                 .create_java_download_job(&cache, 8)

@@ -154,9 +154,11 @@ mod tests {
             for file in &mut stored.files {
                 file.url = url.clone();
             }
-            let service = crate::DatabaseService::start(home.clone())
-                .await
-                .expect("database");
+            let service = crate::DatabaseService::start(
+                crate::Database::open(&home).await.expect("database"),
+            )
+            .await
+            .expect("database");
             service
                 .client()
                 .replace_modpack(&game.instances_dir().expect("instances"), "Pack", stored)

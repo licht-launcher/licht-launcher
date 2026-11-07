@@ -1,9 +1,24 @@
 use std::fs;
 
 use super::{DirectoryState, PendingMove, write_state};
-use crate::SharedCache;
+use crate::store::db::Database;
 use crate::store::layout::progress::{StartupPhase, StartupReporter};
 use crate::store::layout::{initialize_at, tests::fixture};
+use crate::{Result, SharedCache};
+
+async fn write_checkpoint(home: &SharedCache, state: &DirectoryState) -> Result<()> {
+    let database = Database::open(home).await?;
+    let written = write_state(&database, state).await;
+    database.close().await;
+    written
+}
+
+async fn apply(home: &SharedCache, reporter: &StartupReporter) -> Result<()> {
+    let database = Database::open(home).await?;
+    let applied = super::apply(&database, reporter).await;
+    database.close().await;
+    applied
+}
 
 #[tokio::test]
 async fn changing_directory_moves_content_after_restart_and_keeps_the_profile() {
@@ -32,9 +47,10 @@ async fn changing_directory_moves_content_after_restart_and_keeps_the_profile() 
         b"icon",
     )
     .expect("icon");
-    let service = crate::DatabaseService::start(home.clone())
-        .await
-        .expect("service");
+    let service =
+        crate::DatabaseService::start(crate::Database::open(&home).await.expect("database"))
+            .await
+            .expect("service");
     let registered = crate::create_instance(
         &service.client(),
         &source.instances_dir().expect("instances"),
@@ -167,9 +183,10 @@ async fn changing_directory_moves_content_after_restart_and_keeps_the_profile() 
         crate::load_settings(&home).await.expect("settings").java21,
         Some(target.root().join("runtime/java").display().to_string())
     );
-    let service = crate::DatabaseService::start(home.clone())
-        .await
-        .expect("reopen");
+    let service =
+        crate::DatabaseService::start(crate::Database::open(&home).await.expect("database"))
+            .await
+            .expect("reopen");
     assert_eq!(
         service
             .client()
@@ -292,7 +309,7 @@ async fn saving_settings_keeps_the_move_checkpoint() {
     initialize_at(&legacy, &home).await.expect("initialize");
     let source = crate::game_cache(&home).await.expect("source");
     let destination = home.root().parent().expect("parent").join("chosen/data");
-    write_state(
+    write_checkpoint(
         &home,
         &DirectoryState {
             active: source.root().to_path_buf(),
@@ -346,7 +363,7 @@ async fn a_copied_move_finishes_after_its_source_was_cleaned() {
             fs::write(target.root().join("file"), b"original").expect("copied file");
             fs::remove_dir_all(source.root()).expect("cleaned source");
         }
-        write_state(
+        write_checkpoint(
             &home,
             &DirectoryState {
                 active: source.root().to_path_buf(),
@@ -393,7 +410,7 @@ async fn interrupted_copy_resumes_without_overwriting_different_files() {
         }
         Ok(())
     });
-    assert!(super::apply(&home, &interrupted).await.is_err());
+    assert!(apply(&home, &interrupted).await.is_err());
     let target = crate::game_cache(&home).await.expect("target");
     assert!(source.root().join("file").exists());
     assert!(target.root().join("file").exists());
@@ -424,7 +441,7 @@ async fn interrupted_cleanup_preserves_changed_source_and_resumes_after_resoluti
     let target = crate::game_cache(&home).await.expect("target");
     fs::create_dir_all(target.root()).expect("target");
     fs::write(target.root().join("file"), b"older copy").expect("interrupted copy");
-    write_state(
+    write_checkpoint(
         &home,
         &DirectoryState {
             active: source.root().to_path_buf(),

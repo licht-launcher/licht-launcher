@@ -5,9 +5,10 @@ async fn progressive_content_publishes_local_rows_before_database_failure() {
     let cache = cache("progressive-before-database");
     let root = instance(&cache);
     fs::write(root.join("mods").join("one.jar"), b"mod").expect("mod");
-    let service = crate::DatabaseService::start(cache.clone())
-        .await
-        .expect("service");
+    let service =
+        crate::DatabaseService::start(crate::Database::open(&cache).await.expect("database"))
+            .await
+            .expect("service");
     let database = service.client();
     service.shutdown().await.expect("shutdown");
     let mut snapshots = Vec::new();
@@ -33,9 +34,10 @@ async fn progressive_content_publishes_local_rows_before_database_failure() {
 async fn progressive_content_propagates_publication_failure() {
     let cache = cache("progressive-emission-error");
     instance(&cache);
-    let service = crate::DatabaseService::start(cache.clone())
-        .await
-        .expect("service");
+    let service =
+        crate::DatabaseService::start(crate::Database::open(&cache).await.expect("database"))
+            .await
+            .expect("service");
     let result = list_instance_content_progressively(
         &cache,
         &service.client(),
@@ -120,9 +122,10 @@ async fn progressive_content_measures_first_list_and_completion_with_local_fixtu
         .expect("mod");
     }
     seed_metadata(&cache, b"fixture", "Known metadata");
-    let service = crate::DatabaseService::start(cache.clone())
-        .await
-        .expect("service");
+    let service =
+        crate::DatabaseService::start(crate::Database::open(&cache).await.expect("database"))
+            .await
+            .expect("service");
     for pass in ["cold fingerprint index", "warm fingerprint index"] {
         let start = std::time::Instant::now();
         let mut first = None;

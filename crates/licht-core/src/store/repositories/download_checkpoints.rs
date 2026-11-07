@@ -66,7 +66,9 @@ mod tests {
         let root = std::env::temp_dir().join(format!("licht-job-checkpoints-{stamp}"));
         let home = SharedCache::at(&root);
         let game = SharedCache::at(root.join("data"));
-        let service = DatabaseService::start(home.clone()).await.expect("service");
+        let service = DatabaseService::start(crate::Database::open(&home).await.expect("database"))
+            .await
+            .expect("service");
         let client = service.client();
         let first = client
             .create_pending_download_job(
@@ -110,7 +112,9 @@ mod tests {
             Err(CoreError::DownloadJobMissing)
         ));
         service.shutdown().await.expect("shutdown");
-        let service = DatabaseService::start(home).await.expect("reopen");
+        let service = DatabaseService::start(crate::Database::open(&home).await.expect("database"))
+            .await
+            .expect("reopen");
         let client = service.client();
         assert!(
             client

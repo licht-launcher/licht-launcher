@@ -140,9 +140,10 @@ mod tests {
         let cache = fixture();
         let instances = cache.root().join("instances");
         let other = cache.root().join("other-instances");
-        let service = DatabaseService::start(cache.clone())
-            .await
-            .expect("service");
+        let service =
+            DatabaseService::start(crate::Database::open(&cache).await.expect("database"))
+                .await
+                .expect("service");
         let client = service.client();
         let original = index();
         let settings = crate::load_settings(&cache).await.expect("settings");
@@ -207,7 +208,10 @@ mod tests {
         );
         assert!(!instances.join("First").exists());
         service.shutdown().await.expect("shutdown");
-        let service = DatabaseService::start(cache.clone()).await.expect("reopen");
+        let service =
+            DatabaseService::start(crate::Database::open(&cache).await.expect("database"))
+                .await
+                .expect("reopen");
         let client = service.client();
         assert_eq!(
             client

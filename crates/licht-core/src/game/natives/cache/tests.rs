@@ -21,7 +21,7 @@ impl Fixture {
         let game = SharedCache::at(root.join("data"));
         let home = SharedCache::at(root.join("settings"));
         let database = Some(
-            DatabaseService::start(home.clone())
+            DatabaseService::start(crate::Database::open(&home).await.expect("database"))
                 .await
                 .expect("database"),
         );
@@ -72,7 +72,7 @@ impl Fixture {
             .await
             .expect("shutdown");
         self.database = Some(
-            DatabaseService::start(self.home.clone())
+            DatabaseService::start(crate::Database::open(&self.home).await.expect("database"))
                 .await
                 .expect("reopen"),
         );
