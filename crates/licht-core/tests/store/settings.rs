@@ -344,7 +344,6 @@ async fn the_file_keeps_only_startup_preferences_and_the_rest_roundtrips() {
         keys,
         [
             "automaticUpdates",
-            "dataDirectory",
             "hardwareAcceleration",
             "language",
             "minimizeOnGameStart",
@@ -570,7 +569,7 @@ async fn a_custom_directory_is_remembered_without_moving_files() {
     let game = game_cache(&home).await.expect("game cache");
 
     assert_eq!(game.root(), chosen.join("Licht Launcher").join("data"));
-    assert!(settings_file(&home).is_file());
+    assert!(saved_file(&home).get("dataDirectory").is_none());
     assert!(!chosen.join("Licht Launcher").join("settings.json").exists());
     assert_eq!(
         download_concurrency(&game, &home)

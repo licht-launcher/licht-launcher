@@ -401,11 +401,10 @@ impl From<&Settings> for StartupPreferences {
 /// What `settings.json` holds. Every other setting lives in the database.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct FileSettings<'a> {
+struct FileSettings {
     schema: u32,
     #[serde(flatten)]
     preferences: StartupPreferences,
-    data_directory: &'a Option<String>,
 }
 
 // Every save goes through one temporary file and one database row, so writers in this
@@ -554,7 +553,6 @@ fn write_settings_file(cache: &SharedCache, settings: Settings) -> Result<Settin
     let file = FileSettings {
         schema: settings.schema,
         preferences: StartupPreferences::from(&settings),
-        data_directory: &settings.data_directory,
     };
     let json = serde_json::to_string_pretty(&file).map_err(CoreError::Settings)?;
     // Directory moves must be able to retry after an interrupted settings update.
@@ -626,9 +624,7 @@ pub(crate) async fn download_options(
 /// Next process: game files go to `{dataDirectory}/Licht Launcher/data`.
 /// The default game directory is `<launcher>/data`.
 pub async fn game_cache(defaults: &SharedCache) -> Result<SharedCache> {
-    // The application directory is a startup preference, so the database is not needed.
-    let file = defaults.clone();
-    let settings = blocking(move || load_file_settings(&file)).await?;
+    let settings = load_settings(defaults).await?;
     match settings.data_directory {
         Some(path) => Ok(SharedCache::at(
             PathBuf::from(path).join(GAME_FOLDER).join("data"),

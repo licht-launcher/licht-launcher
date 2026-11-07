@@ -1,55 +1,58 @@
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 
-use serde::{Deserialize, Serialize};
-
 use super::progress::{StartupPhase, StartupReporter};
 use super::{Relocation, database, db, files, migration, relocate};
+use crate::store::repositories::settings::{ContentRoots, SettingsRepository};
 use crate::{CoreError, Result, SharedCache};
 
 // Operational locks and update requests belong to the profile, not its content.
 const CONTENT_CACHES: &[&str] = &["icons", "content-metadata"];
 
-#[derive(Serialize, Deserialize)]
 struct DirectoryState {
     active: PathBuf,
     pending: Option<PendingMove>,
 }
 
-#[derive(Serialize, Deserialize)]
 struct PendingMove {
     destination: PathBuf,
     copied: bool,
 }
 
-const STATE_KEY: &str = "content_directory_state";
-
-fn legacy_state_path(home: &SharedCache) -> PathBuf {
-    home.root().join("content-directory.json")
-}
-
+/// `None` until the active root has been recorded for this profile.
 async fn read_state(home: &SharedCache) -> Result<Option<DirectoryState>> {
     let mut connection = db::open_db(home).await?;
-    let stored = db::get_meta(&mut connection, STATE_KEY).await;
-    db::complete_operation(connection, stored)
+    let roots = SettingsRepository::content_roots(&mut connection).await;
+    let roots = db::complete_operation(connection, roots)
         .await?
-        .map(|json| serde_json::from_str(&json).map_err(CoreError::Settings))
-        .transpose()
+        .ok_or_else(SettingsRepository::missing_row)?;
+    Ok(roots.active.map(|active| DirectoryState {
+        active: PathBuf::from(active),
+        pending: roots.pending.map(|destination| PendingMove {
+            destination: PathBuf::from(destination),
+            copied: roots.copied,
+        }),
+    }))
 }
 
 async fn write_state(home: &SharedCache, state: &DirectoryState) -> Result<()> {
-    let json = serde_json::to_string(state).map_err(CoreError::Settings)?;
+    let text = |path: &Path| {
+        path.to_str()
+            .map(str::to_string)
+            .ok_or(CoreError::CachePath)
+    };
+    let roots = ContentRoots {
+        active: Some(text(&state.active)?),
+        pending: state
+            .pending
+            .as_ref()
+            .map(|pending| text(&pending.destination))
+            .transpose()?,
+        copied: state.pending.as_ref().is_some_and(|pending| pending.copied),
+    };
     let mut connection = db::open_db(home).await?;
-    let result = db::set_meta(&mut connection, STATE_KEY, &json).await;
+    let result = SettingsRepository::set_content_roots(&mut connection, &roots).await;
     db::complete_operation(connection, result).await
-}
-
-fn remove_legacy_state(home: &SharedCache) -> Result<()> {
-    match fs::remove_file(legacy_state_path(home)) {
-        Ok(()) => Ok(()),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(error.into()),
-    }
 }
 
 fn validate_path(path: &Path) -> Result<()> {
@@ -137,31 +140,18 @@ fn validate_no_links(path: &Path) -> Result<()> {
 
 pub(super) async fn apply(home: &SharedCache, reporter: &StartupReporter) -> Result<()> {
     let desired = crate::game_cache(home).await?;
-    let mut state = match read_state(home).await? {
-        Some(state) => state,
-        None => match fs::read(legacy_state_path(home)) {
-            Ok(bytes) => {
-                let state: DirectoryState =
-                    serde_json::from_slice(&bytes).map_err(CoreError::Settings)?;
-                write_state(home, &state).await?;
-                state
-            }
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                // Existing installations already use their configured directory.
-                write_state(
-                    home,
-                    &DirectoryState {
-                        active: desired.root().to_path_buf(),
-                        pending: None,
-                    },
-                )
-                .await?;
-                return Ok(());
-            }
-            Err(error) => return Err(error.into()),
-        },
+    let Some(mut state) = read_state(home).await? else {
+        // Existing installations already use their configured directory.
+        write_state(
+            home,
+            &DirectoryState {
+                active: desired.root().to_path_buf(),
+                pending: None,
+            },
+        )
+        .await?;
+        return Ok(());
     };
-    remove_legacy_state(home)?;
     validate_path(&state.active)?;
     if state.active == desired.root()
         && state.pending.as_ref().is_none_or(|pending| !pending.copied)

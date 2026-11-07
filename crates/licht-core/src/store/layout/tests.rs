@@ -331,7 +331,6 @@ async fn migration_retries_after_its_settings_file_was_published_without_the_dat
                 "minimizeOnGameStart",
                 "restoreOnGameExit",
                 "automaticUpdates",
-                "dataDirectory",
             ]
             .contains(&key.as_str())
         })

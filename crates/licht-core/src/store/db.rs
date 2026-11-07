@@ -8,7 +8,7 @@ use super::repositories::metadata::MetadataRepository;
 use crate::{CoreError, Result, SharedCache};
 
 const DB_FILE: &str = "licht.db";
-const SCHEMA_VERSION: u32 = 11;
+const SCHEMA_VERSION: u32 = 12;
 pub(super) const META_LAST_PLAYED: &str = "last_played_folder";
 
 pub fn db_path(cache: &SharedCache) -> PathBuf {
@@ -275,6 +275,22 @@ async fn migrate(connection: &mut SqliteConnection) -> Result<()> {
                 disable_custom_title_bar INTEGER NOT NULL CHECK(disable_custom_title_bar IN (0, 1))
             );
             PRAGMA user_version = 11;",
+        )
+        .execute(&mut *transaction)
+        .await?;
+    }
+    if version < 12 {
+        // The chosen application directory and the content move checkpoint join the settings
+        // row. Earlier checkpoints only came from unreleased builds, so they are dropped.
+        sqlx::raw_sql(
+            "ALTER TABLE settings ADD COLUMN data_directory TEXT;
+            ALTER TABLE settings ADD COLUMN active_content_root TEXT;
+            ALTER TABLE settings ADD COLUMN pending_content_root TEXT;
+            ALTER TABLE settings ADD COLUMN pending_copied INTEGER NOT NULL DEFAULT 0
+                CHECK(pending_copied IN (0, 1)
+                    AND (pending_copied = 0 OR pending_content_root IS NOT NULL));
+            DELETE FROM meta WHERE key = 'content_directory_state';
+            PRAGMA user_version = 12;",
         )
         .execute(&mut *transaction)
         .await?;

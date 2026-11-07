@@ -51,15 +51,16 @@ async fn initialize_at_with_progress(
     {
         migration::migrate(legacy, home, reporter).await?;
     }
+    // Older profiles keep every setting in settings.json until one save moves them.
+    // The content move checkpoint lives in the same row, so it must exist first.
+    if !home.root().join("settings.json").exists() || !settings::stored_in_database(home).await? {
+        settings::save_settings(home, &settings::load_settings(home).await?).await?;
+    }
     relocation::apply(home, reporter).await?;
     let game = settings::game_cache(home).await?;
     tokio::fs::create_dir_all(game.root()).await?;
     tokio::fs::create_dir_all(game.cache_dir()?).await?;
     tokio::fs::create_dir_all(game.instances_dir()?).await?;
-    // Older profiles keep every setting in settings.json until one save moves them.
-    if !home.root().join("settings.json").exists() || !settings::stored_in_database(home).await? {
-        settings::save_settings(home, &settings::load_settings(home).await?).await?;
-    }
     reporter.phase(StartupPhase::RestoringCache)?;
     installation::migrate(home, &game, reporter).await?;
     Ok(())
