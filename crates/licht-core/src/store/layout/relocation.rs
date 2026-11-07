@@ -4,7 +4,7 @@ use std::path::{Component, Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use super::progress::{StartupPhase, StartupReporter};
-use super::{Relocation, database, files, migration, relocate};
+use super::{Relocation, database, db, files, migration, relocate};
 use crate::{CoreError, Result, SharedCache};
 
 // Operational locks and update requests belong to the profile, not its content.
@@ -22,21 +22,34 @@ struct PendingMove {
     copied: bool,
 }
 
-fn state_path(home: &SharedCache) -> PathBuf {
+const STATE_KEY: &str = "content_directory_state";
+
+fn legacy_state_path(home: &SharedCache) -> PathBuf {
     home.root().join("content-directory.json")
 }
 
-fn write_state(home: &SharedCache, state: &DirectoryState) -> Result<()> {
-    fs::create_dir_all(home.root())?;
-    let path = state_path(home);
-    let temporary = path.with_extension("json.tmp");
-    let mut file = fs::File::create(&temporary)?;
-    use std::io::Write;
-    file.write_all(&serde_json::to_vec(state).map_err(CoreError::Settings)?)?;
-    file.sync_all()?;
-    drop(file);
-    fs::rename(temporary, path)?;
-    Ok(())
+async fn read_state(home: &SharedCache) -> Result<Option<DirectoryState>> {
+    let mut connection = db::open_db(home).await?;
+    let stored = db::get_meta(&mut connection, STATE_KEY).await;
+    db::complete_operation(connection, stored)
+        .await?
+        .map(|json| serde_json::from_str(&json).map_err(CoreError::Settings))
+        .transpose()
+}
+
+async fn write_state(home: &SharedCache, state: &DirectoryState) -> Result<()> {
+    let json = serde_json::to_string(state).map_err(CoreError::Settings)?;
+    let mut connection = db::open_db(home).await?;
+    let result = db::set_meta(&mut connection, STATE_KEY, &json).await;
+    db::complete_operation(connection, result).await
+}
+
+fn remove_legacy_state(home: &SharedCache) -> Result<()> {
+    match fs::remove_file(legacy_state_path(home)) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error.into()),
+    }
 }
 
 fn validate_path(path: &Path) -> Result<()> {
@@ -124,28 +137,38 @@ fn validate_no_links(path: &Path) -> Result<()> {
 
 pub(super) async fn apply(home: &SharedCache, reporter: &StartupReporter) -> Result<()> {
     let desired = crate::game_cache(home).await?;
-    let mut state: DirectoryState = match fs::read(state_path(home)) {
-        Ok(bytes) => serde_json::from_slice(&bytes).map_err(CoreError::Settings)?,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            // Existing installations already use their configured directory.
-            write_state(
-                home,
-                &DirectoryState {
-                    active: desired.root().to_path_buf(),
-                    pending: None,
-                },
-            )?;
-            return Ok(());
-        }
-        Err(error) => return Err(error.into()),
+    let mut state = match read_state(home).await? {
+        Some(state) => state,
+        None => match fs::read(legacy_state_path(home)) {
+            Ok(bytes) => {
+                let state: DirectoryState =
+                    serde_json::from_slice(&bytes).map_err(CoreError::Settings)?;
+                write_state(home, &state).await?;
+                state
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                // Existing installations already use their configured directory.
+                write_state(
+                    home,
+                    &DirectoryState {
+                        active: desired.root().to_path_buf(),
+                        pending: None,
+                    },
+                )
+                .await?;
+                return Ok(());
+            }
+            Err(error) => return Err(error.into()),
+        },
     };
+    remove_legacy_state(home)?;
     validate_path(&state.active)?;
     if state.active == desired.root()
         && state.pending.as_ref().is_none_or(|pending| !pending.copied)
     {
         if state.pending.is_some() {
             state.pending = None;
-            write_state(home, &state)?;
+            write_state(home, &state).await?;
         }
         return Ok(());
     }
@@ -154,7 +177,7 @@ pub(super) async fn apply(home: &SharedCache, reporter: &StartupReporter) -> Res
             destination: desired.root().to_path_buf(),
             copied: false,
         });
-        write_state(home, &state)?;
+        write_state(home, &state).await?;
     }
     let pending = state.pending.as_ref().ok_or(CoreError::CachePath)?;
     validate_path(&pending.destination)?;
@@ -196,7 +219,7 @@ pub(super) async fn apply(home: &SharedCache, reporter: &StartupReporter) -> Res
             files::copy_tree_with_progress(&mapping.source, &mapping.destination, reporter)?;
         }
         state.pending.as_mut().ok_or(CoreError::CachePath)?.copied = true;
-        write_state(home, &state)?;
+        write_state(home, &state).await?;
     }
     reporter.phase(StartupPhase::MigratingDatabase)?;
     database::remap(home, &mappings).await?;
@@ -225,7 +248,7 @@ pub(super) async fn apply(home: &SharedCache, reporter: &StartupReporter) -> Res
     }
     state.active = destination.root().to_path_buf();
     state.pending = None;
-    write_state(home, &state)?;
+    write_state(home, &state).await?;
     tracing::info!("Content directory move completed");
     Ok(())
 }
