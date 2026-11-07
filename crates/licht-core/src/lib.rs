@@ -115,9 +115,10 @@ pub use runtime::{
     validate_java,
 };
 pub use settings::{
-    GlobalLaunch, LauncherLanguage, LauncherTheme, Settings, SettingsSnapshot, configured_java,
-    download_concurrency, game_cache, global_launch, load_settings, memory_slider_max,
-    recommended_max_memory_mb, save_settings, set_java_path, settings_snapshot, total_memory_mb,
+    GlobalLaunch, LauncherLanguage, LauncherTheme, Settings, SettingsSnapshot, StartupPreferences,
+    configured_java, download_concurrency, game_cache, global_launch, load_settings,
+    memory_slider_max, recommended_max_memory_mb, save_settings, set_java_path, settings_snapshot,
+    total_memory_mb,
 };
 pub use store::layout::progress::{
     StartupPhase, StartupPreviewScenario, StartupProgress, StartupReporter, StartupUpdateStatus,
@@ -129,7 +130,7 @@ pub use store::layout::requests::{
 };
 pub use store::layout::{
     initialize_launcher, initialize_launcher_with_progress, run_startup_migration_preview,
-    startup_settings,
+    startup_preferences,
 };
 pub use store::service::{DatabaseClient, DatabaseService};
 pub use store::storage::{StorageCategory, StorageSummary, StorageUsage, storage_summary};

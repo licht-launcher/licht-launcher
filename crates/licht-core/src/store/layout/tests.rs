@@ -78,9 +78,12 @@ async fn migration_preserves_files_settings_committed_wal_and_job_paths() {
     let mut settings = crate::load_settings(&legacy).await.expect("settings");
     settings.download_concurrency = 3;
     settings.java21 = Some(artifact.to_string_lossy().into_owned());
-    crate::save_settings(&legacy, &settings)
-        .await
-        .expect("legacy settings");
+    // Legacy profiles kept every setting in settings.json.
+    fs::write(
+        legacy.root().join("settings.json"),
+        serde_json::to_vec(&settings).expect("settings JSON"),
+    )
+    .expect("legacy settings");
     let instance = legacy.instance_dir("Survival").expect("instance");
     fs::create_dir_all(instance.join("saves")).expect("save directory");
     fs::write(instance.join("saves").join("level.dat"), b"world").expect("world");
@@ -279,13 +282,13 @@ async fn migration_retries_after_a_late_settings_conflict_without_rewriting_orig
     )
     .await
     .expect("settings");
-    let mut conflicting = crate::load_settings(&home)
-        .await
-        .expect("destination defaults");
-    conflicting.username = "Different".to_string();
-    crate::save_settings(&home, &conflicting)
-        .await
-        .expect("conflicting settings");
+    // A settings file left by an earlier attempt, before any database was published.
+    fs::create_dir_all(home.root()).expect("home");
+    fs::write(
+        home.root().join("settings.json"),
+        r#"{"schema":1,"username":"Different"}"#,
+    )
+    .expect("conflicting settings");
     assert!(initialize_at(&legacy, &home).await.is_err());
     assert!(!db::db_path(&home).exists());
     assert_eq!(fs::read(&profile).expect("original profile"), original);
@@ -298,6 +301,56 @@ async fn migration_retries_after_a_late_settings_conflict_without_rewriting_orig
         original
     );
     assert!(db::db_path(&home).is_file());
+}
+
+#[tokio::test]
+async fn migration_retries_after_its_settings_file_was_published_without_the_database() {
+    let (legacy, home) = fixture("published-settings");
+    let mut settings = crate::load_settings(&legacy).await.expect("defaults");
+    settings.username = "Alex".to_string();
+    settings.download_concurrency = 3;
+    let legacy_file = serde_json::to_value(&settings).expect("settings JSON");
+    fs::create_dir_all(legacy.root()).expect("legacy");
+    fs::write(
+        legacy.root().join("settings.json"),
+        serde_json::to_vec(&legacy_file).expect("legacy JSON"),
+    )
+    .expect("legacy settings");
+    // An earlier attempt stopped after publishing settings.json and before licht.db.
+    let published = legacy_file
+        .as_object()
+        .expect("object")
+        .iter()
+        .filter(|(key, _)| {
+            [
+                "schema",
+                "theme",
+                "language",
+                "hardwareAcceleration",
+                "minimizeToTray",
+                "minimizeOnGameStart",
+                "restoreOnGameExit",
+                "automaticUpdates",
+                "dataDirectory",
+            ]
+            .contains(&key.as_str())
+        })
+        .map(|(key, value)| (key.clone(), value.clone()))
+        .collect::<serde_json::Map<_, _>>();
+    fs::create_dir_all(home.root()).expect("home");
+    fs::write(
+        home.root().join("settings.json"),
+        serde_json::to_vec(&published).expect("published JSON"),
+    )
+    .expect("published settings");
+    initialize_at(&legacy, &home)
+        .await
+        .expect("retry migration");
+    let migrated = crate::load_settings(&home)
+        .await
+        .expect("migrated settings");
+    assert_eq!(migrated.username, "Alex");
+    assert_eq!(migrated.download_concurrency, 3);
 }
 
 #[tokio::test]
@@ -474,6 +527,33 @@ async fn startup_migration_previews_use_temporary_fixtures_for_success_and_confl
 }
 
 #[tokio::test]
+async fn startup_moves_settings_from_the_file_into_the_database() {
+    let (legacy, home) = fixture("settings-to-database");
+    fs::create_dir_all(home.root()).expect("home");
+    fs::write(
+        home.root().join("settings.json"),
+        r#"{"schema":1,"username":"Alex","downloadConcurrency":4,"theme":"light"}"#,
+    )
+    .expect("settings with database keys");
+    initialize_at(&legacy, &home).await.expect("initialize");
+    let file: serde_json::Value =
+        serde_json::from_slice(&fs::read(home.root().join("settings.json")).expect("file"))
+            .expect("JSON");
+    assert!(file.get("username").is_none());
+    assert_eq!(file["theme"], "light");
+    let settings = crate::load_settings(&home).await.expect("settings");
+    assert_eq!(settings.username, "Alex");
+    assert_eq!(settings.download_concurrency, 4);
+    let mut connection = db::open_db(&home).await.expect("database");
+    let stored: String = sqlx::query_scalar("SELECT username FROM settings")
+        .fetch_one(&mut connection)
+        .await
+        .expect("stored row");
+    connection.close().await.expect("close");
+    assert_eq!(stored, "Alex");
+}
+
+#[tokio::test]
 async fn startup_reads_update_preferences_before_migration_and_prefers_the_current_settings() {
     let (legacy, home) = fixture("startup-preferences");
     let mut old = crate::load_settings(&legacy).await.expect("defaults");
@@ -481,7 +561,7 @@ async fn startup_reads_update_preferences_before_migration_and_prefers_the_curre
     crate::save_settings(&legacy, &old)
         .await
         .expect("legacy preferences");
-    let loaded = super::startup_settings_at(&home, &legacy).expect("legacy fallback");
+    let loaded = super::startup_preferences_at(&home, &legacy).expect("legacy fallback");
     assert!(!loaded.automatic_updates);
     assert!(
         !home.root().exists(),
@@ -491,6 +571,6 @@ async fn startup_reads_update_preferences_before_migration_and_prefers_the_curre
     crate::save_settings(&home, &current)
         .await
         .expect("current preferences");
-    let loaded = super::startup_settings_at(&home, &legacy).expect("current settings");
+    let loaded = super::startup_preferences_at(&home, &legacy).expect("current settings");
     assert!(loaded.automatic_updates);
 }

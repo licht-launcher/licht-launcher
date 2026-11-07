@@ -6,3 +6,4 @@ pub(crate) mod instances;
 pub(crate) mod metadata;
 pub(crate) mod modpacks;
 pub(crate) mod natives;
+pub(crate) mod settings;
