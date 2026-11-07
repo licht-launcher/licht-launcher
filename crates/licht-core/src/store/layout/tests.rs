@@ -574,3 +574,70 @@ async fn startup_reads_update_preferences_before_migration_and_prefers_the_curre
     let loaded = super::startup_preferences_at(&home, &legacy).expect("current settings");
     assert!(loaded.automatic_updates);
 }
+
+/// A connection that has used the WAL keeps a shared lock on the database file, so an
+/// exclusive-locking connection can read it only when no such connection is open.
+async fn held_open(path: &std::path::Path) -> bool {
+    let probe = SqliteConnection::connect_with(
+        &SqliteConnectOptions::new()
+            .filename(path)
+            .locking_mode(sqlx::sqlite::SqliteLockingMode::Exclusive)
+            .busy_timeout(std::time::Duration::ZERO),
+    )
+    .await;
+    let Ok(mut probe) = probe else {
+        return true;
+    };
+    let read = sqlx::query_scalar::<_, i64>("SELECT count(*) FROM sqlite_master")
+        .fetch_one(&mut probe)
+        .await;
+    probe.close().await.expect("close probe");
+    read.is_err()
+}
+
+#[tokio::test]
+async fn an_open_pool_holds_the_database_until_it_closes() {
+    let (_, home) = fixture("pool-close");
+    let database = Database::open(&home).await.expect("database");
+    let mut connection = database.acquire().await.expect("connection");
+    sqlx::query("INSERT INTO meta VALUES ('pool', 'open')")
+        .execute(&mut *connection)
+        .await
+        .expect("write");
+    drop(connection);
+    assert!(held_open(&db::db_path(&home)).await);
+    database.close().await;
+    assert!(!held_open(&db::db_path(&home)).await);
+}
+
+#[tokio::test]
+async fn the_legacy_migration_publishes_a_database_nothing_holds_open() {
+    let (legacy, home) = fixture("migration-closed");
+    let settings = crate::load_settings(&legacy).await.expect("defaults");
+    fs::create_dir_all(legacy.root()).expect("legacy directory");
+    fs::write(
+        legacy.root().join("settings.json"),
+        serde_json::to_vec(&settings).expect("settings JSON"),
+    )
+    .expect("legacy settings");
+
+    migration::migrate(&legacy, &home, &StartupReporter::default())
+        .await
+        .expect("migrate");
+
+    assert!(db::db_path(&home).is_file());
+    assert!(!home.root().join("cache/layout-migration").exists());
+    assert!(!held_open(&db::db_path(&home)).await);
+}
+
+#[tokio::test]
+async fn startup_returns_the_open_profile_pool() {
+    let (legacy, home) = fixture("startup-pool");
+    let database = initialize_at_with_progress(Some(&legacy), &home, &StartupReporter::default())
+        .await
+        .expect("initialize");
+    assert_eq!(database.cache(), &home);
+    assert!(held_open(&db::db_path(&home)).await);
+    database.close().await;
+    assert!(!held_open(&db::db_path(&home)).await);
+}
