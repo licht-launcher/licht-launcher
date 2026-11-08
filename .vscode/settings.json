@@ -1,0 +1,6 @@
+{
+  "tailwindCSS.classFunctions": ["cn", "cva"],
+  "tailwindCSS.experimental.classRegex": [
+    ["Styles\\s*=\\s*\\{([\\s\\S]*?)\\}\\s*as const", "\"([^\"]*)\""]
+  ]
+}
