@@ -131,7 +131,10 @@ fn extract_archive(jar: &Path, destination: &Path, exclude: &[String]) -> Result
     let mut archive = zip::ZipArchive::new(file).map_err(CoreError::NativeArchive)?;
     for index in 0..archive.len() {
         let mut entry = archive.by_index(index).map_err(CoreError::NativeArchive)?;
-        let name = entry.name().replace('\\', "/");
+        let name = entry
+            .name()
+            .map_err(CoreError::NativeArchive)?
+            .replace('\\', "/");
         if entry.is_dir() || is_excluded(&name, exclude) {
             continue;
         }

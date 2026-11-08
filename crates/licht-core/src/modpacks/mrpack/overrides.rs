@@ -27,7 +27,10 @@ pub(super) fn extract_prefixed(
         let mut file = archive
             .by_index(index)
             .map_err(|_| CoreError::ModpackArchive)?;
-        let name = file.name().replace('\\', "/");
+        let name = file
+            .name()
+            .map_err(|_| CoreError::ModpackArchive)?
+            .replace('\\', "/");
         let Some(relative) = name.strip_prefix(prefix) else {
             continue;
         };
