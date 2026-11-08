@@ -142,8 +142,10 @@ mod tests {
         let (legacy, home) = fixture("installation-assets");
         let game = SharedCache::at(home.root().join("data"));
         let instances = game.instances_dir().expect("instances");
-        let settings = crate::load_settings(&home).await.expect("settings");
-        crate::save_settings(&home, &settings)
+        let settings = crate::settings::load_settings_at(&home)
+            .await
+            .expect("settings");
+        crate::settings::testing::save_settings_at(&home, &settings)
             .await
             .expect("save settings");
         let source = crate::InstanceSource::Modpack {
@@ -272,12 +274,12 @@ mod tests {
             );
         }
         connection.close().await.expect("close database");
-        let service =
-            crate::DatabaseService::start(crate::Database::open(&home).await.expect("database"))
-                .await
-                .expect("new service");
+        let database = crate::Database::open(&home).await.expect("database");
+        let service = crate::DatabaseService::start(database.clone())
+            .await
+            .expect("new service");
         let manager = crate::DownloadManager::new(
-            home.clone(),
+            database,
             game.clone(),
             crate::LaunchEnvironment {
                 os: crate::OsName::Linux,

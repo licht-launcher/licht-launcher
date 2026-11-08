@@ -19,7 +19,7 @@ mod worker;
 
 #[derive(Clone)]
 pub(crate) struct DownloadRuntime {
-    pub settings: SharedCache,
+    pub settings: crate::Database,
     pub game: SharedCache,
     pub environment: LaunchEnvironment,
     pub client: reqwest::Client,
@@ -61,7 +61,7 @@ pub struct DownloadManager {
 
 impl DownloadManager {
     pub fn new(
-        settings: SharedCache,
+        settings: crate::Database,
         game: SharedCache,
         environment: LaunchEnvironment,
         client: reqwest::Client,

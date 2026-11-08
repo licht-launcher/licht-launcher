@@ -379,7 +379,9 @@ async fn a_failed_repair_reset_rolls_back_metadata_and_preserves_resumable_parti
             manager.pause(&job.id).await.expect("pause");
         }
         checkpoint_stages(&fixture, &job.id).await;
-        let mut connection = crate::open_db(&fixture.settings).await.expect("connection");
+        let mut connection = crate::open_db(fixture.settings.cache())
+            .await
+            .expect("connection");
         sqlx::raw_sql("CREATE TRIGGER reject_repair_reset BEFORE DELETE ON download_job_checkpoints BEGIN SELECT RAISE(ABORT, 'repair reset fixture'); END;")
         .execute(&mut connection).await.expect("reject reset");
         sqlx::Connection::close(connection).await.expect("close");
@@ -414,7 +416,9 @@ async fn a_failed_repair_reset_rolls_back_metadata_and_preserves_resumable_parti
                     .expect("rolled back checkpoint")
             );
         }
-        let mut connection = crate::open_db(&fixture.settings).await.expect("connection");
+        let mut connection = crate::open_db(fixture.settings.cache())
+            .await
+            .expect("connection");
         sqlx::query("DROP TRIGGER reject_repair_reset")
             .execute(&mut connection)
             .await

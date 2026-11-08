@@ -45,7 +45,10 @@ async fn fresh_layout_places_settings_and_wal_database_at_the_launcher_root() {
     let (legacy, home) = fixture("fresh");
     initialize_at(&legacy, &home).await.expect("initialize");
     assert_eq!(
-        crate::game_cache(&home).await.expect("game").root(),
+        crate::settings::testing::game_cache_at(&home)
+            .await
+            .expect("game")
+            .root(),
         home.root().join("data")
     );
     for directory in ["cache", "data", "instances"] {
@@ -75,7 +78,9 @@ async fn migration_preserves_files_settings_committed_wal_and_job_paths() {
     let artifact = legacy.root().join("libraries").join("one.jar");
     fs::write(&artifact, b"library").expect("library");
     fs::write(artifact.with_extension("jar.part"), b"partial").expect("partial");
-    let mut settings = crate::load_settings(&legacy).await.expect("settings");
+    let mut settings = crate::settings::load_settings_at(&legacy)
+        .await
+        .expect("settings");
     settings.download_concurrency = 3;
     settings.java21 = Some(artifact.to_string_lossy().into_owned());
     // Legacy profiles kept every setting in settings.json.
@@ -119,7 +124,9 @@ async fn migration_preserves_files_settings_committed_wal_and_job_paths() {
         .expect("committed WAL metadata");
 
     initialize_at(&legacy, &home).await.expect("migrate");
-    let new_game = crate::game_cache(&home).await.expect("new game");
+    let new_game = crate::settings::testing::game_cache_at(&home)
+        .await
+        .expect("new game");
     assert_eq!(
         fs::read(new_game.root().join("libraries/one.jar")).expect("migrated library"),
         b"library"
@@ -135,7 +142,7 @@ async fn migration_preserves_files_settings_committed_wal_and_job_paths() {
         b"world"
     );
     assert_eq!(fs::read(&artifact).expect("original preserved"), b"library");
-    let migrated = crate::load_settings(&home)
+    let migrated = crate::settings::load_settings_at(&home)
         .await
         .expect("migrated settings");
     assert_eq!(migrated.download_concurrency, 3);
@@ -231,9 +238,11 @@ async fn migration_preserves_custom_game_directory_and_remaps_its_instance_root(
     let (legacy, home) = fixture("custom");
     let chosen = home.root().parent().expect("parent").join("custom");
     fs::create_dir_all(legacy.root()).expect("legacy");
-    let mut settings = crate::load_settings(&legacy).await.expect("defaults");
+    let mut settings = crate::settings::load_settings_at(&legacy)
+        .await
+        .expect("defaults");
     settings.data_directory = Some(chosen.to_string_lossy().into_owned());
-    crate::save_settings(&legacy, &settings)
+    crate::settings::testing::save_settings_at(&legacy, &settings)
         .await
         .expect("settings");
     let old_game = SharedCache::at(chosen.join("Licht Launcher"));
@@ -245,7 +254,9 @@ async fn migration_preserves_custom_game_directory_and_remaps_its_instance_root(
     initialize_at(&legacy, &home)
         .await
         .expect("custom migration");
-    let game = crate::game_cache(&home).await.expect("custom game");
+    let game = crate::settings::testing::game_cache_at(&home)
+        .await
+        .expect("custom game");
     assert_eq!(game.root(), chosen.join("Licht Launcher/data"));
     assert_eq!(
         fs::read(game.root().join("versions/custom.json")).expect("version"),
@@ -277,9 +288,11 @@ async fn migration_retries_after_a_late_settings_conflict_without_rewriting_orig
     let original =
         serde_json::to_vec(&serde_json::json!({"javaPath": java})).expect("profile JSON");
     fs::write(&profile, &original).expect("profile");
-    crate::save_settings(
+    crate::settings::testing::save_settings_at(
         &legacy,
-        &crate::load_settings(&legacy).await.expect("defaults"),
+        &crate::settings::load_settings_at(&legacy)
+            .await
+            .expect("defaults"),
     )
     .await
     .expect("settings");
@@ -307,7 +320,9 @@ async fn migration_retries_after_a_late_settings_conflict_without_rewriting_orig
 #[tokio::test]
 async fn migration_retries_after_its_settings_file_was_published_without_the_database() {
     let (legacy, home) = fixture("published-settings");
-    let mut settings = crate::load_settings(&legacy).await.expect("defaults");
+    let mut settings = crate::settings::load_settings_at(&legacy)
+        .await
+        .expect("defaults");
     settings.username = "Alex".to_string();
     settings.download_concurrency = 3;
     let legacy_file = serde_json::to_value(&settings).expect("settings JSON");
@@ -346,7 +361,7 @@ async fn migration_retries_after_its_settings_file_was_published_without_the_dat
     initialize_at(&legacy, &home)
         .await
         .expect("retry migration");
-    let migrated = crate::load_settings(&home)
+    let migrated = crate::settings::load_settings_at(&home)
         .await
         .expect("migrated settings");
     assert_eq!(migrated.username, "Alex");
@@ -382,9 +397,11 @@ async fn concurrent_initializations_share_one_complete_migration() {
 #[tokio::test]
 async fn migration_does_not_duplicate_instance_payloads_in_temporary_cache() {
     let (legacy, home) = fixture("no-staged-world");
-    crate::save_settings(
+    crate::settings::testing::save_settings_at(
         &legacy,
-        &crate::load_settings(&legacy).await.expect("settings"),
+        &crate::settings::load_settings_at(&legacy)
+            .await
+            .expect("settings"),
     )
     .await
     .expect("legacy settings");
@@ -541,7 +558,9 @@ async fn startup_moves_settings_from_the_file_into_the_database() {
             .expect("JSON");
     assert!(file.get("username").is_none());
     assert_eq!(file["theme"], "light");
-    let settings = crate::load_settings(&home).await.expect("settings");
+    let settings = crate::settings::load_settings_at(&home)
+        .await
+        .expect("settings");
     assert_eq!(settings.username, "Alex");
     assert_eq!(settings.download_concurrency, 4);
     let mut connection = db::open_db(&home).await.expect("database");
@@ -556,9 +575,11 @@ async fn startup_moves_settings_from_the_file_into_the_database() {
 #[tokio::test]
 async fn startup_reads_update_preferences_before_migration_and_prefers_the_current_settings() {
     let (legacy, home) = fixture("startup-preferences");
-    let mut old = crate::load_settings(&legacy).await.expect("defaults");
+    let mut old = crate::settings::load_settings_at(&legacy)
+        .await
+        .expect("defaults");
     old.automatic_updates = false;
-    crate::save_settings(&legacy, &old)
+    crate::settings::testing::save_settings_at(&legacy, &old)
         .await
         .expect("legacy preferences");
     let loaded = super::startup_preferences_at(&home, &legacy).expect("legacy fallback");
@@ -567,8 +588,10 @@ async fn startup_reads_update_preferences_before_migration_and_prefers_the_curre
         !home.root().exists(),
         "reading preferences must not start migration"
     );
-    let current = crate::load_settings(&home).await.expect("current defaults");
-    crate::save_settings(&home, &current)
+    let current = crate::settings::load_settings_at(&home)
+        .await
+        .expect("current defaults");
+    crate::settings::testing::save_settings_at(&home, &current)
         .await
         .expect("current preferences");
     let loaded = super::startup_preferences_at(&home, &legacy).expect("current settings");
@@ -613,7 +636,9 @@ async fn an_open_pool_holds_the_database_until_it_closes() {
 #[tokio::test]
 async fn the_legacy_migration_publishes_a_database_nothing_holds_open() {
     let (legacy, home) = fixture("migration-closed");
-    let settings = crate::load_settings(&legacy).await.expect("defaults");
+    let settings = crate::settings::load_settings_at(&legacy)
+        .await
+        .expect("defaults");
     fs::create_dir_all(legacy.root()).expect("legacy directory");
     fs::write(
         legacy.root().join("settings.json"),

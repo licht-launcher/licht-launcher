@@ -3,8 +3,9 @@ use std::path::Path;
 
 use super::progress::{StartupPhase, StartupReporter};
 use super::{Relocation, database, files, relocate};
+use crate::settings::{load_settings_at, save_settings};
 use crate::store::db::Database;
-use crate::{CoreError, Result, SharedCache, load_settings, save_settings};
+use crate::{CoreError, Result, SharedCache};
 
 const GAME_DIRECTORIES: &[&str] = &[
     "assets",
@@ -25,7 +26,7 @@ pub(super) async fn migrate(
         phase = "database-snapshot",
         "Starting launcher storage migration"
     );
-    let mut settings = load_settings(legacy).await?;
+    let mut settings = load_settings_at(legacy).await?;
     let old_game = match &settings.data_directory {
         Some(parent) => SharedCache::at(Path::new(parent).join("Licht Launcher")),
         None => legacy.clone(),
@@ -123,19 +124,23 @@ pub(super) async fn migrate(
     }
     tracing::info!(phase = "settings", "Migrating launcher storage");
     reporter.phase(StartupPhase::MigratingSettings)?;
-    let staged_settings = save_settings(&staging, &settings).await?;
     let staged_database = Database::open(&staging).await?;
-    // Only licht.db is published, so the settings row must not stay in its WAL.
-    let checkpointed = database::checkpoint(&staged_database).await;
+    let staged = async {
+        let saved = save_settings(&staged_database, &settings).await?;
+        // Only licht.db is published, so the settings row must not stay in its WAL.
+        database::checkpoint(&staged_database).await?;
+        Ok::<_, CoreError>(saved)
+    }
+    .await;
     // The staged file is renamed below, so no connection may stay open on it.
     staged_database.close().await;
-    checkpointed?;
+    let staged_settings = staged?;
     let settings_file = home.root().join("settings.json");
     if settings_file.exists() && settings_file != legacy.root().join("settings.json") {
         // An interrupted attempt may already have published this same file.
         let published =
             read_json(&settings_file)? == read_json(&staging.root().join("settings.json"))?;
-        if !published && load_settings(home).await? != staged_settings {
+        if !published && load_settings_at(home).await? != staged_settings {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::AlreadyExists,
                 "launcher migration settings destination differs",

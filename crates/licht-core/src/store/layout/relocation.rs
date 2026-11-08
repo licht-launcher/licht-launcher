@@ -139,7 +139,7 @@ fn validate_no_links(path: &Path) -> Result<()> {
 
 pub(super) async fn apply(database: &Database, reporter: &StartupReporter) -> Result<()> {
     let home = database.cache();
-    let desired = crate::game_cache(home).await?;
+    let desired = crate::game_cache(database).await?;
     let Some(mut state) = read_state(database).await? else {
         // Existing installations already use their configured directory.
         write_state(
@@ -213,7 +213,7 @@ pub(super) async fn apply(database: &Database, reporter: &StartupReporter) -> Re
     }
     reporter.phase(StartupPhase::MigratingDatabase)?;
     database::remap(database, &mappings).await?;
-    let mut settings = crate::load_settings(home).await?;
+    let mut settings = crate::load_settings(database).await?;
     for path in [
         &mut settings.java25,
         &mut settings.java21,
@@ -227,7 +227,7 @@ pub(super) async fn apply(database: &Database, reporter: &StartupReporter) -> Re
             .to_string_lossy()
             .into_owned();
     }
-    crate::save_settings(home, &settings).await?;
+    crate::save_settings(database, &settings).await?;
     // The checkpoint keeps the original roots until cleanup completes. Remapping is idempotent.
     for mapping in &mappings {
         remove_verified(&mapping.source, &mapping.destination, &mappings, reporter)?;

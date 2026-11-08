@@ -37,7 +37,7 @@ const PROTECTED_ROOT_NAMES: [&str; 4] = [
 /// part of the stored URL.
 pub async fn install_curseforge_files(
     game: &SharedCache,
-    settings: &SharedCache,
+    settings: &crate::Database,
     instance_dir: &Path,
     progress: impl Into<crate::InstallationContext>,
 ) -> Result<()> {
@@ -400,9 +400,10 @@ mod tests {
         )
         .unwrap();
         let (progress, _incoming) = mpsc::channel(4);
-        install_curseforge_files(&cache, &cache, &instance, progress)
-            .await
-            .expect("cached file should not be downloaded");
+        let settings = crate::Database::open(&cache).await.expect("database");
+        let installed = install_curseforge_files(&cache, &settings, &instance, progress).await;
+        settings.close().await;
+        installed.expect("cached file should not be downloaded");
         assert_eq!(fs::read(mods.join("a.jar")).unwrap(), b"hello world");
         let _ = fs::remove_dir_all(&root);
     }

@@ -873,7 +873,9 @@ async fn cancelling_an_active_job_preserves_shared_cache_bytes_until_the_last_jo
 async fn accepted_cancellation_wins_even_if_an_executor_finishes_successfully() {
     let mut server = Server::new().await;
     let fixture = Fixture::new(&server.url).await;
-    let mut connection = crate::open_db(&fixture.settings).await.expect("database");
+    let mut connection = crate::open_db(fixture.settings.cache())
+        .await
+        .expect("database");
     crate::set_meta(&mut connection, "test_finish_after_cancel", "true")
         .await
         .expect("completion gate");
