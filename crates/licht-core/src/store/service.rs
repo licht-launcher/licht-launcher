@@ -27,6 +27,8 @@ enum Request {
     RememberAccount(String, bool, oneshot::Sender<Result<()>>),
     AccountUuids(oneshot::Sender<Result<Vec<String>>>),
     Stop,
+    #[cfg(test)]
+    Panic,
 }
 
 /// Owns the dispatcher, which keeps one pooled connection. Shutdown waits for accepted work,
@@ -35,6 +37,7 @@ enum Request {
 pub struct DatabaseService {
     client: DatabaseClient,
     worker: Option<JoinHandle<Result<()>>>,
+    database: Database,
 }
 
 /// Shared asynchronous access to the database dispatcher's bounded request queue.
@@ -50,8 +53,9 @@ impl DatabaseService {
         let (initialized, ready) = oneshot::channel();
         let closing = Arc::new(AtomicBool::new(false));
         let worker_closing = Arc::clone(&closing);
+        let worker_database = database.clone();
         let worker = tokio::spawn(async move {
-            let result = run(database, incoming, initialized, worker_closing).await;
+            let result = run(worker_database, incoming, initialized, worker_closing).await;
             if result.is_err() {
                 tracing::error!("Database worker failed");
             }
@@ -60,6 +64,7 @@ impl DatabaseService {
         let service = Self {
             client: DatabaseClient { requests, closing },
             worker: Some(worker),
+            database,
         };
 
         match ready.await {
@@ -85,7 +90,10 @@ impl DatabaseService {
             return Ok(());
         };
 
-        worker.await.map_err(|_| CoreError::DatabaseService {
+        let joined = worker.await;
+        // A worker that panicked never reached its own close, so the pool closes here.
+        self.database.close().await;
+        joined.map_err(|_| CoreError::DatabaseService {
             detail: "could not join the worker",
         })?
     }
@@ -194,6 +202,8 @@ async fn run(
                 );
             }
             Request::Stop => {}
+            #[cfg(test)]
+            Request::Panic => panic!("simulated database handler failure"),
             Request::Downloads(request) => downloads::execute(&mut connection, request).await,
             Request::Content(request) => content::execute(&mut connection, request).await,
             Request::Modpacks(request) => modpacks::execute(&mut connection, request).await,
@@ -271,6 +281,22 @@ mod tests {
             .expect("join task")
             .expect("connection close");
         assert!(matches!(closed, Err(CoreError::DatabaseService { .. })));
+        std::fs::remove_dir_all(cache.root()).expect("fixture cleanup");
+    }
+
+    #[tokio::test]
+    async fn shutdown_closes_the_pool_even_after_the_worker_panicked() {
+        let cache = SharedCache::at(
+            std::env::temp_dir().join(format!("licht-database-panic-{}", std::process::id())),
+        );
+        let database = Database::open(&cache).await.expect("database");
+        let service = DatabaseService::start(database.clone())
+            .await
+            .expect("start");
+        service.client.send(Request::Panic).await.expect("send");
+
+        assert!(service.shutdown().await.is_err());
+        assert!(database.acquire().await.is_err(), "the pool must be closed");
         std::fs::remove_dir_all(cache.root()).expect("fixture cleanup");
     }
 }

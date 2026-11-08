@@ -5,10 +5,13 @@ use super::progress::{StartupPhase, StartupReporter};
 use super::{Relocation, database, files, migration, relocate};
 use crate::store::db::Database;
 use crate::store::repositories::settings::{ContentRoots, SettingsRepository};
+use crate::store::storage;
 use crate::{CoreError, Result, SharedCache};
 
 // Operational locks and update requests belong to the profile, not its content.
 const CONTENT_CACHES: &[&str] = &["icons", "content-metadata"];
+// Room for metadata and filesystem overhead that file sizes do not show.
+const FREE_SPACE_HEADROOM: u64 = 64 * 1024 * 1024;
 
 struct DirectoryState {
     active: PathBuf,
@@ -114,6 +117,43 @@ fn validate_roots(home: &SharedCache, mappings: &[Relocation]) -> Result<()> {
     Ok(())
 }
 
+fn ensure_free_space(
+    mappings: &[Relocation],
+    destination: &Path,
+    free_space: impl Fn(&Path) -> Result<u64>,
+) -> Result<()> {
+    // An interrupted copy already left verified files at the destination.
+    let pending = mappings.iter().try_fold(0_u64, |total, mapping| {
+        let bytes = storage::managed_size_where(&mapping.source, |file| {
+            file.strip_prefix(&mapping.source).map_or(true, |relative| {
+                fs::symlink_metadata(mapping.destination.join(relative)).is_err()
+            })
+        })?;
+        total
+            .checked_add(bytes)
+            .ok_or(CoreError::StorageUnavailable)
+    })?;
+    let required = pending
+        .checked_add(FREE_SPACE_HEADROOM)
+        .ok_or(CoreError::StorageUnavailable)?;
+    let available = match free_space(&canonical_directory(destination)?) {
+        Ok(available) => available,
+        Err(CoreError::StorageUnavailable) => {
+            // The copy itself still fails safely if the volume fills up.
+            tracing::warn!("Could not read free space for the new content directory");
+            return Ok(());
+        }
+        Err(error) => return Err(error),
+    };
+    if available < required {
+        return Err(CoreError::InsufficientSpace {
+            required,
+            available,
+        });
+    }
+    Ok(())
+}
+
 fn canonical_directory(path: &Path) -> Result<PathBuf> {
     match fs::canonicalize(path) {
         Ok(path) => Ok(path),
@@ -138,6 +178,15 @@ fn validate_no_links(path: &Path) -> Result<()> {
 }
 
 pub(super) async fn apply(database: &Database, reporter: &StartupReporter) -> Result<()> {
+    apply_with(database, reporter, storage::available_space).await
+}
+
+/// `free_space` reads the free bytes on the volume holding a canonical directory.
+async fn apply_with(
+    database: &Database,
+    reporter: &StartupReporter,
+    free_space: impl Fn(&Path) -> Result<u64>,
+) -> Result<()> {
     let home = database.cache();
     let desired = crate::game_cache(database).await?;
     let Some(mut state) = read_state(database).await? else {
@@ -195,6 +244,9 @@ pub(super) async fn apply(database: &Database, reporter: &StartupReporter) -> Re
     }
     let mappings = mappings(&source, &destination)?;
     validate_roots(home, &mappings)?;
+    if !pending.copied {
+        ensure_free_space(&mappings, destination.root(), free_space)?;
+    }
     reporter.phase(StartupPhase::MigratingData)?;
     if !pending.copied {
         files::copy_tree_with_progress(source.root(), destination.root(), reporter)?;
