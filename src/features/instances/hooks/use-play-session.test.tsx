@@ -24,7 +24,7 @@ const { state, readiness, prepare, launch, running, touch } = vi.hoisted(() => {
 vi.mock("@/features/downloads/hooks/use-download-jobs", () => ({
   useDownloadJobs: () => ({ data: state.jobs }),
 }));
-vi.mock("@/lib/commands", () => ({
+vi.mock("@/api/commands", () => ({
   isVersionReady: readiness,
   prepareInstanceDownload: prepare,
   launchVersion: launch,

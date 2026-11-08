@@ -18,7 +18,7 @@ const originalScrollTo = Object.getOwnPropertyDescriptor(
   "scrollTo",
 );
 
-vi.mock("@/lib/commands", () => ({
+vi.mock("@/api/commands", () => ({
   listInstanceContent,
   removeInstanceContent: vi.fn(),
   setInstanceContentEnabled: vi.fn(),

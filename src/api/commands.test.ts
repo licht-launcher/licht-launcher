@@ -2,8 +2,6 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { buildDiagnostics } from "@/features/settings/fixtures/build-diagnostics";
-import { appUpdateState } from "@/features/updater/fixtures/state";
 import {
   activateOfflineAccount,
   activeMicrosoftAccount,
@@ -66,7 +64,9 @@ import {
   setLastPlayedFolder,
   stopGame,
   touchLastOpened,
-} from "@/lib/commands";
+} from "@/api/commands";
+import { buildDiagnostics } from "@/features/settings/fixtures/build-diagnostics";
+import { appUpdateState } from "@/features/updater/fixtures/state";
 import type { DownloadJobSnapshot } from "@/lib/generated/DownloadJobSnapshot";
 import type { InstanceContentEntry } from "@/lib/generated/InstanceContentEntry";
 import type { InstanceContentUpdate } from "@/lib/generated/InstanceContentUpdate";

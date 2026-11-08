@@ -1,11 +1,11 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { formatBuildDiagnostics } from "@/api/build-info";
 import { buildDiagnostics } from "@/features/settings/fixtures/build-diagnostics";
 import {
   mockSettingsCommands,
   renderSettings,
 } from "@/features/settings/fixtures/render-settings";
-import { formatBuildDiagnostics } from "@/lib/build-info";
 
 vi.mock("@tauri-apps/api/core", async () => {
   const { invoke: mocked } = await import(

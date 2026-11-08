@@ -13,7 +13,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useState } from "react";
-
+import { listInstanceEntries } from "@/api/commands";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -25,7 +25,6 @@ import {
   sortFileEntries,
   toggleFilesSort,
 } from "@/features/instances/lib/files-table";
-import { listInstanceEntries } from "@/lib/commands";
 import type { InstanceFsEntry } from "@/lib/generated/InstanceFsEntry";
 import { cn } from "@/lib/utils";
 

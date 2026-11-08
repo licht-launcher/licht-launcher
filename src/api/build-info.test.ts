@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { buildDiagnostics } from "@/features/settings/fixtures/build-diagnostics";
-import { APP_VERSION } from "@/lib/app-release";
 import {
   buildIdentifier,
   formatBuildDiagnostics,
   parseBuildDiagnostics,
-} from "@/lib/build-info";
+} from "@/api/build-info";
+import { buildDiagnostics } from "@/features/settings/fixtures/build-diagnostics";
+import { APP_VERSION } from "@/lib/app-release";
 
 describe("buildIdentifier", () => {
   it.each([

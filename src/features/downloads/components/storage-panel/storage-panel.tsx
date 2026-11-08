@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
+import { getStorageSummary } from "@/api/commands";
 import { Button } from "@/components/ui/button";
 import { type SegmentColor, SegmentedBar } from "@/components/ui/segmented-bar";
 import { useStorageLoadingPreview } from "@/features/downloads/hooks/use-storage-loading-preview";
-import { getStorageSummary } from "@/lib/commands";
 import type { StorageCategory } from "@/lib/generated/StorageCategory";
 import { cn } from "@/lib/utils";
 

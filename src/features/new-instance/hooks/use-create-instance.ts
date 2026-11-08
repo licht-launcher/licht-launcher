@@ -1,11 +1,10 @@
 import { useMutation } from "@tanstack/react-query";
-
+import { createInstanceWithPlatform } from "@/api/commands";
 import { useFinishCreation } from "@/features/new-instance/hooks/use-finish-creation";
 import {
   resolveInstanceName,
   type ScratchState,
 } from "@/features/new-instance/model/create-state";
-import { createInstanceWithPlatform } from "@/lib/commands";
 
 /** Creates an instance from the scratch form, then opens it and closes the popup. */
 export function useCreateInstance({

@@ -2,14 +2,13 @@ import { useMutation } from "@tanstack/react-query";
 import { FolderOpenIcon } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-
+import { browseApplicationDirectory } from "@/api/commands";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { StoragePanel } from "@/features/downloads/components/storage-panel";
 import type { Draft } from "@/features/settings/model/draft";
-import { browseApplicationDirectory } from "@/lib/commands";
 import {
   downloadLimitKbs,
   formatDownloadLimit,

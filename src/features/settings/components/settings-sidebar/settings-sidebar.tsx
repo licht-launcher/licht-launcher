@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-
+import { buildIdentifier, formatBuildDiagnostics } from "@/api/build-info";
+import { getBuildDiagnostics } from "@/api/commands";
 import { Button } from "@/components/ui/button";
 import { DialogTitle } from "@/components/ui/dialog";
 import {
@@ -10,8 +11,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { SECTIONS, type SectionId } from "@/features/settings/model/sections";
-import { buildIdentifier, formatBuildDiagnostics } from "@/lib/build-info";
-import { getBuildDiagnostics } from "@/lib/commands";
 import { friendlyError, messageOf } from "@/lib/errors";
 
 import { settingsSidebarStyles } from "./settings-sidebar.styles";

@@ -14,6 +14,8 @@ import {
 import type { ReactNode } from "react";
 import { toast } from "sonner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { listDownloadJobs } from "@/api/commands";
+import { onOpenSettingsRequest } from "@/api/shell-events";
 import { DownloadsPage } from "@/features/downloads/downloads-page";
 import { downloadJob } from "@/features/downloads/fixtures/job";
 import { storageSummary } from "@/features/downloads/fixtures/storage";
@@ -28,10 +30,8 @@ import {
 } from "@/features/downloads/hooks/use-download-telemetry";
 import { useDownloadTelemetrySync } from "@/features/downloads/hooks/use-download-telemetry-sync";
 import { snapshot } from "@/features/settings/fixtures/snapshot";
-import { listDownloadJobs } from "@/lib/commands";
 import type { DownloadJobSnapshot } from "@/lib/generated/DownloadJobSnapshot";
 import type { DownloadTelemetry } from "@/lib/generated/DownloadTelemetry";
-import { onOpenSettingsRequest } from "@/lib/shell-events";
 
 const { invoke, listen, dispose } = vi.hoisted(() => ({
   invoke: vi.fn(),

@@ -13,10 +13,10 @@ import {
 import type { ReactNode } from "react";
 import { toast } from "sonner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { listDownloadJobs } from "@/api/commands";
 import { SortableDownloadQueue } from "@/features/downloads/components/sortable-download-queue";
 import { downloadJob } from "@/features/downloads/fixtures/job";
 import { DOWNLOAD_JOBS_QUERY_KEY } from "@/features/downloads/hooks/use-download-jobs";
-import { listDownloadJobs } from "@/lib/commands";
 import type { DownloadJobSnapshot } from "@/lib/generated/DownloadJobSnapshot";
 
 const { invoke, drag } = vi.hoisted(() => ({

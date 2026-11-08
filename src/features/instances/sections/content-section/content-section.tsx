@@ -1,6 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import {
+  removeInstanceContent,
+  setInstanceContentEnabled,
+} from "@/api/commands";
 import { Progress } from "@/components/ui/progress";
 import { ContentLoading } from "@/features/instances/components/content/content-loading";
 import { ContentRemovalDialog } from "@/features/instances/components/content/content-removal-dialog";
@@ -18,10 +22,6 @@ import {
   sortContentEntries,
   toggleContentSort,
 } from "@/features/instances/lib/content-table";
-import {
-  removeInstanceContent,
-  setInstanceContentEnabled,
-} from "@/lib/commands";
 import { friendlyError, messageOf } from "@/lib/errors";
 import type { InstanceContentEntry } from "@/lib/generated/InstanceContentEntry";
 import type { InstanceContentKind } from "@/lib/generated/InstanceContentKind";

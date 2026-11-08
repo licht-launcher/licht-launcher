@@ -2,12 +2,11 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { BoxIcon, LayersIcon, PencilIcon, WrenchIcon } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-
+import { repairInstance } from "@/api/commands";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { EditInstanceVersionDialog } from "@/features/instance-settings/components/edit-instance-version-dialog";
 import { versionsQueryOptions } from "@/features/instances/lib/versions-query";
-import { repairInstance } from "@/lib/commands";
 import { friendlyError, messageOf } from "@/lib/errors";
 import type { VersionSummary } from "@/lib/generated/VersionSummary";
 

@@ -1,16 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2Icon, LogInIcon } from "lucide-react";
 import { useState } from "react";
-
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import {
   activeMicrosoftAccount,
   beginMicrosoftLogin,
   listMicrosoftAccounts,
   logoutMicrosoftAccount,
   setActiveMicrosoftAccount,
-} from "@/lib/commands";
+} from "@/api/commands";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { friendlyError, messageOf } from "@/lib/errors";
 import type { AccountProfile } from "@/lib/generated/AccountProfile";
 

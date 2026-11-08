@@ -8,7 +8,8 @@ import {
 } from "lucide-react";
 import { type ReactElement, useEffect, useState } from "react";
 import { toast } from "sonner";
-
+import { openRepository } from "@/api/commands";
+import { requestOpenSettings } from "@/api/shell-events";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -23,9 +24,7 @@ import {
   MANUAL_UPDATE_CHECK_EVENT,
   UPDATE_CHECK_STATUS_EVENT,
 } from "@/features/updater/components/update-check";
-import { openRepository } from "@/lib/commands";
 import { friendlyError, messageOf } from "@/lib/errors";
-import { requestOpenSettings } from "@/lib/shell-events";
 
 export function AppContextMenu({ children }: { children: ReactElement }) {
   const router = useRouter();

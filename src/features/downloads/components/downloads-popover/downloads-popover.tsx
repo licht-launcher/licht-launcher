@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Download, Loader2 } from "lucide-react";
 import type { ReactNode } from "react";
-
+import { listInstances } from "@/api/commands";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -22,7 +22,6 @@ import {
   isPreparingProgress,
   progressText,
 } from "@/features/instances/lib/download-progress";
-import { listInstances } from "@/lib/commands";
 import type { DownloadJobSnapshot } from "@/lib/generated/DownloadJobSnapshot";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 import { cn } from "@/lib/utils";

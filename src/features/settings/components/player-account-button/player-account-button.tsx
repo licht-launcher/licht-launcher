@@ -2,7 +2,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PlusIcon } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-
+import {
+  activateOfflineAccount,
+  listMicrosoftAccounts,
+  setActiveMicrosoftAccount,
+} from "@/api/commands";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -15,11 +19,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { SkinHead } from "@/components/ui/skin-head";
 import { useTitleBarDecorations } from "@/hooks/use-title-bar-decorations";
-import {
-  activateOfflineAccount,
-  listMicrosoftAccounts,
-  setActiveMicrosoftAccount,
-} from "@/lib/commands";
 import { friendlyError, messageOf } from "@/lib/errors";
 import type { AccountProfile } from "@/lib/generated/AccountProfile";
 

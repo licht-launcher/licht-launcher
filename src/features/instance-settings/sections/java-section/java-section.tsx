@@ -1,11 +1,10 @@
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
-
+import { browseJava } from "@/api/commands";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import type { InstanceDraft } from "@/features/instance-settings/model/draft";
-import { browseJava } from "@/lib/commands";
 import { friendlyError, messageOf } from "@/lib/errors";
 
 import { javaSectionStyles } from "./java-section.styles";

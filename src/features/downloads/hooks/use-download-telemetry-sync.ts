@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useRef } from "react";
+import { getDownloadTelemetry } from "@/api/commands";
 import { SPEED_HISTORY_MS, SPEED_SAMPLE_MS } from "@/components/ui/speed-chart";
 import {
   DOWNLOAD_SPEED_HISTORY_QUERY_KEY,
@@ -9,7 +10,6 @@ import {
   EMPTY_SPEED_HISTORY,
   type SpeedHistory,
 } from "@/features/downloads/hooks/use-download-telemetry";
-import { getDownloadTelemetry } from "@/lib/commands";
 import type { DownloadTelemetry } from "@/lib/generated/DownloadTelemetry";
 
 export function useDownloadTelemetrySync(active: boolean) {

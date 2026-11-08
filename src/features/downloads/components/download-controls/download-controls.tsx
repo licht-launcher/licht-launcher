@@ -6,7 +6,11 @@ import {
 import { Pause, Play, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-
+import {
+  cancelDownloadJob,
+  pauseDownloadJob,
+  resumeDownloadJob,
+} from "@/api/commands";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -23,11 +27,6 @@ import {
   replaceDownloadSnapshot,
 } from "@/features/downloads/hooks/use-download-jobs";
 import { VERSIONS_QUERY_KEY } from "@/features/instances/lib/versions-query";
-import {
-  cancelDownloadJob,
-  pauseDownloadJob,
-  resumeDownloadJob,
-} from "@/lib/commands";
 import { friendlyError, messageOf } from "@/lib/errors";
 import type { DownloadJobSnapshot } from "@/lib/generated/DownloadJobSnapshot";
 

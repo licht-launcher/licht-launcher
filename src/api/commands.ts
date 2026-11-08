@@ -1,12 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
+import { parseAppUpdateState } from "@/api/app-update-state";
+import { parseBuildDiagnostics } from "@/api/build-info";
 import type {
   LoaderChannel,
   PlatformId,
 } from "@/features/new-instance/model/create-state";
-import { parseAppUpdateState } from "@/lib/app-update-state";
-import { parseBuildDiagnostics } from "@/lib/build-info";
 import type { AccountProfile } from "@/lib/generated/AccountProfile";
 import type { AppUpdateState } from "@/lib/generated/AppUpdateState";
 import type { BuildDiagnostics } from "@/lib/generated/BuildDiagnostics";

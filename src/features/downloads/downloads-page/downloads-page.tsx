@@ -6,6 +6,13 @@ import {
 } from "@tanstack/react-query";
 import { Download, Pause, Play, Settings } from "lucide-react";
 import { toast } from "sonner";
+import {
+  getSettings,
+  listInstances,
+  pauseAllDownloads,
+  resumeAllDownloads,
+} from "@/api/commands";
+import { requestOpenSettings } from "@/api/shell-events";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -22,15 +29,8 @@ import {
   DOWNLOAD_TELEMETRY_QUERY_KEY,
   useDownloadTelemetry,
 } from "@/features/downloads/hooks/use-download-telemetry";
-import {
-  getSettings,
-  listInstances,
-  pauseAllDownloads,
-  resumeAllDownloads,
-} from "@/lib/commands";
 import { formatDownloadLimit } from "@/lib/download-speed";
 import { friendlyError, messageOf } from "@/lib/errors";
-import { requestOpenSettings } from "@/lib/shell-events";
 
 import { downloadsPageStyles } from "./downloads-page.styles";
 

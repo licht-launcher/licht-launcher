@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-
+import { openInstanceFolder } from "@/api/commands";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PageTransition } from "@/components/ui/page-transition";
@@ -41,7 +41,6 @@ import {
   FilesSection,
 } from "@/features/instances/sections/files-section";
 import { PlaySection } from "@/features/instances/sections/play-section";
-import { openInstanceFolder } from "@/lib/commands";
 import { friendlyError, messageOf } from "@/lib/errors";
 import type { DownloadJobSnapshot } from "@/lib/generated/DownloadJobSnapshot";
 import type { DownloadProgress } from "@/lib/generated/DownloadProgress";

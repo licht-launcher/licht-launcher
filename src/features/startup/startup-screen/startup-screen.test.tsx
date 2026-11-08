@@ -31,7 +31,7 @@ const {
   listen: vi.fn(),
   listeners: new Set<(event: { payload: StartupProgress }) => void>(),
 }));
-vi.mock("@/lib/commands", () => ({ getStartupProgress: getProgress }));
+vi.mock("@/api/commands", () => ({ getStartupProgress: getProgress }));
 vi.mock("@tauri-apps/api/window", () => ({
   getCurrentWindow: () => ({ center, show, close, label: windowInfo.label }),
 }));
