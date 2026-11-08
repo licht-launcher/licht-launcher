@@ -18,7 +18,7 @@ it("bundles platform icons as local files allowed by the release CSP", async () 
       rolldownOptions: {
         input: path.resolve(
           root,
-          "src/features/new-instance/assets/platform-icons.tsx",
+          "src/features/new-instance/assets/platform-icons/platform-icons.tsx",
         ),
         preserveEntrySignatures: "strict",
       },

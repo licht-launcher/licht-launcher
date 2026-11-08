@@ -6,7 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useStartupProgress } from "@/features/startup/hooks/use-startup-progress";
 import { messageOf } from "@/lib/errors";
 import type { StartupPhase } from "@/lib/generated/StartupPhase";
-import logo from "../../../src-tauri/icons/128x128@2x.png?no-inline";
+import logo from "../../../../src-tauri/icons/128x128@2x.png?no-inline";
 
 const labels: Record<StartupPhase, string> = {
   preparing: "Preparing launcher…",
