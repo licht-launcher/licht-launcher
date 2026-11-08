@@ -9,15 +9,23 @@
     "node": ">=24.15.0 <25"
   },
   "scripts": {
-    "dev": "vite",
-    "build": "pnpm typecheck && vite build",
+    "dev": "tauri dev",
+    "dev:web": "vite",
+    "build": "tauri build",
+    "build:debug": "tauri build --debug",
+    "build:web": "tsc -b && vite build",
     "typecheck": "tsc -b",
-    "tauri": "tauri",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
-    "format": "biome format --write .",
+    "lint:rust": "cargo clippy --workspace --all-targets --locked -- -D warnings",
+    "format:rust": "cargo fmt --all",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:rust": "cargo test --workspace --locked",
+    "check": "pnpm check:web && pnpm check:rust",
+    "check:web": "pnpm lint && pnpm typecheck && pnpm test",
+    "check:rust": "cargo fmt --all --check && pnpm lint:rust && pnpm test:rust",
+    "tauri": "tauri"
   },
   "dependencies": {
     "@dnd-kit/react": "0.5.1",

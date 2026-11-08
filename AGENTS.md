@@ -53,6 +53,7 @@
 
 ## Quality (required before opening a PR)
 
+- Run everything with `pnpm check` (or `pnpm check:rust` / `pnpm check:web`).
 - Rust: `cargo fmt --check`, `cargo clippy -- -D warnings`, `cargo test`
 - Frontend: `pnpm lint`, `pnpm typecheck`, `pnpm test` (Vitest + Testing Library; new components with at least one render/interaction test)
 - Automated tests for all core logic. Use **fixtures** (real Mojang JSONs saved in `tests/fixtures`). **No test may depend on the network.**
