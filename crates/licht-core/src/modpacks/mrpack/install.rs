@@ -16,7 +16,7 @@ use reqwest::Client;
 pub async fn install_mrpack_files(
     database: &crate::DatabaseClient,
     game: &SharedCache,
-    settings: &SharedCache,
+    settings: &crate::Database,
     instance_dir: &Path,
     progress: impl Into<crate::InstallationContext>,
 ) -> Result<()> {
@@ -34,7 +34,7 @@ pub async fn install_mrpack_files(
 async fn install_files(
     database: &crate::DatabaseClient,
     game: &SharedCache,
-    settings: &SharedCache,
+    settings: &crate::Database,
     instance_dir: &Path,
     progress: crate::InstallationContext,
     client: &Client,
@@ -154,7 +154,8 @@ mod tests {
             for file in &mut stored.files {
                 file.url = url.clone();
             }
-            let service = crate::DatabaseService::start(home.clone())
+            let database = crate::Database::open(&home).await.expect("database");
+            let service = crate::DatabaseService::start(database.clone())
                 .await
                 .expect("database");
             service
@@ -166,7 +167,7 @@ mod tests {
             let result = install_files(
                 &service.client(),
                 &game,
-                &home,
+                &database,
                 &directory,
                 sender.into(),
                 &Client::new(),

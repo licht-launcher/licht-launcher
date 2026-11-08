@@ -138,7 +138,8 @@ mod tests {
         let executable = crate::runtime::archive::java_executable(&runtime, environment().os);
         std::fs::create_dir_all(executable.parent().expect("bin")).expect("runtime directory");
         std::fs::write(&executable, b"installed Java").expect("runtime");
-        let service = crate::DatabaseService::start(home.clone())
+        let database = crate::Database::open(&home).await.expect("database");
+        let service = crate::DatabaseService::start(database.clone())
             .await
             .expect("database");
         let job = service
@@ -148,7 +149,7 @@ mod tests {
             .expect("job");
         let (events, mut incoming) = tokio::sync::mpsc::channel(8);
         let context = InstallationContext::for_job(
-            home,
+            database,
             cache.clone(),
             job.id,
             DownloadControl::new(),
@@ -207,6 +208,7 @@ mod tests {
                     .expect("runtime directory");
                 std::fs::write(&expected, b"temurin").expect("installed Java");
             }
+            let settings = crate::Database::open(&settings).await.expect("database");
             let database = crate::DatabaseService::start(settings.clone())
                 .await
                 .expect("database");

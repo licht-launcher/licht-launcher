@@ -26,6 +26,7 @@ async fn a_local_version_is_written_and_installed() {
     let _ = std::fs::remove_dir_all(&directory);
     std::fs::create_dir_all(&directory).expect("cache root");
     let cache = SharedCache::at(&directory);
+    let settings = licht_core::Database::open(&cache).await.expect("database");
     let server = serve().await;
     let base = server.base.clone();
     let asset_hash = sha1_hex(ASSET);
@@ -50,7 +51,7 @@ async fn a_local_version_is_written_and_installed() {
     let installed = install_game(
         &reqwest::Client::new(),
         &cache,
-        &cache,
+        &settings,
         GameInstall {
             version_id: "demo",
             version_json_url: &format!("{base}/version"),
@@ -78,7 +79,7 @@ async fn a_local_version_is_written_and_installed() {
     let error = install_game(
         &reqwest::Client::new(),
         &cache,
-        &cache,
+        &settings,
         GameInstall {
             version_id: "demo",
             version_json_url: &format!("{base}/version"),
@@ -93,6 +94,7 @@ async fn a_local_version_is_written_and_installed() {
     .expect_err("sha1");
     assert!(matches!(error, CoreError::Sha1Mismatch { .. }));
 
+    settings.close().await;
     let _ = std::fs::remove_dir_all(directory);
 }
 

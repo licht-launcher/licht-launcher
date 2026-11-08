@@ -2,7 +2,8 @@ use std::fs;
 use std::path::{Component, Path, PathBuf};
 
 use super::progress::{StartupPhase, StartupReporter};
-use super::{Relocation, database, db, files, migration, relocate};
+use super::{Relocation, database, files, migration, relocate};
+use crate::store::db::Database;
 use crate::store::repositories::settings::{ContentRoots, SettingsRepository};
 use crate::store::storage;
 use crate::{CoreError, Result, SharedCache};
@@ -23,10 +24,9 @@ struct PendingMove {
 }
 
 /// `None` until the active root has been recorded for this profile.
-async fn read_state(home: &SharedCache) -> Result<Option<DirectoryState>> {
-    let mut connection = db::open_db(home).await?;
-    let roots = SettingsRepository::content_roots(&mut connection).await;
-    let roots = db::complete_operation(connection, roots)
+async fn read_state(database: &Database) -> Result<Option<DirectoryState>> {
+    let mut connection = database.acquire().await?;
+    let roots = SettingsRepository::content_roots(&mut connection)
         .await?
         .ok_or_else(SettingsRepository::missing_row)?;
     Ok(roots.active.map(|active| DirectoryState {
@@ -38,7 +38,7 @@ async fn read_state(home: &SharedCache) -> Result<Option<DirectoryState>> {
     }))
 }
 
-async fn write_state(home: &SharedCache, state: &DirectoryState) -> Result<()> {
+async fn write_state(database: &Database, state: &DirectoryState) -> Result<()> {
     let text = |path: &Path| {
         path.to_str()
             .map(str::to_string)
@@ -53,9 +53,8 @@ async fn write_state(home: &SharedCache, state: &DirectoryState) -> Result<()> {
             .transpose()?,
         copied: state.pending.as_ref().is_some_and(|pending| pending.copied),
     };
-    let mut connection = db::open_db(home).await?;
-    let result = SettingsRepository::set_content_roots(&mut connection, &roots).await;
-    db::complete_operation(connection, result).await
+    let mut connection = database.acquire().await?;
+    SettingsRepository::set_content_roots(&mut connection, &roots).await
 }
 
 fn validate_path(path: &Path) -> Result<()> {
@@ -178,21 +177,22 @@ fn validate_no_links(path: &Path) -> Result<()> {
     Ok(())
 }
 
-pub(super) async fn apply(home: &SharedCache, reporter: &StartupReporter) -> Result<()> {
-    apply_with(home, reporter, storage::available_space).await
+pub(super) async fn apply(database: &Database, reporter: &StartupReporter) -> Result<()> {
+    apply_with(database, reporter, storage::available_space).await
 }
 
 /// `free_space` reads the free bytes on the volume holding a canonical directory.
 async fn apply_with(
-    home: &SharedCache,
+    database: &Database,
     reporter: &StartupReporter,
     free_space: impl Fn(&Path) -> Result<u64>,
 ) -> Result<()> {
-    let desired = crate::game_cache(home).await?;
-    let Some(mut state) = read_state(home).await? else {
+    let home = database.cache();
+    let desired = crate::game_cache(database).await?;
+    let Some(mut state) = read_state(database).await? else {
         // Existing installations already use their configured directory.
         write_state(
-            home,
+            database,
             &DirectoryState {
                 active: desired.root().to_path_buf(),
                 pending: None,
@@ -207,7 +207,7 @@ async fn apply_with(
     {
         if state.pending.is_some() {
             state.pending = None;
-            write_state(home, &state).await?;
+            write_state(database, &state).await?;
         }
         return Ok(());
     }
@@ -216,7 +216,7 @@ async fn apply_with(
             destination: desired.root().to_path_buf(),
             copied: false,
         });
-        write_state(home, &state).await?;
+        write_state(database, &state).await?;
     }
     let pending = state.pending.as_ref().ok_or(CoreError::CachePath)?;
     validate_path(&pending.destination)?;
@@ -261,11 +261,11 @@ async fn apply_with(
             files::copy_tree_with_progress(&mapping.source, &mapping.destination, reporter)?;
         }
         state.pending.as_mut().ok_or(CoreError::CachePath)?.copied = true;
-        write_state(home, &state).await?;
+        write_state(database, &state).await?;
     }
     reporter.phase(StartupPhase::MigratingDatabase)?;
-    database::remap(home, &mappings).await?;
-    let mut settings = crate::load_settings(home).await?;
+    database::remap(database, &mappings).await?;
+    let mut settings = crate::load_settings(database).await?;
     for path in [
         &mut settings.java25,
         &mut settings.java21,
@@ -279,7 +279,7 @@ async fn apply_with(
             .to_string_lossy()
             .into_owned();
     }
-    crate::save_settings(home, &settings).await?;
+    crate::settings::store_settings(database, &settings).await?;
     // The checkpoint keeps the original roots until cleanup completes. Remapping is idempotent.
     for mapping in &mappings {
         remove_verified(&mapping.source, &mapping.destination, &mappings, reporter)?;
@@ -290,7 +290,7 @@ async fn apply_with(
     }
     state.active = destination.root().to_path_buf();
     state.pending = None;
-    write_state(home, &state).await?;
+    write_state(database, &state).await?;
     tracing::info!("Content directory move completed");
     Ok(())
 }

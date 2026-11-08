@@ -6,10 +6,10 @@ pub use model::{
 };
 
 use crate::store::repositories::download_jobs::DownloadJobRepository;
-use crate::{CoreError, Result, SharedCache, open_db};
+use crate::{CoreError, Database, Result, SharedCache};
 
 pub async fn create_download_job(
-    settings: &SharedCache,
+    settings: &Database,
     game: &SharedCache,
     folder: &str,
     version: &str,
@@ -19,52 +19,46 @@ pub async fn create_download_job(
 }
 
 pub async fn create_pending_download_job(
-    settings: &SharedCache,
+    settings: &Database,
     game: &SharedCache,
     folder: &str,
     version: Option<&str>,
     operation: DownloadJobOperation,
 ) -> Result<DownloadJobSnapshot> {
-    let mut connection = open_db(settings).await?;
-    let result =
-        DownloadJobRepository::create(&mut connection, game, folder, version, operation).await;
-    crate::db::complete_operation(connection, result).await
+    let mut connection = settings.acquire().await?;
+    DownloadJobRepository::create(&mut connection, game, folder, version, operation).await
 }
 
 pub async fn list_download_jobs(
-    settings: &SharedCache,
+    settings: &Database,
     game: &SharedCache,
 ) -> Result<Vec<DownloadJobSnapshot>> {
-    let mut connection = open_db(settings).await?;
-    let result = DownloadJobRepository::list(&mut connection, game).await;
-    crate::db::complete_operation(connection, result).await
+    let mut connection = settings.acquire().await?;
+    DownloadJobRepository::list(&mut connection, game).await
 }
 
 pub async fn get_download_job(
-    settings: &SharedCache,
+    settings: &Database,
     game: &SharedCache,
     id: &str,
 ) -> Result<DownloadJobSnapshot> {
-    let mut connection = open_db(settings).await?;
-    let result = DownloadJobRepository::get(&mut connection, game, id).await;
-    crate::db::complete_operation(connection, result).await
+    let mut connection = settings.acquire().await?;
+    DownloadJobRepository::get(&mut connection, game, id).await
 }
 
 pub async fn update_download_job(
-    settings: &SharedCache,
+    settings: &Database,
     game: &SharedCache,
     id: &str,
     update: DownloadJobUpdate,
 ) -> Result<DownloadJobSnapshot> {
-    let mut connection = open_db(settings).await?;
-    let result = DownloadJobRepository::update(&mut connection, game, id, update).await;
-    crate::db::complete_operation(connection, result).await
+    let mut connection = settings.acquire().await?;
+    DownloadJobRepository::update(&mut connection, game, id, update).await
 }
 
-pub async fn recover_download_jobs(settings: &SharedCache, game: &SharedCache) -> Result<usize> {
-    let mut connection = open_db(settings).await?;
-    let result = DownloadJobRepository::recover(&mut connection, game).await;
-    crate::db::complete_operation(connection, result).await
+pub async fn recover_download_jobs(settings: &Database, game: &SharedCache) -> Result<usize> {
+    let mut connection = settings.acquire().await?;
+    DownloadJobRepository::recover(&mut connection, game).await
 }
 
 fn invalid(detail: &'static str) -> CoreError {

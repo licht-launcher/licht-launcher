@@ -16,6 +16,19 @@ pub(crate) fn java_binary_name(os: OsName) -> &'static str {
     }
 }
 
+/// A configured Java path is started as a program, so it must name a Java launcher
+/// (`java`, `javaw`, with or without `.exe`) rather than any file.
+pub(crate) fn is_java_executable(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| {
+            matches!(
+                name.to_ascii_lowercase().as_str(),
+                "java" | "javaw" | "java.exe" | "javaw.exe"
+            )
+        })
+}
+
 /// Usual install directories. A missing directory is not an error.
 pub fn default_java_roots(os: OsName) -> &'static [&'static str] {
     match os {
@@ -80,7 +93,7 @@ pub fn validate_java(executable: &Path, required: &crate::JavaVersion) -> Result
 
 /// Accepts an existing JVM for `--java` / custom install paths (no download).
 pub fn use_custom_java(executable: &Path) -> Result<PathBuf> {
-    if !executable.is_file() {
+    if !executable.is_file() || !is_java_executable(executable) {
         return Err(CoreError::JavaPath);
     }
     Ok(executable.to_path_buf())

@@ -361,10 +361,11 @@ async fn install(
     environment: &LaunchEnvironment,
 ) -> licht_core::Result<()> {
     let (progress, mut incoming) = mpsc::channel::<DownloadProgress>(8);
+    let settings = licht_core::Database::open(cache).await?;
     let result = install_version(
         &reqwest::Client::new(),
         cache,
-        cache,
+        &settings,
         InstallPlan {
             version_id: "1.21.11",
             version,
@@ -377,6 +378,7 @@ async fn install(
     )
     .await;
     while incoming.recv().await.is_some() {}
+    settings.close().await;
     result
 }
 

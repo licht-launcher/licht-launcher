@@ -161,7 +161,7 @@ pub(super) fn write_verified(destination: &Path, bytes: &[u8], expected: &str) -
 pub(super) async fn download_libraries(
     client: &Client,
     cache: &SharedCache,
-    settings: &SharedCache,
+    settings: &crate::Database,
     artifacts: &[Artifact],
     progress: impl Into<crate::InstallationContext>,
 ) -> Result<()> {

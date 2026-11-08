@@ -140,12 +140,13 @@ mod tests {
         let cache = fixture();
         let instances = cache.root().join("instances");
         let other = cache.root().join("other-instances");
-        let service = DatabaseService::start(cache.clone())
+        let database = crate::Database::open(&cache).await.expect("database");
+        let service = DatabaseService::start(database.clone())
             .await
             .expect("service");
         let client = service.client();
         let original = index();
-        let settings = crate::load_settings(&cache).await.expect("settings");
+        let settings = crate::load_settings(&database).await.expect("settings");
         crate::create_instance(
             &client,
             &instances,
@@ -207,7 +208,10 @@ mod tests {
         );
         assert!(!instances.join("First").exists());
         service.shutdown().await.expect("shutdown");
-        let service = DatabaseService::start(cache.clone()).await.expect("reopen");
+        let service =
+            DatabaseService::start(crate::Database::open(&cache).await.expect("database"))
+                .await
+                .expect("reopen");
         let client = service.client();
         assert_eq!(
             client
@@ -235,7 +239,9 @@ mod tests {
     #[tokio::test]
     async fn invalid_replacement_rolls_back_the_entire_index() {
         let cache = fixture();
-        let mut connection = crate::store::db::open_db(&cache).await.expect("database");
+        let mut connection = crate::store::db::open_migrated(&cache)
+            .await
+            .expect("database");
         let original = index();
         ModpackRepository::replace(&mut connection, "instances", "First", &original)
             .await

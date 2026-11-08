@@ -37,7 +37,7 @@ const PROTECTED_ROOT_NAMES: [&str; 4] = [
 /// part of the stored URL.
 pub async fn install_curseforge_files(
     game: &SharedCache,
-    settings: &SharedCache,
+    settings: &crate::Database,
     instance_dir: &Path,
     progress: impl Into<crate::InstallationContext>,
 ) -> Result<()> {
@@ -205,9 +205,13 @@ mod tests {
         let root = temp_dir("import");
         let instances = root.join("instances");
         fs::create_dir_all(&instances).unwrap();
-        let service = crate::DatabaseService::start(SharedCache::at(&root))
-            .await
-            .expect("database");
+        let service = crate::DatabaseService::start(
+            crate::Database::open(&SharedCache::at(&root))
+                .await
+                .expect("database"),
+        )
+        .await
+        .expect("database");
         let pending = pending(&service.client(), &instances).await;
         let entry = import_planned(
             &service.client(),
@@ -274,9 +278,13 @@ mod tests {
         let root = temp_dir("blocked");
         let instances = root.join("instances");
         fs::create_dir_all(&instances).unwrap();
-        let service = crate::DatabaseService::start(SharedCache::at(&root))
-            .await
-            .expect("database");
+        let service = crate::DatabaseService::start(
+            crate::Database::open(&SharedCache::at(&root))
+                .await
+                .expect("database"),
+        )
+        .await
+        .expect("database");
         let pending = pending(&service.client(), &instances).await;
         let profile = crate::load_instance(&service.client(), &instances.join(&pending.folder))
             .await
@@ -323,9 +331,13 @@ mod tests {
         let root = temp_dir("override");
         let instances = root.join("instances");
         fs::create_dir_all(&instances).unwrap();
-        let service = crate::DatabaseService::start(SharedCache::at(&root))
-            .await
-            .expect("database");
+        let service = crate::DatabaseService::start(
+            crate::Database::open(&SharedCache::at(&root))
+                .await
+                .expect("database"),
+        )
+        .await
+        .expect("database");
         let pending = pending(&service.client(), &instances).await;
         let profile = crate::load_instance(&service.client(), &instances.join(&pending.folder))
             .await
@@ -388,9 +400,10 @@ mod tests {
         )
         .unwrap();
         let (progress, _incoming) = mpsc::channel(4);
-        install_curseforge_files(&cache, &cache, &instance, progress)
-            .await
-            .expect("cached file should not be downloaded");
+        let settings = crate::Database::open(&cache).await.expect("database");
+        let installed = install_curseforge_files(&cache, &settings, &instance, progress).await;
+        settings.close().await;
+        installed.expect("cached file should not be downloaded");
         assert_eq!(fs::read(mods.join("a.jar")).unwrap(), b"hello world");
         let _ = fs::remove_dir_all(&root);
     }

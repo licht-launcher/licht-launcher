@@ -5,54 +5,72 @@ use sqlx::Connection;
 
 use super::files;
 use super::progress::StartupReporter;
+use crate::store::db::Database;
 use crate::store::repositories::metadata::MetadataRepository;
 use crate::{CoreError, Result, SharedCache};
 
 pub(super) async fn migrate(
-    home: &SharedCache,
+    database: &Database,
     game: &SharedCache,
     reporter: &StartupReporter,
 ) -> Result<()> {
     let key = format!("installation-storage-v1:{}", game.root().display());
-    let mut connection = super::db::open_db(home).await?;
-    let result = async {
-        if MetadataRepository::get(&mut connection, &key).await?.as_deref() == Some("1") {
-            return Ok(());
+    let mut connection = database.acquire().await?;
+    if MetadataRepository::get(&mut connection, &key)
+        .await?
+        .as_deref()
+        == Some("1")
+    {
+        return Ok(());
+    }
+    migrate_icons(&mut connection, &game.instances_dir()?, reporter).await?;
+    let legacy = game.root().join("modpacks");
+    let artifacts: Vec<(i64, String, Option<String>)> = sqlx::query_as(
+        "SELECT artifact.job_id, artifact.path, job.instance_folder FROM download_job_artifacts artifact
+         JOIN download_jobs job ON job.id = artifact.job_id WHERE job.data_directory = ?1
+         AND job.status NOT IN (?2, ?3)",
+    ).bind(game.root().to_str().ok_or(CoreError::CachePath)?)
+        .bind("\"completed\"").bind("\"cancelled\"").fetch_all(&mut *connection).await?;
+    let mut updates = Vec::new();
+    for (id, path, folder) in artifacts {
+        let source = PathBuf::from(path);
+        if !source.starts_with(&legacy) {
+            continue;
         }
-        migrate_icons(&mut connection, &game.instances_dir()?, reporter).await?;
-        let legacy = game.root().join("modpacks");
-        let artifacts: Vec<(i64, String, Option<String>)> = sqlx::query_as(
-            "SELECT artifact.job_id, artifact.path, job.instance_folder FROM download_job_artifacts artifact
-             JOIN download_jobs job ON job.id = artifact.job_id WHERE job.data_directory = ?1
-             AND job.status NOT IN (?2, ?3)",
-        ).bind(game.root().to_str().ok_or(CoreError::CachePath)?)
-            .bind("\"completed\"").bind("\"cancelled\"").fetch_all(&mut connection).await?;
-        let mut updates = Vec::new();
-        for (id, path, folder) in artifacts {
-            let source = PathBuf::from(path);
-            if !source.starts_with(&legacy) { continue; }
-            if source.components().any(|part| matches!(part, Component::ParentDir))
-                || source.file_name().is_none_or(|name| name != "pack.zip")
-            { return Err(CoreError::CachePath); }
-            let folder = folder.ok_or(CoreError::CachePath)?;
-            let destination = crate::modpacks::workspace::archive_path(&game.instance_dir(&folder)?)?;
-            files::copy_tree_with_progress(&source, &destination, reporter)?;
-            files::copy_tree_with_progress(&source.with_file_name("pack.zip.part"), &destination.with_file_name("pack.zip.part"), reporter)?;
-            updates.push((id, source, destination));
+        if source
+            .components()
+            .any(|part| matches!(part, Component::ParentDir))
+            || source.file_name().is_none_or(|name| name != "pack.zip")
+        {
+            return Err(CoreError::CachePath);
         }
-        let mut transaction = connection.begin().await?;
-        for (id, source, destination) in updates {
-            sqlx::query("INSERT OR IGNORE INTO download_job_artifacts (job_id, path) VALUES (?1, ?2)")
-                .bind(id).bind(destination.to_str().ok_or(CoreError::CachePath)?).execute(&mut *transaction).await?;
-            sqlx::query("DELETE FROM download_job_artifacts WHERE job_id = ?1 AND path = ?2")
-                .bind(id).bind(source.to_str().ok_or(CoreError::CachePath)?).execute(&mut *transaction).await?;
-        }
-        transaction.commit().await?;
-        remove_legacy_archives(&legacy)?;
-        MetadataRepository::set(&mut connection, &key, "1").await?;
-        Ok(())
-    }.await;
-    super::db::complete_operation(connection, result).await
+        let folder = folder.ok_or(CoreError::CachePath)?;
+        let destination = crate::modpacks::workspace::archive_path(&game.instance_dir(&folder)?)?;
+        files::copy_tree_with_progress(&source, &destination, reporter)?;
+        files::copy_tree_with_progress(
+            &source.with_file_name("pack.zip.part"),
+            &destination.with_file_name("pack.zip.part"),
+            reporter,
+        )?;
+        updates.push((id, source, destination));
+    }
+    let mut transaction = connection.begin().await?;
+    for (id, source, destination) in updates {
+        sqlx::query("INSERT OR IGNORE INTO download_job_artifacts (job_id, path) VALUES (?1, ?2)")
+            .bind(id)
+            .bind(destination.to_str().ok_or(CoreError::CachePath)?)
+            .execute(&mut *transaction)
+            .await?;
+        sqlx::query("DELETE FROM download_job_artifacts WHERE job_id = ?1 AND path = ?2")
+            .bind(id)
+            .bind(source.to_str().ok_or(CoreError::CachePath)?)
+            .execute(&mut *transaction)
+            .await?;
+    }
+    transaction.commit().await?;
+    remove_legacy_archives(&legacy)?;
+    MetadataRepository::set(&mut connection, &key, "1").await?;
+    Ok(())
 }
 
 async fn migrate_icons(
@@ -124,8 +142,10 @@ mod tests {
         let (legacy, home) = fixture("installation-assets");
         let game = SharedCache::at(home.root().join("data"));
         let instances = game.instances_dir().expect("instances");
-        let settings = crate::load_settings(&home).await.expect("settings");
-        crate::save_settings(&home, &settings)
+        let settings = crate::settings::load_settings_at(&home)
+            .await
+            .expect("settings");
+        crate::settings::testing::save_settings_at(&home, &settings)
             .await
             .expect("save settings");
         let source = crate::InstanceSource::Modpack {
@@ -134,9 +154,10 @@ mod tests {
             version_id: "v1".to_string(),
             icon_url: Some("https://cdn.modrinth.com/data/fixture/icon.png".to_string()),
         };
-        let service = crate::DatabaseService::start(home.clone())
-            .await
-            .expect("service");
+        let service =
+            crate::DatabaseService::start(crate::Database::open(&home).await.expect("database"))
+                .await
+                .expect("service");
         let first = crate::create_pending_instance(
             &service.client(),
             &instances,
@@ -197,9 +218,10 @@ mod tests {
             .await
             .expect("migrate installation assets");
         assert!(!game.root().join("modpacks").exists());
-        let service = crate::DatabaseService::start(home.clone())
-            .await
-            .expect("reopen");
+        let service =
+            crate::DatabaseService::start(crate::Database::open(&home).await.expect("database"))
+                .await
+                .expect("reopen");
         let first_entry = crate::instance_entry(
             &service.client(),
             &instances.join(&first.folder),
@@ -235,7 +257,9 @@ mod tests {
         initialize_at(&legacy, &home)
             .await
             .expect("repeat initialization");
-        let mut connection = super::super::db::open_db(&home).await.expect("database");
+        let mut connection = super::super::db::open_migrated(&home)
+            .await
+            .expect("database");
         for job in &jobs {
             let path: String =
                 sqlx::query_scalar("SELECT path FROM download_job_artifacts WHERE job_id = ?1")
@@ -252,11 +276,12 @@ mod tests {
             );
         }
         connection.close().await.expect("close database");
-        let service = crate::DatabaseService::start(home.clone())
+        let database = crate::Database::open(&home).await.expect("database");
+        let service = crate::DatabaseService::start(database.clone())
             .await
             .expect("new service");
         let manager = crate::DownloadManager::new(
-            home.clone(),
+            database,
             game.clone(),
             crate::LaunchEnvironment {
                 os: crate::OsName::Linux,

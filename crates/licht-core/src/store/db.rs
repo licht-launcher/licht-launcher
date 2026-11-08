@@ -1,7 +1,9 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use sqlx::{Connection, SqliteConnection, sqlite::SqliteConnectOptions};
+use sqlx::pool::PoolConnection;
+use sqlx::sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions};
+use sqlx::{Connection, Sqlite, SqliteConnection};
 
 use super::repositories::metadata::MetadataRepository;
 
@@ -9,54 +11,86 @@ use crate::{CoreError, Result, SharedCache};
 
 const DB_FILE: &str = "licht.db";
 const SCHEMA_VERSION: u32 = 12;
+const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
+// The database actor keeps one connection; the rest serve short reads and writes.
+const MAX_CONNECTIONS: u32 = 4;
 pub(super) const META_LAST_PLAYED: &str = "last_played_folder";
 
 pub fn db_path(cache: &SharedCache) -> PathBuf {
     cache.root().join(DB_FILE)
 }
 
-pub async fn open_db(cache: &SharedCache) -> Result<SqliteConnection> {
-    let _initialization = super::layout::initialization_lock(cache, "database.lock").await?;
-    tokio::fs::create_dir_all(cache.root()).await?;
-    let options = SqliteConnectOptions::new()
-        .filename(db_path(cache))
-        .create_if_missing(true)
-        .busy_timeout(Duration::from_secs(5));
-    let mut connection = SqliteConnection::connect_with(&options).await?;
-    let migrated = async {
-        migrate(&mut connection).await?;
-        let journal: String = sqlx::query_scalar("PRAGMA journal_mode = WAL")
-            .fetch_one(&mut connection)
-            .await?;
-        if journal != "wal" {
-            return Err(std::io::Error::other("could not enable SQLite WAL mode").into());
-        }
-        Ok(())
-    }
-    .await;
-    if let Err(error) = migrated {
-        if connection.close().await.is_err() {
-            tracing::error!("Failed to close the database after a migration error");
-        }
-        return Err(error);
-    }
-    Ok(connection)
+/// One connection pool for a profile's `licht.db`, opened once and shared by every user.
+///
+/// Opening creates the file when it is missing, migrates it and enables WAL. Nothing may
+/// rename or delete the file while a pool is open, so [`Database::close`] must run first.
+#[derive(Clone, Debug)]
+pub struct Database {
+    cache: SharedCache,
+    pool: SqlitePool,
 }
 
-pub(crate) async fn complete_operation<T>(
-    connection: SqliteConnection,
-    result: Result<T>,
-) -> Result<T> {
-    match (result, connection.close().await) {
-        (Ok(value), Ok(())) => Ok(value),
-        (Ok(_), Err(error)) => Err(error.into()),
-        (Err(error), closed) => {
-            if closed.is_err() {
-                tracing::error!("Failed to close the database after an operation error");
-            }
-            Err(error)
+impl Database {
+    pub async fn open(cache: &SharedCache) -> Result<Self> {
+        let _initialization = super::layout::initialization_lock(cache, "database.lock").await?;
+        tokio::fs::create_dir_all(cache.root()).await?;
+        let pool = SqlitePoolOptions::new()
+            .max_connections(MAX_CONNECTIONS)
+            .connect_with(connect_options(cache).create_if_missing(true))
+            .await?;
+        let database = Self {
+            cache: cache.clone(),
+            pool,
+        };
+        if let Err(error) = database.prepare().await {
+            database.close().await;
+            return Err(error);
         }
+        Ok(database)
     }
+
+    async fn prepare(&self) -> Result<()> {
+        let mut connection = self.acquire().await?;
+        migrate(&mut connection).await?;
+        enable_wal(&mut connection).await
+    }
+
+    pub fn cache(&self) -> &SharedCache {
+        &self.cache
+    }
+
+    pub(crate) async fn acquire(&self) -> Result<PoolConnection<Sqlite>> {
+        Ok(self.pool.acquire().await?)
+    }
+
+    /// Waits for borrowed connections to return, then closes every connection.
+    pub async fn close(&self) {
+        self.pool.close().await;
+    }
+}
+
+fn connect_options(cache: &SharedCache) -> SqliteConnectOptions {
+    SqliteConnectOptions::new()
+        .filename(db_path(cache))
+        .busy_timeout(BUSY_TIMEOUT)
+}
+
+async fn enable_wal(connection: &mut SqliteConnection) -> Result<()> {
+    let journal: String = sqlx::query_scalar("PRAGMA journal_mode = WAL")
+        .fetch_one(connection)
+        .await?;
+    if journal != "wal" {
+        return Err(std::io::Error::other("could not enable SQLite WAL mode").into());
+    }
+    Ok(())
+}
+
+/// A plain connection to a migrated database, apart from any pool, for test fixtures that
+/// hold locks or change the schema.
+#[cfg(test)]
+pub(crate) async fn open_migrated(cache: &SharedCache) -> Result<SqliteConnection> {
+    Database::open(cache).await?.close().await;
+    Ok(SqliteConnection::connect_with(&connect_options(cache)).await?)
 }
 
 async fn schema_version(connection: &mut SqliteConnection) -> Result<u32> {
@@ -311,17 +345,15 @@ pub async fn clear_meta(connection: &mut SqliteConnection, key: &str) -> Result<
     MetadataRepository::clear(connection, key).await
 }
 
-pub async fn last_played_folder(cache: &SharedCache) -> Result<Option<String>> {
-    let mut connection = open_db(cache).await?;
-    let result = get_meta(&mut connection, META_LAST_PLAYED).await;
-    complete_operation(connection, result).await
+pub async fn last_played_folder(database: &Database) -> Result<Option<String>> {
+    let mut connection = database.acquire().await?;
+    get_meta(&mut connection, META_LAST_PLAYED).await
 }
 
-pub async fn set_last_played_folder(cache: &SharedCache, folder: &str) -> Result<()> {
+pub async fn set_last_played_folder(database: &Database, folder: &str) -> Result<()> {
     let folder = validate_last_played_folder(folder)?;
-    let mut connection = open_db(cache).await?;
-    let result = set_meta(&mut connection, META_LAST_PLAYED, folder).await;
-    complete_operation(connection, result).await
+    let mut connection = database.acquire().await?;
+    set_meta(&mut connection, META_LAST_PLAYED, folder).await
 }
 
 pub(super) fn validate_last_played_folder(folder: &str) -> Result<&str> {
@@ -332,8 +364,7 @@ pub(super) fn validate_last_played_folder(folder: &str) -> Result<&str> {
     Ok(folder)
 }
 
-pub async fn clear_last_played_folder(cache: &SharedCache) -> Result<()> {
-    let mut connection = open_db(cache).await?;
-    let result = clear_meta(&mut connection, META_LAST_PLAYED).await;
-    complete_operation(connection, result).await
+pub async fn clear_last_played_folder(database: &Database) -> Result<()> {
+    let mut connection = database.acquire().await?;
+    clear_meta(&mut connection, META_LAST_PLAYED).await
 }

@@ -20,7 +20,7 @@ pub async fn get_player_head(
     skin_url: Option<String>,
 ) -> Result<String, String> {
     let client = http_client().map_err(failure)?;
-    let path = licht_core::cached_player_head(&paths.settings, &client, skin_url.as_deref())
+    let path = licht_core::cached_player_head(paths.settings.cache(), &client, skin_url.as_deref())
         .await
         .map_err(failure)?;
     path.into_os_string()
@@ -32,7 +32,7 @@ pub async fn get_player_head(
 pub fn active_microsoft_account(
     paths: State<'_, LauncherPaths>,
 ) -> Result<Option<AccountProfile>, String> {
-    get_active_profile(&paths.settings).map_err(failure)
+    get_active_profile(paths.settings.cache()).map_err(failure)
 }
 
 #[tauri::command]

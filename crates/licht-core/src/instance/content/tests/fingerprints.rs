@@ -13,9 +13,10 @@ async fn content_reuses_persisted_fingerprints_and_manual_refresh_revalidates_by
     seed_metadata(&cache, b"old", "Original");
     seed_metadata(&cache, b"new", "Updated");
     let client = offline_client();
-    let service = crate::DatabaseService::start(cache.clone())
-        .await
-        .expect("service");
+    let service =
+        crate::DatabaseService::start(crate::Database::open(&cache).await.expect("database"))
+            .await
+            .expect("service");
     let entries =
         list_instance_content_with_metadata(&cache, &service.client(), &client, "classic", false)
             .await
@@ -26,9 +27,10 @@ async fn content_reuses_persisted_fingerprints_and_manual_refresh_revalidates_by
     // Preserving size and mtime deliberately exercises the accepted cache heuristic.
     fs::write(&path, b"new").expect("same-size mod");
     set_modified(&path, modified);
-    let service = crate::DatabaseService::start(cache.clone())
-        .await
-        .expect("restart");
+    let service =
+        crate::DatabaseService::start(crate::Database::open(&cache).await.expect("database"))
+            .await
+            .expect("restart");
     let entries =
         list_instance_content_with_metadata(&cache, &service.client(), &client, "classic", false)
             .await
@@ -71,9 +73,10 @@ async fn content_detects_added_resized_and_removed_files() {
         seed_metadata(&cache, body, title);
     }
     let client = offline_client();
-    let service = crate::DatabaseService::start(cache.clone())
-        .await
-        .expect("service");
+    let service =
+        crate::DatabaseService::start(crate::Database::open(&cache).await.expect("database"))
+            .await
+            .expect("service");
     list_instance_content_with_metadata(&cache, &service.client(), &client, "classic", false)
         .await
         .expect("initial content");
@@ -139,9 +142,10 @@ async fn content_detects_mtime_changes_even_when_size_is_unchanged() {
     seed_metadata(&cache, b"old", "Original");
     seed_metadata(&cache, b"new", "Updated");
     let client = offline_client();
-    let service = crate::DatabaseService::start(cache.clone())
-        .await
-        .expect("service");
+    let service =
+        crate::DatabaseService::start(crate::Database::open(&cache).await.expect("database"))
+            .await
+            .expect("service");
     list_instance_content_with_metadata(&cache, &service.client(), &client, "classic", false)
         .await
         .expect("initial content");
