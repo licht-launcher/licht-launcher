@@ -43,10 +43,10 @@ import { PlayerAccountButton } from "@/features/settings/components/player-accou
 import { useCustomTitleBar } from "@/hooks/use-custom-title-bar";
 import { APP_CODENAME, APP_VERSION } from "@/lib/app-release";
 import { getLastPlayedFolder } from "@/lib/commands";
+import { cn } from "@/lib/utils";
 import type { HomeSearch } from "@/routes/_app/index";
 
-const footerActionClassName =
-  "h-8 gap-2 rounded-md p-0 text-xs text-muted-foreground hover:bg-transparent hover:text-foreground dark:hover:bg-transparent aria-expanded:bg-transparent aria-expanded:text-foreground";
+import { instancesChromeStyles } from "./instances-chrome.styles";
 
 export function InstancesChrome({ children }: { children: ReactNode }) {
   const customTitleBar = useCustomTitleBar().data ?? true;
@@ -236,9 +236,9 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
   );
 
   const content = (
-    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      <div className="mx-2 mt-2 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-foreground/10 bg-popover">
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-muted/30">
+    <div className={instancesChromeStyles.root}>
+      <div className={instancesChromeStyles.frame}>
+        <div className={instancesChromeStyles.content}>
           <ChromeContext.Provider value={context}>
             {children}
           </ChromeContext.Provider>
@@ -249,7 +249,7 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
 
   return (
     <>
-      <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-home-sidebar text-popover-foreground">
+      <div className={instancesChromeStyles.sidebar}>
         <TitleBar
           windowControls={customTitleBar}
           actions={
@@ -281,7 +281,7 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
           <ResizablePanelGroup
             id={SIDEBAR_LAYOUT_ID}
             orientation="horizontal"
-            className="min-h-0 w-full flex-1 overflow-hidden"
+            className={instancesChromeStyles.sidebarPanel}
             defaultLayout={defaultLayout}
             onLayoutChanged={onLayoutChanged}
             disableCursor
@@ -339,7 +339,7 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
             </ResizablePanel>
             <ResizableHandle
               aria-label="Resize sidebar"
-              className="w-0 bg-transparent hover:scale-x-100 hover:bg-transparent focus-visible:scale-x-100 focus-visible:bg-transparent active:scale-x-100 active:bg-transparent"
+              className={instancesChromeStyles.resizeHandle}
             />
             <ResizablePanel id={MAIN_PANEL_ID} minSize={480}>
               {content}
@@ -349,42 +349,48 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
         <footer
           role="contentinfo"
           aria-label="Download status"
-          className="flex shrink-0 items-center justify-center px-3 pt-2 pb-1.5"
+          className={instancesChromeStyles.footer}
         >
-          <div className="grid min-h-8 w-full grid-cols-4 items-center">
-            <div className="flex items-center justify-start">
+          <div className={instancesChromeStyles.footerGrid}>
+            <div className={instancesChromeStyles.footerStart}>
               <CreateInstanceMenu onScratch={dialogs.openCreate} side="top">
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className={footerActionClassName}
+                  className={instancesChromeStyles.footerAction}
                 >
-                  <PlusIcon aria-hidden className="size-3.5" />
+                  <PlusIcon
+                    aria-hidden
+                    className={instancesChromeStyles.footerIcon}
+                  />
                   Create instance
                 </Button>
               </CreateInstanceMenu>
             </div>
-            <div className="col-span-2 flex min-w-0 items-center justify-center">
+            <div className={instancesChromeStyles.footerCenter}>
               <DownloadsPopover
                 side="top"
                 showLabel
-                triggerClassName={footerActionClassName}
+                triggerClassName={instancesChromeStyles.footerAction}
                 onOpen={() => {
                   dialogs.setSettingsOpen(false);
                   void navigate({ to: "/downloads" });
                 }}
               />
             </div>
-            <div className="flex min-w-0 items-center justify-end">
+            <div className={instancesChromeStyles.footerEnd}>
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-                className={`${footerActionClassName} min-w-0`}
+                className={cn(
+                  instancesChromeStyles.footerAction,
+                  instancesChromeStyles.footerActionShrink,
+                )}
                 onClick={() => dialogs.openGlobalSettings("updater")}
               >
-                <span className="truncate">
+                <span className={instancesChromeStyles.footerLabel}>
                   Early Release {APP_VERSION} · {APP_CODENAME}
                 </span>
               </Button>

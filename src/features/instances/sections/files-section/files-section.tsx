@@ -29,6 +29,8 @@ import { listInstanceEntries } from "@/lib/commands";
 import type { InstanceFsEntry } from "@/lib/generated/InstanceFsEntry";
 import { cn } from "@/lib/utils";
 
+import { filesSectionStyles } from "./files-section.styles";
+
 function joinRelative(base: string, name: string): string {
   return base === "" ? name : `${base}/${name}`;
 }
@@ -70,14 +72,17 @@ export function FilesBreadcrumb({
   const parts = breadcrumbParts(relativePath);
 
   return (
-    <nav aria-label="Current folder" className="min-w-0 flex-1">
-      <ol className="flex min-w-0 flex-wrap items-center gap-1 text-xs font-medium text-muted-foreground">
-        <li className="min-w-0">
+    <nav
+      aria-label="Current folder"
+      className={filesSectionStyles.breadcrumbWrapper}
+    >
+      <ol className={filesSectionStyles.breadcrumbs}>
+        <li className={filesSectionStyles.breadcrumbItem}>
           <button
             type="button"
             className={cn(
-              "cursor-pointer rounded-sm outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
-              relativePath === "" && "text-foreground",
+              filesSectionStyles.breadcrumbButton,
+              relativePath === "" && filesSectionStyles.breadcrumbCurrent,
             )}
             disabled={folder === null || relativePath === ""}
             onClick={() => {
@@ -91,17 +96,17 @@ export function FilesBreadcrumb({
           const path = parts.slice(0, index + 1).join("/");
           const current = index === parts.length - 1;
           return (
-            <li key={path} className="flex min-w-0 items-center gap-1">
+            <li key={path} className={filesSectionStyles.breadcrumbSegment}>
               <ChevronRightIcon
                 aria-hidden
-                className="size-3.5 shrink-0"
+                className={filesSectionStyles.breadcrumbIcon}
                 strokeWidth={2}
               />
               <button
                 type="button"
                 className={cn(
-                  "cursor-pointer truncate rounded-sm outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
-                  current && "text-foreground",
+                  filesSectionStyles.breadcrumbLink,
+                  current && filesSectionStyles.breadcrumbCurrent,
                 )}
                 disabled={current}
                 onClick={() => {
@@ -150,22 +155,19 @@ export function FilesSection({
     ((listing.data?.length ?? 0) > 0 || relativePath !== "");
 
   return (
-    <section
-      aria-label="Instance files"
-      className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border/60 bg-black/20"
-    >
+    <section aria-label="Instance files" className={filesSectionStyles.root}>
       {folder === null ? (
-        <p className="p-3 text-sm leading-normal text-muted-foreground">
+        <p className={filesSectionStyles.message}>
           Select an instance to browse its files.
         </p>
       ) : listing.isPending ? (
         <>
-          <div className="min-w-[48rem]">
-            <table className="w-full table-fixed text-sm leading-normal">
+          <div className={filesSectionStyles.tableWrapper}>
+            <table className={filesSectionStyles.table}>
               <colgroup>
                 <col />
-                <col className="w-24" />
-                <col className="w-44" />
+                <col className={filesSectionStyles.sizeColumn} />
+                <col className={filesSectionStyles.dateColumn} />
               </colgroup>
               <FilesTableHead
                 sortKey={sortKey}
@@ -174,44 +176,44 @@ export function FilesSection({
               />
             </table>
           </div>
-          <Progress aria-label="Loading files" className="h-px rounded-none" />
-          <ScrollArea className="min-h-0 flex-1">
-            <div className="min-w-[48rem]">
-              <table className="w-full table-fixed text-sm leading-normal">
+          <Progress
+            aria-label="Loading files"
+            className={filesSectionStyles.progress}
+          />
+          <ScrollArea className={filesSectionStyles.scrollArea}>
+            <div className={filesSectionStyles.tableWrapper}>
+              <table className={filesSectionStyles.table}>
                 <colgroup>
                   <col />
-                  <col className="w-24" />
-                  <col className="w-44" />
+                  <col className={filesSectionStyles.sizeColumn} />
+                  <col className={filesSectionStyles.dateColumn} />
                 </colgroup>
                 <tbody>
                   {filesSkeletonRows.map((row, index) => (
-                    <tr
-                      key={row}
-                      className="border-b border-border/60 last:border-b-0 odd:bg-black/10"
-                    >
-                      <td className="px-3 py-3">
+                    <tr key={row} className={filesSectionStyles.skeletonRow}>
+                      <td className={filesSectionStyles.skeletonCell}>
                         <div
                           className={cn(
-                            "flex items-center gap-2 transition-opacity",
+                            filesSectionStyles.skeletonItem,
                             filesSkeletonOpacity[index],
                           )}
                         >
-                          <div className="size-4 animate-pulse rounded bg-muted" />
-                          <div className="h-4 w-2/5 animate-pulse rounded bg-muted" />
+                          <div className={filesSectionStyles.skeletonIcon} />
+                          <div className={filesSectionStyles.skeletonName} />
                         </div>
                       </td>
-                      <td className="px-3 py-3">
+                      <td className={filesSectionStyles.skeletonCell}>
                         <div
                           className={cn(
-                            "h-3 w-12 animate-pulse rounded bg-muted",
+                            filesSectionStyles.skeletonSize,
                             filesSkeletonOpacity[index],
                           )}
                         />
                       </td>
-                      <td className="px-3 py-3">
+                      <td className={filesSectionStyles.skeletonCell}>
                         <div
                           className={cn(
-                            "h-3 w-28 animate-pulse rounded bg-muted",
+                            filesSectionStyles.skeletonDate,
                             filesSkeletonOpacity[index],
                           )}
                         />
@@ -224,8 +226,8 @@ export function FilesSection({
           </ScrollArea>
         </>
       ) : listing.isError ? (
-        <div className="flex flex-col gap-2 p-3">
-          <p className="text-sm leading-normal text-destructive">
+        <div className={filesSectionStyles.errorBlock}>
+          <p className={filesSectionStyles.errorText}>
             Could not list this folder.
           </p>
           {relativePath !== "" ? (
@@ -233,7 +235,7 @@ export function FilesSection({
               type="button"
               variant="secondary"
               size="sm"
-              className="self-start"
+              className={filesSectionStyles.retryButton}
               onClick={() => {
                 onRelativePathChange(parentRelative(relativePath));
               }}
@@ -245,11 +247,11 @@ export function FilesSection({
       ) : (
         <>
           {showTable ? (
-            <table className="w-full shrink-0 table-fixed caption-bottom text-sm leading-normal">
+            <table className={filesSectionStyles.headTable}>
               <colgroup>
                 <col />
-                <col className="w-24" />
-                <col className="w-44" />
+                <col className={filesSectionStyles.sizeColumn} />
+                <col className={filesSectionStyles.dateColumn} />
               </colgroup>
               <FilesTableHead
                 sortKey={sortKey}
@@ -258,15 +260,15 @@ export function FilesSection({
               />
             </table>
           ) : null}
-          <ScrollArea className="min-h-0 flex-1">
+          <ScrollArea className={filesSectionStyles.scrollArea}>
             {(listing.data?.length ?? 0) === 0 ? (
-              <div className="flex flex-col">
+              <div className={filesSectionStyles.bodyWrapper}>
                 {relativePath !== "" ? (
-                  <table className="w-full table-fixed caption-bottom text-sm leading-normal">
+                  <table className={filesSectionStyles.bodyTable}>
                     <colgroup>
                       <col />
-                      <col className="w-24" />
-                      <col className="w-44" />
+                      <col className={filesSectionStyles.sizeColumn} />
+                      <col className={filesSectionStyles.dateColumn} />
                     </colgroup>
                     <tbody>
                       <ParentRow
@@ -281,11 +283,11 @@ export function FilesSection({
                 <EmptyFolderState />
               </div>
             ) : (
-              <table className="w-full table-fixed caption-bottom text-sm leading-normal">
+              <table className={filesSectionStyles.bodyTable}>
                 <colgroup>
                   <col />
-                  <col className="w-24" />
-                  <col className="w-44" />
+                  <col className={filesSectionStyles.sizeColumn} />
+                  <col className={filesSectionStyles.dateColumn} />
                 </colgroup>
                 <tbody>
                   {relativePath !== "" ? (
@@ -334,7 +336,7 @@ function FilesTableHead({
 }) {
   return (
     <thead>
-      <tr className="border-b border-border/60 text-left text-xs font-medium tracking-wide text-muted-foreground">
+      <tr className={filesSectionStyles.headRow}>
         <SortableHeader
           label="Name"
           icon={ArrowDownAZIcon}
@@ -342,7 +344,7 @@ function FilesTableHead({
           sortKey={sortKey}
           sortDir={sortDir}
           onSort={onSort}
-          className="px-3 py-3"
+          className={filesSectionStyles.skeletonCell}
         />
         <SortableHeader
           label="Size"
@@ -351,7 +353,7 @@ function FilesTableHead({
           sortKey={sortKey}
           sortDir={sortDir}
           onSort={onSort}
-          className="w-24 px-3 py-3"
+          className={filesSectionStyles.sizeHeader}
         />
         <SortableHeader
           label="Created"
@@ -360,7 +362,7 @@ function FilesTableHead({
           sortKey={sortKey}
           sortDir={sortDir}
           onSort={onSort}
-          className="w-44 px-3 py-3"
+          className={filesSectionStyles.dateHeader}
         />
       </tr>
     </thead>
@@ -392,19 +394,23 @@ function SortableHeader({
       <button
         type="button"
         className={cn(
-          "inline-flex cursor-pointer items-center gap-1 rounded-sm font-medium outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
-          active && "text-foreground",
+          filesSectionStyles.sortButton,
+          active && filesSectionStyles.breadcrumbCurrent,
         )}
         onClick={() => {
           onSort(column);
         }}
       >
-        <Icon aria-hidden className="size-3.5 shrink-0" strokeWidth={2} />
+        <Icon
+          aria-hidden
+          className={filesSectionStyles.breadcrumbIcon}
+          strokeWidth={2}
+        />
         {label}
         {active ? (
           <SortIcon
             aria-hidden
-            className="size-3 shrink-0 text-muted-foreground opacity-60"
+            className={filesSectionStyles.sortIconIdle}
             strokeWidth={2}
           />
         ) : null}
@@ -415,17 +421,15 @@ function SortableHeader({
 
 function EmptyFolderState() {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 px-3 py-16 text-muted-foreground">
-      <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-muted">
+    <div className={filesSectionStyles.empty}>
+      <span className={filesSectionStyles.emptyIconWell}>
         <FolderOpenIcon
           aria-hidden
-          className="size-6 shrink-0"
+          className={filesSectionStyles.emptyIcon}
           strokeWidth={1.5}
         />
       </span>
-      <p className="font-brand text-sm font-medium leading-normal">
-        This folder is empty.
-      </p>
+      <p className={filesSectionStyles.emptyText}>This folder is empty.</p>
     </div>
   );
 }
@@ -440,34 +444,28 @@ function ParentRow({
   return (
     <tr
       className={cn(
-        "border-b border-border/60 hover:bg-muted/40",
-        striped && "bg-black/15",
+        filesSectionStyles.parentRow,
+        striped && filesSectionStyles.rowStriped,
       )}
     >
-      <td className="px-3 py-3">
+      <td className={filesSectionStyles.skeletonCell}>
         <button
           type="button"
           aria-label="Up"
-          className="flex w-full min-w-0 cursor-pointer items-center gap-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className={filesSectionStyles.entryButton}
           onClick={onOpen}
           onDoubleClick={onOpen}
         >
           <CornerLeftUpIcon
             aria-hidden
-            className="size-4 shrink-0 text-muted-foreground"
+            className={filesSectionStyles.entryIcon}
             strokeWidth={2}
           />
-          <span className="min-w-0 truncate font-medium text-foreground">
-            ..
-          </span>
+          <span className={filesSectionStyles.entryName}>..</span>
         </button>
       </td>
-      <td className="px-3 py-3 text-xs text-muted-foreground tabular-nums">
-        —
-      </td>
-      <td className="px-3 py-3 text-xs text-muted-foreground tabular-nums">
-        —
-      </td>
+      <td className={filesSectionStyles.metaCell}>—</td>
+      <td className={filesSectionStyles.metaCell}>—</td>
     </tr>
   );
 }
@@ -485,10 +483,10 @@ function FileRow({
   return (
     <tr
       className={cn(
-        "border-b border-border/60 last:border-b-0",
-        striped && "bg-black/15",
-        entry.isDir && "cursor-pointer hover:bg-muted/40",
-        !entry.isDir && "hover:bg-muted/30",
+        filesSectionStyles.row,
+        striped && filesSectionStyles.rowStriped,
+        entry.isDir && filesSectionStyles.rowDirectory,
+        !entry.isDir && filesSectionStyles.rowFile,
       )}
       onClick={() => {
         if (entry.isDir) {
@@ -509,22 +507,20 @@ function FileRow({
       role={entry.isDir ? "button" : undefined}
       aria-label={entry.isDir ? `${entry.name}, folder` : `${entry.name}, file`}
     >
-      <td className="px-3 py-3">
-        <span className="flex min-w-0 items-center gap-2">
+      <td className={filesSectionStyles.skeletonCell}>
+        <span className={filesSectionStyles.entryContent}>
           <Icon
             aria-hidden
-            className="size-4 shrink-0 text-muted-foreground"
+            className={filesSectionStyles.entryIcon}
             strokeWidth={2}
           />
-          <span className="min-w-0 truncate font-medium text-foreground">
-            {entry.name}
-          </span>
+          <span className={filesSectionStyles.entryName}>{entry.name}</span>
         </span>
       </td>
-      <td className="px-3 py-3 text-xs text-muted-foreground tabular-nums">
+      <td className={filesSectionStyles.metaCell}>
         {formatFileSize(entry.size)}
       </td>
-      <td className="px-3 py-3 text-xs text-muted-foreground tabular-nums">
+      <td className={filesSectionStyles.metaCell}>
         {formatFileCreated(entry.created)}
       </td>
     </tr>

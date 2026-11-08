@@ -26,6 +26,8 @@ import { friendlyError, messageOf } from "@/lib/errors";
 import type { InstanceContentEntry } from "@/lib/generated/InstanceContentEntry";
 import type { InstanceContentKind } from "@/lib/generated/InstanceContentKind";
 
+import { contentSectionStyles } from "./content-section.styles";
+
 export type { ContentFilter } from "@/features/instances/lib/content-table";
 export const CONTENT_STALE_TIME = Number.POSITIVE_INFINITY;
 
@@ -111,7 +113,7 @@ export function ContentSection({
 
   if (folder === null)
     return (
-      <p className="p-3 text-sm text-muted-foreground">
+      <p className={contentSectionStyles.message}>
         Select an instance to manage its content.
       </p>
     );
@@ -119,7 +121,7 @@ export function ContentSection({
     return <ContentLoading sortKey={sortKey} sortDir={sortDir} />;
   if (content.isError && content.data === undefined)
     return (
-      <p className="p-3 text-sm text-destructive">
+      <p className={contentSectionStyles.error}>
         Could not list instance content.
       </p>
     );
@@ -131,13 +133,13 @@ export function ContentSection({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border/60 bg-black/20">
+    <div className={contentSectionStyles.root}>
       {content.isError ? (
-        <p role="alert" className="p-3 text-sm text-destructive">
+        <p role="alert" className={contentSectionStyles.error}>
           Some content metadata could not be loaded. Refresh to try again.
         </p>
       ) : null}
-      <table className="w-full shrink-0 table-fixed text-sm">
+      <table className={contentSectionStyles.headTable}>
         <ContentTableColumns />
         <ContentTableHead
           sortKey={sortKey}
@@ -149,7 +151,7 @@ export function ContentSection({
       {content.isFetching ? (
         <Progress
           aria-label="Loading content metadata"
-          className="h-px rounded-none"
+          className={contentSectionStyles.progress}
         />
       ) : null}
       <ContentTable

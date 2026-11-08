@@ -11,6 +11,8 @@ import {
 } from "@/components/ui/dialog";
 import type { InstanceContentEntry } from "@/lib/generated/InstanceContentEntry";
 
+import { contentRemovalDialogStyles } from "./content-removal-dialog.styles";
+
 export function ContentRemovalDialog({
   entry,
   pending,
@@ -28,8 +30,10 @@ export function ContentRemovalDialog({
     <Dialog open={entry !== null} onOpenChange={onOpenChange}>
       <DialogContent onCloseAutoFocus={onCloseAutoFocus}>
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <AlertTriangleIcon className="size-5 text-destructive" />
+          <DialogTitle className={contentRemovalDialogStyles.title}>
+            <AlertTriangleIcon
+              className={contentRemovalDialogStyles.titleIcon}
+            />
             Remove content?
           </DialogTitle>
           <DialogDescription>

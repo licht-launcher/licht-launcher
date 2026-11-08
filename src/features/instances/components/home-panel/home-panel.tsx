@@ -47,6 +47,8 @@ import type { DownloadJobSnapshot } from "@/lib/generated/DownloadJobSnapshot";
 import type { DownloadProgress } from "@/lib/generated/DownloadProgress";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 
+import { homePanelStyles } from "./home-panel.styles";
+
 const INSTANCE_TABS = ["content", "files", "console"];
 
 export function HomePanel({
@@ -98,8 +100,8 @@ export function HomePanel({
   }
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-4">
-      <div className="shrink-0">
+    <div className={homePanelStyles.root}>
+      <div className={homePanelStyles.header}>
         <PlaySection
           instance={instance}
           busy={busy}
@@ -124,31 +126,34 @@ export function HomePanel({
           );
           setTab(next);
         }}
-        className="mt-3 flex min-h-0 flex-1 flex-col gap-2"
+        className={homePanelStyles.tabs}
       >
-        <div className="flex shrink-0 items-center gap-2">
-          <TabsList variant="sliding" className="w-fit shrink-0">
+        <div className={homePanelStyles.toolbar}>
+          <TabsList variant="sliding" className={homePanelStyles.tabsList}>
             <TabsTrigger
               value="content"
-              className="cursor-pointer gap-1.5 px-3"
+              className={homePanelStyles.tabsTrigger}
             >
-              <BlocksIcon aria-hidden className="size-4 shrink-0" />
+              <BlocksIcon aria-hidden className={homePanelStyles.tabIcon} />
               Content
             </TabsTrigger>
-            <TabsTrigger value="files" className="cursor-pointer gap-1.5 px-3">
-              <FolderIcon aria-hidden className="size-4 shrink-0" />
+            <TabsTrigger value="files" className={homePanelStyles.tabsTrigger}>
+              <FolderIcon aria-hidden className={homePanelStyles.tabIcon} />
               Files
             </TabsTrigger>
             <TabsTrigger
               value="console"
-              className="cursor-pointer gap-1.5 px-3"
+              className={homePanelStyles.tabsTrigger}
             >
-              <SquareTerminalIcon aria-hidden className="size-4 shrink-0" />
+              <SquareTerminalIcon
+                aria-hidden
+                className={homePanelStyles.tabIcon}
+              />
               Console
             </TabsTrigger>
           </TabsList>
           {tab === "console" ? (
-            <div className="ml-auto flex shrink-0 items-center gap-2">
+            <div className={homePanelStyles.tabActions}>
               <Button
                 type="button"
                 variant="outline"
@@ -176,7 +181,7 @@ export function HomePanel({
                 type="button"
                 variant="outline"
                 size="sm"
-                className="shrink-0"
+                className={homePanelStyles.header}
                 disabled={instance === null}
                 onClick={() => {
                   if (instance !== null) {
@@ -192,7 +197,7 @@ export function HomePanel({
             <>
               <Input
                 aria-label="Search content"
-                className="ml-auto w-52 font-medium"
+                className={homePanelStyles.searchInput}
                 placeholder="Search content"
                 value={contentSearch}
                 startIcon={<SearchIcon aria-hidden />}
@@ -206,7 +211,7 @@ export function HomePanel({
               >
                 <SelectTrigger
                   aria-label="Filter content"
-                  className="w-36 font-medium"
+                  className={homePanelStyles.filterSelect}
                 >
                   <SelectValue />
                 </SelectTrigger>
@@ -249,16 +254,15 @@ export function HomePanel({
               >
                 <RefreshCwIcon
                   aria-hidden
-                  className={refreshingContent ? "animate-spin" : undefined}
+                  className={
+                    refreshingContent ? homePanelStyles.refreshing : undefined
+                  }
                 />
               </Button>
             </>
           ) : null}
         </div>
-        <TabsContent
-          value="files"
-          className="mt-0 flex min-h-0 flex-1 flex-col outline-none"
-        >
+        <TabsContent value="files" className={homePanelStyles.tabContent}>
           <PageTransition direction={tabDirection}>
             <FilesSection
               folder={folder}
@@ -267,18 +271,12 @@ export function HomePanel({
             />
           </PageTransition>
         </TabsContent>
-        <TabsContent
-          value="console"
-          className="mt-0 flex min-h-0 flex-1 flex-col outline-none"
-        >
+        <TabsContent value="console" className={homePanelStyles.tabContent}>
           <PageTransition direction={tabDirection}>
             <ConsoleSection lines={lines} selected={logLevels} />
           </PageTransition>
         </TabsContent>
-        <TabsContent
-          value="content"
-          className="mt-0 flex min-h-0 flex-1 flex-col outline-none"
-        >
+        <TabsContent value="content" className={homePanelStyles.tabContent}>
           <PageTransition direction={tabDirection}>
             <ContentSection
               folder={folder}

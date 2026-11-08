@@ -9,6 +9,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 
+import { instanceActionDialogStyles } from "./instance-action-dialog.styles";
+
 export type InstanceAction =
   | { kind: "rename"; folder: string; name: string }
   | { kind: "delete"; folder: string; name: string };
@@ -42,7 +44,7 @@ export function InstanceActionDialog({
               </DialogDescription>
             </DialogHeader>
             <label
-              className="flex flex-col gap-1 text-sm"
+              className={instanceActionDialogStyles.field}
               htmlFor="instance-name"
             >
               Name

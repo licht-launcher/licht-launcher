@@ -33,6 +33,8 @@ import type { DownloadProgress } from "@/lib/generated/DownloadProgress";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 import { cn } from "@/lib/utils";
 
+import { playSectionStyles } from "./play-section.styles";
+
 function MetaTip({
   label,
   icon: Icon,
@@ -44,11 +46,8 @@ function MetaTip({
 }) {
   return (
     <Tooltip>
-      <TooltipTrigger
-        type="button"
-        className="inline-flex min-w-0 cursor-default items-center gap-1 rounded-sm text-sm text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <Icon aria-hidden className="size-3.5 shrink-0" />
+      <TooltipTrigger type="button" className={playSectionStyles.metaTrigger}>
+        <Icon aria-hidden className={playSectionStyles.metaIcon} />
         {children}
       </TooltipTrigger>
       <TooltipContent side="bottom" align="center" sideOffset={2}>
@@ -93,7 +92,7 @@ export function PlaySection({
 }) {
   if (instance === null) {
     return (
-      <p className="text-sm text-muted-foreground">
+      <p className={playSectionStyles.muted}>
         Create an instance to get started.
       </p>
     );
@@ -124,40 +123,46 @@ export function PlaySection({
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
+    <div className={playSectionStyles.root}>
+      <div className={playSectionStyles.header}>
+        <div className={playSectionStyles.identity}>
           <InstanceIcon iconPath={instance.iconPath} size="md" />
-          <div className="flex min-w-0 flex-col gap-0.5">
-            <h2 className="text-lg font-medium">{instance.name}</h2>
+          <div className={playSectionStyles.identityText}>
+            <h2 className={playSectionStyles.title}>{instance.name}</h2>
             <TooltipProvider delayDuration={300}>
-              <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
+              <div className={playSectionStyles.meta}>
                 <MetaTip label="Game version" icon={BoxIcon}>
-                  <span className="truncate">{gameVersion ?? "Preparing"}</span>
+                  <span className={playSectionStyles.metaValue}>
+                    {gameVersion ?? "Preparing"}
+                  </span>
                 </MetaTip>
-                <span aria-hidden className="text-sm text-muted-foreground">
+                <span aria-hidden className={playSectionStyles.muted}>
                   •
                 </span>
                 <MetaTip label="Loader" icon={BlocksIcon}>
-                  <span className="truncate">{loaderLabel}</span>
+                  <span className={playSectionStyles.metaValue}>
+                    {loaderLabel}
+                  </span>
                 </MetaTip>
-                <span aria-hidden className="text-sm text-muted-foreground">
+                <span aria-hidden className={playSectionStyles.muted}>
                   •
                 </span>
                 <MetaTip label="Last played" icon={ClockIcon}>
-                  <span className="truncate">{openedLabel}</span>
+                  <span className={playSectionStyles.metaValue}>
+                    {openedLabel}
+                  </span>
                 </MetaTip>
               </div>
             </TooltipProvider>
           </div>
         </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
+        <div className={playSectionStyles.actions}>
           {showStop ? (
             <Button
               type="button"
               variant="destructive"
               disabled={busy || stopping}
-              className={cn(stopping && "animate-pulse disabled:opacity-100")}
+              className={cn(stopping && playSectionStyles.busyButton)}
               onClick={onStop}
             >
               <SquareIcon data-icon="inline-start" aria-hidden />
@@ -173,7 +178,7 @@ export function PlaySection({
           ) : (
             <Button
               disabled={busy || playDisabled || installing || starting}
-              className={cn(starting && "animate-pulse disabled:opacity-100")}
+              className={cn(starting && playSectionStyles.busyButton)}
               onClick={onPlay}
             >
               <PlayIcon data-icon="inline-start" aria-hidden />
@@ -198,14 +203,16 @@ export function PlaySection({
         </div>
       </div>
       {installing || downloadJob !== undefined ? (
-        <div className="flex w-full min-w-0 flex-col gap-1">
-          <span className="text-xs text-muted-foreground">
-            <span className="font-medium">
+        <div className={playSectionStyles.download}>
+          <span className={playSectionStyles.downloadLabel}>
+            <span className={playSectionStyles.downloadTitle}>
               {progress !== null && !isPreparingProgress(progress)
                 ? progressText(progress, downloadJob?.phase)
                 : "Preparing…"}
             </span>
-            <span className="ml-2">{downloadDetail}</span>
+            <span className={playSectionStyles.downloadDetail}>
+              {downloadDetail}
+            </span>
           </span>
           <Progress
             aria-label="Install progress"

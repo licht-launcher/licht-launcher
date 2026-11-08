@@ -10,6 +10,8 @@ import type { InstanceContentEntry } from "@/lib/generated/InstanceContentEntry"
 import type { InstanceContentKind } from "@/lib/generated/InstanceContentKind";
 import { cn } from "@/lib/utils";
 
+import { contentRowStyles } from "./content-row.styles";
+
 export function ContentRow({
   entry,
   index,
@@ -33,41 +35,36 @@ export function ContentRow({
       data-index={index}
       aria-rowindex={index + 1}
       className={cn(
-        "border-b border-border/60",
-        last && "border-b-0",
-        index % 2 === 0 && "bg-black/10",
+        contentRowStyles.row,
+        last && contentRowStyles.rowLast,
+        index % 2 === 0 && contentRowStyles.rowOdd,
       )}
     >
-      <td className="px-3 py-2">
-        <div className="flex min-w-0 items-center gap-3">
+      <td className={contentRowStyles.cell}>
+        <div className={contentRowStyles.item}>
           {entry.iconUrl ? (
             <img
               src={entry.iconUrl}
               alt=""
-              className="size-8 shrink-0 rounded-md object-cover"
+              className={contentRowStyles.image}
             />
           ) : (
             <ContentIcon kind={entry.kind} />
           )}
-          <div className="min-w-0">
-            <p className="truncate font-medium" title={entry.title}>
+          <div className={contentRowStyles.text}>
+            <p className={contentRowStyles.name} title={entry.title}>
               {entry.title}
             </p>
-            <p
-              className="truncate text-xs text-muted-foreground"
-              title={entry.name}
-            >
+            <p className={contentRowStyles.detail} title={entry.name}>
               {entry.version ? `${entry.version} · ` : ""}
               {entry.name}
             </p>
           </div>
         </div>
       </td>
-      <td className="px-3 py-2 text-xs text-muted-foreground">
-        {formatSize(entry.size)}
-      </td>
-      <td className="px-3 py-2">
-        <div className="flex items-center justify-end gap-2">
+      <td className={contentRowStyles.metaCell}>{formatSize(entry.size)}</td>
+      <td className={contentRowStyles.cell}>
+        <div className={contentRowStyles.actions}>
           <Switch
             data-content-action="toggle"
             checked={entry.enabled}
@@ -80,12 +77,12 @@ export function ContentRow({
             type="button"
             size="icon"
             variant="ghost"
-            className="text-muted-foreground opacity-60 hover:text-destructive hover:opacity-100"
+            className={contentRowStyles.removeButton}
             aria-label={`Remove ${formatContentTitle(entry.name)}`}
             disabled={disabled}
             onClick={() => onRemove(entry)}
           >
-            <Trash2Icon aria-hidden className="size-4" />
+            <Trash2Icon aria-hidden className={contentRowStyles.icon} />
           </Button>
         </div>
       </td>
@@ -98,29 +95,21 @@ function ContentIcon({ kind }: { kind: InstanceContentKind }) {
     kind === "mods"
       ? {
           Icon: BlocksIcon,
-          wrapperClassName: "bg-accent-violet/15",
-          iconClassName: "text-accent-violet",
+          ...contentRowStyles.kinds.mods,
         }
       : kind === "resourcePacks"
         ? {
             Icon: ImageIcon,
-            wrapperClassName: "bg-accent-orange/15",
-            iconClassName: "text-accent-orange",
+            ...contentRowStyles.kinds.resourcePacks,
           }
         : {
             Icon: SparklesIcon,
-            wrapperClassName: "bg-accent-teal/15",
-            iconClassName: "text-accent-teal",
+            ...contentRowStyles.kinds.shaders,
           };
-  const { Icon, wrapperClassName, iconClassName } = contentIcon;
+  const { Icon, wrapper, icon } = contentIcon;
   return (
-    <span
-      className={cn(
-        "flex size-8 shrink-0 items-center justify-center rounded-md",
-        wrapperClassName,
-      )}
-    >
-      <Icon aria-hidden className={cn("size-4", iconClassName)} />
+    <span className={cn(contentRowStyles.iconWell, wrapper)}>
+      <Icon aria-hidden className={cn(contentRowStyles.icon, icon)} />
     </span>
   );
 }

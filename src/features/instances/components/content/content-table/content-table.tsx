@@ -7,6 +7,8 @@ import type { useContentVirtualizer } from "@/features/instances/hooks/use-conte
 import type { InstanceContentEntry } from "@/lib/generated/InstanceContentEntry";
 import { cn } from "@/lib/utils";
 
+import { contentTableStyles } from "./content-table.styles";
+
 export function ContentTable({
   entries,
   totalEntries,
@@ -24,10 +26,13 @@ export function ContentTable({
 }) {
   const { viewportRef, virtualizer, virtualRows, tableEvents } = virtualization;
   return (
-    <ScrollArea className="min-h-0 flex-1" viewportRef={viewportRef}>
-      <div className="min-w-[48rem]">
+    <ScrollArea
+      className={contentTableStyles.scrollArea}
+      viewportRef={viewportRef}
+    >
+      <div className={contentTableStyles.tableWrapper}>
         <table
-          className="w-full table-fixed text-sm"
+          className={contentTableStyles.table}
           aria-label="Installed content"
           aria-rowcount={entries.length || undefined}
           {...tableEvents}
@@ -37,15 +42,14 @@ export function ContentTable({
             {entries.length === 0 ? (
               <tr>
                 <td colSpan={3}>
-                  <div className="flex min-h-56 flex-col items-center justify-center gap-3 px-4 text-center">
-                    <span className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                      <PackageIcon aria-hidden className="size-6" />
+                  <div className={contentTableStyles.empty}>
+                    <span className={contentTableStyles.emptyIconWell}>
+                      <PackageIcon
+                        aria-hidden
+                        className={contentTableStyles.emptyIcon}
+                      />
                     </span>
-                    <p
-                      className={cn(
-                        "font-brand text-sm font-medium leading-normal text-muted-foreground",
-                      )}
-                    >
+                    <p className={cn(contentTableStyles.emptyText)}>
                       {totalEntries === 0
                         ? "No content installed."
                         : "No content matches your filters."}
@@ -64,7 +68,7 @@ export function ContentTable({
                       <tr aria-hidden="true" tabIndex={-1}>
                         <td
                           colSpan={3}
-                          className="border-0 p-0"
+                          className={contentTableStyles.emptyCell}
                           style={{ height: gap }}
                         />
                       </tr>
@@ -88,7 +92,7 @@ export function ContentTable({
               <tr aria-hidden="true" tabIndex={-1}>
                 <td
                   colSpan={3}
-                  className="border-0 p-0"
+                  className={contentTableStyles.emptyCell}
                   style={{
                     height:
                       virtualizer.getTotalSize() -

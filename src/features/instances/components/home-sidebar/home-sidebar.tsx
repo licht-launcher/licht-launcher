@@ -28,6 +28,8 @@ import {
 } from "@/features/instances/lib/sort-instances";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 
+import { homeSidebarStyles } from "./home-sidebar.styles";
+
 function SortLabel({
   icon: Icon,
   label,
@@ -36,8 +38,12 @@ function SortLabel({
   label: string;
 }) {
   return (
-    <span className="flex items-center gap-1.5 font-brand text-xs font-medium leading-none">
-      <Icon aria-hidden className="size-3.5 shrink-0" strokeWidth={2} />
+    <span className={homeSidebarStyles.sortLabel}>
+      <Icon
+        aria-hidden
+        className={homeSidebarStyles.sortIcon}
+        strokeWidth={2}
+      />
       {label}
     </span>
   );
@@ -71,17 +77,12 @@ export function HomeSidebar({
   const ordered = sortInstances(instances, sort);
 
   return (
-    <div className="flex h-full w-full min-w-0 flex-col overflow-hidden">
-      <div className="flex min-h-0 flex-1 flex-col px-2 py-2">
-        <nav
-          aria-label="Instances"
-          className="flex min-h-0 flex-1 flex-col gap-2"
-        >
-          <div className="flex min-h-0 flex-1 flex-col">
-            <div className="ml-px flex items-center gap-2 border border-transparent px-1">
-              <h2 className="min-w-0 flex-1 font-brand text-xs font-medium leading-none text-muted-foreground">
-                Instances
-              </h2>
+    <div className={homeSidebarStyles.root}>
+      <div className={homeSidebarStyles.body}>
+        <nav aria-label="Instances" className={homeSidebarStyles.nav}>
+          <div className={homeSidebarStyles.section}>
+            <div className={homeSidebarStyles.sectionHeader}>
+              <h2 className={homeSidebarStyles.sectionTitle}>Instances</h2>
               <Select
                 value={sort}
                 onValueChange={(value) => {
@@ -97,7 +98,7 @@ export function HomeSidebar({
                 <SelectTrigger
                   size="sm"
                   aria-label="Sort instances"
-                  className="h-auto w-auto max-w-40 shrink-0 gap-1 border-0 bg-transparent px-0 py-0 font-brand text-xs font-medium leading-none text-muted-foreground shadow-none dark:bg-transparent dark:hover:bg-transparent [&_svg:not([class*='size-'])]:size-3.5"
+                  className={homeSidebarStyles.sortTrigger}
                 >
                   <SelectValue />
                 </SelectTrigger>
@@ -105,28 +106,35 @@ export function HomeSidebar({
                   position="popper"
                   side="bottom"
                   align="end"
-                  className="z-100 font-brand text-xs font-medium"
+                  className={homeSidebarStyles.sortContent}
                 >
-                  <SelectItem value="lastPlayed" className="text-xs">
+                  <SelectItem
+                    value="lastPlayed"
+                    className={homeSidebarStyles.sortItem}
+                  >
                     <SortLabel icon={HistoryIcon} label="Last played" />
                   </SelectItem>
-                  <SelectItem value="name" className="text-xs">
+                  <SelectItem
+                    value="name"
+                    className={homeSidebarStyles.sortItem}
+                  >
                     <SortLabel icon={ArrowDownAZIcon} label="A–Z" />
                   </SelectItem>
-                  <SelectItem value="nameDesc" className="text-xs">
+                  <SelectItem
+                    value="nameDesc"
+                    className={homeSidebarStyles.sortItem}
+                  >
                     <SortLabel icon={ArrowDownZAIcon} label="Z–A" />
                   </SelectItem>
                 </SelectContent>
               </Select>
             </div>
             {loading ? (
-              <p className="border border-transparent px-1 text-sm text-muted-foreground">
-                Loading…
-              </p>
+              <p className={homeSidebarStyles.empty}>Loading…</p>
             ) : null}
             {!loading && ordered.length > 0 ? (
-              <ScrollArea className="min-h-0 flex-1">
-                <ul className="flex w-full min-w-0 flex-col px-px">
+              <ScrollArea className={homeSidebarStyles.scrollArea}>
+                <ul className={homeSidebarStyles.list}>
                   {ordered.map((instance) => {
                     const selected = instance.folder === selectedFolder;
                     const phase = playPhase(instance.folder);
@@ -141,15 +149,15 @@ export function HomeSidebar({
                         playBlocked={playBlocked}
                         onAction={onInstanceAction}
                       >
-                        <li className="min-w-0 max-w-full">
+                        <li className={homeSidebarStyles.listItem}>
                           <Button
                             type="button"
                             variant={selected ? "secondary" : "ghost"}
                             className={cn(
-                              "grid w-full min-w-0 max-w-full grid-cols-[auto_minmax(0,1fr)_auto] gap-2 overflow-hidden px-1 text-[0.8rem]",
+                              homeSidebarStyles.instanceButton,
                               selected &&
-                                "border-foreground/10 bg-secondary/35 hover:border-foreground/20 hover:bg-secondary/50",
-                              !selected && "text-muted-foreground/70",
+                                homeSidebarStyles.instanceButtonSelected,
+                              !selected && homeSidebarStyles.instanceButtonIdle,
                             )}
                             aria-current={selected ? "page" : undefined}
                             aria-label={
@@ -164,7 +172,7 @@ export function HomeSidebar({
                           >
                             <InstanceIcon iconPath={instance.iconPath} />
                             <span
-                              className="min-w-0 overflow-hidden text-left text-ellipsis whitespace-nowrap"
+                              className={homeSidebarStyles.instanceName}
                               title={instance.name}
                             >
                               {instance.name}
@@ -172,18 +180,26 @@ export function HomeSidebar({
                             {active ? (
                               <span
                                 aria-hidden
-                                className="inline-flex min-w-0 items-center gap-1.5 overflow-hidden text-ellipsis whitespace-nowrap text-xs font-medium text-success"
+                                className={homeSidebarStyles.instanceStatus}
                               >
                                 {phase === "starting" ? "Starting" : "Running"}
                                 {phase === "starting" ? (
                                   <Loader2Icon
-                                    className="size-3.5 shrink-0 animate-spin"
+                                    className={
+                                      homeSidebarStyles.instanceSpinner
+                                    }
                                     strokeWidth={2}
                                   />
                                 ) : (
-                                  <span className="relative flex size-2 shrink-0">
-                                    <span className="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-75" />
-                                    <span className="relative inline-flex size-2 rounded-full bg-success" />
+                                  <span
+                                    className={homeSidebarStyles.runningDot}
+                                  >
+                                    <span
+                                      className={homeSidebarStyles.runningPing}
+                                    />
+                                    <span
+                                      className={homeSidebarStyles.runningCore}
+                                    />
                                   </span>
                                 )}
                               </span>

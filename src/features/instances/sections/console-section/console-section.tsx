@@ -31,6 +31,8 @@ import {
 import type { ConsoleLine } from "@/features/instances/model/console-line";
 import { cn } from "@/lib/utils";
 
+import { consoleSectionStyles } from "./console-section.styles";
+
 /** Decorative flowers for the empty console. */
 export const CONSOLE_EMPTY_LILY = "❀ ✿ ❁";
 
@@ -42,34 +44,34 @@ const LEVEL_OPTIONS = [
     value: "info" as const,
     label: "Info",
     icon: InfoIcon,
-    tone: "text-info",
+    tone: consoleSectionStyles.toneInfo,
   },
   {
     value: "warn" as const,
     label: "Warn",
     icon: TriangleAlertIcon,
-    tone: "text-warning",
+    tone: consoleSectionStyles.toneWarn,
   },
   {
     value: "error" as const,
     label: "Error",
     icon: CircleAlertIcon,
-    tone: "text-destructive",
+    tone: consoleSectionStyles.toneError,
   },
 ];
 
 function selectionTone(selected: LogLevelSelection): string {
   if (selected.size === 0) {
-    return "text-foreground";
+    return consoleSectionStyles.toneDefault;
   }
   if (selected.size === 1) {
     const only = [...selected][0];
     return (
       LEVEL_OPTIONS.find((option) => option.value === only)?.tone ??
-      "text-foreground"
+      consoleSectionStyles.toneDefault
     );
   }
-  return "text-foreground";
+  return consoleSectionStyles.toneDefault;
 }
 
 function selectionIcon(selected: LogLevelSelection) {
@@ -134,24 +136,27 @@ export function ConsoleLogLevelFilter({
           size="sm"
           aria-label="Log level"
           className={cn(
-            "w-40 justify-between font-semibold",
+            consoleSectionStyles.filterTrigger,
             selectionTone(selected),
           )}
         >
-          <span className="flex min-w-0 items-center gap-1.5">
+          <span className={consoleSectionStyles.filterLabel}>
             <TriggerIcon aria-hidden data-icon="inline-start" />
-            <span className="truncate">{label}</span>
+            <span className={consoleSectionStyles.filterLabelText}>
+              {label}
+            </span>
           </span>
           <ChevronDownIcon
             aria-hidden
-            className="size-4 shrink-0 text-muted-foreground"
+            className={consoleSectionStyles.filterChevron}
           />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-40 p-1">
-        <p className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
-          Log Level
-        </p>
+      <PopoverContent
+        align="end"
+        className={consoleSectionStyles.filterContent}
+      >
+        <p className={consoleSectionStyles.filterTitle}>Log Level</p>
         {LEVEL_OPTIONS.map((option) => {
           const Icon = option.icon;
           const checked = selected.has(option.value);
@@ -159,21 +164,29 @@ export function ConsoleLogLevelFilter({
             <button
               key={option.value}
               type="button"
-              className={cn(
-                "flex w-full cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-semibold outline-none hover:bg-accent",
-                option.tone,
-              )}
+              className={cn(consoleSectionStyles.filterOption, option.tone)}
               aria-pressed={checked}
               onClick={() => {
                 onSelectedChange(toggleLogLevel(selected, option.value));
               }}
             >
-              <Icon aria-hidden className="size-4 shrink-0" />
-              <span className="flex-1 text-left">{option.label}</span>
+              <Icon
+                aria-hidden
+                className={consoleSectionStyles.filterOptionIcon}
+              />
+              <span className={consoleSectionStyles.filterOptionLabel}>
+                {option.label}
+              </span>
               {checked ? (
-                <CheckIcon aria-hidden className="size-4 shrink-0" />
+                <CheckIcon
+                  aria-hidden
+                  className={consoleSectionStyles.filterOptionIcon}
+                />
               ) : (
-                <span className="size-4 shrink-0" aria-hidden />
+                <span
+                  className={consoleSectionStyles.filterOptionIcon}
+                  aria-hidden
+                />
               )}
             </button>
           );
@@ -200,8 +213,6 @@ export function ConsoleSection({
       return [{ line, effectiveLevel }];
     });
   }, [lines, selected]);
-  const logSelect =
-    "cursor-text select-text selection:bg-muted-foreground/35 selection:text-foreground";
 
   const rootRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
@@ -265,40 +276,40 @@ export function ConsoleSection({
   return (
     <section
       aria-label="Game log"
-      className="relative flex min-h-0 flex-1 flex-col"
+      className={consoleSectionStyles.root}
       ref={rootRef}
     >
       <ScrollArea
         type={revealScrollbar ? "always" : "hover"}
-        className="min-h-0 flex-1 rounded-lg border border-border/60 bg-black/20"
+        className={consoleSectionStyles.scrollArea}
       >
         {lines.length === 0 ? (
           <div
             className={cn(
-              logSelect,
-              "flex flex-col gap-3 p-3 font-mono text-sm leading-relaxed text-muted-foreground",
+              consoleSectionStyles.selectable,
+              consoleSectionStyles.emptyLog,
             )}
           >
             <p>The game log will appear here.</p>
-            <p
-              aria-hidden
-              className="select-none font-sans text-lg leading-none text-muted-foreground/70"
-            >
+            <p aria-hidden className={consoleSectionStyles.emptyLogPrompt}>
               {CONSOLE_EMPTY_LILY}
             </p>
           </div>
         ) : visible.length === 0 ? (
           <p
             className={cn(
-              logSelect,
-              "p-3 font-mono text-sm leading-relaxed text-muted-foreground",
+              consoleSectionStyles.selectable,
+              consoleSectionStyles.logMessage,
             )}
           >
             No lines match this level.
           </p>
         ) : (
           <pre
-            className={cn(logSelect, "p-3 font-mono text-sm leading-relaxed")}
+            className={cn(
+              consoleSectionStyles.selectable,
+              consoleSectionStyles.log,
+            )}
           >
             {visible.map(({ line, effectiveLevel }) => (
               <ConsoleLineView
@@ -315,7 +326,7 @@ export function ConsoleSection({
           type="button"
           size="icon-sm"
           variant="secondary"
-          className="absolute right-3 bottom-3 z-10 shadow-sm"
+          className={consoleSectionStyles.jumpButton}
           aria-label="Scroll to bottom"
           onClick={jumpToBottom}
         >

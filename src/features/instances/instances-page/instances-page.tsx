@@ -10,6 +10,8 @@ import { CreateInstanceMenu } from "@/features/new-instance/components/create-in
 import { friendlyError, messageOf } from "@/lib/errors";
 import { Route } from "@/routes/_app/index";
 
+import { instancesPageStyles } from "./instances-page.styles";
+
 export function InstancesPage() {
   const navigate = useNavigate();
   const { prepare } = Route.useSearch();
@@ -74,19 +76,19 @@ export function InstancesPage() {
     return (
       <section
         aria-labelledby="instances-welcome-title"
-        className="flex min-h-0 flex-1 flex-col items-center justify-center gap-6 overflow-auto p-8 text-center"
+        className={instancesPageStyles.root}
       >
-        <div className="flex size-16 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-          <PlusIcon aria-hidden className="size-8" />
+        <div className={instancesPageStyles.iconWell}>
+          <PlusIcon aria-hidden className={instancesPageStyles.icon} />
         </div>
-        <div className="max-w-md space-y-2">
+        <div className={instancesPageStyles.text}>
           <h1
             id="instances-welcome-title"
-            className="text-2xl font-semibold tracking-tight"
+            className={instancesPageStyles.title}
           >
             Create your first instance
           </h1>
-          <p className="text-sm text-muted-foreground">
+          <p className={instancesPageStyles.description}>
             Choose a Minecraft version or install a modpack to start playing.
           </p>
         </div>

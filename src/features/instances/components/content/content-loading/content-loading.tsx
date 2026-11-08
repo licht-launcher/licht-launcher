@@ -10,6 +10,8 @@ import type {
 } from "@/features/instances/lib/content-table";
 import { cn } from "@/lib/utils";
 
+import { contentLoadingStyles } from "./content-loading.styles";
+
 const skeletonRows = ["one", "two", "three", "four", "five", "six"];
 const skeletonOpacity = [
   "opacity-100",
@@ -28,9 +30,9 @@ export function ContentLoading({
   sortDir: ContentSortDir;
 }) {
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border/60 bg-black/20">
-      <div className="min-w-[48rem]">
-        <table className="w-full table-fixed text-sm">
+    <div className={contentLoadingStyles.root}>
+      <div className={contentLoadingStyles.tableWrapper}>
+        <table className={contentLoadingStyles.table}>
           <ContentTableColumns />
           <ContentTableHead
             sortKey={sortKey}
@@ -43,44 +45,45 @@ export function ContentLoading({
       </div>
       <Progress
         aria-label="Loading content metadata"
-        className="h-px rounded-none"
+        className={contentLoadingStyles.progress}
       />
-      <ScrollArea className="min-h-0 flex-1">
-        <div className="min-w-[48rem]">
-          <table className="w-full table-fixed text-sm">
+      <ScrollArea className={contentLoadingStyles.scrollArea}>
+        <div className={contentLoadingStyles.tableWrapper}>
+          <table className={contentLoadingStyles.table}>
             <ContentTableColumns />
             <tbody>
               {skeletonRows.map((row, index) => (
-                <tr
-                  key={row}
-                  className="border-b border-border/60 last:border-b-0 odd:bg-black/10"
-                >
-                  <td className="px-3 py-2">
+                <tr key={row} className={contentLoadingStyles.row}>
+                  <td className={contentLoadingStyles.cell}>
                     <div
                       className={cn(
-                        "flex items-center gap-3 transition-opacity",
+                        contentLoadingStyles.item,
                         skeletonOpacity[index],
                       )}
                     >
-                      <div className="size-8 shrink-0 animate-pulse rounded-md bg-muted" />
-                      <div className="min-w-0 flex-1 space-y-2">
-                        <div className="h-4 w-2/5 animate-pulse rounded bg-muted" />
-                        <div className="h-3 w-3/5 animate-pulse rounded bg-muted" />
+                      <div className={contentLoadingStyles.iconPlaceholder} />
+                      <div className={contentLoadingStyles.textPlaceholder}>
+                        <div
+                          className={contentLoadingStyles.titlePlaceholder}
+                        />
+                        <div
+                          className={contentLoadingStyles.subtitlePlaceholder}
+                        />
                       </div>
                     </div>
                   </td>
-                  <td className="px-3 py-2">
+                  <td className={contentLoadingStyles.cell}>
                     <div
                       className={cn(
-                        "h-3 w-16 animate-pulse rounded bg-muted",
+                        contentLoadingStyles.metaPlaceholder,
                         skeletonOpacity[index],
                       )}
                     />
                   </td>
-                  <td className="px-3 py-2">
+                  <td className={contentLoadingStyles.cell}>
                     <div
                       className={cn(
-                        "ml-auto h-8 w-20 animate-pulse rounded-md bg-muted",
+                        contentLoadingStyles.actionPlaceholder,
                         skeletonOpacity[index],
                       )}
                     />
