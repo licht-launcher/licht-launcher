@@ -28,7 +28,7 @@ pub(super) fn fixture(name: &str) -> (SharedCache, SharedCache) {
 }
 
 async fn legacy_database(legacy: &SharedCache) -> SqliteConnection {
-    let connection = db::open_db(legacy).await.expect("create schema");
+    let connection = db::open_migrated(legacy).await.expect("create schema");
     connection.close().await.expect("close current filename");
     fs::rename(db::db_path(legacy), legacy.root().join("licht.sqlite")).expect("legacy filename");
     SqliteConnection::connect_with(
@@ -55,7 +55,7 @@ async fn fresh_layout_places_settings_and_wal_database_at_the_launcher_root() {
         assert!(home.root().join(directory).is_dir());
     }
     assert!(home.root().join("settings.json").is_file());
-    let mut connection = db::open_db(&home).await.expect("database");
+    let mut connection = db::open_migrated(&home).await.expect("database");
     let mode: String = sqlx::query_scalar("PRAGMA journal_mode")
         .fetch_one(&mut connection)
         .await
@@ -176,7 +176,7 @@ async fn migration_preserves_files_settings_committed_wal_and_job_paths() {
             .to_string_lossy()
             .as_ref()
     );
-    let mut migrated = db::open_db(&home).await.expect("migrated database");
+    let mut migrated = db::open_migrated(&home).await.expect("migrated database");
     let remembered: String =
         sqlx::query_scalar("SELECT value FROM meta WHERE key = 'microsoft_account_uuids'")
             .fetch_one(&mut migrated)
@@ -563,7 +563,7 @@ async fn startup_moves_settings_from_the_file_into_the_database() {
         .expect("settings");
     assert_eq!(settings.username, "Alex");
     assert_eq!(settings.download_concurrency, 4);
-    let mut connection = db::open_db(&home).await.expect("database");
+    let mut connection = db::open_migrated(&home).await.expect("database");
     let stored: String = sqlx::query_scalar("SELECT username FROM settings")
         .fetch_one(&mut connection)
         .await

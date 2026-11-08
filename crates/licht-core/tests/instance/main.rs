@@ -731,3 +731,18 @@ async fn renaming_may_take_the_name_of_another_instance() {
     service.shutdown().await.expect("shutdown");
     let _ = fs::remove_dir_all(root);
 }
+
+/// Migrates the profile database as startup does, then returns a plain connection apart
+/// from any pool, for fixtures that hold locks or change the schema.
+async fn open_migrated(
+    cache: &licht_core::SharedCache,
+) -> licht_core::Result<sqlx::SqliteConnection> {
+    use sqlx::Connection;
+    licht_core::Database::open(cache).await?.close().await;
+    Ok(sqlx::SqliteConnection::connect_with(
+        &sqlx::sqlite::SqliteConnectOptions::new()
+            .filename(licht_core::db_path(cache))
+            .busy_timeout(std::time::Duration::from_secs(5)),
+    )
+    .await?)
+}

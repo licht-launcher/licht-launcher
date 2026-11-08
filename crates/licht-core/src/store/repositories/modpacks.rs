@@ -239,7 +239,9 @@ mod tests {
     #[tokio::test]
     async fn invalid_replacement_rolls_back_the_entire_index() {
         let cache = fixture();
-        let mut connection = crate::store::db::open_db(&cache).await.expect("database");
+        let mut connection = crate::store::db::open_migrated(&cache)
+            .await
+            .expect("database");
         let original = index();
         ModpackRepository::replace(&mut connection, "instances", "First", &original)
             .await

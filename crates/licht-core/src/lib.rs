@@ -54,7 +54,7 @@ pub use auth::{
 };
 pub use cache::SharedCache;
 pub use db::{
-    Database, clear_last_played_folder, clear_meta, db_path, get_meta, last_played_folder, open_db,
+    Database, clear_last_played_folder, clear_meta, db_path, get_meta, last_played_folder,
     set_last_played_folder, set_meta,
 };
 pub use diagnostics::{BuildDiagnostics, build_diagnostics};
