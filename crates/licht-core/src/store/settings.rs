@@ -278,7 +278,12 @@ fn normalize_directory(cache: &SharedCache, value: Option<&str>) -> Result<Optio
     Ok(Some(path.display().to_string()))
 }
 
-pub(super) fn validated(cache: &SharedCache, settings: Settings) -> Result<Settings> {
+/// `total_mb` is the machine RAM, probed once by the caller for the whole load or save.
+pub(super) fn validated(
+    cache: &SharedCache,
+    settings: Settings,
+    total_mb: u32,
+) -> Result<Settings> {
     if settings.schema != SCHEMA {
         return Err(CoreError::SettingsSchema {
             schema: settings.schema,
@@ -300,7 +305,7 @@ pub(super) fn validated(cache: &SharedCache, settings: Settings) -> Result<Setti
     {
         return Err(CoreError::SettingsDownloadSpeed);
     }
-    validate_memory_allocation(settings.max_memory_mb, total_memory_mb())?;
+    validate_memory_allocation(settings.max_memory_mb, total_mb)?;
     if matches!(settings.width, Some(0)) || matches!(settings.height, Some(0)) {
         return Err(CoreError::SettingsWindow);
     }
@@ -335,13 +340,12 @@ pub(super) fn validated(cache: &SharedCache, settings: Settings) -> Result<Setti
     })
 }
 
-fn from_stored(cache: &SharedCache, stored: StoredSettings) -> Result<Settings> {
+fn from_stored(cache: &SharedCache, stored: StoredSettings, total: u32) -> Result<Settings> {
     if stored.schema != SCHEMA {
         return Err(CoreError::SettingsSchema {
             schema: stored.schema,
         });
     }
-    let total = total_memory_mb();
     let max_memory_mb = match stored.max_memory_mb {
         Some(value) => value,
         None => recommended_max_memory_mb(total),
@@ -384,6 +388,7 @@ fn from_stored(cache: &SharedCache, stored: StoredSettings) -> Result<Settings> 
             minimize_on_game_start: stored.minimize_on_game_start,
             restore_on_game_exit: stored.restore_on_game_exit,
         },
+        total,
     )
 }
 
@@ -463,19 +468,26 @@ pub async fn load_settings(database: &Database) -> Result<Settings> {
 
 /// Callers must hold [`SETTINGS_LOCK`], for reading or writing.
 async fn read_settings(database: &Database) -> Result<Settings> {
+    Ok(read_with_memory(database).await?.0)
+}
+
+/// Reads the settings together with the machine RAM they were checked against.
+async fn read_with_memory(database: &Database) -> Result<(Settings, u32)> {
     let file = database.cache().clone();
-    let mut settings = blocking(move || load_file_settings(&file)).await?;
+    let (mut settings, total) = blocking(move || {
+        let total = total_memory_mb();
+        Ok((load_file_settings(&file, total)?, total))
+    })
+    .await?;
     let mut connection = database.acquire().await?;
     // Until the first save stores a row, older settings files still carry every value.
     if !SettingsRepository::load_into(&mut connection, &mut settings).await? {
-        return Ok(settings);
+        return Ok((settings, total));
     }
     drop(connection);
     // A saved allocation can come from a machine with more RAM.
-    settings.max_memory_mb = settings
-        .max_memory_mb
-        .min(memory_slider_max(total_memory_mb()));
-    validated(database.cache(), settings)
+    settings.max_memory_mb = settings.max_memory_mb.min(memory_slider_max(total));
+    Ok((validated(database.cache(), settings, total)?, total))
 }
 
 /// Settings of a folder that has no open pool, such as a legacy profile. A missing
@@ -483,7 +495,7 @@ async fn read_settings(database: &Database) -> Result<Settings> {
 pub(crate) async fn load_settings_at(cache: &SharedCache) -> Result<Settings> {
     if !db::db_path(cache).is_file() {
         let file = cache.clone();
-        return blocking(move || load_file_settings(&file)).await;
+        return blocking(move || load_file_settings(&file, total_memory_mb())).await;
     }
     let database = Database::open(cache).await?;
     let settings = load_settings(&database).await;
@@ -497,10 +509,13 @@ pub(super) async fn stored_in_database(database: &Database) -> Result<bool> {
 }
 
 pub(super) fn load_startup_preferences(cache: &SharedCache) -> Result<StartupPreferences> {
-    Ok(StartupPreferences::from(&load_file_settings(cache)?))
+    Ok(StartupPreferences::from(&load_file_settings(
+        cache,
+        total_memory_mb(),
+    )?))
 }
 
-fn load_file_settings(cache: &SharedCache) -> Result<Settings> {
+fn load_file_settings(cache: &SharedCache, total: u32) -> Result<Settings> {
     let path = settings_path(cache);
     if !path.is_file() {
         return from_stored(
@@ -533,15 +548,18 @@ fn load_file_settings(cache: &SharedCache) -> Result<Settings> {
                 minimize_on_game_start: false,
                 restore_on_game_exit: false,
             },
+            total,
         );
     }
-    from_stored(cache, read_stored(&path)?)
+    from_stored(cache, read_stored(&path)?, total)
 }
 
 pub async fn settings_snapshot(database: &Database) -> Result<SettingsSnapshot> {
     let cache = database.cache();
-    let settings = load_settings(database).await?;
-    let total = total_memory_mb();
+    let (settings, total) = {
+        let _reading = SETTINGS_LOCK.read().await;
+        read_with_memory(database).await?
+    };
     let application_directory = match &settings.data_directory {
         Some(path) => path.clone(),
         None => cache.root().display().to_string(),
@@ -572,11 +590,12 @@ async fn write_settings(database: Database, settings: Settings) -> Result<Settin
     let checked = database.cache().clone();
     let settings = blocking(move || {
         let path = settings_path(&checked);
+        let total = total_memory_mb();
         // An unreadable or newer file is left in place rather than overwritten.
         if path.is_file() {
-            let _existing = from_stored(&checked, read_stored(&path)?)?;
+            let _existing = from_stored(&checked, read_stored(&path)?, total)?;
         }
-        validated(&checked, settings)
+        validated(&checked, settings, total)
     })
     .await?;
     // The row is written first, so an interrupted save keeps the previous startup

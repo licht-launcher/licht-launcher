@@ -31,7 +31,7 @@ pub(super) async fn migrate(
         Some(parent) => SharedCache::at(Path::new(parent).join("Licht Launcher")),
         None => legacy.clone(),
     };
-    settings = super::super::settings::validated(home, settings)?;
+    settings = super::super::settings::validated(home, settings, crate::total_memory_mb())?;
     let new_game = match &settings.data_directory {
         Some(parent) => SharedCache::at(Path::new(parent).join("Licht Launcher").join("data")),
         None => SharedCache::at(home.root().join("data")),
