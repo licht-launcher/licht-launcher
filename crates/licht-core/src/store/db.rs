@@ -46,6 +46,9 @@ impl Database {
             database.close().await;
             return Err(error);
         }
+        // Only the first connection may create the file: a later reconnect must fail rather
+        // than replace a missing database with an empty one that has no schema.
+        database.pool.set_connect_options(connect_options(cache));
         Ok(database)
     }
 
@@ -367,4 +370,39 @@ pub(super) fn validate_last_played_folder(folder: &str) -> Result<&str> {
 pub async fn clear_last_played_folder(database: &Database) -> Result<()> {
     let mut connection = database.acquire().await?;
     clear_meta(&mut connection, META_LAST_PLAYED).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn a_reconnect_after_the_file_is_gone_does_not_create_an_empty_database() {
+        let cache = SharedCache::at(
+            std::env::temp_dir().join(format!("licht-db-reconnect-{}", std::process::id())),
+        );
+        let _ = std::fs::remove_dir_all(cache.root());
+        let database = Database::open(&cache).await.expect("database");
+        // Take every pooled connection out of the pool, so the next acquire reconnects.
+        while database.pool.size() > 0 {
+            database
+                .acquire()
+                .await
+                .expect("connection")
+                .detach()
+                .close()
+                .await
+                .expect("close");
+        }
+        for suffix in ["", "-wal", "-shm"] {
+            let path = cache.root().join(format!("{DB_FILE}{suffix}"));
+            if path.exists() {
+                std::fs::remove_file(path).expect("remove database file");
+            }
+        }
+
+        assert!(database.acquire().await.is_err());
+        assert!(!db_path(&cache).exists());
+        database.close().await;
+    }
 }

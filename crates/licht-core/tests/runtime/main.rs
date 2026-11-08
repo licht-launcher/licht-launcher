@@ -125,6 +125,11 @@ fn a_custom_java_is_used_without_downloading() {
     let missing_path = directory.join("missing.exe");
     let missing = use_custom_java(&missing_path).expect_err("a missing java should fail");
     assert!(matches!(missing, CoreError::JavaPath));
+
+    let script = directory.join("run.sh");
+    std::fs::write(&script, b"#!/bin/sh").expect("script");
+    let other = use_custom_java(&script).expect_err("only a Java launcher may run");
+    assert!(matches!(other, CoreError::JavaPath));
     let _ = std::fs::remove_dir_all(directory);
 }
 

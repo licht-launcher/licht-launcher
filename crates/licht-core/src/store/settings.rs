@@ -223,7 +223,28 @@ pub fn configured_java(settings: &Settings, major: u32) -> Option<PathBuf> {
         _ => None,
     }?;
     let path = PathBuf::from(text);
-    path.is_file().then_some(path)
+    (path.is_file() && crate::runtime::is_java_executable(&path)).then_some(path)
+}
+
+/// Applies to new user input only. Values already stored are ignored at launch instead,
+/// because rejecting them on load or on an internal save would stop the launcher.
+fn check_java_executables(settings: &Settings) -> Result<()> {
+    let paths = [
+        &settings.java25,
+        &settings.java21,
+        &settings.java17,
+        &settings.java8,
+    ];
+    if paths
+        .into_iter()
+        .flatten()
+        .map(|path| path.trim())
+        .filter(|path| !path.is_empty())
+        .any(|path| !crate::runtime::is_java_executable(Path::new(path)))
+    {
+        return Err(CoreError::SettingsJava);
+    }
+    Ok(())
 }
 
 fn clean_java(value: Option<&str>) -> Result<Option<String>> {
@@ -536,7 +557,14 @@ pub async fn settings_snapshot(database: &Database) -> Result<SettingsSnapshot> 
     })
 }
 
+/// Saves settings from the user, so Java paths must name a Java executable.
 pub async fn save_settings(database: &Database, settings: &Settings) -> Result<Settings> {
+    check_java_executables(settings)?;
+    store_settings(database, settings).await
+}
+
+/// Saves settings the launcher already holds (startup, migration, content move).
+pub(crate) async fn store_settings(database: &Database, settings: &Settings) -> Result<Settings> {
     exclusive_write(write_settings(database.clone(), settings.clone())).await
 }
 
