@@ -40,7 +40,10 @@ pub(super) fn list_override_files(
         let file = archive
             .by_index(index)
             .map_err(|_| CoreError::ModpackArchive)?;
-        let name = file.name().replace('\\', "/");
+        let name = file
+            .name()
+            .map_err(|_| CoreError::ModpackArchive)?
+            .replace('\\', "/");
         let Some(relative) = relative_override(&name, prefixes) else {
             continue;
         };

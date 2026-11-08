@@ -158,9 +158,15 @@ pub(crate) async fn prepare_modpack_instance(
 pub(crate) fn detect_modpack_source(archive: &Path) -> Result<ModpackSource> {
     let file = std::fs::File::open(archive)?;
     let zip = zip::ZipArchive::new(file).map_err(|_| CoreError::ModpackArchive)?;
-    if zip.file_names().any(|name| name == "modrinth.index.json") {
+    if zip
+        .file_names()
+        .any(|name| name.is_ok_and(|name| name == "modrinth.index.json"))
+    {
         Ok(ModpackSource::Modrinth)
-    } else if zip.file_names().any(|name| name == "manifest.json") {
+    } else if zip
+        .file_names()
+        .any(|name| name.is_ok_and(|name| name == "manifest.json"))
+    {
         Ok(ModpackSource::Curseforge)
     } else {
         Err(CoreError::ModpackArchive)

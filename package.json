@@ -62,7 +62,9 @@
   },
   "pnpm": {
     "overrides": {
-      "shadcn>zod": ">=4.6.6"
+      "shadcn>zod": ">=4.6.6",
+      "@shadcn/registry>zod": ">=4.6.6",
+      "@ts-morph/common>minimatch": ">=11.0.1"
     }
   }
 }
