@@ -20,11 +20,11 @@ From the repository root:
 
 ```sh
 pnpm install --frozen-lockfile
-pnpm tauri dev
+pnpm dev
 ```
 
-The frontend development server starts automatically with `pnpm tauri dev`.
-For a frontend-only development server, run `pnpm dev`.
+The frontend development server starts automatically with `pnpm dev`.
+For a frontend-only development server, run `pnpm dev:web`.
 
 To build the release executable without an installer:
 
@@ -78,13 +78,12 @@ executable. See the [runtime](../internals/RUNTIME.md),
 Run these checks before submitting a PR:
 
 ```sh
-pnpm lint
-pnpm typecheck
-pnpm test
-cargo fmt --all --check
-cargo clippy --workspace --all-targets --locked -- -D warnings
-cargo test --workspace --locked
+pnpm check
 ```
+
+`pnpm check` runs the frontend checks (`pnpm check:web`: lint, typecheck,
+tests) and the Rust checks (`pnpm check:rust`: `cargo fmt --check`, Clippy,
+tests). Run either half on its own when you only touched one side.
 
 For build/packaging changes, also run the relevant build described in the
 development environment section above. Report checks you could not run and actual
