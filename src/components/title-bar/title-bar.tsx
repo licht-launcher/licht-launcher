@@ -1,14 +1,13 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { DownloadCloud, Minus } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
-
+import { usesNativeCaptionButtons } from "@/api/native-caption";
 import { Button } from "@/components/ui/button";
 import {
   getUpdateCheckStatus,
   INSTALL_UPDATE_EVENT,
   UPDATE_CHECK_STATUS_EVENT,
 } from "@/features/updater/components/update-check";
-import { usesNativeCaptionButtons } from "@/lib/native-caption";
 import { cn } from "@/lib/utils";
 
 const controlClass =

@@ -1,8 +1,7 @@
 import { ClockIcon, RefreshCwIcon, RotateCcwIcon } from "lucide-react";
 import { toast } from "sonner";
-
+import { restartApp } from "@/api/commands";
 import { Button } from "@/components/ui/button";
-import { restartApp } from "@/lib/commands";
 
 import { titleBarRestartToastStyles } from "./title-bar-restart-toast.styles";
 

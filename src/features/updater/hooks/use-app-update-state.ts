@@ -1,13 +1,13 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { parseAppUpdateState } from "@/api/app-update-state";
+import { getAppUpdateState } from "@/api/commands";
 import {
   getUpdateSimulation,
   subscribeUpdateSimulation,
 } from "@/features/updater/model/simulation";
 import { APP_VERSION } from "@/lib/app-release";
-import { parseAppUpdateState } from "@/lib/app-update-state";
-import { getAppUpdateState } from "@/lib/commands";
 import { messageOf } from "@/lib/errors";
 import type { AppUpdateState } from "@/lib/generated/AppUpdateState";
 

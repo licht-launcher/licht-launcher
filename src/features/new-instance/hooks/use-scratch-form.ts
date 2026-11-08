@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
-
+import { listLoaderBuilds } from "@/api/commands";
 import { versionsQueryOptions } from "@/features/instances/lib/versions-query";
 import { createVersionChoices } from "@/features/instances/model/create-versions";
 import {
@@ -9,7 +9,6 @@ import {
   platformNeedsLoader,
   type ScratchState,
 } from "@/features/new-instance/model/create-state";
-import { listLoaderBuilds } from "@/lib/commands";
 
 /**
  * The from-scratch form: its state, the version lists it depends on, and the

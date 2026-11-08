@@ -2,7 +2,12 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { CircleCheckIcon, OctagonXIcon, RefreshCwIcon } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
-
+import {
+  checkAppUpdate,
+  downloadAppUpdate,
+  installAppUpdate,
+  openStartupPreview,
+} from "@/api/commands";
 import { Button } from "@/components/ui/button";
 import { useStartupProgress } from "@/features/startup/hooks/use-startup-progress";
 import {
@@ -10,12 +15,6 @@ import {
   useAppUpdateState,
 } from "@/features/updater/hooks/use-app-update-state";
 import { getUpdateSimulation } from "@/features/updater/model/simulation";
-import {
-  checkAppUpdate,
-  downloadAppUpdate,
-  installAppUpdate,
-  openStartupPreview,
-} from "@/lib/commands";
 import { messageOf } from "@/lib/errors";
 import type { AppUpdatePhase } from "@/lib/generated/AppUpdatePhase";
 

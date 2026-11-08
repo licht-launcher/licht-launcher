@@ -1,13 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-
+import { getSettings } from "@/api/commands";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
 import { InstanceSettingsPanel } from "@/features/instance-settings/components/instance-settings-panel";
 import { InstanceSettingsSidebar } from "@/features/instance-settings/components/instance-settings-sidebar";
 import { useInstanceDraft } from "@/features/instance-settings/hooks/use-instance-draft";
 import type { InstanceSectionId } from "@/features/instance-settings/model/sections";
-import { getSettings } from "@/lib/commands";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 
 import { instanceSettingsDialogStyles } from "./instance-settings-dialog.styles";

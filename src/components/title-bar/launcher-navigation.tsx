@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-
+import { openFeedback, quitApp } from "@/api/commands";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -24,7 +24,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { SectionId } from "@/features/settings/model/sections";
-import { openFeedback, quitApp } from "@/lib/commands";
 import { friendlyError, messageOf } from "@/lib/errors";
 
 export function LauncherNavigation({

@@ -6,6 +6,7 @@ import {
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { listDownloadJobs } from "@/api/commands";
 import {
   ACTIVE_DOWNLOAD_QUERY_KEY,
   DOWNLOAD_JOBS_QUERY_KEY,
@@ -13,7 +14,6 @@ import {
   replaceDownloadSnapshot,
 } from "@/features/downloads/hooks/use-download-jobs";
 import { VERSIONS_QUERY_KEY } from "@/features/instances/lib/versions-query";
-import { listDownloadJobs } from "@/lib/commands";
 import { friendlyError, messageOf } from "@/lib/errors";
 import type { DownloadJobSnapshot } from "@/lib/generated/DownloadJobSnapshot";
 

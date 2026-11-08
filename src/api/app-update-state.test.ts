@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { parseAppUpdateState } from "@/api/app-update-state";
 import { appUpdateState } from "@/features/updater/fixtures/state";
-import { parseAppUpdateState } from "@/lib/app-update-state";
 
 describe("application update state boundary", () => {
   it("accepts the generated state shape", () => {

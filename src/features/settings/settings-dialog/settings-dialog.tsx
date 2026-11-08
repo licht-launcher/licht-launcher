@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
-
+import { onOpenSettingsRequest } from "@/api/shell-events";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
 import { SettingsPanel } from "@/features/settings/components/settings-panel";
 import { SettingsSidebar } from "@/features/settings/components/settings-sidebar";
 import { useSettingsDraft } from "@/features/settings/hooks/use-settings-draft";
 import type { SectionId } from "@/features/settings/model/sections";
-import { onOpenSettingsRequest } from "@/lib/shell-events";
 
 import { settingsDialogStyles } from "./settings-dialog.styles";
 

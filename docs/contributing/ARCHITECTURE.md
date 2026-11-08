@@ -34,7 +34,10 @@ events are throttled to approximately 100 ms. Shared types are generated with
 - `src/routes`: TanStack Router file-based routes that mount feature screens.
 - `src/features`: screens and feature-specific UI behavior.
 - `src/components/ui`: shared design-system components using theme tokens.
-- `src/lib`: UI utilities and typed invocation wrappers.
+- `src/api`: bridge to the Rust backend and Tauri: typed invocation wrappers,
+  Rust payload parsing, app events, and window/platform helpers.
+- `src/lib`: generic helpers (`cn`, error messages, formatting) and the
+  `ts-rs` types in `src/lib/generated`.
 
 The generated `src/routeTree.gen.ts` is committed so typechecking does not depend
 on a Vite build. Hash history (`/#/`) avoids requiring the Tauri window to rewrite

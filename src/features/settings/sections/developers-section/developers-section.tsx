@@ -1,6 +1,17 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { UserRound } from "lucide-react";
 import { useState, useSyncExternalStore } from "react";
+import {
+  closeStartupPreview,
+  openStartupPreview,
+  restartStartupPreview,
+} from "@/api/commands";
+import {
+  previewWindowSize,
+  resetWindowBounds,
+  WINDOW_SIZE_PRESETS,
+  type WindowSizePreset,
+} from "@/api/window-preview";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -32,19 +43,8 @@ import {
   setUpdateSimulation,
   subscribeUpdateSimulation,
 } from "@/features/updater/model/simulation";
-import {
-  closeStartupPreview,
-  openStartupPreview,
-  restartStartupPreview,
-} from "@/lib/commands";
 import { friendlyError, messageOf } from "@/lib/errors";
 import type { StartupPreviewScenario } from "@/lib/generated/StartupPreviewScenario";
-import {
-  previewWindowSize,
-  resetWindowBounds,
-  WINDOW_SIZE_PRESETS,
-  type WindowSizePreset,
-} from "@/lib/window-preview";
 
 import { developersSectionStyles } from "./developers-section.styles";
 

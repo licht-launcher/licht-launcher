@@ -36,7 +36,7 @@ const {
   resizeWindow: vi.fn(),
   resetWindow: vi.fn(),
 }));
-vi.mock("@/lib/commands", () => ({
+vi.mock("@/api/commands", () => ({
   openStartupPreview: openPreview,
   closeStartupPreview: closePreview,
   isStartupPreviewOpen: getPreviewOpen,
@@ -52,8 +52,8 @@ vi.mock("@tauri-apps/api/event", () => ({
     },
   ),
 }));
-vi.mock("@/lib/window-preview", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/window-preview")>()),
+vi.mock("@/api/window-preview", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/api/window-preview")>()),
   previewWindowSize: resizeWindow,
   resetWindowBounds: resetWindow,
 }));

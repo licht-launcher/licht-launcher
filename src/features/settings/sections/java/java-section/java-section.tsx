@@ -1,6 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-
+import {
+  browseJava,
+  detectJavaInstallations,
+  installRecommendedJava,
+  runtimeJava,
+} from "@/api/commands";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useJavaReady } from "@/features/settings/hooks/use-java-ready";
@@ -11,12 +16,6 @@ import {
   type JavaField,
 } from "@/features/settings/model/sections";
 import { JavaMajorRow } from "@/features/settings/sections/java/java-major-row";
-import {
-  browseJava,
-  detectJavaInstallations,
-  installRecommendedJava,
-  runtimeJava,
-} from "@/lib/commands";
 import { friendlyError, messageOf } from "@/lib/errors";
 
 import { javaSectionStyles } from "./java-section.styles";

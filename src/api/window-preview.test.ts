@@ -4,7 +4,7 @@ import {
   previewWindowSize,
   resetWindowBounds,
   type WindowSizePreset,
-} from "@/lib/window-preview";
+} from "@/api/window-preview";
 
 const { setSize, center } = vi.hoisted(() => ({
   setSize: vi.fn(),

@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   NATIVE_CAPTION_WIDTH_PX,
   usesNativeCaptionButtons,
-} from "@/lib/native-caption";
+} from "@/api/native-caption";
 
 describe("native-caption", () => {
   afterEach(() => {

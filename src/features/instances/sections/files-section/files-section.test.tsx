@@ -17,7 +17,7 @@ import type { InstanceFsEntry } from "@/lib/generated/InstanceFsEntry";
 
 const listInstanceEntries = vi.hoisted(() => vi.fn());
 
-vi.mock("@/lib/commands", () => ({
+vi.mock("@/api/commands", () => ({
   listInstanceEntries,
 }));
 

@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useRef, useState } from "react";
-import { isStartupPreviewOpen } from "@/lib/commands";
+import { isStartupPreviewOpen } from "@/api/commands";
 import { messageOf } from "@/lib/errors";
 
 export const STARTUP_PREVIEW_QUERY_KEY = [

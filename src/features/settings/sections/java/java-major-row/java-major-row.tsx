@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { DownloadIcon, FolderOpenIcon, SearchIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-
+import { javaInstallationStatus } from "@/api/commands";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useDebounced } from "@/features/settings/hooks/use-debounced";
@@ -10,7 +10,6 @@ import type { JavaMajor } from "@/features/settings/model/sections";
 import { JavaDetectDialog } from "@/features/settings/sections/java/java-detect-dialog";
 import { JavaMark } from "@/features/settings/sections/java/java-mark";
 import { mergeInstallations } from "@/features/settings/sections/java/merge-installations";
-import { javaInstallationStatus } from "@/lib/commands";
 import { friendlyError, messageOf } from "@/lib/errors";
 
 import { javaMajorRowStyles } from "./java-major-row.styles";

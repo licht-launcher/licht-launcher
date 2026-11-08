@@ -3,6 +3,7 @@ import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { PlusIcon } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef } from "react";
 import { useDefaultLayout } from "react-resizable-panels";
+import { getLastPlayedFolder } from "@/api/commands";
 import { LauncherNavigation } from "@/components/title-bar/launcher-navigation";
 import { TitleBar } from "@/components/title-bar/title-bar";
 import { Button } from "@/components/ui/button";
@@ -42,7 +43,6 @@ import { uniqueName } from "@/features/new-instance/model/create-state";
 import { PlayerAccountButton } from "@/features/settings/components/player-account-button";
 import { useCustomTitleBar } from "@/hooks/use-custom-title-bar";
 import { APP_CODENAME, APP_VERSION } from "@/lib/app-release";
-import { getLastPlayedFolder } from "@/lib/commands";
 import { cn } from "@/lib/utils";
 import type { HomeSearch } from "@/routes/_app/index";
 

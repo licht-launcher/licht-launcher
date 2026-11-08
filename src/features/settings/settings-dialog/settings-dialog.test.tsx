@@ -2,14 +2,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-
+import { requestOpenSettings } from "@/api/shell-events";
 import {
   invoke,
   mockSettingsCommands,
   renderSettings,
 } from "@/features/settings/fixtures/render-settings";
 import { SettingsDialog } from "@/features/settings/settings-dialog";
-import { requestOpenSettings } from "@/lib/shell-events";
 
 vi.mock("@tauri-apps/api/core", async () => {
   const { invoke: mocked } = await import(
