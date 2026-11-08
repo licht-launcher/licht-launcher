@@ -435,6 +435,40 @@ async fn concurrent_saves_leave_a_valid_file() {
     assert!((1..=16).contains(&loaded.download_concurrency));
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn reads_during_saves_never_mix_the_file_and_the_database() {
+    let cache = database("consistent-reads").await;
+    let mut light = sample(8);
+    light.theme = licht_core::LauncherTheme::Light;
+    light.username = "Alex".to_string();
+    let mut dark = sample(8);
+    dark.theme = licht_core::LauncherTheme::Dark;
+    dark.username = "Steve".to_string();
+    save_settings(&cache, &light).await.expect("first save");
+
+    let writer = {
+        let cache = cache.clone();
+        let (light, dark) = (light.clone(), dark.clone());
+        tokio::spawn(async move {
+            for index in 0..100 {
+                let next = if index % 2 == 0 { &dark } else { &light };
+                save_settings(&cache, next).await.expect("save");
+            }
+        })
+    };
+    // The theme lives in settings.json and the username in licht.db.
+    while !writer.is_finished() {
+        let loaded = load_settings(&cache).await.expect("load");
+        let pair = (loaded.theme, loaded.username.as_str());
+        assert!(
+            pair == (licht_core::LauncherTheme::Light, "Alex")
+                || pair == (licht_core::LauncherTheme::Dark, "Steve"),
+            "mixed read: {pair:?}"
+        );
+    }
+    writer.await.expect("writer");
+}
+
 #[tokio::test]
 async fn values_outside_one_to_sixteen_are_rejected_without_writing() {
     let cache = database("range").await;
