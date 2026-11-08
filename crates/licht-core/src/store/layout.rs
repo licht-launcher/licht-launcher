@@ -70,7 +70,7 @@ async fn prepare_profile(database: &Database, reporter: &StartupReporter) -> Res
     if !database.cache().root().join("settings.json").exists()
         || !settings::stored_in_database(database).await?
     {
-        settings::save_settings(database, &settings::load_settings(database).await?).await?;
+        settings::store_settings(database, &settings::load_settings(database).await?).await?;
     }
     relocation::apply(database, reporter).await?;
     let game = settings::game_cache(database).await?;
@@ -114,7 +114,7 @@ pub async fn run_startup_migration_preview(fail: bool, reporter: StartupReporter
         std::fs::create_dir_all(legacy.root().join("versions"))?;
         let database = Database::open(&legacy).await?;
         let saved = async {
-            settings::save_settings(&database, &settings::load_settings(&database).await?).await
+            settings::store_settings(&database, &settings::load_settings(&database).await?).await
         }
         .await;
         database.close().await;

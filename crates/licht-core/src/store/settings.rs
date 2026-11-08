@@ -223,7 +223,28 @@ pub fn configured_java(settings: &Settings, major: u32) -> Option<PathBuf> {
         _ => None,
     }?;
     let path = PathBuf::from(text);
-    path.is_file().then_some(path)
+    (path.is_file() && crate::runtime::is_java_executable(&path)).then_some(path)
+}
+
+/// Applies to new user input only. Values already stored are ignored at launch instead,
+/// because rejecting them on load or on an internal save would stop the launcher.
+fn check_java_executables(settings: &Settings) -> Result<()> {
+    let paths = [
+        &settings.java25,
+        &settings.java21,
+        &settings.java17,
+        &settings.java8,
+    ];
+    if paths
+        .into_iter()
+        .flatten()
+        .map(|path| path.trim())
+        .filter(|path| !path.is_empty())
+        .any(|path| !crate::runtime::is_java_executable(Path::new(path)))
+    {
+        return Err(CoreError::SettingsJava);
+    }
+    Ok(())
 }
 
 fn clean_java(value: Option<&str>) -> Result<Option<String>> {
@@ -408,15 +429,16 @@ struct FileSettings {
 }
 
 // Every save goes through one temporary file and one database row, so writers in this
-// process take turns. The write runs in its own task, so a cancelled caller cannot
-// release the lock while the write is still in progress.
-static SETTINGS_WRITES: std::sync::LazyLock<std::sync::Arc<tokio::sync::Mutex<()>>> =
+// process take turns, and readers wait for a save to finish both parts instead of mixing
+// an old file with a new row. The write runs in its own task, so a cancelled caller
+// cannot release the lock while the write is still in progress.
+static SETTINGS_LOCK: std::sync::LazyLock<std::sync::Arc<tokio::sync::RwLock<()>>> =
     std::sync::LazyLock::new(Default::default);
 
 async fn exclusive_write<T: Send + 'static>(
     work: impl std::future::Future<Output = Result<T>> + Send + 'static,
 ) -> Result<T> {
-    let guard = std::sync::Arc::clone(&SETTINGS_WRITES).lock_owned().await;
+    let guard = std::sync::Arc::clone(&SETTINGS_LOCK).write_owned().await;
     tokio::spawn(async move {
         let _guard = guard;
         work.await
@@ -435,6 +457,12 @@ async fn blocking<T: Send + 'static>(
 
 /// Settings of the profile that owns `database`. A missing `settings.json` means the defaults.
 pub async fn load_settings(database: &Database) -> Result<Settings> {
+    let _reading = SETTINGS_LOCK.read().await;
+    read_settings(database).await
+}
+
+/// Callers must hold [`SETTINGS_LOCK`], for reading or writing.
+async fn read_settings(database: &Database) -> Result<Settings> {
     let file = database.cache().clone();
     let mut settings = blocking(move || load_file_settings(&file)).await?;
     let mut connection = database.acquire().await?;
@@ -529,7 +557,14 @@ pub async fn settings_snapshot(database: &Database) -> Result<SettingsSnapshot> 
     })
 }
 
+/// Saves settings from the user, so Java paths must name a Java executable.
 pub async fn save_settings(database: &Database, settings: &Settings) -> Result<Settings> {
+    check_java_executables(settings)?;
+    store_settings(database, settings).await
+}
+
+/// Saves settings the launcher already holds (startup, migration, content move).
+pub(crate) async fn store_settings(database: &Database, settings: &Settings) -> Result<Settings> {
     exclusive_write(write_settings(database.clone(), settings.clone())).await
 }
 
@@ -582,7 +617,7 @@ pub async fn set_java_path(database: &Database, major: u32, path: &Path) -> Resu
     let text = Some(path.display().to_string());
     exclusive_write(async move {
         // Read inside the lock so a concurrent save cannot be overwritten with stale values.
-        let mut settings = load_settings(&database).await?;
+        let mut settings = read_settings(&database).await?;
         match major {
             25 => settings.java25 = text,
             21 => settings.java21 = text,
