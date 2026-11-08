@@ -603,6 +603,21 @@ async fn a_game_folder_with_its_own_settings_file_keeps_its_concurrency() {
     assert!(!game.root().join("licht.db").exists());
 }
 
+#[tokio::test]
+async fn a_java_setting_must_name_a_java_executable() {
+    let cache = database("java-name").await;
+    let script = cache.cache().root().join("run.sh");
+    std::fs::write(&script, b"#!/bin/sh").expect("script");
+    let mut settings = sample(8);
+    settings.java21 = Some(script.display().to_string());
+
+    let rejected = save_settings(&cache, &settings).await;
+
+    assert!(matches!(rejected, Err(CoreError::SettingsJava)));
+    // A value saved before this check, or edited by hand, is ignored at launch.
+    assert_eq!(configured_java(&settings, 21), None);
+}
+
 #[test]
 fn a_configured_java_is_used_only_when_the_file_exists() {
     let cache = SharedCache::at(
