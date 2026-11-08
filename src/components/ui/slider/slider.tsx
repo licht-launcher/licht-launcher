@@ -2,6 +2,8 @@ import { cn } from "cn";
 import { Slider as SliderPrimitive } from "radix-ui";
 import type * as React from "react";
 
+import { sliderStyles } from "./slider.styles";
+
 function Slider({
   className,
   defaultValue,
@@ -14,19 +16,16 @@ function Slider({
       data-slot="slider"
       defaultValue={defaultValue}
       value={value}
-      className={cn(
-        "relative flex w-full touch-none items-center select-none data-disabled:opacity-50",
-        className,
-      )}
+      className={cn(sliderStyles.root, className)}
       {...props}
     >
       <SliderPrimitive.Track
         data-slot="slider-track"
-        className="relative h-1.5 w-full grow overflow-hidden rounded-full bg-muted"
+        className={sliderStyles.track}
       >
         <SliderPrimitive.Range
           data-slot="slider-range"
-          className="absolute h-full bg-primary"
+          className={sliderStyles.range}
         />
       </SliderPrimitive.Track>
       {children}
@@ -36,7 +35,7 @@ function Slider({
         aria-labelledby={props["aria-labelledby"]}
         aria-describedby={props["aria-describedby"]}
         aria-valuetext={props["aria-valuetext"]}
-        className="relative z-20 block size-4 rounded-full border border-primary bg-white outline-none focus-visible:ring-3 focus-visible:ring-white/80"
+        className={sliderStyles.thumb}
       />
     </SliderPrimitive.Root>
   );

@@ -26,6 +26,9 @@ import {
 import type { SectionId } from "@/features/settings/model/sections";
 import { openFeedback, quitApp } from "@/lib/commands";
 import { friendlyError, messageOf } from "@/lib/errors";
+import { cn } from "@/lib/utils";
+
+import { launcherNavigationStyles } from "./launcher-navigation.styles";
 
 export function LauncherNavigation({
   libraryActive,
@@ -61,27 +64,33 @@ export function LauncherNavigation({
   }
 
   return (
-    <div className="flex shrink-0 items-center gap-1 px-2">
+    <div className={launcherNavigationStyles.root}>
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
         <DropdownMenuTrigger asChild>
           <Button
             type="button"
             variant="ghost"
             size="sm"
-            className="mr-1 h-7 shrink-0 gap-1 px-1.5 font-brand text-xs font-medium tracking-widest text-muted-foreground uppercase select-none hover:bg-transparent dark:hover:bg-transparent aria-expanded:bg-transparent"
+            className={launcherNavigationStyles.brandTrigger}
           >
             Licht Launcher
             {menuOpen ? (
-              <ChevronUpIcon aria-hidden className="size-3" />
+              <ChevronUpIcon
+                aria-hidden
+                className={launcherNavigationStyles.brandChevron}
+              />
             ) : (
-              <ChevronDownIcon aria-hidden className="size-3" />
+              <ChevronDownIcon
+                aria-hidden
+                className={launcherNavigationStyles.brandChevron}
+              />
             )}
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent
           aria-label="Licht menu"
           align="start"
-          className="font-brand"
+          className={launcherNavigationStyles.menu}
           onCloseAutoFocus={(event) => {
             const section = openingSettings.current;
             if (section !== null) {
@@ -117,13 +126,13 @@ export function LauncherNavigation({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <div className="flex shrink-0 items-center gap-0.5">
+      <div className={launcherNavigationStyles.history}>
         <Button
           type="button"
           variant="ghost"
           size="icon-sm"
           aria-label="Back"
-          className="text-muted-foreground"
+          className={launcherNavigationStyles.historyButton}
           disabled={!canGoBack}
           onClick={() => router.history.back()}
         >
@@ -134,7 +143,7 @@ export function LauncherNavigation({
           variant="ghost"
           size="icon-sm"
           aria-label="Forward"
-          className="text-muted-foreground"
+          className={launcherNavigationStyles.historyButton}
           disabled={!canGoForward}
           onClick={() => router.history.forward()}
         >
@@ -143,27 +152,36 @@ export function LauncherNavigation({
       </div>
       <nav
         aria-label="Main navigation"
-        className="ml-2 flex shrink-0 items-center gap-1"
+        className={launcherNavigationStyles.nav}
       >
         <Button
           type="button"
           variant="ghost"
           size="sm"
-          className="h-7 px-2 text-xs text-muted-foreground aria-[current=page]:border-foreground/20 aria-[current=page]:text-foreground"
+          className={cn(
+            launcherNavigationStyles.navButton,
+            launcherNavigationStyles.navButtonCurrent,
+          )}
           aria-current={libraryActive ? "page" : undefined}
           onClick={onOpenLibrary}
         >
-          <LibraryIcon aria-hidden className="size-3.5" />
+          <LibraryIcon
+            aria-hidden
+            className={launcherNavigationStyles.navIcon}
+          />
           Library
         </Button>
         <Button
           type="button"
           variant="ghost"
           size="sm"
-          className="h-7 px-2 text-xs text-muted-foreground"
+          className={launcherNavigationStyles.navButton}
           disabled
         >
-          <CompassIcon aria-hidden className="size-3.5" />
+          <CompassIcon
+            aria-hidden
+            className={launcherNavigationStyles.navIcon}
+          />
           Discover
         </Button>
       </nav>

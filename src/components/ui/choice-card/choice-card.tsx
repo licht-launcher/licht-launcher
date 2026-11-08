@@ -2,14 +2,9 @@ import type { ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 
-const iconTones = {
-  instance: "bg-instance/20 text-instance",
-  warning: "bg-warning/20 text-warning",
-  cool: "bg-accent-cool/20 text-accent-cool",
-  file: "bg-accent-file/20 text-accent-file",
-} as const;
+import { choiceCardStyles } from "./choice-card.styles";
 
-export type ChoiceCardIconTone = keyof typeof iconTones;
+export type ChoiceCardIconTone = keyof typeof choiceCardStyles.iconTones;
 
 export function ChoiceCard({
   title,
@@ -40,31 +35,29 @@ export function ChoiceCard({
       aria-pressed={selected}
       disabled={disabled}
       className={cn(
-        "flex h-auto w-full cursor-pointer flex-col items-start gap-3 rounded-lg border py-1 pl-1 pr-2.5 text-left text-foreground outline-none select-none",
-        "transition-[background-color,border-color,box-shadow] duration-200 ease-out",
-        "focus-visible:ring-3 focus-visible:ring-ring/50",
-        "disabled:pointer-events-none disabled:opacity-50",
-        "border-border/60 ring-3",
-        selected ? "bg-muted ring-primary" : "ring-primary/0",
+        choiceCardStyles.root,
+        selected
+          ? choiceCardStyles.rootSelected
+          : choiceCardStyles.rootUnselected,
         className,
       )}
       onClick={onSelect}
     >
-      <span className="flex flex-col items-start w-full gap-2">
-        <div className="flex items-center gap-2">
+      <span className={choiceCardStyles.body}>
+        <div className={choiceCardStyles.header}>
           {icon !== undefined ? (
             <span
               className={cn(
-                "flex border size-7 p-1.5 shrink-0 items-center justify-center overflow-hidden rounded-md transition-colors duration-200 ease-out",
+                choiceCardStyles.icon,
                 iconNeutral
-                  ? "bg-black/20 text-muted-foreground"
-                  : iconTones[iconTone],
+                  ? choiceCardStyles.iconNeutral
+                  : choiceCardStyles.iconTones[iconTone],
               )}
             >
               {icon}
             </span>
           ) : null}
-          <span className="block text-sm">{title}</span>
+          <span className={choiceCardStyles.title}>{title}</span>
         </div>
         {children}
       </span>

@@ -27,6 +27,8 @@ import { openRepository } from "@/lib/commands";
 import { friendlyError, messageOf } from "@/lib/errors";
 import { requestOpenSettings } from "@/lib/shell-events";
 
+import { appContextMenuStyles } from "./app-context-menu.styles";
+
 export function AppContextMenu({ children }: { children: ReactElement }) {
   const router = useRouter();
   useRouterState({
@@ -105,7 +107,9 @@ export function AppContextMenu({ children }: { children: ReactElement }) {
           >
             <RefreshCwIcon
               aria-hidden
-              className={checking ? "animate-spin" : undefined}
+              className={
+                checking ? appContextMenuStyles.checkingIcon : undefined
+              }
             />
             {checking ? "Checking for updates…" : "Check for updates"}
           </ContextMenuItem>

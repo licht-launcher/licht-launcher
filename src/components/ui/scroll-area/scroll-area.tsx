@@ -2,6 +2,8 @@ import { cn } from "cn";
 import { ScrollArea as ScrollAreaPrimitive } from "radix-ui";
 import type * as React from "react";
 
+import { scrollAreaStyles } from "./scroll-area.styles";
+
 function ScrollArea({
   className,
   children,
@@ -17,13 +19,13 @@ function ScrollArea({
   return (
     <ScrollAreaPrimitive.Root
       data-slot="scroll-area"
-      className={cn("relative", className)}
+      className={cn(scrollAreaStyles.root, className)}
       {...props}
     >
       <ScrollAreaPrimitive.Viewport
         ref={viewportRef}
         data-slot="scroll-area-viewport"
-        className="size-full rounded-[inherit] transition-[color,box-shadow] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1"
+        className={scrollAreaStyles.viewport}
       >
         {children}
       </ScrollAreaPrimitive.Viewport>
@@ -43,15 +45,12 @@ function ScrollBar({
       data-slot="scroll-area-scrollbar"
       data-orientation={orientation}
       orientation={orientation}
-      className={cn(
-        "flex touch-none p-px transition-colors select-none data-horizontal:h-2 data-horizontal:flex-col data-horizontal:border-t data-horizontal:border-t-transparent data-vertical:h-full data-vertical:w-2 data-vertical:border-l data-vertical:border-l-transparent",
-        className,
-      )}
+      className={cn(scrollAreaStyles.scrollbar, className)}
       {...props}
     >
       <ScrollAreaPrimitive.ScrollAreaThumb
         data-slot="scroll-area-thumb"
-        className="relative flex-1 rounded-full bg-muted-foreground/18 transition-colors duration-150 hover:bg-muted-foreground/28"
+        className={scrollAreaStyles.thumb}
       />
     </ScrollAreaPrimitive.ScrollAreaScrollbar>
   );

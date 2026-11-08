@@ -11,11 +11,7 @@ import {
 import { usesNativeCaptionButtons } from "@/lib/native-caption";
 import { cn } from "@/lib/utils";
 
-const controlClass =
-  "h-full w-14 shrink-0 rounded-none [&_svg:not([class*='size-'])]:size-4";
-
-const chipClass =
-  "h-6 max-w-36 gap-1.5 rounded-md border border-border/60 bg-muted/40 px-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground";
+import { titleBarStyles } from "./title-bar.styles";
 
 function currentWindow() {
   try {
@@ -51,24 +47,25 @@ export function TitleBar({
   }, []);
 
   return (
-    <header
-      data-title-bar
-      className="pointer-events-auto relative shrink-0 text-popover-foreground"
-    >
+    <header data-title-bar className={titleBarStyles.root}>
       <div
         className={cn(
-          "flex h-9 items-stretch",
-          nativeCaption && "pr-[var(--native-caption-inset)]",
+          titleBarStyles.bar,
+          nativeCaption && titleBarStyles.barNativeCaption,
         )}
       >
         {children}
-        <div data-tauri-drag-region className="min-w-0 flex-1" aria-hidden />
-        <div className="flex shrink-0 items-center gap-1.5 px-2 text-muted-foreground">
+        <div
+          data-tauri-drag-region
+          className={titleBarStyles.dragRegion}
+          aria-hidden
+        />
+        <div className={titleBarStyles.actions}>
           {updateAvailable ? (
             <Button
               type="button"
               variant="ghost"
-              className={cn(chipClass, "cursor-pointer")}
+              className={cn(titleBarStyles.chip, titleBarStyles.updateChip)}
               aria-label="Update"
               onClick={() => {
                 window.dispatchEvent(new Event(INSTALL_UPDATE_EVENT));
@@ -76,7 +73,7 @@ export function TitleBar({
             >
               <DownloadCloud
                 aria-hidden
-                className="size-3.5 shrink-0"
+                className={titleBarStyles.updateIcon}
                 strokeWidth={2}
               />
               Update
@@ -85,27 +82,28 @@ export function TitleBar({
           {actions}
         </div>
         {!windowControls || nativeCaption ? null : (
-          <div
-            data-window-controls
-            className="pointer-events-auto relative z-[60] flex shrink-0 items-stretch text-muted-foreground"
-          >
+          <div data-window-controls className={titleBarStyles.windowControls}>
             <Button
               type="button"
               variant="ghost"
-              className={controlClass}
+              className={titleBarStyles.control}
               aria-label="Minimize"
               onClick={() => {
                 void windowApi?.minimize();
               }}
             >
-              <Minus aria-hidden className="size-4" strokeWidth={1.75} />
+              <Minus
+                aria-hidden
+                className={titleBarStyles.minimizeIcon}
+                strokeWidth={1.75}
+              />
             </Button>
             <Button
               type="button"
               variant="ghost"
               className={cn(
-                controlClass,
-                "hover:bg-destructive/20 hover:text-destructive",
+                titleBarStyles.control,
+                titleBarStyles.closeControl,
               )}
               aria-label="Close"
               onClick={() => {
@@ -115,7 +113,7 @@ export function TitleBar({
               <svg
                 aria-hidden
                 viewBox="0 0 24 24"
-                className="size-5"
+                className={titleBarStyles.closeIcon}
                 fill="none"
               >
                 <path

@@ -2,6 +2,8 @@ import { type ReactNode, useEffect, useState } from "react";
 
 import { cn } from "@/lib/utils";
 
+import { revealStyles } from "./reveal.styles";
+
 /** A little over the 200ms transition, so the content is never cut short. */
 const COLLAPSE_MS = 250;
 
@@ -57,17 +59,14 @@ export function Reveal({
       data-state={expanded ? "open" : "closed"}
       inert={!expanded}
       className={cn(
-        "grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none",
-        expanded ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
+        revealStyles.root,
+        expanded ? revealStyles.rootExpanded : revealStyles.rootCollapsed,
         className,
       )}
     >
       {/* The side room keeps focus outlines from being clipped by the overflow. */}
-      <div
-        data-slot="reveal-clip"
-        className="-mx-1 min-h-0 overflow-hidden px-1"
-      >
-        <div className="py-1">{children}</div>
+      <div data-slot="reveal-clip" className={revealStyles.clip}>
+        <div className={revealStyles.content}>{children}</div>
       </div>
     </div>
   );

@@ -1,5 +1,7 @@
 import { Gauge } from "lucide-react";
 
+import { speedChartStyles } from "./speed-chart.styles";
+
 export type SpeedSample = { at: number; bytesPerSecond: number };
 export const SPEED_HISTORY_MS = 30_000;
 export const SPEED_SAMPLE_MS = 1000;
@@ -27,7 +29,7 @@ export function SpeedChart({
     kind?: "bars" | "line";
   }[];
 }) {
-  const colors = { violet: "text-accent-violet", cool: "text-accent-cool" };
+  const colors = speedChartStyles.colors;
   const end = Math.max(
     0,
     ...series.map((line) => line.samples.at(-1)?.at ?? 0),
@@ -84,24 +86,18 @@ export function SpeedChart({
   }
 
   return (
-    <section
-      aria-label={title}
-      className="flex min-w-0 flex-col rounded-lg border border-border/60 bg-black/20 p-4"
-    >
-      <h2 className="flex items-center gap-2 text-sm font-medium">
-        <Gauge aria-hidden className="size-4 text-muted-foreground" />
+    <section aria-label={title} className={speedChartStyles.root}>
+      <h2 className={speedChartStyles.title}>
+        <Gauge aria-hidden className={speedChartStyles.titleIcon} />
         {title}
       </h2>
-      <ul
-        aria-label="Speed legend"
-        className="mt-2 flex flex-wrap gap-x-6 gap-y-2 text-sm"
-      >
+      <ul aria-label="Speed legend" className={speedChartStyles.legend}>
         {visible.map((line) => (
-          <li key={line.label} className="flex items-center gap-2">
+          <li key={line.label} className={speedChartStyles.legendItem}>
             <svg
               aria-hidden
               viewBox="0 0 16 16"
-              className={`size-3 ${colors[line.color]}`}
+              className={`${speedChartStyles.legendSwatch} ${colors[line.color]}`}
               fill="none"
               stroke="currentColor"
               strokeWidth="2"
@@ -112,11 +108,9 @@ export function SpeedChart({
                 }
               />
             </svg>
-            <span className="text-xs font-medium text-muted-foreground">
-              {line.label}
-            </span>
+            <span className={speedChartStyles.legendLabel}>{line.label}</span>
             <span
-              className={`font-mono text-sm font-medium tabular-nums ${line.kind === "bars" ? "text-foreground" : "text-muted-foreground"}`}
+              className={`${speedChartStyles.legendValue} ${line.kind === "bars" ? speedChartStyles.legendValueBars : speedChartStyles.legendValueLine}`}
             >
               {formatSpeed(line.samples.at(-1)?.bytesPerSecond ?? 0)}
             </span>
@@ -128,7 +122,7 @@ export function SpeedChart({
         aria-label={`${title}. ${summary}. Last ${SPEED_HISTORY_MS / 1000} seconds.`}
         viewBox="0 0 1000 160"
         preserveAspectRatio="none"
-        className="mt-2 h-32 min-h-32 w-full flex-1"
+        className={speedChartStyles.chart}
       >
         <title>
           {title} over the last {SPEED_HISTORY_MS / 1000} seconds
@@ -137,7 +131,7 @@ export function SpeedChart({
           d="M0 10H1000 M0 80H1000 M0 150H1000"
           fill="none"
           stroke="currentColor"
-          className="text-border"
+          className={speedChartStyles.grid}
           vectorEffect="non-scaling-stroke"
         />
         {[...visible]
@@ -161,7 +155,7 @@ export function SpeedChart({
                 <polyline
                   key={line.label}
                   aria-label={`${line.label} line`}
-                  className={`${colors[line.color]} opacity-50`}
+                  className={`${colors[line.color]} ${speedChartStyles.line}`}
                   points={points(line.samples)}
                   fill="none"
                   stroke="currentColor"

@@ -10,6 +10,8 @@ import {
   PopoverContent,
 } from "@/components/ui/popover";
 
+import { comboboxStyles } from "./combobox.styles";
+
 export type ComboboxOption = { value: string; label: string };
 
 const ROW_HEIGHT = 32;
@@ -104,7 +106,7 @@ export function Combobox({
       }}
     >
       <PopoverAnchor asChild>
-        <div className={cn("relative", className)}>
+        <div className={cn(comboboxStyles.root, className)}>
           <Input
             ref={inputRef}
             id={id}
@@ -119,7 +121,7 @@ export function Combobox({
             autoComplete="off"
             disabled={disabled}
             placeholder={placeholder}
-            className="pr-8"
+            className={comboboxStyles.input}
             value={open && query !== null ? query : (selected?.label ?? "")}
             onFocus={openList}
             onClick={openList}
@@ -167,8 +169,8 @@ export function Combobox({
           <ChevronDownIcon
             aria-hidden
             className={cn(
-              "pointer-events-none absolute top-1/2 right-2.5 size-4 -translate-y-1/2 text-muted-foreground transition-transform duration-200",
-              open && "rotate-180",
+              comboboxStyles.chevron,
+              open && comboboxStyles.chevronOpen,
             )}
           />
         </div>
@@ -177,7 +179,7 @@ export function Combobox({
         container={container}
         align="start"
         collisionPadding={8}
-        className="w-(--radix-popover-trigger-width) p-1"
+        className={comboboxStyles.content}
         // The focus stays in the field; only the pointer uses the list.
         onOpenAutoFocus={(event) => {
           event.preventDefault();
@@ -203,15 +205,15 @@ export function Combobox({
           onMouseDown={(event) => {
             event.preventDefault();
           }}
-          className="max-h-[min(16rem,var(--radix-popper-available-height))] overflow-y-auto text-sm"
+          className={comboboxStyles.viewport}
         >
           {visible.length === 0 ? (
-            <p className="px-2 py-2 text-muted-foreground">{emptyText}</p>
+            <p className={comboboxStyles.empty}>{emptyText}</p>
           ) : (
             <div
               role="listbox"
               aria-label={ariaLabel}
-              className="relative w-full"
+              className={comboboxStyles.listbox}
               // Rows are absolutely placed; only the visible window is rendered.
               style={{ height: virtualizer.getTotalSize() }}
             >
@@ -230,9 +232,9 @@ export function Combobox({
                     aria-selected={isSelected}
                     tabIndex={-1}
                     className={cn(
-                      "absolute inset-x-0 top-0 flex cursor-pointer items-center justify-between rounded-md px-2 transition-colors",
-                      row.index === active && "bg-muted",
-                      isSelected && "font-medium",
+                      comboboxStyles.option,
+                      row.index === active && comboboxStyles.optionActive,
+                      isSelected && comboboxStyles.optionSelected,
                     )}
                     style={{
                       height: row.size,
@@ -247,7 +249,10 @@ export function Combobox({
                   >
                     {option.label}
                     {isSelected ? (
-                      <CheckIcon aria-hidden className="size-4 text-primary" />
+                      <CheckIcon
+                        aria-hidden
+                        className={comboboxStyles.checkIcon}
+                      />
                     ) : null}
                   </div>
                 );

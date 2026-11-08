@@ -4,14 +4,9 @@ import { Progress } from "@/components/ui/progress";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 
-const colors = {
-  primary: { fill: "fill-primary", marker: "bg-primary" },
-  warning: { fill: "fill-warning", marker: "bg-warning" },
-  chart1: { fill: "fill-chart-1", marker: "bg-chart-1" },
-  chart2: { fill: "fill-chart-2", marker: "bg-chart-2" },
-  chart3: { fill: "fill-chart-3", marker: "bg-chart-3" },
-  violet: { fill: "fill-accent-violet", marker: "bg-accent-violet" },
-};
+import { segmentedBarStyles } from "./segmented-bar.styles";
+
+const colors = segmentedBarStyles.colors;
 
 export type SegmentColor = keyof typeof colors;
 type Segment = {
@@ -69,18 +64,18 @@ export function SegmentedBar({
     <fieldset
       aria-label={`${label} chart`}
       aria-busy={loading}
-      className="flex w-full min-w-0 max-w-full flex-col gap-3"
+      className={segmentedBarStyles.root}
       onMouseOver={(event) => setHovered(segmentFrom(event.target))}
       onMouseLeave={() => setHovered(null)}
       onFocus={(event) => setHovered(segmentFrom(event.target))}
       onBlur={() => setHovered(null)}
     >
-      <div className="relative flex h-5 w-full min-w-0 max-w-full items-center overflow-hidden">
+      <div className={segmentedBarStyles.track}>
         <div
           role="img"
           aria-label={`${label}. ${summary}`}
           aria-hidden={loading}
-          className="flex w-full min-w-0 max-w-full items-center"
+          className={segmentedBarStyles.chart}
         >
           <svg
             aria-hidden
@@ -89,9 +84,13 @@ export function SegmentedBar({
             preserveAspectRatio="none"
             width="100%"
             height="12"
-            className="relative w-full min-w-0 max-w-full overflow-hidden rounded-full"
+            className={segmentedBarStyles.bar}
           >
-            <rect width="1000" height="12" className="fill-muted" />
+            <rect
+              width="1000"
+              height="12"
+              className={segmentedBarStyles.barBackground}
+            />
             {blocks.map((block) => (
               <rect
                 key={block.label}
@@ -103,10 +102,10 @@ export function SegmentedBar({
                 height="12"
                 className={cn(
                   colors[block.color].fill,
-                  "transition-opacity duration-200 ease-out motion-reduce:transition-none",
+                  segmentedBarStyles.segment,
                   active !== null && active !== block.label
-                    ? "opacity-25"
-                    : "opacity-100",
+                    ? segmentedBarStyles.segmentDimmed
+                    : segmentedBarStyles.segmentVisible,
                 )}
               />
             ))}
@@ -119,8 +118,10 @@ export function SegmentedBar({
             width="100%"
             height={highlighted ? 16 : 12}
             className={cn(
-              "pointer-events-none absolute top-1/2 left-0 w-full min-w-0 max-w-full -translate-y-1/2 overflow-hidden rounded-full transition-[height,opacity] duration-200 ease-out motion-reduce:transition-none",
-              highlighted ? "opacity-100" : "opacity-0",
+              segmentedBarStyles.highlight,
+              highlighted
+                ? segmentedBarStyles.highlightVisible
+                : segmentedBarStyles.highlightHidden,
             )}
           >
             {highlighted && (
@@ -137,19 +138,26 @@ export function SegmentedBar({
         {loading && (
           <Progress
             aria-label={`Loading ${label.toLowerCase()}`}
-            className="absolute top-1/2 left-0 h-3 -translate-y-1/2 motion-reduce:[&_[data-slot=progress-indicator]]:animate-none"
+            className={segmentedBarStyles.loading}
           />
         )}
       </div>
       <ul
         aria-label={`${label} breakdown`}
         className={cn(
-          "text-xs",
-          compact ? "grid grid-cols-3 gap-x-4 gap-y-2" : "flex flex-col gap-1",
+          segmentedBarStyles.legend,
+          compact
+            ? segmentedBarStyles.legendCompact
+            : segmentedBarStyles.legendRegular,
         )}
       >
         {segments.map((segment) => (
-          <li key={segment.label} className={compact ? "min-w-0" : undefined}>
+          <li
+            key={segment.label}
+            className={
+              compact ? segmentedBarStyles.legendItemCompact : undefined
+            }
+          >
             <Button
               type="button"
               variant="ghost"
@@ -162,25 +170,27 @@ export function SegmentedBar({
               disabled={loading}
               data-segment={segment.label}
               className={cn(
-                "h-auto w-full justify-between text-xs",
-                compact ? "gap-2 px-0 py-0.5" : "gap-3 px-1 py-1",
+                segmentedBarStyles.legendButton,
+                compact
+                  ? segmentedBarStyles.legendButtonCompact
+                  : segmentedBarStyles.legendButtonRegular,
                 active === segment.label
-                  ? "text-foreground"
-                  : "text-muted-foreground",
+                  ? segmentedBarStyles.legendButtonActive
+                  : segmentedBarStyles.legendButtonInactive,
               )}
             >
-              <span className="flex min-w-0 items-center gap-2">
+              <span className={segmentedBarStyles.legendLabel}>
                 <span
                   aria-hidden
-                  className={`size-2 shrink-0 rounded-sm ${colors[segment.color].marker}`}
+                  className={`${segmentedBarStyles.legendMarker} ${colors[segment.color].marker}`}
                 />
                 {segment.label}
               </span>
-              <span className="shrink-0 font-mono tabular-nums">
+              <span className={segmentedBarStyles.legendValue}>
                 {loading ? (
                   <Spinner
                     aria-label={`Loading ${segment.label}`}
-                    className="size-3"
+                    className={segmentedBarStyles.legendSpinner}
                   />
                 ) : (
                   segment.valueLabel

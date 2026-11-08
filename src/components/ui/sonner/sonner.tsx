@@ -7,24 +7,25 @@ import {
 } from "lucide-react";
 import { Toaster as Sonner, type ToasterProps } from "sonner";
 
+import { toasterStyles } from "./sonner.styles";
+
 function Toaster({ theme = "dark", ...props }: ToasterProps) {
   return (
     <Sonner
       theme={theme}
       closeButton
-      className="toaster group z-100"
+      className={toasterStyles.root}
       icons={{
-        success: <CircleCheckIcon className="size-4" />,
-        info: <InfoIcon className="size-4" />,
-        warning: <TriangleAlertIcon className="size-4" />,
-        error: <OctagonXIcon className="size-4" />,
-        loading: <Loader2Icon className="size-4 animate-spin" />,
+        success: <CircleCheckIcon className={toasterStyles.icon} />,
+        info: <InfoIcon className={toasterStyles.icon} />,
+        warning: <TriangleAlertIcon className={toasterStyles.icon} />,
+        error: <OctagonXIcon className={toasterStyles.icon} />,
+        loading: <Loader2Icon className={toasterStyles.loadingIcon} />,
       }}
       toastOptions={{
         classNames: {
-          toast: "cn-toast pointer-events-auto",
-          closeButton:
-            "absolute right-2 top-2 inline-flex size-5 items-center justify-center rounded-sm text-muted-foreground opacity-70 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          toast: toasterStyles.toast,
+          closeButton: toasterStyles.closeButton,
         },
       }}
       {...props}

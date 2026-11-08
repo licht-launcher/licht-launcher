@@ -2,6 +2,8 @@ import { type ComponentProps, useId } from "react";
 
 import { cn } from "@/lib/utils";
 
+import { cardStyles } from "./card.styles";
+
 export function Card({
   title,
   className,
@@ -12,20 +14,14 @@ export function Card({
     <section
       data-slot="card"
       aria-labelledby={title && !props["aria-label"] ? titleId : undefined}
-      className={cn(
-        "flex min-w-0 flex-col gap-4 rounded-xl border border-border bg-muted/60 p-4 leading-snug text-card-foreground [&_p]:leading-snug",
-        className,
-      )}
+      className={cn(cardStyles.root, className)}
       {...props}
     />
   );
 
   return title ? (
-    <div className="flex min-w-0 flex-col gap-2">
-      <h3
-        id={titleId}
-        className="px-3 text-xs font-normal text-muted-foreground"
-      >
+    <div className={cardStyles.wrapper}>
+      <h3 id={titleId} className={cardStyles.title}>
         {title}
       </h3>
       {content}

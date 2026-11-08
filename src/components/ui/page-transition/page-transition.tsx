@@ -1,6 +1,8 @@
 import { cn } from "cn";
 import { createContext, type ReactNode, useContext, useState } from "react";
 
+import { pageTransitionStyles } from "./page-transition.styles";
+
 const PageTransitionContext = createContext(false);
 
 export function PageTransition({
@@ -41,11 +43,11 @@ export function PageTransition({
         data-slot="page-transition"
         data-direction={direction}
         className={cn(
-          "flex h-full min-h-0 min-w-0 flex-1 flex-col",
+          pageTransitionStyles.root,
           animation.enabled &&
             (animation.alternate
-              ? "motion-safe:animate-page-enter-alternate"
-              : "motion-safe:animate-page-enter"),
+              ? pageTransitionStyles.enterAlternate
+              : pageTransitionStyles.enter),
         )}
         onAnimationEnd={(event) => {
           const name = animation.alternate

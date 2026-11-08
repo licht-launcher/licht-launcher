@@ -2,6 +2,8 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { UserRoundIcon } from "lucide-react";
 import { useState } from "react";
 
+import { skinHeadStyles } from "./skin-head.styles";
+
 export function SkinHead({ headPath }: { headPath?: string }) {
   const [failedPath, setFailedPath] = useState<string | null>(null);
   let source: string | null = null;
@@ -17,18 +19,18 @@ export function SkinHead({ headPath }: { headPath?: string }) {
     <span
       aria-hidden="true"
       data-slot="skin-head"
-      className="relative inline-flex size-4 shrink-0 items-center justify-center overflow-hidden rounded-xs bg-muted"
+      className={skinHeadStyles.root}
     >
       {source !== null ? (
         <img
           src={source}
           alt=""
           draggable={false}
-          className="size-full object-cover"
+          className={skinHeadStyles.image}
           onError={() => setFailedPath(headPath ?? null)}
         />
       ) : (
-        <UserRoundIcon className="size-3.5 text-muted-foreground" />
+        <UserRoundIcon className={skinHeadStyles.fallback} />
       )}
     </span>
   );

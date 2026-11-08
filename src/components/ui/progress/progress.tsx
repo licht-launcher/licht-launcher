@@ -4,6 +4,8 @@ import { cn } from "cn";
 import { Progress as ProgressPrimitive } from "radix-ui";
 import type * as React from "react";
 
+import { progressStyles } from "./progress.styles";
+
 function Progress({
   className,
   value,
@@ -14,20 +16,17 @@ function Progress({
   return (
     <ProgressPrimitive.Root
       data-slot="progress"
-      className={cn(
-        "relative flex h-1 w-full items-center overflow-x-hidden rounded-full bg-muted",
-        className,
-      )}
+      className={cn(progressStyles.root, className)}
       value={value}
       {...props}
     >
       <ProgressPrimitive.Indicator
         data-slot="progress-indicator"
         className={cn(
-          "size-full transition-all",
+          progressStyles.indicator,
           isIndeterminate
-            ? "progress-indeterminate w-2/5 bg-primary-soft"
-            : "flex-1 bg-primary",
+            ? progressStyles.indicatorIndeterminate
+            : progressStyles.indicatorDeterminate,
         )}
         style={
           isIndeterminate

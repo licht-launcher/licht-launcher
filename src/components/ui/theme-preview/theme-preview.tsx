@@ -1,6 +1,8 @@
 import { useId } from "react";
 import type { LauncherTheme } from "@/lib/generated/LauncherTheme";
 
+import { themePreviewStyles } from "./theme-preview.styles";
+
 const labels: Record<LauncherTheme, string> = {
   light: "Light theme preview",
   dark: "Dark theme preview",
@@ -10,19 +12,39 @@ const labels: Record<LauncherTheme, string> = {
 function WindowPalette({ theme }: { theme: Exclude<LauncherTheme, "system"> }) {
   return (
     <g data-theme-preview={theme}>
-      <rect width="180" height="110" className="fill-background" />
-      <rect width="180" height="16" className="fill-muted" />
-      <circle cx="9" cy="8" r="2" className="fill-muted-foreground" />
-      <circle cx="17" cy="8" r="2" className="fill-muted-foreground" />
-      <circle cx="25" cy="8" r="2" className="fill-muted-foreground" />
-      <rect y="16" width="44" height="94" className="fill-secondary" />
+      <rect width="180" height="110" className={themePreviewStyles.window} />
+      <rect width="180" height="16" className={themePreviewStyles.titleBar} />
+      <circle
+        cx="9"
+        cy="8"
+        r="2"
+        className={themePreviewStyles.windowControl}
+      />
+      <circle
+        cx="17"
+        cy="8"
+        r="2"
+        className={themePreviewStyles.windowControl}
+      />
+      <circle
+        cx="25"
+        cy="8"
+        r="2"
+        className={themePreviewStyles.windowControl}
+      />
+      <rect
+        y="16"
+        width="44"
+        height="94"
+        className={themePreviewStyles.sidebar}
+      />
       <rect
         x="8"
         y="28"
         width="28"
         height="5"
         rx="2"
-        className="fill-primary"
+        className={themePreviewStyles.sidebarActive}
       />
       <rect
         x="8"
@@ -30,7 +52,7 @@ function WindowPalette({ theme }: { theme: Exclude<LauncherTheme, "system"> }) {
         width="22"
         height="4"
         rx="2"
-        className="fill-muted-foreground/40"
+        className={themePreviewStyles.sidebarItem}
       />
       <rect
         x="8"
@@ -38,7 +60,7 @@ function WindowPalette({ theme }: { theme: Exclude<LauncherTheme, "system"> }) {
         width="26"
         height="4"
         rx="2"
-        className="fill-muted-foreground/40"
+        className={themePreviewStyles.sidebarItem}
       />
       <rect
         x="8"
@@ -46,7 +68,7 @@ function WindowPalette({ theme }: { theme: Exclude<LauncherTheme, "system"> }) {
         width="19"
         height="4"
         rx="2"
-        className="fill-muted-foreground/40"
+        className={themePreviewStyles.sidebarItem}
       />
       <rect
         x="56"
@@ -54,7 +76,7 @@ function WindowPalette({ theme }: { theme: Exclude<LauncherTheme, "system"> }) {
         width="68"
         height="6"
         rx="2"
-        className="fill-foreground/70"
+        className={themePreviewStyles.heading}
       />
       <rect
         x="56"
@@ -62,7 +84,7 @@ function WindowPalette({ theme }: { theme: Exclude<LauncherTheme, "system"> }) {
         width="110"
         height="30"
         rx="4"
-        className="fill-muted"
+        className={themePreviewStyles.panel}
       />
       <rect
         x="56"
@@ -70,7 +92,7 @@ function WindowPalette({ theme }: { theme: Exclude<LauncherTheme, "system"> }) {
         width="48"
         height="12"
         rx="3"
-        className="fill-primary"
+        className={themePreviewStyles.primaryAction}
       />
       <rect
         x="112"
@@ -78,9 +100,9 @@ function WindowPalette({ theme }: { theme: Exclude<LauncherTheme, "system"> }) {
         width="54"
         height="12"
         rx="3"
-        className="fill-secondary"
+        className={themePreviewStyles.secondaryAction}
       />
-      <path d="M0 16H180M44 16V110" className="fill-none stroke-border" />
+      <path d="M0 16H180M44 16V110" className={themePreviewStyles.divider} />
     </g>
   );
 }
@@ -92,7 +114,7 @@ export function ThemePreview({ theme }: { theme: LauncherTheme }) {
       role="img"
       aria-label={labels[theme]}
       viewBox="0 0 180 110"
-      className="block h-auto w-full overflow-hidden rounded-md border border-border"
+      className={themePreviewStyles.root}
     >
       <title>{labels[theme]}</title>
       {theme === "system" ? (
