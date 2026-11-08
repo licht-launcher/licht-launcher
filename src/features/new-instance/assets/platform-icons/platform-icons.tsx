@@ -8,6 +8,8 @@ import vanillaUrl from "@/assets/platforms/vanilla.svg?no-inline";
 import type { PlatformId } from "@/features/new-instance/model/create-state";
 import { cn } from "@/lib/utils";
 
+import { platformIconsStyles } from "./platform-icons.styles";
+
 const PLATFORM_ICON_URL: Record<PlatformId, string> = {
   vanilla: vanillaUrl,
   fabric: fabricUrl,
@@ -18,7 +20,7 @@ const PLATFORM_ICON_URL: Record<PlatformId, string> = {
 
 export function PlatformIcon({
   platform,
-  className = "size-5",
+  className = platformIconsStyles.defaultSize,
 }: {
   platform: PlatformId;
   className?: string;
@@ -27,7 +29,7 @@ export function PlatformIcon({
     <img
       src={PLATFORM_ICON_URL[platform]}
       alt=""
-      className={cn("aspect-square object-contain", className)}
+      className={cn(platformIconsStyles.root, className)}
       draggable={false}
     />
   );

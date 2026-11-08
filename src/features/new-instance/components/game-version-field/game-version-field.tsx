@@ -7,6 +7,8 @@ import { FormSection } from "@/features/new-instance/components/form-section";
 import type { ScratchState } from "@/features/new-instance/model/create-state";
 import type { VersionSummary } from "@/lib/generated/VersionSummary";
 
+import { gameVersionFieldStyles } from "./game-version-field.styles";
+
 export function GameVersionField({
   state,
   versions,
@@ -47,25 +49,25 @@ export function GameVersionField({
       description="Type to search. Missing versions install when you play."
     >
       {failed ? (
-        <div className="flex flex-col gap-2">
-          <p className="text-sm text-muted-foreground">
+        <div className={gameVersionFieldStyles.root}>
+          <p className={gameVersionFieldStyles.message}>
             Could not load the version list. Check your connection and try
             again.
           </p>
           <Button
             type="button"
             variant="outline"
-            className="self-start"
+            className={gameVersionFieldStyles.retryButton}
             onClick={onRetry}
           >
             Retry
           </Button>
         </div>
       ) : (
-        <div className="flex items-center gap-3">
+        <div className={gameVersionFieldStyles.row}>
           <Combobox
             aria-label="Game version"
-            className="flex-1"
+            className={gameVersionFieldStyles.combobox}
             options={choices}
             value={state.gameVersion}
             disabled={pending}
@@ -75,12 +77,12 @@ export function GameVersionField({
               onChange({ gameVersion, loaderVersion: "" });
             }}
           />
-          <div className="flex shrink-0 items-center gap-2 text-sm text-muted-foreground">
+          <div className={gameVersionFieldStyles.snapshotsToggle}>
             <Switch
               id="include-snapshots"
               aria-label="Include snapshots"
               checked={state.includeSnapshots}
-              className="data-[state=checked]:bg-warning"
+              className={gameVersionFieldStyles.snapshotsSwitch}
               disabled={pending}
               onCheckedChange={changeSnapshots}
             />

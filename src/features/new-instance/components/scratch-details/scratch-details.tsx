@@ -14,6 +14,8 @@ import {
 } from "@/features/new-instance/model/create-state";
 import type { VersionSummary } from "@/lib/generated/VersionSummary";
 
+import { scratchDetailsStyles } from "./scratch-details.styles";
+
 export function ScratchDetails({
   state,
   takenNames,
@@ -39,8 +41,8 @@ export function ScratchDetails({
   onChange: (patch: Partial<ScratchState>) => void;
 }) {
   return (
-    <div className="flex flex-col">
-      <div className="flex flex-col gap-5">
+    <div className={scratchDetailsStyles.root}>
+      <div className={scratchDetailsStyles.sections}>
         <NameField
           value={state.name}
           placeholder={
@@ -76,7 +78,7 @@ export function ScratchDetails({
         />
       </div>
       <Reveal open={platformNeedsLoader(state.platform)}>
-        <div className="pt-4">
+        <div className={scratchDetailsStyles.loaderOptions}>
           <LoaderOptions
             state={state}
             loaderState={loaderState}

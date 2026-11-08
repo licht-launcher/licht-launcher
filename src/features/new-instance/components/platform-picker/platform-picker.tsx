@@ -5,6 +5,8 @@ import {
   type PlatformId,
 } from "@/features/new-instance/model/create-state";
 
+import { platformPickerStyles } from "./platform-picker.styles";
+
 export function PlatformPicker({
   value,
   onChange,
@@ -13,12 +15,12 @@ export function PlatformPicker({
   onChange: (platform: PlatformId) => void;
 }) {
   return (
-    <fieldset className="flex min-w-0 flex-wrap gap-2">
-      <legend className="sr-only">Platform</legend>
+    <fieldset className={platformPickerStyles.root}>
+      <legend className={platformPickerStyles.legend}>Platform</legend>
       {PLATFORMS.map((platform) => (
         <ChoiceCard
           key={platform.id}
-          className="w-auto"
+          className={platformPickerStyles.card}
           title={platform.label}
           icon={<PlatformIcon platform={platform.id} />}
           iconNeutral

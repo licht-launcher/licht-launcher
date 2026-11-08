@@ -1,6 +1,8 @@
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { CreateFlow } from "@/features/new-instance/components/create-flow";
 
+import { createInstanceDialogStyles } from "./create-instance-dialog.styles";
+
 export function CreateInstanceDialog({
   open,
   onOpenChange,
@@ -12,7 +14,7 @@ export function CreateInstanceDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         aria-describedby={undefined}
-        className="flex max-h-[calc(100%-2rem)] flex-col gap-5 overflow-hidden px-4 py-6 sm:max-w-xl"
+        className={createInstanceDialogStyles.content}
       >
         {/* Unmounted on close, so every opening starts from the sources. */}
         <CreateFlow

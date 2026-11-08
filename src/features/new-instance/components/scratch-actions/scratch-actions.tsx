@@ -3,6 +3,8 @@ import { PlusIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
 
+import { scratchActionsStyles } from "./scratch-actions.styles";
+
 export function ScratchActions({
   creating,
   canCreate,
@@ -15,7 +17,7 @@ export function ScratchActions({
   onCreate: () => void;
 }) {
   return (
-    <DialogFooter className="-mx-4 -mb-6 bg-transparent border-none px-4 pt-0 sm:justify-between">
+    <DialogFooter className={scratchActionsStyles.root}>
       <Button
         type="button"
         variant="outline"

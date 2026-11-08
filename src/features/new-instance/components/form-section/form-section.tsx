@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 
+import { formSectionStyles } from "./form-section.styles";
+
 /** A titled block of the create form: icon, title, optional description, then content. */
 export function FormSection({
   icon: Icon,
@@ -21,18 +23,18 @@ export function FormSection({
   return (
     <section
       className={cn(
-        "flex flex-col gap-3",
-        divided && "border-t border-border/40 pt-5",
+        formSectionStyles.root,
+        divided && formSectionStyles.rootDivided,
       )}
     >
-      <div className="flex items-center gap-3">
-        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-          <Icon aria-hidden className="size-4" />
+      <div className={formSectionStyles.header}>
+        <div className={formSectionStyles.iconWell}>
+          <Icon aria-hidden className={formSectionStyles.icon} />
         </div>
         <div>
-          <h3 className="text-sm font-medium">{title}</h3>
+          <h3 className={formSectionStyles.title}>{title}</h3>
           {description === undefined ? null : (
-            <p className="text-xs text-muted-foreground">{description}</p>
+            <p className={formSectionStyles.description}>{description}</p>
           )}
         </div>
       </div>

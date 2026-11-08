@@ -15,6 +15,8 @@ import {
   type ScratchState,
 } from "@/features/new-instance/model/create-state";
 
+import { loaderOptionsStyles } from "./loader-options.styles";
+
 export function LoaderOptions({
   state,
   loaderState,
@@ -54,7 +56,7 @@ export function LoaderOptions({
         <Reveal
           open={loaderState === "ready" && state.loaderChannel === "manual"}
         >
-          <div className="pt-2">
+          <div className={loaderOptionsStyles.manualVersion}>
             <Select
               value={state.loaderVersion}
               onValueChange={(loaderVersion) => {

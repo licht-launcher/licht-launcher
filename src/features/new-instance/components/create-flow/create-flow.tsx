@@ -6,6 +6,8 @@ import { useInstanceNames } from "@/features/new-instance/hooks/use-instance-nam
 import { useScratchForm } from "@/features/new-instance/hooks/use-scratch-form";
 import { canCreateScratch } from "@/features/new-instance/model/create-state";
 
+import { createFlowStyles } from "./create-flow.styles";
+
 /** The popup's content: the from-scratch form, with its actions kept in view. */
 export function CreateFlow({ onClose }: { onClose: () => void }) {
   const takenNames = useInstanceNames();
@@ -27,10 +29,7 @@ export function CreateFlow({ onClose }: { onClose: () => void }) {
     <>
       <CreateHeader />
       {/* Only the form scrolls; the header and the actions stay in view. */}
-      <div
-        data-slot="create-scroll"
-        className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1"
-      >
+      <div data-slot="create-scroll" className={createFlowStyles.scrollArea}>
         <ScratchDetails
           state={state}
           takenNames={takenNames}

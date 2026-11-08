@@ -2,6 +2,8 @@ import { PencilLineIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { FormSection } from "@/features/new-instance/components/form-section";
 
+import { nameFieldStyles } from "./name-field.styles";
+
 export function NameField({
   value,
   placeholder,
@@ -18,10 +20,7 @@ export function NameField({
       title="Name your instance"
       description="You can rename it later from the library."
     >
-      <label
-        className="flex flex-col gap-1.5 text-sm font-medium"
-        htmlFor="instance-name"
-      >
+      <label className={nameFieldStyles.root} htmlFor="instance-name">
         <Input
           id="instance-name"
           aria-label="Instance Name"

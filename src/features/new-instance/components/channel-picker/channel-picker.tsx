@@ -10,6 +10,8 @@ import {
 } from "@/components/ui/tooltip";
 import type { LoaderChannel } from "@/features/new-instance/model/create-state";
 
+import { channelPickerStyles } from "./channel-picker.styles";
+
 const CHANNELS: { id: LoaderChannel; label: string; icon: ReactNode }[] = [
   {
     id: "stable",
@@ -80,8 +82,8 @@ export function ChannelPicker({
 }) {
   return (
     <TooltipProvider delayDuration={300}>
-      <fieldset className="flex min-w-0 flex-wrap gap-2">
-        <legend className="sr-only">Loader channel</legend>
+      <fieldset className={channelPickerStyles.root}>
+        <legend className={channelPickerStyles.legend}>Loader channel</legend>
         {CHANNELS.map((channel) => {
           const reason = unavailableReason(channel.id, {
             loader,
@@ -92,7 +94,7 @@ export function ChannelPicker({
           });
           const card = (
             <ChoiceCard
-              className="w-auto"
+              className={channelPickerStyles.card}
               title={channel.label}
               icon={channel.icon}
               iconNeutral
@@ -113,7 +115,7 @@ export function ChannelPicker({
                 <span
                   // biome-ignore lint/a11y/noNoninteractiveTabindex: lets keyboard users reach the reason a channel is disabled.
                   tabIndex={0}
-                  className="rounded-lg outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                  className={channelPickerStyles.disabledCardWrapper}
                 >
                   {card}
                 </span>
