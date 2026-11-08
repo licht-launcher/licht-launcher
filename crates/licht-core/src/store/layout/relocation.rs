@@ -227,7 +227,7 @@ pub(super) async fn apply(database: &Database, reporter: &StartupReporter) -> Re
             .to_string_lossy()
             .into_owned();
     }
-    crate::save_settings(database, &settings).await?;
+    crate::settings::store_settings(database, &settings).await?;
     // The checkpoint keeps the original roots until cleanup completes. Remapping is idempotent.
     for mapping in &mappings {
         remove_verified(&mapping.source, &mapping.destination, &mappings, reporter)?;
