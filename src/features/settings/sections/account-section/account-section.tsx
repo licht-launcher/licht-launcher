@@ -14,6 +14,8 @@ import {
 import { friendlyError, messageOf } from "@/lib/errors";
 import type { AccountProfile } from "@/lib/generated/AccountProfile";
 
+import { accountSectionStyles } from "./account-section.styles";
+
 export function AccountSection() {
   const queryClient = useQueryClient();
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -75,10 +77,12 @@ export function AccountSection() {
 
   return (
     <Card title="Account">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <h4 className="text-sm font-normal">Sign in with Microsoft</h4>
-          <p className="text-sm text-muted-foreground">
+      <div className={accountSectionStyles.row}>
+        <div className={accountSectionStyles.rowText}>
+          <h4 className={accountSectionStyles.rowLabel}>
+            Sign in with Microsoft
+          </h4>
+          <p className={accountSectionStyles.rowDescription}>
             Sign in to launch with your purchased game.
           </p>
         </div>
@@ -94,7 +98,7 @@ export function AccountSection() {
             <Loader2Icon
               data-icon="inline-start"
               aria-hidden
-              className="animate-spin"
+              className={accountSectionStyles.spinner}
             />
           ) : (
             <LogInIcon data-icon="inline-start" aria-hidden />
@@ -103,33 +107,32 @@ export function AccountSection() {
         </Button>
       </div>
       {begin.isPending ? (
-        <p className="text-sm text-muted-foreground">
+        <p className={accountSectionStyles.rowDescription}>
           Complete sign-in in your browser, then return here.
         </p>
       ) : null}
       {loginError !== null ? (
-        <p className="text-sm text-destructive" role="alert">
+        <p className={accountSectionStyles.error} role="alert">
           {loginError}
         </p>
       ) : null}
       {profiles.length > 0 ? (
-        <ul className="flex flex-col gap-2">
+        <ul className={accountSectionStyles.profiles}>
           {profiles.map((profile) => {
             const isActive = profile.uuid === activeUuid;
             return (
-              <li
-                key={profile.uuid}
-                className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2"
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-normal">{profile.name}</p>
-                  <p className="truncate font-mono text-xs text-muted-foreground">
+              <li key={profile.uuid} className={accountSectionStyles.profile}>
+                <div className={accountSectionStyles.profileText}>
+                  <p className={accountSectionStyles.profileName}>
+                    {profile.name}
+                  </p>
+                  <p className={accountSectionStyles.profileId}>
                     {profile.uuid}
                   </p>
                 </div>
-                <div className="flex shrink-0 gap-2">
+                <div className={accountSectionStyles.profileActions}>
                   {isActive ? (
-                    <span className="text-xs text-muted-foreground">
+                    <span className={accountSectionStyles.profileStatus}>
                       Active
                     </span>
                   ) : (

@@ -12,6 +12,8 @@ import { JavaSection } from "@/features/settings/sections/java/java-section";
 import { UpdaterSection } from "@/features/settings/sections/updater-section";
 import type { SettingsSnapshot } from "@/lib/generated/SettingsSnapshot";
 
+import { settingsPanelStyles } from "./settings-panel.styles";
+
 export function SettingsPanel({
   section,
   draft,
@@ -26,22 +28,22 @@ export function SettingsPanel({
   const page = SECTIONS.find((item) => item.id === section) ?? SECTIONS[0];
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+    <div className={settingsPanelStyles.root}>
       <ScrollArea
-        className="min-h-0 flex-1"
+        className={settingsPanelStyles.scrollArea}
         /* Radix top/bottom are inline; height:auto so h-full does not ignore bottom. */
         scrollbarStyle={{ top: "2.5rem", bottom: "0.75rem", height: "auto" }}
       >
         <PageTransition animationKey={section}>
-          <div className="flex flex-col gap-6 px-8 pt-8 pr-12 pb-8">
-            <div className="flex flex-col gap-0.5">
-              <h2 className="text-lg font-medium">{page.label}</h2>
-              <p className="text-sm leading-snug text-muted-foreground">
+          <div className={settingsPanelStyles.content}>
+            <div className={settingsPanelStyles.header}>
+              <h2 className={settingsPanelStyles.title}>{page.label}</h2>
+              <p className={settingsPanelStyles.description}>
                 {page.description}
               </p>
             </div>
             {section === "account" ? (
-              <div className="flex flex-col gap-8">
+              <div className={settingsPanelStyles.sections}>
                 <AccountSection />
                 <AppearanceSection draft={draft} onChange={onChange} />
                 <BehaviorSection draft={draft} onChange={onChange} />

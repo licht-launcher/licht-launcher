@@ -19,6 +19,8 @@ import {
 } from "@/lib/commands";
 import { friendlyError, messageOf } from "@/lib/errors";
 
+import { javaSectionStyles } from "./java-section.styles";
+
 export function JavaSection({
   draft,
   onChange,
@@ -80,7 +82,7 @@ export function JavaSection({
   }
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className={javaSectionStyles.root}>
       <Card title="Runtimes">
         {JAVA_MAJORS.map((row) => (
           <JavaMajorRow
@@ -103,11 +105,14 @@ export function JavaSection({
       </Card>
 
       <Card title="Launch options">
-        <div className="flex flex-col gap-0.5">
-          <label htmlFor="jvm-arguments" className="text-sm font-normal">
+        <div className={javaSectionStyles.groupText}>
+          <label htmlFor="jvm-arguments" className={javaSectionStyles.rowLabel}>
             Java arguments
           </label>
-          <p id="jvm-arguments-hint" className="text-sm text-muted-foreground">
+          <p
+            id="jvm-arguments-hint"
+            className={javaSectionStyles.rowDescription}
+          >
             Extra JVM flags, separated by spaces.
           </p>
         </div>

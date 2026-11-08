@@ -3,6 +3,8 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import type { JavaMajor } from "@/features/settings/model/sections";
 import { samePath } from "@/features/settings/sections/java/merge-installations";
 
+import { javaDetectDialogStyles } from "./java-detect-dialog.styles";
+
 export function JavaDetectDialog({
   open,
   onOpenChange,
@@ -20,19 +22,22 @@ export function JavaDetectDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl">
+      <DialogContent className={javaDetectDialogStyles.content}>
         <DialogTitle>{row.label}</DialogTitle>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="text-muted-foreground">
+        <div className={javaDetectDialogStyles.tableWrapper}>
+          <table className={javaDetectDialogStyles.table}>
+            <thead className={javaDetectDialogStyles.tableHead}>
               <tr>
-                <th className="pr-3 font-medium" scope="col">
+                <th className={javaDetectDialogStyles.headerCell} scope="col">
                   Versão
                 </th>
-                <th className="pr-3 font-medium" scope="col">
+                <th className={javaDetectDialogStyles.headerCell} scope="col">
                   Caminho
                 </th>
-                <th className="font-medium" scope="col">
+                <th
+                  className={javaDetectDialogStyles.lastHeaderCell}
+                  scope="col"
+                >
                   Ações
                 </th>
               </tr>
@@ -41,10 +46,10 @@ export function JavaDetectDialog({
               {installations.map((path) => {
                 const selected = samePath(path, value);
                 return (
-                  <tr key={path} className="border-t border-border">
-                    <td className="py-2 pr-3">{row.major}</td>
-                    <td className="py-2 pr-3 break-all">{path}</td>
-                    <td className="py-2">
+                  <tr key={path} className={javaDetectDialogStyles.row}>
+                    <td className={javaDetectDialogStyles.cell}>{row.major}</td>
+                    <td className={javaDetectDialogStyles.pathCell}>{path}</td>
+                    <td className={javaDetectDialogStyles.lastCell}>
                       <Button
                         type="button"
                         variant="outline"

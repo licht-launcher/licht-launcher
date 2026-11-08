@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 
+import { memoryInputStyles } from "./memory-input.styles";
+
 export function MemoryInput({
   valueMb,
   minimumMb,
@@ -17,10 +19,10 @@ export function MemoryInput({
     setText(String(valueMb));
   }, [valueMb]);
   return (
-    <div className="flex shrink-0 items-center gap-2">
+    <div className={memoryInputStyles.root}>
       <Input
         aria-label="Memory Allocation (MB)"
-        className="w-28"
+        className={memoryInputStyles.input}
         type="number"
         min={minimumMb}
         max={maximumMb}
@@ -54,7 +56,7 @@ export function MemoryInput({
           }
         }}
       />
-      <span className="text-sm text-muted-foreground">MB</span>
+      <span className={memoryInputStyles.unit}>MB</span>
     </div>
   );
 }

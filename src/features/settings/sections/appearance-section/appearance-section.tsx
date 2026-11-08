@@ -12,13 +12,23 @@ import { ThemePreview } from "@/components/ui/theme-preview";
 import type { Draft } from "@/features/settings/model/draft";
 import type { LauncherTheme } from "@/lib/generated/LauncherTheme";
 
+import { appearanceSectionStyles } from "./appearance-section.styles";
+
 const themes = [
-  { value: "dark", label: "Dark", icon: <MoonIcon className="size-4.5" /> },
-  { value: "light", label: "Light", icon: <SunIcon className="size-4.5" /> },
+  {
+    value: "dark",
+    label: "Dark",
+    icon: <MoonIcon className={appearanceSectionStyles.themeIcon} />,
+  },
+  {
+    value: "light",
+    label: "Light",
+    icon: <SunIcon className={appearanceSectionStyles.themeIcon} />,
+  },
   {
     value: "system",
     label: "System",
-    icon: <MonitorIcon className="size-4" />,
+    icon: <MonitorIcon className={appearanceSectionStyles.icon} />,
   },
 ] as const satisfies ReadonlyArray<{
   value: LauncherTheme;
@@ -35,10 +45,13 @@ export function AppearanceSection({
 }) {
   return (
     <Card title="Appearance">
-      <div className="flex items-center justify-between gap-3 text-sm">
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <span className="font-normal">Language</span>
-          <p id="language-hint" className="text-sm text-muted-foreground">
+      <div className={appearanceSectionStyles.row}>
+        <div className={appearanceSectionStyles.rowText}>
+          <span className={appearanceSectionStyles.rowLabel}>Language</span>
+          <p
+            id="language-hint"
+            className={appearanceSectionStyles.rowDescription}
+          >
             Choose the launcher's display language.
           </p>
         </div>
@@ -59,17 +72,23 @@ export function AppearanceSection({
       <fieldset
         aria-labelledby="color-theme-label"
         aria-describedby="color-theme-hint"
-        className="flex min-w-0 flex-col gap-3 text-sm"
+        className={appearanceSectionStyles.themeField}
       >
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <span id="color-theme-label" className="font-normal">
+        <div className={appearanceSectionStyles.rowText}>
+          <span
+            id="color-theme-label"
+            className={appearanceSectionStyles.rowLabel}
+          >
             Color theme
           </span>
-          <p id="color-theme-hint" className="text-sm text-muted-foreground">
+          <p
+            id="color-theme-hint"
+            className={appearanceSectionStyles.rowDescription}
+          >
             Choose the launcher's color theme.
           </p>
         </div>
-        <div className="flex gap-3">
+        <div className={appearanceSectionStyles.themeOptions}>
           {themes.map(({ value, label, icon }) => (
             <ChoiceCard
               key={value}
@@ -77,7 +96,7 @@ export function AppearanceSection({
               icon={icon}
               selected={draft.theme === value}
               onSelect={() => onChange({ theme: value })}
-              className="min-w-0 flex-1"
+              className={appearanceSectionStyles.themeOption}
             >
               <span aria-hidden="true">
                 <ThemePreview theme={value} />

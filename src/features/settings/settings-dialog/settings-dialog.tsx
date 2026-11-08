@@ -8,6 +8,8 @@ import { useSettingsDraft } from "@/features/settings/hooks/use-settings-draft";
 import type { SectionId } from "@/features/settings/model/sections";
 import { onOpenSettingsRequest } from "@/lib/shell-events";
 
+import { settingsDialogStyles } from "./settings-dialog.styles";
+
 export function SettingsDialog({
   open,
   onOpenChange,
@@ -43,7 +45,7 @@ export function SettingsDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
-        className="flex h-5/6 max-h-screen gap-0 overflow-hidden bg-popover p-0 sm:max-w-4xl"
+        className={settingsDialogStyles.content}
         onInteractOutside={(event) => {
           if (
             event.target instanceof Element &&
@@ -63,9 +65,9 @@ export function SettingsDialog({
             onChange={update}
           />
         ) : (
-          <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center p-6">
+          <div className={settingsDialogStyles.loading}>
             <Spinner
-              className="size-5 text-muted-foreground"
+              className={settingsDialogStyles.spinner}
               aria-label="Loading settings"
             />
           </div>

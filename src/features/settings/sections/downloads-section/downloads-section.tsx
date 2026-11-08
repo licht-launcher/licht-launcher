@@ -17,6 +17,8 @@ import {
 } from "@/lib/download-speed";
 import { friendlyError, messageOf } from "@/lib/errors";
 
+import { downloadsSectionStyles } from "./downloads-section.styles";
+
 export function DownloadsSection({
   draft,
   onChange,
@@ -37,29 +39,29 @@ export function DownloadsSection({
   });
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className={downloadsSectionStyles.root}>
       <Card title="Storage">
         <StoragePanel active embedded />
 
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-0.5">
+        <div className={downloadsSectionStyles.group}>
+          <div className={downloadsSectionStyles.groupText}>
             <label
               htmlFor="application-directory"
-              className="text-sm font-normal"
+              className={downloadsSectionStyles.rowLabel}
             >
               Application directory
             </label>
-            <p className="text-sm text-muted-foreground">
+            <p className={downloadsSectionStyles.rowDescription}>
               Where instances, game files, and managed Java runtimes are stored.
               Existing data will be moved after restart. Launcher settings and
               the database stay in your profile directory.
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className={downloadsSectionStyles.folderRow}>
             <Input
               id="application-directory"
               aria-label="Application directory"
-              className="min-w-0 flex-1"
+              className={downloadsSectionStyles.folderInput}
               value={draft.dataDirectory}
               onChange={(event) =>
                 onChange({ dataDirectory: event.target.value })
@@ -80,24 +82,24 @@ export function DownloadsSection({
         </div>
       </Card>
       <Card title="Network">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 flex-col gap-0.5">
+        <div className={downloadsSectionStyles.row}>
+          <div className={downloadsSectionStyles.rowText}>
             <label
               htmlFor="enable-download-speed-limit"
-              className="text-sm font-normal"
+              className={downloadsSectionStyles.rowLabel}
             >
               Limit download speed
             </label>
             <p
               id="download-speed-limit-hint"
-              className="text-sm text-muted-foreground"
+              className={downloadsSectionStyles.rowDescription}
             >
               Set a shared speed limit for game downloads.
             </p>
           </div>
           <Switch
             id="enable-download-speed-limit"
-            className="shrink-0"
+            className={downloadsSectionStyles.control}
             aria-describedby="download-speed-limit-hint"
             checked={speedLimitEnabled}
             onCheckedChange={(enabled) => {
@@ -107,24 +109,24 @@ export function DownloadsSection({
           />
         </div>
         {speedLimitEnabled ? (
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex min-w-0 flex-col gap-0.5">
+          <div className={downloadsSectionStyles.row}>
+            <div className={downloadsSectionStyles.rowText}>
               <label
                 htmlFor="download-speed-limit"
-                className="text-sm font-normal"
+                className={downloadsSectionStyles.rowLabel}
               >
                 Speed limit (kB/s)
               </label>
               <p
                 id="download-speed-value-hint"
-                className="text-sm text-muted-foreground"
+                className={downloadsSectionStyles.rowDescription}
               >
                 Enter the maximum download speed in kilobytes per second.
               </p>
             </div>
             <Input
               id="download-speed-limit"
-              className="w-28 shrink-0"
+              className={downloadsSectionStyles.numberInput}
               aria-describedby="download-speed-value-hint"
               type="number"
               min={0.001}
@@ -144,7 +146,7 @@ export function DownloadsSection({
         {speedLimitEnabled &&
         speedLimit !== null &&
         speedLimit !== "invalid" ? (
-          <p className="text-xs text-muted-foreground">
+          <p className={downloadsSectionStyles.note}>
             Downloads limited to {formatDownloadLimit(speedLimit)}
           </p>
         ) : null}

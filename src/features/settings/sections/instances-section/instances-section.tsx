@@ -7,6 +7,8 @@ import { useMemoryPreview } from "@/features/settings/hooks/use-memory-preview";
 import type { Draft } from "@/features/settings/model/draft";
 import type { SettingsSnapshot } from "@/lib/generated/SettingsSnapshot";
 
+import { instancesSectionStyles } from "./instances-section.styles";
+
 export function InstancesSection({
   draft,
   snapshot,
@@ -31,32 +33,41 @@ export function InstancesSection({
     else onChange({ maxMemoryMb });
   }
   return (
-    <div className="flex flex-col gap-8">
+    <div className={instancesSectionStyles.root}>
       <Card title="Game window" aria-label="Game window">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 flex-col gap-0.5">
-            <label htmlFor="fullscreen" className="text-sm font-normal">
+        <div className={instancesSectionStyles.row}>
+          <div className={instancesSectionStyles.rowText}>
+            <label
+              htmlFor="fullscreen"
+              className={instancesSectionStyles.rowLabel}
+            >
               Fullscreen
             </label>
-            <p id="fullscreen-hint" className="text-sm text-muted-foreground">
+            <p
+              id="fullscreen-hint"
+              className={instancesSectionStyles.rowDescription}
+            >
               The game starts in fullscreen. Width and height are not used.
             </p>
           </div>
           <Switch
             id="fullscreen"
-            className="shrink-0"
+            className={instancesSectionStyles.control}
             aria-label="Fullscreen"
             aria-describedby="fullscreen-hint"
             checked={draft.fullscreen}
             onCheckedChange={(fullscreen) => onChange({ fullscreen })}
           />
         </div>
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 flex-col gap-0.5">
-            <label htmlFor="width" className="text-sm font-normal">
+        <div className={instancesSectionStyles.row}>
+          <div className={instancesSectionStyles.rowText}>
+            <label htmlFor="width" className={instancesSectionStyles.rowLabel}>
               Window width
             </label>
-            <p id="width-hint" className="text-sm text-muted-foreground">
+            <p
+              id="width-hint"
+              className={instancesSectionStyles.rowDescription}
+            >
               Window width in pixels.
             </p>
           </div>
@@ -66,19 +77,22 @@ export function InstancesSection({
             min={1}
             inputMode="numeric"
             placeholder="854"
-            className="w-28 shrink-0"
+            className={instancesSectionStyles.numberInput}
             aria-describedby="width-hint"
             value={draft.width}
             disabled={draft.fullscreen}
             onChange={(event) => onChange({ width: event.target.value })}
           />
         </div>
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 flex-col gap-0.5">
-            <label htmlFor="height" className="text-sm font-normal">
+        <div className={instancesSectionStyles.row}>
+          <div className={instancesSectionStyles.rowText}>
+            <label htmlFor="height" className={instancesSectionStyles.rowLabel}>
               Window height
             </label>
-            <p id="height-hint" className="text-sm text-muted-foreground">
+            <p
+              id="height-hint"
+              className={instancesSectionStyles.rowDescription}
+            >
               Window height in pixels.
             </p>
           </div>
@@ -88,7 +102,7 @@ export function InstancesSection({
             min={1}
             inputMode="numeric"
             placeholder="480"
-            className="w-28 shrink-0"
+            className={instancesSectionStyles.numberInput}
             aria-describedby="height-hint"
             value={draft.height}
             disabled={draft.fullscreen}
@@ -98,9 +112,11 @@ export function InstancesSection({
       </Card>
 
       <Card title="Memory" aria-label="Memory">
-        <div className="flex flex-col gap-0.5">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-sm font-normal">Memory Allocation</span>
+        <div className={instancesSectionStyles.memoryField}>
+          <div className={instancesSectionStyles.row}>
+            <span className={instancesSectionStyles.rowLabel}>
+              Memory Allocation
+            </span>
             <MemoryInput
               valueMb={allocationMb}
               minimumMb={snapshot.memoryMinimumMb}
@@ -108,11 +124,11 @@ export function InstancesSection({
               onChange={updateMemory}
             />
           </div>
-          <p id="memory-hint" className="text-sm text-muted-foreground">
+          <p id="memory-hint" className={instancesSectionStyles.rowDescription}>
             Memory allocation. The minimum stays 512 MB.
           </p>
           {memoryPreview.totalMb !== null ? (
-            <p className="text-sm text-muted-foreground">
+            <p className={instancesSectionStyles.rowDescription}>
               Preview: {memoryPreview.totalMb / 1024} GiB RAM. Allocation edits
               are kept in this session.
             </p>

@@ -1,5 +1,7 @@
 import { CircleCheckIcon, CircleXIcon, LoaderCircleIcon } from "lucide-react";
 
+import { javaMarkStyles } from "./java-mark.styles";
+
 export function JavaMark({
   label,
   checking,
@@ -13,7 +15,7 @@ export function JavaMark({
     return (
       <LoaderCircleIcon
         role="img"
-        className="size-4 shrink-0 animate-spin text-muted-foreground"
+        className={javaMarkStyles.pending}
         aria-label={`Checking ${label}`}
       />
     );
@@ -22,11 +24,7 @@ export function JavaMark({
   return (
     <Icon
       role="img"
-      className={
-        valid
-          ? "size-4 shrink-0 text-primary"
-          : "size-4 shrink-0 text-destructive"
-      }
+      className={valid ? javaMarkStyles.found : javaMarkStyles.missing}
       aria-label={valid ? `${label} is valid` : `${label} is invalid`}
     />
   );

@@ -2,6 +2,8 @@ import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import type { Draft } from "@/features/settings/model/draft";
 
+import { behaviorSectionStyles } from "./behavior-section.styles";
+
 const preferences = [
   {
     field: "hardwareAcceleration",
@@ -39,18 +41,21 @@ export function BehaviorSection({
         if (field === "restoreOnGameExit" && !draft.minimizeOnGameStart)
           return null;
         return (
-          <div key={field} className="flex items-center justify-between gap-3">
-            <div className="flex min-w-0 flex-col gap-0.5">
-              <label htmlFor={field} className="text-sm font-normal">
+          <div key={field} className={behaviorSectionStyles.row}>
+            <div className={behaviorSectionStyles.rowText}>
+              <label htmlFor={field} className={behaviorSectionStyles.rowLabel}>
                 {label}
               </label>
-              <p id={`${field}-hint`} className="text-sm text-muted-foreground">
+              <p
+                id={`${field}-hint`}
+                className={behaviorSectionStyles.rowDescription}
+              >
                 {description}
               </p>
             </div>
             <Switch
               id={field}
-              className="shrink-0"
+              className={behaviorSectionStyles.control}
               aria-describedby={`${field}-hint`}
               checked={draft[field]}
               onCheckedChange={(checked) => onChange({ [field]: checked })}

@@ -8,6 +8,8 @@ import { messageOf } from "@/lib/errors";
 import type { StartupPhase } from "@/lib/generated/StartupPhase";
 import logo from "../../../../src-tauri/icons/128x128@2x.png?no-inline";
 
+import { startupScreenStyles } from "./startup-screen.styles";
+
 const labels: Record<StartupPhase, string> = {
   preparing: "Preparing launcher…",
   checkingUpdates: "Checking for updates…",
@@ -84,22 +86,22 @@ export function StartupScreen() {
       ? Math.min(100, (snapshot.processedBytes / snapshot.totalBytes) * 100)
       : undefined;
   return (
-    <ScrollArea className="h-full">
+    <ScrollArea className={startupScreenStyles.scrollArea}>
       <main
-        className="flex min-h-screen flex-col items-center justify-center gap-6 bg-sidebar p-6 text-center text-sidebar-foreground"
+        className={startupScreenStyles.root}
         aria-label="Launcher startup"
         aria-busy={closing.isPending}
       >
-        <h1 data-tauri-drag-region className="flex w-full justify-center">
+        <h1 data-tauri-drag-region className={startupScreenStyles.logoWrapper}>
           <img
             ref={logoRef}
             src={logo}
             alt="Licht Launcher"
             draggable={false}
-            className="pointer-events-none size-24 object-contain"
+            className={startupScreenStyles.logo}
           />
         </h1>
-        <div className="flex w-full max-w-xs flex-col gap-2">
+        <div className={startupScreenStyles.progress}>
           {!error && phase !== "ready" ? (
             <Progress
               value={value}
@@ -107,7 +109,7 @@ export function StartupScreen() {
             />
           ) : null}
           {phase === "downloadingUpdate" && snapshot ? (
-            <p className="text-xs text-muted-foreground">
+            <p className={startupScreenStyles.detail}>
               {formatBytes(snapshot.processedBytes)}
               {snapshot.totalBytes
                 ? ` / ${formatBytes(snapshot.totalBytes)}`
@@ -115,45 +117,49 @@ export function StartupScreen() {
               {value !== undefined ? ` · ${Math.floor(value)}%` : ""}
             </p>
           ) : snapshot && snapshot.processedFiles > 0 ? (
-            <p className="text-xs text-muted-foreground">
+            <p className={startupScreenStyles.detail}>
               {snapshot.processedFiles.toLocaleString()} files verified ·{" "}
               {formatBytes(snapshot.processedBytes)}
             </p>
           ) : null}
-          <p role="status" aria-live="polite" className="text-sm">
+          <p
+            role="status"
+            aria-live="polite"
+            className={startupScreenStyles.message}
+          >
             {labels[phase]}
           </p>
           {snapshot?.version ? (
-            <p className="text-xs text-muted-foreground">
+            <p className={startupScreenStyles.detail}>
               Update: {snapshot.version}
             </p>
           ) : null}
           {snapshot?.warning ? (
-            <p className="text-sm text-warning">{snapshot.warning}</p>
+            <p className={startupScreenStyles.warning}>{snapshot.warning}</p>
           ) : null}
           {snapshot?.preview ? (
-            <p className="text-xs font-medium text-warning">
+            <p className={startupScreenStyles.warningLabel}>
               Development preview · updates are simulated and migration uses
               temporary fixtures.
             </p>
           ) : null}
           {startup.eventError ? (
-            <p className="text-xs text-muted-foreground">
+            <p className={startupScreenStyles.detail}>
               Live progress is unavailable. Polling startup status.
             </p>
           ) : null}
           {error ? (
-            <p role="alert" className="text-sm text-destructive">
+            <p role="alert" className={startupScreenStyles.error}>
               {error}
             </p>
           ) : null}
           {reveal.error ? (
-            <p role="alert" className="text-sm text-destructive">
+            <p role="alert" className={startupScreenStyles.error}>
               Could not prepare the startup window: {reveal.error.message}
             </p>
           ) : null}
           {closing.error ? (
-            <p role="alert" className="text-sm text-destructive">
+            <p role="alert" className={startupScreenStyles.error}>
               Could not close preview: {messageOf(closing.error)}
             </p>
           ) : null}

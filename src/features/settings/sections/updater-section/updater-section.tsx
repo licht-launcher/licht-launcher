@@ -60,35 +60,38 @@ export function UpdaterSection({
       : undefined;
   return (
     <Card title="Launcher updates">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <label htmlFor="automatic-updates" className="text-sm font-normal">
+      <div className={updaterSectionStyles.row}>
+        <div className={updaterSectionStyles.rowText}>
+          <label
+            htmlFor="automatic-updates"
+            className={updaterSectionStyles.rowLabel}
+          >
             Automatic updates
           </label>
           <p
             id="automatic-updates-hint"
-            className="text-sm text-muted-foreground"
+            className={updaterSectionStyles.rowDescription}
           >
             Check and download updates in the background.
           </p>
         </div>
         <Switch
           id="automatic-updates"
-          className="shrink-0"
+          className={updaterSectionStyles.control}
           aria-describedby="automatic-updates-hint"
           checked={draft.automaticUpdates}
           onCheckedChange={(automaticUpdates) => onChange({ automaticUpdates })}
         />
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5 text-sm">
+      <div className={updaterSectionStyles.statusRow}>
+        <div className={updaterSectionStyles.statusText}>
           <p>Version {appReleaseLabel}</p>
           <p
             role="status"
             className={
               state?.phase === "ready"
-                ? "text-green-500"
-                : "text-muted-foreground"
+                ? updaterSectionStyles.statusReady
+                : updaterSectionStyles.statusIdle
             }
           >
             {state?.phase === "ready" && state.version
@@ -98,7 +101,7 @@ export function UpdaterSection({
                 : "Loading update status…"}
           </p>
           {state?.phase === "cached" && state.version ? (
-            <p className="text-sm text-muted-foreground">
+            <p className={updaterSectionStyles.rowDescription}>
               Cached version: {state.version}
             </p>
           ) : null}
@@ -139,12 +142,12 @@ export function UpdaterSection({
         <Progress value={percentage} aria-label="Update download progress" />
       ) : null}
       {error ? (
-        <p role="alert" className="text-sm text-destructive">
+        <p role="alert" className={updaterSectionStyles.error}>
           {error}
         </p>
       ) : null}
       {query.eventError ? (
-        <p className="text-xs text-muted-foreground">
+        <p className={updaterSectionStyles.note}>
           Live update progress is unavailable. Polling update status.
         </p>
       ) : null}
@@ -153,3 +156,5 @@ export function UpdaterSection({
 }
 
 import { DownloadCloud, RefreshCwIcon } from "lucide-react";
+
+import { updaterSectionStyles } from "./updater-section.styles";

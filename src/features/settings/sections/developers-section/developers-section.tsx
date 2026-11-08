@@ -46,6 +46,8 @@ import {
   type WindowSizePreset,
 } from "@/lib/window-preview";
 
+import { developersSectionStyles } from "./developers-section.styles";
+
 const concurrencyControls = [
   {
     key: "downloadConcurrency",
@@ -128,23 +130,29 @@ export function DevelopersSection({
   });
 
   return (
-    <section aria-label="Developer Tools" className="flex flex-col gap-8">
+    <section
+      aria-label="Developer Tools"
+      className={developersSectionStyles.root}
+    >
       <Card title="Player">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 flex-col gap-0.5">
-            <label htmlFor="offline-username" className="text-sm font-normal">
+        <div className={developersSectionStyles.row}>
+          <div className={developersSectionStyles.rowText}>
+            <label
+              htmlFor="offline-username"
+              className={developersSectionStyles.rowLabel}
+            >
               Offline username
             </label>
             <p
               id="offline-username-hint"
-              className="text-sm text-muted-foreground"
+              className={developersSectionStyles.rowDescription}
             >
               Used when no Microsoft account is active.
             </p>
           </div>
           <Input
             id="offline-username"
-            className="w-40 shrink-0"
+            className={developersSectionStyles.usernameInput}
             startIcon={<UserRound aria-hidden />}
             value={draft.username}
             autoComplete="nickname"
@@ -154,26 +162,26 @@ export function DevelopersSection({
         </div>
       </Card>
       <Card title="Window">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 flex-col gap-0.5">
+        <div className={developersSectionStyles.row}>
+          <div className={developersSectionStyles.rowText}>
             <label
               htmlFor="disable-custom-title-bar"
-              className="text-sm font-normal"
+              className={developersSectionStyles.rowLabel}
             >
               System title bar
             </label>
             <div
               id="disable-custom-title-bar-hint"
-              className="flex flex-col gap-0.5 text-sm"
+              className={developersSectionStyles.windowSize}
             >
-              <p className="text-muted-foreground">
+              <p className={developersSectionStyles.windowSizeValue}>
                 Use the operating system title bar instead of Licht's.
               </p>
             </div>
           </div>
           <Switch
             id="disable-custom-title-bar"
-            className="shrink-0"
+            className={developersSectionStyles.control}
             aria-describedby="disable-custom-title-bar-hint"
             checked={draft.disableCustomTitleBar}
             onCheckedChange={(disableCustomTitleBar) =>
@@ -182,17 +190,19 @@ export function DevelopersSection({
           />
         </div>
         <div
-          className="flex flex-col gap-3"
+          className={developersSectionStyles.group}
           aria-busy={windowPreview.isPending}
         >
-          <div className="flex flex-col gap-0.5">
-            <h4 className="text-sm font-normal">Window size presets</h4>
-            <p className="text-sm text-muted-foreground">
+          <div className={developersSectionStyles.groupText}>
+            <h4 className={developersSectionStyles.rowLabel}>
+              Window size presets
+            </h4>
+            <p className={developersSectionStyles.rowDescription}>
               Temporarily resize the launcher to test layouts at its supported
               sizes.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className={developersSectionStyles.presets}>
             {WINDOW_SIZE_PRESETS.map((preset) => (
               <Button
                 key={preset.id}
@@ -206,12 +216,14 @@ export function DevelopersSection({
               </Button>
             ))}
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <h4 className="text-sm font-normal">Restore window</h4>
+          <div className={developersSectionStyles.wrapRow}>
+            <div className={developersSectionStyles.wrapRowText}>
+              <h4 className={developersSectionStyles.rowLabel}>
+                Restore window
+              </h4>
               <p
                 id="reset-window-bounds-hint"
-                className="text-sm text-muted-foreground"
+                className={developersSectionStyles.rowDescription}
               >
                 Restore the default size and center the window.
               </p>
@@ -228,7 +240,7 @@ export function DevelopersSection({
             </Button>
           </div>
           {windowPreview.error ? (
-            <p role="alert" className="text-sm text-destructive">
+            <p role="alert" className={developersSectionStyles.error}>
               {friendlyError(messageOf(windowPreview.error))}
             </p>
           ) : null}
@@ -236,15 +248,17 @@ export function DevelopersSection({
       </Card>
       <Card title="Transfers">
         {concurrencyControls.map((control) => (
-          <div key={control.key} className="flex flex-col gap-3">
-            <div className="flex flex-col gap-0.5">
-              <div className="flex items-baseline justify-between gap-3 text-sm">
+          <div key={control.key} className={developersSectionStyles.group}>
+            <div className={developersSectionStyles.groupText}>
+              <div className={developersSectionStyles.transferHeader}>
                 <span id={`${control.key}-label`}>{control.label}</span>
-                <span className="text-muted-foreground">
+                <span className={developersSectionStyles.windowSizeValue}>
                   {draft[control.key]}
                 </span>
               </div>
-              <p className="text-sm text-muted-foreground">{control.hint}</p>
+              <p className={developersSectionStyles.rowDescription}>
+                {control.hint}
+              </p>
             </div>
             <Slider
               aria-labelledby={`${control.key}-label`}
@@ -261,18 +275,18 @@ export function DevelopersSection({
       </Card>
       <Card title="Testing">
         {import.meta.env.DEV && (
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex min-w-0 flex-col gap-0.5">
+          <div className={developersSectionStyles.group}>
+            <div className={developersSectionStyles.row}>
+              <div className={developersSectionStyles.rowText}>
                 <label
                   htmlFor="simulate-memory"
-                  className="text-sm font-normal"
+                  className={developersSectionStyles.rowLabel}
                 >
                   Simulate memory
                 </label>
                 <p
                   id="simulate-memory-hint"
-                  className="text-sm text-muted-foreground"
+                  className={developersSectionStyles.rowDescription}
                 >
                   Preview Memory Allocation in Instances with a different RAM
                   size.
@@ -280,7 +294,7 @@ export function DevelopersSection({
               </div>
               <Switch
                 id="simulate-memory"
-                className="shrink-0"
+                className={developersSectionStyles.control}
                 aria-describedby="simulate-memory-hint"
                 checked={memoryPreview.totalMb !== null}
                 onCheckedChange={(enabled) =>
@@ -289,8 +303,11 @@ export function DevelopersSection({
               />
             </div>
             {memoryPreview.totalMb !== null ? (
-              <div className="flex items-center justify-between gap-3">
-                <label htmlFor="simulated-ram" className="text-sm font-normal">
+              <div className={developersSectionStyles.row}>
+                <label
+                  htmlFor="simulated-ram"
+                  className={developersSectionStyles.rowLabel}
+                >
                   Simulated RAM
                 </label>
                 <Select
@@ -322,14 +339,17 @@ export function DevelopersSection({
             ) : null}
           </div>
         )}
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 flex-col gap-0.5">
-            <label htmlFor="simulate-update" className="text-sm font-normal">
+        <div className={developersSectionStyles.row}>
+          <div className={developersSectionStyles.rowText}>
+            <label
+              htmlFor="simulate-update"
+              className={developersSectionStyles.rowLabel}
+            >
               Simulate available update
             </label>
             <p
               id="simulate-update-hint"
-              className="text-sm text-muted-foreground"
+              className={developersSectionStyles.rowDescription}
             >
               Show an update notification and action without checking for a
               release.
@@ -337,24 +357,24 @@ export function DevelopersSection({
           </div>
           <Switch
             id="simulate-update"
-            className="shrink-0"
+            className={developersSectionStyles.control}
             aria-describedby="simulate-update-hint"
             checked={simulateUpdate}
             onCheckedChange={setUpdateSimulation}
           />
         </div>
         {import.meta.env.DEV && (
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <div className={developersSectionStyles.wrapRow}>
+            <div className={developersSectionStyles.wrapRowText}>
               <label
                 htmlFor="simulate-storage-loading"
-                className="text-sm font-normal"
+                className={developersSectionStyles.rowLabel}
               >
                 Simulate storage loading
               </label>
               <p
                 id="simulate-storage-loading-hint"
-                className="text-sm text-muted-foreground"
+                className={developersSectionStyles.rowDescription}
               >
                 Open Downloads and keep storage loading until this is turned
                 off.
@@ -362,7 +382,7 @@ export function DevelopersSection({
             </div>
             <Switch
               id="simulate-storage-loading"
-              className="shrink-0"
+              className={developersSectionStyles.control}
               aria-describedby="simulate-storage-loading-hint"
               checked={storageLoading}
               onCheckedChange={(enabled) =>
@@ -371,15 +391,17 @@ export function DevelopersSection({
             />
           </div>
         )}
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-0.5">
-            <h4 className="text-sm font-normal">Startup preview</h4>
-            <p className="text-sm text-muted-foreground">
+        <div className={developersSectionStyles.group}>
+          <div className={developersSectionStyles.groupText}>
+            <h4 className={developersSectionStyles.rowLabel}>
+              Startup preview
+            </h4>
+            <p className={developersSectionStyles.rowDescription}>
               Open a separate startup preview, or restart the launcher with the
               selected scenario. Updates and migrations use simulated data.
             </p>
           </div>
-          <div className="flex flex-col gap-0.5">
+          <div className={developersSectionStyles.groupText}>
             <Select
               disabled={previewBusy || previewOpen}
               value={scenario}
@@ -391,7 +413,7 @@ export function DevelopersSection({
               <SelectTrigger
                 id="startup-test-scenario"
                 aria-label="Startup test scenario"
-                className="w-full"
+                className={developersSectionStyles.previewSelect}
               >
                 <SelectValue />
               </SelectTrigger>
@@ -404,13 +426,13 @@ export function DevelopersSection({
               </SelectContent>
             </Select>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className={developersSectionStyles.presets}>
             <Button
               size="default"
               variant={previewOpen ? "outline" : "default"}
               className={
                 previewOpen
-                  ? "border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  ? developersSectionStyles.closePreviewButton
                   : undefined
               }
               disabled={previewBusy}
@@ -428,12 +450,12 @@ export function DevelopersSection({
             </Button>
           </div>
           {previewError ? (
-            <p role="alert" className="text-sm text-destructive">
+            <p role="alert" className={developersSectionStyles.error}>
               {messageOf(previewError)}
             </p>
           ) : null}
           {previewState.eventError ? (
-            <p className="text-xs text-muted-foreground">
+            <p className={developersSectionStyles.note}>
               Live preview status is unavailable. Polling window state.
             </p>
           ) : null}

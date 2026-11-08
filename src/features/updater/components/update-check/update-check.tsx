@@ -19,6 +19,8 @@ import {
 import { messageOf } from "@/lib/errors";
 import type { AppUpdatePhase } from "@/lib/generated/AppUpdatePhase";
 
+import { updateCheckStyles } from "./update-check.styles";
+
 export {
   DEV_CLEAR_SIMULATED_UPDATE_EVENT,
   DEV_SIMULATE_UPDATE_EVENT,
@@ -86,19 +88,19 @@ function showCheckToast(
     (id) => (
       <div
         role={status === "failed" ? "alert" : "status"}
-        className="pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-xl border border-border bg-popover p-3 text-popover-foreground"
+        className={updateCheckStyles.toast}
       >
         <Icon
           aria-hidden
           className={
             status === "checking"
-              ? "size-4 shrink-0 animate-spin"
-              : "size-4 shrink-0"
+              ? updateCheckStyles.spinner
+              : updateCheckStyles.icon
           }
         />
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <p className="text-sm font-medium">{title}</p>
-          <p className="text-sm text-muted-foreground">{description}</p>
+        <div className={updateCheckStyles.toastText}>
+          <p className={updateCheckStyles.toastTitle}>{title}</p>
+          <p className={updateCheckStyles.toastDescription}>{description}</p>
         </div>
         <Button
           type="button"
@@ -196,14 +198,14 @@ export function UpdateCheck() {
     toast.dismiss("manual-update-check");
     toast.custom(
       (id) => (
-        <div className="pointer-events-auto flex w-full max-w-sm flex-col gap-3 rounded-xl border border-border bg-popover p-3 text-popover-foreground">
-          <div className="flex flex-col gap-0.5">
-            <p className="text-sm font-medium">Update ready</p>
-            <p className="text-sm text-muted-foreground">
+        <div className={updateCheckStyles.prompt}>
+          <div className={updateCheckStyles.promptText}>
+            <p className={updateCheckStyles.toastTitle}>Update ready</p>
+            <p className={updateCheckStyles.toastDescription}>
               Version {state.version} is ready. Restart to apply.
             </p>
           </div>
-          <div className="flex items-center justify-end gap-2">
+          <div className={updateCheckStyles.promptActions}>
             <Button
               type="button"
               variant="outline"

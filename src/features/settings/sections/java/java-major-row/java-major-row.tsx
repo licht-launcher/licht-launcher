@@ -13,6 +13,8 @@ import { mergeInstallations } from "@/features/settings/sections/java/merge-inst
 import { javaInstallationStatus } from "@/lib/commands";
 import { friendlyError, messageOf } from "@/lib/errors";
 
+import { javaMajorRowStyles } from "./java-major-row.styles";
+
 export function JavaMajorRow({
   row,
   value,
@@ -68,13 +70,10 @@ export function JavaMajorRow({
   const installations = mergeInstallations(found, runtimePath);
 
   return (
-    <div className="flex flex-col gap-2">
-      <label
-        className="flex flex-col gap-0.5 text-sm leading-snug"
-        htmlFor={row.field}
-      >
-        <span className="font-normal">{row.label}</span>
-        <span className="flex items-center gap-2">
+    <div className={javaMajorRowStyles.root}>
+      <label className={javaMajorRowStyles.text} htmlFor={row.field}>
+        <span className={javaMajorRowStyles.label}>{row.label}</span>
+        <span className={javaMajorRowStyles.status}>
           <Input
             id={row.field}
             placeholder="path/to/java"
@@ -85,7 +84,7 @@ export function JavaMajorRow({
           <JavaMark label={row.label} checking={checking} valid={valid} />
         </span>
       </label>
-      <div className="flex flex-wrap gap-2">
+      <div className={javaMajorRowStyles.actions}>
         <Button
           type="button"
           variant="outline"

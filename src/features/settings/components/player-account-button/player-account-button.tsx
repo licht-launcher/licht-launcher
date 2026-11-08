@@ -23,6 +23,8 @@ import {
 import { friendlyError, messageOf } from "@/lib/errors";
 import type { AccountProfile } from "@/lib/generated/AccountProfile";
 
+import { playerAccountButtonStyles } from "./player-account-button.styles";
+
 export function PlayerAccountButton({
   onAddAccount,
 }: {
@@ -66,18 +68,20 @@ export function PlayerAccountButton({
           type="button"
           variant="ghost"
           size="sm"
-          className="h-7 max-w-48 justify-start gap-2 rounded-md px-2 text-xs text-muted-foreground data-[state=open]:border-foreground/20 data-[state=open]:bg-muted data-[state=open]:text-foreground"
+          className={playerAccountButtonStyles.trigger}
           aria-label={`Account: ${username}`}
         >
           <SkinHead key={activeUuid || username} headPath={headPath} />
-          <span className="truncate">{username}</span>
+          <span className={playerAccountButtonStyles.triggerName}>
+            {username}
+          </span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
         side="bottom"
         align="end"
         aria-label="Player accounts"
-        className="min-w-56 font-brand"
+        className={playerAccountButtonStyles.menu}
         onCloseAutoFocus={(event) => {
           if (openingSettings.current) {
             event.preventDefault();
@@ -86,16 +90,13 @@ export function PlayerAccountButton({
         }}
       >
         {accounts.isPending ? (
-          <p
-            role="status"
-            className="px-2 py-1.5 text-xs text-muted-foreground"
-          >
+          <p role="status" className={playerAccountButtonStyles.menuMessage}>
             Loading accounts…
           </p>
         ) : null}
         {accounts.isError ? (
           <>
-            <p role="alert" className="px-2 py-1.5 text-xs text-destructive">
+            <p role="alert" className={playerAccountButtonStyles.menuError}>
               Could not load accounts.
             </p>
             <DropdownMenuItem
@@ -109,7 +110,7 @@ export function PlayerAccountButton({
           </>
         ) : null}
         {accounts.isSuccess && accounts.data.length === 0 ? (
-          <p className="px-2 py-1.5 text-xs text-muted-foreground">
+          <p className={playerAccountButtonStyles.menuMessage}>
             No Microsoft accounts added
           </p>
         ) : null}
