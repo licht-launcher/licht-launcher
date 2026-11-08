@@ -37,6 +37,7 @@
 ## UI and design system (consistency over creativity)
 
 - Use **only** the components in `src/components/ui` and the **theme tokens** (CSS variables). If a component is missing, propose adding it to the design system instead of creating a one-off style.
+- One folder per component with `<name>.tsx`, `<name>.styles.ts` (Tailwind classes), `<name>.test.tsx` and `index.ts`. Components added with the shadcn CLI must be moved into this layout. See `docs/contributing/ARCHITECTURE.md`.
 - **Forbidden:** inline styles, loose colors/sizes (e.g. `#3b82f6`, `w-[137px]`) outside the tokens, and any new UI library without my approval.
 - Before creating a screen, **list the existing components** that will be used and which ones are missing.
 - Accessibility: everything operable by keyboard, with visible focus and correct labels (Radix already helps; do not remove that).
