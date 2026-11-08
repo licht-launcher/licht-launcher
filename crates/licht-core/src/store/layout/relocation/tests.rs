@@ -97,7 +97,9 @@ async fn changing_directory_moves_content_after_restart_and_keeps_the_profile() 
         .await
         .expect("artifact");
     service.shutdown().await.expect("shutdown");
-    let mut connection = super::super::db::open_db(&home).await.expect("database");
+    let mut connection = super::super::db::open_migrated(&home)
+        .await
+        .expect("database");
     sqlx::query("INSERT INTO native_generations VALUES (?1, '1.21', 'fingerprint', 'generation')")
         .bind(source.root().to_str().expect("source path"))
         .execute(&mut connection)
@@ -222,7 +224,9 @@ async fn changing_directory_moves_content_after_restart_and_keeps_the_profile() 
         Some(target.root().join("runtime/java").display().to_string())
     );
     service.shutdown().await.expect("shutdown");
-    let mut connection = super::super::db::open_db(&home).await.expect("database");
+    let mut connection = super::super::db::open_migrated(&home)
+        .await
+        .expect("database");
     let artifact: String =
         sqlx::query_scalar("SELECT path FROM download_job_artifacts WHERE job_id = ?1")
             .bind(&job.id)
@@ -259,7 +263,9 @@ async fn changing_directory_moves_content_after_restart_and_keeps_the_profile() 
 }
 
 async fn stored_roots(home: &SharedCache) -> (Option<String>, Option<String>, bool) {
-    let mut connection = super::super::db::open_db(home).await.expect("database");
+    let mut connection = super::super::db::open_migrated(home)
+        .await
+        .expect("database");
     let roots = sqlx::query_as(
         "SELECT active_content_root, pending_content_root, pending_copied FROM settings",
     )
@@ -282,7 +288,9 @@ async fn content_roots_live_in_the_settings_row() {
         stored_roots(&home).await,
         (Some(game.root().display().to_string()), None, false)
     );
-    let mut connection = super::super::db::open_db(&home).await.expect("database");
+    let mut connection = super::super::db::open_migrated(&home)
+        .await
+        .expect("database");
     let legacy_state: Option<String> =
         sqlx::query_scalar("SELECT value FROM meta WHERE key = 'content_directory_state'")
             .fetch_optional(&mut connection)
@@ -302,7 +310,9 @@ async fn a_row_from_before_content_roots_adopts_the_current_directory() {
         .expect("game");
     fs::write(game.root().join("file"), b"original").expect("file");
     // Rows written before schema 12 have no content roots yet.
-    let mut connection = super::super::db::open_db(&home).await.expect("database");
+    let mut connection = super::super::db::open_migrated(&home)
+        .await
+        .expect("database");
     sqlx::query("UPDATE settings SET active_content_root = NULL, pending_content_root = NULL, pending_copied = 0")
         .execute(&mut connection)
         .await

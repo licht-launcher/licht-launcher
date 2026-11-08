@@ -257,7 +257,9 @@ mod tests {
         initialize_at(&legacy, &home)
             .await
             .expect("repeat initialization");
-        let mut connection = super::super::db::open_db(&home).await.expect("database");
+        let mut connection = super::super::db::open_migrated(&home)
+            .await
+            .expect("database");
         for job in &jobs {
             let path: String =
                 sqlx::query_scalar("SELECT path FROM download_job_artifacts WHERE job_id = ?1")

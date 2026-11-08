@@ -1,10 +1,11 @@
 use sqlx::Connection;
 
+use crate::open_migrated;
 use licht_core::{
     Arch, CoreError, DownloadComponent, DownloadJobOperation, DownloadJobSnapshot,
     DownloadJobStatus, DownloadJobUpdate, DownloadManager, DownloadPhase, DownloadProgress,
     LaunchEnvironment, OsName, SharedCache, create_download_job, get_download_job,
-    list_download_jobs, open_db, recover_download_jobs, update_download_job,
+    list_download_jobs, recover_download_jobs, update_download_job,
 };
 
 #[tokio::test]
@@ -291,7 +292,9 @@ async fn pending_instance_removal_rejects_repairs_and_standalone_java_tasks() {
     .await
     .expect("repair");
     let java = fixture.create("Java target").await;
-    let mut connection = open_db(fixture.settings.cache()).await.expect("database");
+    let mut connection = open_migrated(fixture.settings.cache())
+        .await
+        .expect("database");
     sqlx::query("UPDATE download_jobs SET instance_folder = NULL, java_major = 21 WHERE id = ?1")
         .bind(&java.id)
         .execute(&mut connection)
@@ -465,7 +468,9 @@ async fn unsafe_contexts_and_invalid_progress_are_rejected_without_changing_the_
 async fn invalid_database_payloads_fail_explicitly_instead_of_disappearing_from_the_list() {
     let fixture = Fixture::new("corrupt-data").await;
     let job = fixture.create("Survival").await;
-    let mut connection = open_db(fixture.settings.cache()).await.expect("database");
+    let mut connection = open_migrated(fixture.settings.cache())
+        .await
+        .expect("database");
     sqlx::query("UPDATE download_jobs SET progress = 'not JSON' WHERE id = ?1")
         .bind(&job.id)
         .execute(&mut connection)
@@ -523,7 +528,9 @@ async fn indexed_cleanup_preserves_active_shared_partials_and_complete_files() {
             progress(1, 11, 11),
         )
         .await;
-    let mut connection = open_db(fixture.settings.cache()).await.expect("database");
+    let mut connection = open_migrated(fixture.settings.cache())
+        .await
+        .expect("database");
     for (id, name) in [
         (&cancelled.id, "exclusive.jar"),
         (&cancelled.id, "shared.jar"),

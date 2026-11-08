@@ -545,7 +545,9 @@ async fn invalidation_keeps_existing_binaries_and_allows_a_fresh_generation() {
 async fn a_database_publication_failure_leaves_no_reusable_generation() {
     let fixture = Fixture::new().await;
     let version = fixture.version("natives-windows", &[("native.dll", b"native")]);
-    let mut connection = crate::open_db(&fixture.home).await.expect("connection");
+    let mut connection = crate::store::db::open_migrated(&fixture.home)
+        .await
+        .expect("connection");
     sqlx::raw_sql("CREATE TRIGGER reject_native_cache BEFORE INSERT ON native_generations BEGIN SELECT RAISE(ABORT, 'native cache fixture'); END;")
         .execute(&mut connection).await.expect("trigger");
     assert!(
@@ -682,7 +684,9 @@ async fn invalid_database_paths_are_rebuilt_without_escaping_the_cache() {
     )
     .await
     .expect("first");
-    let mut connection = crate::open_db(&fixture.home).await.expect("database");
+    let mut connection = crate::store::db::open_migrated(&fixture.home)
+        .await
+        .expect("database");
     sqlx::query("UPDATE native_generations SET generation = '../outside'")
         .execute(&mut connection)
         .await
@@ -742,7 +746,9 @@ async fn output_metadata_failure_rolls_back_the_previous_generation_reference() 
         .expect("root")
         .join(platform(&windows()));
     fs::remove_file(parent.join(&original.generation).join("native.dll")).expect("force rebuild");
-    let mut connection = crate::open_db(&fixture.home).await.expect("database");
+    let mut connection = crate::store::db::open_migrated(&fixture.home)
+        .await
+        .expect("database");
     sqlx::raw_sql("CREATE TRIGGER reject_native_output BEFORE INSERT ON native_outputs BEGIN SELECT RAISE(ABORT, 'output metadata fixture'); END;")
         .execute(&mut connection).await.expect("trigger");
     assert!(

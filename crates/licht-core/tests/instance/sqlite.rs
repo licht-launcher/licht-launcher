@@ -1,6 +1,7 @@
 use super::*;
+use crate::open_migrated;
 use licht_core::{
-    InstanceSource, SharedCache, configure_instance_version, create_pending_instance, open_db,
+    InstanceSource, SharedCache, configure_instance_version, create_pending_instance,
 };
 use sqlx::Connection;
 
@@ -149,7 +150,7 @@ async fn rejected_database_writes_preserve_profiles_and_clean_incomplete_folders
             .expect("invalid settings rejected"),
         original
     );
-    let mut connection = open_db(&cache).await.expect("connection");
+    let mut connection = open_migrated(&cache).await.expect("connection");
     sqlx::raw_sql("CREATE TRIGGER reject_instance_write BEFORE INSERT ON instances BEGIN SELECT RAISE(ABORT, 'rejected fixture write'); END;").execute(&mut connection).await.expect("reject writes");
     assert!(
         update_instance(&client, &instances, "World", &settings())
@@ -216,7 +217,9 @@ async fn deleting_a_profile_and_its_modpack_index_is_transactional() {
     create_instance(&client, &instances, "World", "1.20.1", &plain_template())
         .await
         .expect("create");
-    let mut connection = open_db(&SharedCache::at(&root)).await.expect("connection");
+    let mut connection = open_migrated(&SharedCache::at(&root))
+        .await
+        .expect("connection");
     sqlx::query("INSERT INTO modpack_indexes (instances_directory, instance_folder, name) VALUES (?1, 'World', 'Pack')")
         .bind(instances.to_str().expect("path")).execute(&mut connection).await.expect("modpack index");
     sqlx::raw_sql("CREATE TRIGGER reject_instance_delete BEFORE DELETE ON instances BEGIN SELECT RAISE(ABORT, 'rejected fixture deletion'); END;")
@@ -257,7 +260,7 @@ async fn deleting_a_profile_and_its_modpack_index_is_transactional() {
 async fn version_six_gains_an_empty_instances_table_and_preserves_existing_data() {
     let root = scratch("sqlite-schema-six");
     let cache = SharedCache::at(&root);
-    let mut connection = open_db(&cache).await.expect("database");
+    let mut connection = open_migrated(&cache).await.expect("database");
     sqlx::raw_sql("DROP TABLE settings; DROP TABLE native_outputs; DROP TABLE native_generations; DROP TABLE download_job_checkpoints; DROP TABLE instances; INSERT INTO meta VALUES ('fixture', 'preserved'); PRAGMA user_version = 6;")
         .execute(&mut connection).await.expect("version six fixture");
     connection.close().await.expect("close");
@@ -271,7 +274,7 @@ async fn version_six_gains_an_empty_instances_table_and_preserves_existing_data(
             .is_empty()
     );
     service.shutdown().await.expect("shutdown");
-    let mut connection = open_db(&cache).await.expect("reopen");
+    let mut connection = open_migrated(&cache).await.expect("reopen");
     let version: i64 = sqlx::query_scalar("PRAGMA user_version")
         .fetch_one(&mut connection)
         .await
@@ -299,7 +302,9 @@ async fn corrupted_database_profiles_are_reported_instead_of_reset() {
     create_instance(&client, &instances, "World", "1.20.1", &plain_template())
         .await
         .expect("create");
-    let mut connection = open_db(&SharedCache::at(&root)).await.expect("connection");
+    let mut connection = open_migrated(&SharedCache::at(&root))
+        .await
+        .expect("connection");
     sqlx::query("UPDATE instances SET jvm_arguments = 'not JSON'")
         .execute(&mut connection)
         .await

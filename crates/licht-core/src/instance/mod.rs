@@ -185,7 +185,12 @@ pub fn resolved_java_path(instance: &Instance) -> Option<PathBuf> {
     if path.is_empty() {
         return None;
     }
-    Some(PathBuf::from(path))
+    let path = PathBuf::from(path);
+    if !crate::runtime::is_java_executable(&path) {
+        tracing::warn!("Ignoring a custom Java path that does not name a Java executable");
+        return None;
+    }
+    Some(path)
 }
 
 /// Builds an [`InstanceEntry`] from the profile and optional cached icon.

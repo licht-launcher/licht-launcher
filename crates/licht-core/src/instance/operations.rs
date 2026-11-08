@@ -154,6 +154,13 @@ pub async fn update_instance(
     instance.override_java = settings.override_java;
     instance.override_jvm_arguments = settings.override_jvm_arguments;
     instance.java_path = normalize_java_path(settings.java_path.as_deref());
+    if instance
+        .java_path
+        .as_deref()
+        .is_some_and(|path| !crate::runtime::is_java_executable(Path::new(path)))
+    {
+        return Err(crate::CoreError::SettingsJava);
+    }
     instance.max_memory_mb = settings.max_memory_mb;
     instance.jvm_arguments = settings.jvm_arguments.clone();
     instance.fullscreen = settings.fullscreen;

@@ -3,7 +3,7 @@ use std::path::Path;
 
 use super::progress::{StartupPhase, StartupReporter};
 use super::{Relocation, database, files, relocate};
-use crate::settings::{load_settings_at, save_settings};
+use crate::settings::{load_settings_at, store_settings};
 use crate::store::db::Database;
 use crate::{CoreError, Result, SharedCache};
 
@@ -126,7 +126,7 @@ pub(super) async fn migrate(
     reporter.phase(StartupPhase::MigratingSettings)?;
     let staged_database = Database::open(&staging).await?;
     let staged = async {
-        let saved = save_settings(&staged_database, &settings).await?;
+        let saved = store_settings(&staged_database, &settings).await?;
         // Only licht.db is published, so the settings row must not stay in its WAL.
         database::checkpoint(&staged_database).await?;
         Ok::<_, CoreError>(saved)

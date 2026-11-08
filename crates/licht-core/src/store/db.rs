@@ -88,39 +88,12 @@ async fn enable_wal(connection: &mut SqliteConnection) -> Result<()> {
     Ok(())
 }
 
-pub async fn open_db(cache: &SharedCache) -> Result<SqliteConnection> {
-    let _initialization = super::layout::initialization_lock(cache, "database.lock").await?;
-    tokio::fs::create_dir_all(cache.root()).await?;
-    let options = connect_options(cache).create_if_missing(true);
-    let mut connection = SqliteConnection::connect_with(&options).await?;
-    let migrated = async {
-        migrate(&mut connection).await?;
-        enable_wal(&mut connection).await
-    }
-    .await;
-    if let Err(error) = migrated {
-        if connection.close().await.is_err() {
-            tracing::error!("Failed to close the database after a migration error");
-        }
-        return Err(error);
-    }
-    Ok(connection)
-}
-
-pub(crate) async fn complete_operation<T>(
-    connection: SqliteConnection,
-    result: Result<T>,
-) -> Result<T> {
-    match (result, connection.close().await) {
-        (Ok(value), Ok(())) => Ok(value),
-        (Ok(_), Err(error)) => Err(error.into()),
-        (Err(error), closed) => {
-            if closed.is_err() {
-                tracing::error!("Failed to close the database after an operation error");
-            }
-            Err(error)
-        }
-    }
+/// A plain connection to a migrated database, apart from any pool, for test fixtures that
+/// hold locks or change the schema.
+#[cfg(test)]
+pub(crate) async fn open_migrated(cache: &SharedCache) -> Result<SqliteConnection> {
+    Database::open(cache).await?.close().await;
+    Ok(SqliteConnection::connect_with(&connect_options(cache)).await?)
 }
 
 async fn schema_version(connection: &mut SqliteConnection) -> Result<u32> {
@@ -375,17 +348,15 @@ pub async fn clear_meta(connection: &mut SqliteConnection, key: &str) -> Result<
     MetadataRepository::clear(connection, key).await
 }
 
-pub async fn last_played_folder(cache: &SharedCache) -> Result<Option<String>> {
-    let mut connection = open_db(cache).await?;
-    let result = get_meta(&mut connection, META_LAST_PLAYED).await;
-    complete_operation(connection, result).await
+pub async fn last_played_folder(database: &Database) -> Result<Option<String>> {
+    let mut connection = database.acquire().await?;
+    get_meta(&mut connection, META_LAST_PLAYED).await
 }
 
-pub async fn set_last_played_folder(cache: &SharedCache, folder: &str) -> Result<()> {
+pub async fn set_last_played_folder(database: &Database, folder: &str) -> Result<()> {
     let folder = validate_last_played_folder(folder)?;
-    let mut connection = open_db(cache).await?;
-    let result = set_meta(&mut connection, META_LAST_PLAYED, folder).await;
-    complete_operation(connection, result).await
+    let mut connection = database.acquire().await?;
+    set_meta(&mut connection, META_LAST_PLAYED, folder).await
 }
 
 pub(super) fn validate_last_played_folder(folder: &str) -> Result<&str> {
@@ -396,10 +367,9 @@ pub(super) fn validate_last_played_folder(folder: &str) -> Result<&str> {
     Ok(folder)
 }
 
-pub async fn clear_last_played_folder(cache: &SharedCache) -> Result<()> {
-    let mut connection = open_db(cache).await?;
-    let result = clear_meta(&mut connection, META_LAST_PLAYED).await;
-    complete_operation(connection, result).await
+pub async fn clear_last_played_folder(database: &Database) -> Result<()> {
+    let mut connection = database.acquire().await?;
+    clear_meta(&mut connection, META_LAST_PLAYED).await
 }
 
 #[cfg(test)]
