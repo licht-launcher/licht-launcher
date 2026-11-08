@@ -24,7 +24,8 @@ use licht_core::{
 /// next start, so this process keeps the folders it opened with.
 #[derive(Clone)]
 pub struct LauncherPaths {
-    pub settings: SharedCache,
+    /// The profile's database pool; its cache is the settings folder.
+    pub settings: licht_core::Database,
     pub game: SharedCache,
 }
 

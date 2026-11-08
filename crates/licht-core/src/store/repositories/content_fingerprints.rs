@@ -97,9 +97,10 @@ mod tests {
     async fn content_index_persists_and_isolates_instances_and_data_directories() {
         let cache = cache();
         let other = SharedCache::at(cache.root().join("other-data"));
-        let service = DatabaseService::start(cache.clone())
-            .await
-            .expect("service");
+        let service =
+            DatabaseService::start(crate::Database::open(&cache).await.expect("database"))
+                .await
+                .expect("service");
         let client = service.client();
         let entries = vec![entry("mods/one.jar", 3)];
         client
@@ -122,9 +123,10 @@ mod tests {
         );
         service.shutdown().await.expect("shutdown");
 
-        let service = DatabaseService::start(cache.clone())
-            .await
-            .expect("restart");
+        let service =
+            DatabaseService::start(crate::Database::open(&cache).await.expect("database"))
+                .await
+                .expect("restart");
         assert_eq!(
             service
                 .client()
@@ -139,9 +141,10 @@ mod tests {
     #[tokio::test]
     async fn content_index_sync_updates_adds_and_removes_only_its_instance_entries() {
         let cache = cache();
-        let service = DatabaseService::start(cache.clone())
-            .await
-            .expect("service");
+        let service =
+            DatabaseService::start(crate::Database::open(&cache).await.expect("database"))
+                .await
+                .expect("service");
         let client = service.client();
         let initial = vec![entry("mods/one.jar", 3), entry("mods/removed.jar", 4)];
         client
@@ -177,9 +180,10 @@ mod tests {
     #[tokio::test]
     async fn content_index_sync_rolls_back_removals_when_an_update_fails() {
         let cache = cache();
-        let service = DatabaseService::start(cache.clone())
-            .await
-            .expect("service");
+        let service =
+            DatabaseService::start(crate::Database::open(&cache).await.expect("database"))
+                .await
+                .expect("service");
         let client = service.client();
         let initial = vec![entry("mods/removed.jar", 4)];
         client

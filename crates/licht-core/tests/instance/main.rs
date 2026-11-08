@@ -422,6 +422,42 @@ fn resolved_launch_uses_global_until_overrides_turn_on() {
 }
 
 #[tokio::test]
+async fn a_custom_java_must_be_a_java_executable() {
+    let root = scratch("custom-java-name");
+    let instances = root.join("instances");
+    let service = database(&root).await;
+    let client = service.client();
+    let created = create_instance(&client, &instances, "Scripted", "1.20.1", &plain_template())
+        .await
+        .expect("create");
+    let settings = InstanceSettings {
+        override_window: false,
+        override_memory: false,
+        override_java: true,
+        override_jvm_arguments: false,
+        java_path: Some("C:/tools/run.bat".to_string()),
+        max_memory_mb: 2048,
+        jvm_arguments: Vec::new(),
+        fullscreen: false,
+        width: None,
+        height: None,
+    };
+
+    let rejected = update_instance(&client, &instances, &created.folder, &settings).await;
+
+    assert!(matches!(rejected, Err(CoreError::SettingsJava)));
+    let mut stored = load_instance(&client, &instances.join(&created.folder))
+        .await
+        .expect("instance");
+    assert_eq!(stored.java_path, None);
+    // A value saved before this check, or edited by hand, is ignored at launch.
+    stored.override_java = true;
+    stored.java_path = Some("C:/tools/run.bat".to_string());
+    assert_eq!(resolved_java_path(&stored), None);
+    service.shutdown().await.expect("shutdown");
+}
+
+#[tokio::test]
 async fn update_instance_persists_overrides_and_keeps_name() {
     let root = scratch("update");
     let instances = root.join("instances");
@@ -602,9 +638,13 @@ fn missing_last_opened_at_defaults_to_none() {
     let _ = fs::remove_dir_all(root);
 }
 async fn database(root: &Path) -> licht_core::DatabaseService {
-    licht_core::DatabaseService::start(licht_core::SharedCache::at(root))
-        .await
-        .expect("database")
+    licht_core::DatabaseService::start(
+        licht_core::Database::open(&licht_core::SharedCache::at(root))
+            .await
+            .expect("database"),
+    )
+    .await
+    .expect("database")
 }
 
 mod preparation;
@@ -726,4 +766,19 @@ async fn renaming_may_take_the_name_of_another_instance() {
     assert_eq!(punctuated.name, "Pack!");
     service.shutdown().await.expect("shutdown");
     let _ = fs::remove_dir_all(root);
+}
+
+/// Migrates the profile database as startup does, then returns a plain connection apart
+/// from any pool, for fixtures that hold locks or change the schema.
+async fn open_migrated(
+    cache: &licht_core::SharedCache,
+) -> licht_core::Result<sqlx::SqliteConnection> {
+    use sqlx::Connection;
+    licht_core::Database::open(cache).await?.close().await;
+    Ok(sqlx::SqliteConnection::connect_with(
+        &sqlx::sqlite::SqliteConnectOptions::new()
+            .filename(licht_core::db_path(cache))
+            .busy_timeout(std::time::Duration::from_secs(5)),
+    )
+    .await?)
 }

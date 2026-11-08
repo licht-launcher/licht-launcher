@@ -118,7 +118,7 @@ pub async fn browse_application_directory(
     paths: State<'_, LauncherPaths>,
     path: String,
 ) -> Result<Option<String>, String> {
-    let Some(fallback) = paths.settings.root().parent() else {
+    let Some(fallback) = paths.settings.cache().root().parent() else {
         return Err("application directory is missing".to_string());
     };
     let directory = starting_directory(&path, fallback)?;

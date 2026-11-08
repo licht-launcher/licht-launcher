@@ -67,7 +67,10 @@ async fn an_installed_version_launches_offline_with_its_client_jar() {
     let directory = std::env::temp_dir().join(format!("licht-offline-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&directory);
     let cache = SharedCache::at(&directory);
-    let database = licht_core::DatabaseService::start(SharedCache::at(directory.join("settings")))
+    let settings = licht_core::Database::open(&SharedCache::at(directory.join("settings")))
+        .await
+        .expect("database");
+    let database = licht_core::DatabaseService::start(settings.clone())
         .await
         .expect("database");
     let base = serve().await;
@@ -81,7 +84,7 @@ async fn an_installed_version_launches_offline_with_its_client_jar() {
     install_version(
         &reqwest::Client::new(),
         &cache,
-        &cache,
+        &settings,
         InstallPlan {
             version_id: "demo",
             version: &version,
@@ -144,9 +147,13 @@ async fn two_offline_instances_reuse_an_extraction_without_reopening_native_arch
         .as_nanos();
     let root = std::env::temp_dir().join(format!("licht-offline-native-cache-{stamp}"));
     let cache = SharedCache::at(root.join("data"));
-    let database = licht_core::DatabaseService::start(SharedCache::at(root.join("settings")))
-        .await
-        .expect("database");
+    let database = licht_core::DatabaseService::start(
+        licht_core::Database::open(&SharedCache::at(root.join("settings")))
+            .await
+            .expect("database"),
+    )
+    .await
+    .expect("database");
     let source = cache
         .library("demo/native-linux.jar")
         .expect("native source");
@@ -234,9 +241,13 @@ async fn a_launchwrapper_version_uses_the_instance_as_its_default_folder() {
     let directory = std::env::temp_dir().join(format!("licht-wrapper-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&directory);
     let cache = SharedCache::at(directory.join("data"));
-    let database = licht_core::DatabaseService::start(SharedCache::at(directory.join("settings")))
-        .await
-        .expect("database");
+    let database = licht_core::DatabaseService::start(
+        licht_core::Database::open(&SharedCache::at(directory.join("settings")))
+            .await
+            .expect("database"),
+    )
+    .await
+    .expect("database");
     let index = cache.asset_index("test").expect("index path");
     std::fs::create_dir_all(index.parent().expect("indexes")).expect("indexes");
     std::fs::write(&index, r#"{"objects":{}}"#).expect("index");
@@ -327,9 +338,13 @@ async fn a_launchwrapper_game_copies_resources_and_keeps_auth_session_literal() 
         std::env::temp_dir().join(format!("licht-assets-launch-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&directory);
     let cache = SharedCache::at(directory.join("data"));
-    let database = licht_core::DatabaseService::start(SharedCache::at(directory.join("settings")))
-        .await
-        .expect("database");
+    let database = licht_core::DatabaseService::start(
+        licht_core::Database::open(&SharedCache::at(directory.join("settings")))
+            .await
+            .expect("database"),
+    )
+    .await
+    .expect("database");
     let hash = "abababababababababababababababababababab";
     let object = cache.asset_object(hash).expect("object path");
     std::fs::create_dir_all(object.parent().expect("prefix")).expect("objects");

@@ -22,7 +22,7 @@ pub struct InstallPlan<'a> {
 pub async fn install_version(
     client: &reqwest::Client,
     cache: &SharedCache,
-    settings: &SharedCache,
+    settings: &crate::Database,
     plan: InstallPlan<'_>,
     progress: impl Into<InstallationContext>,
 ) -> Result<()> {
@@ -110,7 +110,7 @@ pub fn parse_install_args(args: &[String]) -> Result<InstallArgs> {
 pub async fn install_game(
     client: &reqwest::Client,
     cache: &SharedCache,
-    settings: &SharedCache,
+    settings: &crate::Database,
     request: GameInstall<'_>,
     progress: impl Into<InstallationContext>,
 ) -> Result<PathBuf> {
@@ -173,7 +173,7 @@ pub async fn install_game(
 pub async fn install_game_version(
     client: &reqwest::Client,
     cache: &SharedCache,
-    settings: &SharedCache,
+    settings: &crate::Database,
     id: &str,
     environment: &LaunchEnvironment,
     progress: impl Into<InstallationContext>,
@@ -194,7 +194,7 @@ pub async fn install_game_version(
 async fn install_requested(
     client: &reqwest::Client,
     cache: &SharedCache,
-    settings: &SharedCache,
+    settings: &crate::Database,
     id: &str,
     environment: &LaunchEnvironment,
     progress: InstallationContext,
@@ -256,7 +256,7 @@ async fn install_requested(
 async fn install_local_version(
     client: &reqwest::Client,
     cache: &SharedCache,
-    settings: &SharedCache,
+    settings: &crate::Database,
     id: &str,
     environment: &LaunchEnvironment,
     progress: InstallationContext,

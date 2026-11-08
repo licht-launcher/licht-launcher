@@ -14,14 +14,14 @@ fn fixture_executor(
     context: InstallationContext,
 ) -> BoxFuture<'static, Result<()>> {
     Box::pin(async move {
-        let mut connection = crate::open_db(&runtime.settings).await?;
+        let mut connection = runtime.settings.acquire().await?;
         let url = crate::get_meta(&mut connection, "test_download_url")
             .await?
             .ok_or(CoreError::VersionMissing)?;
         let finish_after_cancel = crate::get_meta(&mut connection, "test_finish_after_cancel")
             .await?
             .is_some();
-        sqlx::Connection::close(connection).await?;
+        drop(connection);
         let component = if job.java_major.is_some() {
             DownloadComponent::Java
         } else {
@@ -91,7 +91,7 @@ pub(super) async fn wait_until(mut predicate: impl FnMut() -> bool) {
 
 pub(super) struct Fixture {
     root: PathBuf,
-    pub(super) settings: SharedCache,
+    pub(super) settings: crate::Database,
     pub(super) game: SharedCache,
     database: Option<crate::DatabaseService>,
 }
@@ -107,15 +107,15 @@ impl Fixture {
             "licht-functional-download-{}-{stamp}-{sequence}",
             std::process::id()
         ));
-        let settings = SharedCache::at(root.join("settings"));
+        let settings = crate::Database::open(&SharedCache::at(root.join("settings")))
+            .await
+            .expect("database");
         let game = SharedCache::at(root.join("game").join("data"));
-        let mut connection = crate::open_db(&settings).await.expect("database");
+        let mut connection = settings.acquire().await.expect("connection");
         crate::set_meta(&mut connection, "test_download_url", url)
             .await
             .expect("fixture URL");
-        sqlx::Connection::close(connection)
-            .await
-            .expect("close fixture connection");
+        drop(connection);
         let database = Some(
             crate::DatabaseService::start(settings.clone())
                 .await
@@ -138,6 +138,10 @@ impl Fixture {
             .shutdown()
             .await
             .expect("shutdown");
+        // Shutdown closed the pool, as when the launcher exits.
+        self.settings = crate::Database::open(self.settings.cache())
+            .await
+            .expect("database");
         self.database = Some(
             crate::DatabaseService::start(self.settings.clone())
                 .await

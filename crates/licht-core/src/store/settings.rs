@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use super::db;
+use super::db::{self, Database};
 use super::repositories::settings::SettingsRepository;
 use crate::{CoreError, DEFAULT_CONCURRENCY, Result, SharedCache};
 
@@ -223,7 +223,28 @@ pub fn configured_java(settings: &Settings, major: u32) -> Option<PathBuf> {
         _ => None,
     }?;
     let path = PathBuf::from(text);
-    path.is_file().then_some(path)
+    (path.is_file() && crate::runtime::is_java_executable(&path)).then_some(path)
+}
+
+/// Applies to new user input only. Values already stored are ignored at launch instead,
+/// because rejecting them on load or on an internal save would stop the launcher.
+fn check_java_executables(settings: &Settings) -> Result<()> {
+    let paths = [
+        &settings.java25,
+        &settings.java21,
+        &settings.java17,
+        &settings.java8,
+    ];
+    if paths
+        .into_iter()
+        .flatten()
+        .map(|path| path.trim())
+        .filter(|path| !path.is_empty())
+        .any(|path| !crate::runtime::is_java_executable(Path::new(path)))
+    {
+        return Err(CoreError::SettingsJava);
+    }
+    Ok(())
 }
 
 fn clean_java(value: Option<&str>) -> Result<Option<String>> {
@@ -413,15 +434,16 @@ struct FileSettings {
 }
 
 // Every save goes through one temporary file and one database row, so writers in this
-// process take turns. The write runs in its own task, so a cancelled caller cannot
-// release the lock while the write is still in progress.
-static SETTINGS_WRITES: std::sync::LazyLock<std::sync::Arc<tokio::sync::Mutex<()>>> =
+// process take turns, and readers wait for a save to finish both parts instead of mixing
+// an old file with a new row. The write runs in its own task, so a cancelled caller
+// cannot release the lock while the write is still in progress.
+static SETTINGS_LOCK: std::sync::LazyLock<std::sync::Arc<tokio::sync::RwLock<()>>> =
     std::sync::LazyLock::new(Default::default);
 
 async fn exclusive_write<T: Send + 'static>(
     work: impl std::future::Future<Output = Result<T>> + Send + 'static,
 ) -> Result<T> {
-    let guard = std::sync::Arc::clone(&SETTINGS_WRITES).lock_owned().await;
+    let guard = std::sync::Arc::clone(&SETTINGS_LOCK).write_owned().await;
     tokio::spawn(async move {
         let _guard = guard;
         work.await
@@ -438,40 +460,52 @@ async fn blocking<T: Send + 'static>(
         .map_err(|_| std::io::Error::other("could not join settings file access"))?
 }
 
-/// Missing `settings.json` and database mean the defaults. Nothing is created until a save.
-pub async fn load_settings(cache: &SharedCache) -> Result<Settings> {
-    Ok(load_with_memory(cache).await?.0)
+/// Settings of the profile that owns `database`. A missing `settings.json` means the defaults.
+pub async fn load_settings(database: &Database) -> Result<Settings> {
+    let _reading = SETTINGS_LOCK.read().await;
+    read_settings(database).await
 }
 
-/// Loads the settings together with the machine RAM they were checked against.
-async fn load_with_memory(cache: &SharedCache) -> Result<(Settings, u32)> {
-    let file = cache.clone();
+/// Callers must hold [`SETTINGS_LOCK`], for reading or writing.
+async fn read_settings(database: &Database) -> Result<Settings> {
+    Ok(read_with_memory(database).await?.0)
+}
+
+/// Reads the settings together with the machine RAM they were checked against.
+async fn read_with_memory(database: &Database) -> Result<(Settings, u32)> {
+    let file = database.cache().clone();
     let (mut settings, total) = blocking(move || {
         let total = total_memory_mb();
         Ok((load_file_settings(&file, total)?, total))
     })
     .await?;
+    let mut connection = database.acquire().await?;
     // Until the first save stores a row, older settings files still carry every value.
-    if !db::db_path(cache).is_file() {
+    if !SettingsRepository::load_into(&mut connection, &mut settings).await? {
         return Ok((settings, total));
     }
-    let mut connection = db::open_db(cache).await?;
-    let stored = SettingsRepository::load_into(&mut connection, &mut settings).await;
-    if !db::complete_operation(connection, stored).await? {
-        return Ok((settings, total));
-    }
+    drop(connection);
     // A saved allocation can come from a machine with more RAM.
     settings.max_memory_mb = settings.max_memory_mb.min(memory_slider_max(total));
-    Ok((validated(cache, settings, total)?, total))
+    Ok((validated(database.cache(), settings, total)?, total))
 }
 
-pub(super) async fn stored_in_database(cache: &SharedCache) -> Result<bool> {
+/// Settings of a folder that has no open pool, such as a legacy profile. A missing
+/// database means the file alone, so reading never creates one.
+pub(crate) async fn load_settings_at(cache: &SharedCache) -> Result<Settings> {
     if !db::db_path(cache).is_file() {
-        return Ok(false);
+        let file = cache.clone();
+        return blocking(move || load_file_settings(&file, total_memory_mb())).await;
     }
-    let mut connection = db::open_db(cache).await?;
-    let exists = SettingsRepository::exists(&mut connection).await;
-    db::complete_operation(connection, exists).await
+    let database = Database::open(cache).await?;
+    let settings = load_settings(&database).await;
+    database.close().await;
+    settings
+}
+
+pub(super) async fn stored_in_database(database: &Database) -> Result<bool> {
+    let mut connection = database.acquire().await?;
+    SettingsRepository::exists(&mut connection).await
 }
 
 pub(super) fn load_startup_preferences(cache: &SharedCache) -> Result<StartupPreferences> {
@@ -520,8 +554,12 @@ fn load_file_settings(cache: &SharedCache, total: u32) -> Result<Settings> {
     from_stored(cache, read_stored(&path)?, total)
 }
 
-pub async fn settings_snapshot(cache: &SharedCache) -> Result<SettingsSnapshot> {
-    let (settings, total) = load_with_memory(cache).await?;
+pub async fn settings_snapshot(database: &Database) -> Result<SettingsSnapshot> {
+    let cache = database.cache();
+    let (settings, total) = {
+        let _reading = SETTINGS_LOCK.read().await;
+        read_with_memory(database).await?
+    };
     let application_directory = match &settings.data_directory {
         Some(path) => path.clone(),
         None => cache.root().display().to_string(),
@@ -537,12 +575,19 @@ pub async fn settings_snapshot(cache: &SharedCache) -> Result<SettingsSnapshot> 
     })
 }
 
-pub async fn save_settings(cache: &SharedCache, settings: &Settings) -> Result<Settings> {
-    exclusive_write(write_settings(cache.clone(), settings.clone())).await
+/// Saves settings from the user, so Java paths must name a Java executable.
+pub async fn save_settings(database: &Database, settings: &Settings) -> Result<Settings> {
+    check_java_executables(settings)?;
+    store_settings(database, settings).await
 }
 
-async fn write_settings(cache: SharedCache, settings: Settings) -> Result<Settings> {
-    let checked = cache.clone();
+/// Saves settings the launcher already holds (startup, migration, content move).
+pub(crate) async fn store_settings(database: &Database, settings: &Settings) -> Result<Settings> {
+    exclusive_write(write_settings(database.clone(), settings.clone())).await
+}
+
+async fn write_settings(database: Database, settings: Settings) -> Result<Settings> {
+    let checked = database.cache().clone();
     let settings = blocking(move || {
         let path = settings_path(&checked);
         let total = total_memory_mb();
@@ -555,9 +600,10 @@ async fn write_settings(cache: SharedCache, settings: Settings) -> Result<Settin
     .await?;
     // The row is written first, so an interrupted save keeps the previous startup
     // preferences in the file; the next save writes both again.
-    let mut connection = db::open_db(&cache).await?;
-    let stored = SettingsRepository::save(&mut connection, &settings).await;
-    db::complete_operation(connection, stored).await?;
+    let mut connection = database.acquire().await?;
+    SettingsRepository::save(&mut connection, &settings).await?;
+    drop(connection);
+    let cache = database.cache().clone();
     blocking(move || write_settings_file(&cache, settings)).await
 }
 
@@ -585,12 +631,12 @@ fn write_settings_file(cache: &SharedCache, settings: Settings) -> Result<Settin
     Ok(settings)
 }
 
-pub async fn set_java_path(cache: &SharedCache, major: u32, path: &Path) -> Result<Settings> {
-    let cache = cache.clone();
+pub async fn set_java_path(database: &Database, major: u32, path: &Path) -> Result<Settings> {
+    let database = database.clone();
     let text = Some(path.display().to_string());
     exclusive_write(async move {
         // Read inside the lock so a concurrent save cannot be overwritten with stale values.
-        let mut settings = load_settings(&cache).await?;
+        let mut settings = read_settings(&database).await?;
         match major {
             25 => settings.java25 = text,
             21 => settings.java21 = text,
@@ -598,23 +644,23 @@ pub async fn set_java_path(cache: &SharedCache, major: u32, path: &Path) -> Resu
             8 => settings.java8 = text,
             _ => return Err(CoreError::SettingsJava),
         }
-        write_settings(cache, settings).await
+        write_settings(database, settings).await
     })
     .await
 }
 
-fn concurrency_source<'a>(game: &'a SharedCache, settings: &'a SharedCache) -> &'a SharedCache {
-    if settings_path(game).is_file() {
-        game
+/// Game files may live in another folder. When that folder has its own `settings.json`,
+/// concurrency comes from it, as before profiles had a database.
+async fn concurrency_settings(game: &SharedCache, settings: &Database) -> Result<Settings> {
+    if game != settings.cache() && settings_path(game).is_file() {
+        load_settings_at(game).await
     } else {
-        settings
+        load_settings(settings).await
     }
 }
 
-/// Game files may live in another folder. When that folder has no
-/// `settings.json`, concurrency still comes from the settings folder.
-pub async fn download_concurrency(game: &SharedCache, settings: &SharedCache) -> Result<usize> {
-    Ok(load_settings(concurrency_source(game, settings))
+pub async fn download_concurrency(game: &SharedCache, settings: &Database) -> Result<usize> {
+    Ok(concurrency_settings(game, settings)
         .await?
         .download_concurrency as usize)
 }
@@ -622,9 +668,9 @@ pub async fn download_concurrency(game: &SharedCache, settings: &SharedCache) ->
 /// Bandwidth, concurrency, and retry for one download batch, from a single settings read.
 pub(crate) async fn download_options(
     game: &SharedCache,
-    settings: &SharedCache,
+    settings: &Database,
 ) -> Result<crate::DownloadOptions> {
-    let saved = load_settings(concurrency_source(game, settings)).await?;
+    let saved = concurrency_settings(game, settings).await?;
     let limits = crate::shared_transfer_limits();
     limits
         .bandwidth
@@ -639,13 +685,62 @@ pub(crate) async fn download_options(
 
 /// Next process: game files go to `{dataDirectory}/Licht Launcher/data`.
 /// The default game directory is `<launcher>/data`.
-pub async fn game_cache(defaults: &SharedCache) -> Result<SharedCache> {
-    let settings = load_settings(defaults).await?;
+pub async fn game_cache(database: &Database) -> Result<SharedCache> {
+    let defaults = database.cache();
+    let settings = load_settings(database).await?;
     match settings.data_directory {
         Some(path) => Ok(SharedCache::at(
             PathBuf::from(path).join(GAME_FOLDER).join("data"),
         )),
         None => Ok(SharedCache::at(defaults.root().join("data"))),
+    }
+}
+
+/// One-off pools for tests that read or change a profile outside startup.
+#[cfg(test)]
+pub(crate) mod testing {
+    use super::*;
+
+    async fn scoped<T>(
+        cache: &SharedCache,
+        work: impl AsyncFnOnce(&Database) -> Result<T>,
+    ) -> Result<T> {
+        let database = Database::open(cache).await?;
+        let result = work(&database).await;
+        database.close().await;
+        result
+    }
+
+    pub(crate) async fn save_settings_at(
+        cache: &SharedCache,
+        settings: &Settings,
+    ) -> Result<Settings> {
+        scoped(cache, async |database| {
+            save_settings(database, settings).await
+        })
+        .await
+    }
+
+    pub(crate) async fn game_cache_at(cache: &SharedCache) -> Result<SharedCache> {
+        scoped(cache, async |database| game_cache(database).await).await
+    }
+}
+
+#[cfg(test)]
+mod folder_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn reading_a_folder_without_a_database_creates_nothing() {
+        let cache = SharedCache::at(
+            std::env::temp_dir().join(format!("licht-settings-read-{}", std::process::id())),
+        );
+        let _ = std::fs::remove_dir_all(cache.root());
+
+        let settings = load_settings_at(&cache).await.expect("defaults");
+
+        assert_eq!(settings.schema, SCHEMA);
+        assert!(!cache.root().exists());
     }
 }
 

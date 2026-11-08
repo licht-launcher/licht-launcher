@@ -5,6 +5,7 @@ mod detect;
 mod require;
 mod temurin;
 
+pub(crate) use detect::is_java_executable;
 pub use detect::{
     JavaDetections, JavaPaths, JavaStatus, browse_start_directory, default_java_roots,
     detect_javas, detect_known_javas, discover_javas, java_detect_roots, java_installation_status,

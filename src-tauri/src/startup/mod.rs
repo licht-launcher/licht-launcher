@@ -72,6 +72,7 @@ async fn initialize(
         state.phase = StartupPhase::StartingServices;
         state.total_bytes = None;
     })?;
+    // The service closes the pool when the launcher shuts down.
     let database = licht_core::DatabaseService::start(paths.settings.clone()).await?;
     let database_client = database.client();
     *runtime.database.lock().await = Some(database);

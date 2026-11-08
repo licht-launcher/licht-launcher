@@ -3,9 +3,10 @@ use std::future::Future;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::task::Poll;
 
+use crate::{open_migrated, stored_last_played};
 use licht_core::{
-    CoreError, DatabaseService, DownloadJobOperation, DownloadJobStatus, DownloadJobUpdate,
-    DownloadPhase, DownloadProgress, SharedCache, db_path, open_db,
+    CoreError, Database, DatabaseService, DownloadJobOperation, DownloadJobStatus,
+    DownloadJobUpdate, DownloadPhase, DownloadProgress, SharedCache, db_path,
 };
 
 static NEXT_FIXTURE: AtomicU64 = AtomicU64::new(0);
@@ -46,7 +47,7 @@ async fn assert_pending(mut future: std::pin::Pin<&mut impl Future>) {
 }
 
 async fn hold_writer(cache: &SharedCache) -> SqliteConnection {
-    let mut connection = open_db(cache).await.expect("writer connection");
+    let mut connection = open_migrated(cache).await.expect("writer connection");
     sqlx::query("BEGIN IMMEDIATE")
         .execute(&mut connection)
         .await
@@ -65,9 +66,13 @@ async fn release_writer(mut connection: SqliteConnection) {
 #[tokio::test]
 async fn metadata_round_trips_and_survives_service_restart() {
     let fixture = Fixture::new();
-    let service = DatabaseService::start(fixture.cache.clone())
-        .await
-        .expect("start");
+    let service = DatabaseService::start(
+        licht_core::Database::open(&fixture.cache)
+            .await
+            .expect("database"),
+    )
+    .await
+    .expect("start");
     let client = service.client();
     assert_eq!(client.last_played_folder().await.expect("empty"), None);
     client
@@ -86,9 +91,13 @@ async fn metadata_round_trips_and_survives_service_restart() {
         .expect("persist");
     service.shutdown().await.expect("shutdown");
 
-    let restarted = DatabaseService::start(fixture.cache.clone())
-        .await
-        .expect("restart");
+    let restarted = DatabaseService::start(
+        licht_core::Database::open(&fixture.cache)
+            .await
+            .expect("database"),
+    )
+    .await
+    .expect("restart");
     assert_eq!(
         restarted
             .client()
@@ -106,9 +115,13 @@ async fn metadata_round_trips_and_survives_service_restart() {
 #[tokio::test]
 async fn invalid_input_does_not_change_metadata_or_stop_the_service() {
     let fixture = Fixture::new();
-    let service = DatabaseService::start(fixture.cache.clone())
-        .await
-        .expect("start");
+    let service = DatabaseService::start(
+        licht_core::Database::open(&fixture.cache)
+            .await
+            .expect("database"),
+    )
+    .await
+    .expect("start");
     let client = service.client();
     client
         .set_last_played_folder("survival")
@@ -128,11 +141,17 @@ async fn invalid_input_does_not_change_metadata_or_stop_the_service() {
 #[tokio::test]
 async fn a_sql_error_is_returned_and_the_service_accepts_subsequent_requests() {
     let fixture = Fixture::new();
-    let service = DatabaseService::start(fixture.cache.clone())
-        .await
-        .expect("start");
+    let service = DatabaseService::start(
+        licht_core::Database::open(&fixture.cache)
+            .await
+            .expect("database"),
+    )
+    .await
+    .expect("start");
     let client = service.client();
-    let mut connection = open_db(&fixture.cache).await.expect("fixture connection");
+    let mut connection = open_migrated(&fixture.cache)
+        .await
+        .expect("fixture connection");
     sqlx::raw_sql(
         "CREATE TRIGGER reject_metadata BEFORE INSERT ON meta
          BEGIN SELECT RAISE(FAIL, 'fixture write failure'); END;",
@@ -186,7 +205,7 @@ async fn startup_reports_an_unsupported_schema_without_modifying_it() {
     connection.close().await.expect("close future database");
 
     assert!(matches!(
-        DatabaseService::start(fixture.cache.clone()).await,
+        Database::open(&fixture.cache).await,
         Err(CoreError::DatabaseSchema { schema: 13 })
     ));
     let mut connection = SqliteConnection::connect_with(
@@ -209,7 +228,7 @@ async fn startup_reports_an_invalid_database_directory() {
     let blocked = fixture.cache.root().join("blocked");
     std::fs::write(&blocked, b"not a directory").expect("blocking file");
     assert!(matches!(
-        DatabaseService::start(SharedCache::at(blocked)).await,
+        Database::open(&SharedCache::at(blocked)).await,
         Err(CoreError::Io(_))
     ));
 }
@@ -217,9 +236,13 @@ async fn startup_reports_an_invalid_database_directory() {
 #[tokio::test]
 async fn a_full_queue_keeps_the_runtime_responsive_and_preserves_write_order() {
     let fixture = Fixture::new();
-    let service = DatabaseService::start(fixture.cache.clone())
-        .await
-        .expect("start");
+    let service = DatabaseService::start(
+        licht_core::Database::open(&fixture.cache)
+            .await
+            .expect("database"),
+    )
+    .await
+    .expect("start");
     let client = service.client();
     let writer = hold_writer(&fixture.cache).await;
     let writes = (0..130).map(|index| {
@@ -248,9 +271,13 @@ async fn a_full_queue_keeps_the_runtime_responsive_and_preserves_write_order() {
 #[tokio::test]
 async fn shutdown_drains_a_full_queue_and_rejects_requests_still_waiting_for_capacity() {
     let fixture = Fixture::new();
-    let service = DatabaseService::start(fixture.cache.clone())
-        .await
-        .expect("start");
+    let service = DatabaseService::start(
+        licht_core::Database::open(&fixture.cache)
+            .await
+            .expect("database"),
+    )
+    .await
+    .expect("start");
     let client = service.client();
     let writer = hold_writer(&fixture.cache).await;
     let writes = (0..130).map(|index| {
@@ -286,7 +313,7 @@ async fn shutdown_drains_a_full_queue_and_rejects_requests_still_waiting_for_cap
     // At most one write is in flight in addition to the 64 pending queue slots.
     assert!((64..=65).contains(&accepted), "accepted {accepted} writes");
     assert_eq!(
-        licht_core::last_played_folder(&fixture.cache)
+        stored_last_played(&fixture.cache)
             .await
             .expect("drained metadata"),
         Some(format!("world-{}", accepted - 1))
@@ -296,9 +323,13 @@ async fn shutdown_drains_a_full_queue_and_rejects_requests_still_waiting_for_cap
 #[tokio::test]
 async fn shutdown_drains_an_accepted_write_after_its_caller_disconnects() {
     let fixture = Fixture::new();
-    let service = DatabaseService::start(fixture.cache.clone())
-        .await
-        .expect("start");
+    let service = DatabaseService::start(
+        licht_core::Database::open(&fixture.cache)
+            .await
+            .expect("database"),
+    )
+    .await
+    .expect("start");
     let client = service.client();
     let writer = hold_writer(&fixture.cache).await;
     let mut write = Box::pin(client.set_last_played_folder("survival"));
@@ -314,7 +345,7 @@ async fn shutdown_drains_an_accepted_write_after_its_caller_disconnects() {
     release_writer(writer).await;
     shutdown.await.expect("drain and close");
     assert_eq!(
-        licht_core::last_played_folder(&fixture.cache)
+        stored_last_played(&fixture.cache)
             .await
             .expect("committed write"),
         Some("survival".into())
@@ -344,7 +375,7 @@ fn job_update(status: DownloadJobStatus) -> DownloadJobUpdate {
 #[tokio::test]
 async fn account_identifiers_preserve_legacy_metadata_and_do_not_lose_concurrent_updates() {
     let fixture = Fixture::new();
-    let mut connection = open_db(&fixture.cache).await.expect("database");
+    let mut connection = open_migrated(&fixture.cache).await.expect("database");
     licht_core::set_meta(
         &mut connection,
         "microsoft_account_uuids",
@@ -353,9 +384,13 @@ async fn account_identifiers_preserve_legacy_metadata_and_do_not_lose_concurrent
     .await
     .expect("legacy identifiers");
     connection.close().await.expect("close fixture connection");
-    let service = DatabaseService::start(fixture.cache.clone())
-        .await
-        .expect("start");
+    let service = DatabaseService::start(
+        licht_core::Database::open(&fixture.cache)
+            .await
+            .expect("database"),
+    )
+    .await
+    .expect("start");
     let client = service.client();
     assert_eq!(
         client
@@ -400,9 +435,13 @@ async fn account_identifiers_preserve_legacy_metadata_and_do_not_lose_concurrent
 #[tokio::test]
 async fn download_requests_preserve_lifecycle_version_recovery_and_transition_validation() {
     let fixture = Fixture::new();
-    let service = DatabaseService::start(fixture.cache.clone())
-        .await
-        .expect("start");
+    let service = DatabaseService::start(
+        licht_core::Database::open(&fixture.cache)
+            .await
+            .expect("database"),
+    )
+    .await
+    .expect("start");
     let client = service.client();
     let game = SharedCache::at(fixture.cache.root().join("game/data"));
     let paused = client
@@ -487,9 +526,13 @@ async fn download_requests_preserve_lifecycle_version_recovery_and_transition_va
 #[tokio::test]
 async fn download_requests_isolate_data_directories_and_validate_targets() {
     let fixture = Fixture::new();
-    let service = DatabaseService::start(fixture.cache.clone())
-        .await
-        .expect("start");
+    let service = DatabaseService::start(
+        licht_core::Database::open(&fixture.cache)
+            .await
+            .expect("database"),
+    )
+    .await
+    .expect("start");
     let client = service.client();
     let first = SharedCache::at(fixture.cache.root().join("first/data"));
     let second = SharedCache::at(fixture.cache.root().join("second/data"));
@@ -541,9 +584,13 @@ async fn download_requests_isolate_data_directories_and_validate_targets() {
 #[tokio::test]
 async fn artifact_requests_keep_shared_references_and_never_remove_files() {
     let fixture = Fixture::new();
-    let service = DatabaseService::start(fixture.cache.clone())
-        .await
-        .expect("start");
+    let service = DatabaseService::start(
+        licht_core::Database::open(&fixture.cache)
+            .await
+            .expect("database"),
+    )
+    .await
+    .expect("start");
     let client = service.client();
     let game = SharedCache::at(fixture.cache.root().join("game/data"));
     let first = client
@@ -611,9 +658,13 @@ async fn artifact_requests_keep_shared_references_and_never_remove_files() {
 #[tokio::test]
 async fn java_download_requests_validate_the_major_and_keep_typed_targets() {
     let fixture = Fixture::new();
-    let service = DatabaseService::start(fixture.cache.clone())
-        .await
-        .expect("start");
+    let service = DatabaseService::start(
+        licht_core::Database::open(&fixture.cache)
+            .await
+            .expect("database"),
+    )
+    .await
+    .expect("start");
     let client = service.client();
     let game = SharedCache::at(fixture.cache.root().join("game/data"));
     let java = client
@@ -632,9 +683,13 @@ async fn java_download_requests_validate_the_major_and_keep_typed_targets() {
 #[tokio::test]
 async fn a_download_write_waiting_for_sqlite_does_not_block_the_runtime() {
     let fixture = Fixture::new();
-    let service = DatabaseService::start(fixture.cache.clone())
-        .await
-        .expect("start");
+    let service = DatabaseService::start(
+        licht_core::Database::open(&fixture.cache)
+            .await
+            .expect("database"),
+    )
+    .await
+    .expect("start");
     let client = service.client();
     let game = SharedCache::at(fixture.cache.root().join("game/data"));
     let writer = hold_writer(&fixture.cache).await;

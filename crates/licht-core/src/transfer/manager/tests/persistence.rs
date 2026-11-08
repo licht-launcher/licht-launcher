@@ -110,7 +110,9 @@ async fn a_contended_progress_write_yields_and_cannot_overwrite_shutdown_state()
     fixture.partial(5).await;
     let slot = manager.active_job(&job.id).await.expect("active job");
     let mut events = manager.subscribe();
-    let mut writer = crate::open_db(&fixture.settings).await.expect("writer");
+    let mut writer = crate::store::db::open_migrated(fixture.settings.cache())
+        .await
+        .expect("writer");
     let transaction = writer
         .begin_with("BEGIN IMMEDIATE")
         .await

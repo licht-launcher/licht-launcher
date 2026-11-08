@@ -181,9 +181,10 @@ async fn concurrent_content_preserves_cached_metadata_for_each_original_file() {
         .expect("mod");
         seed_metadata(&cache, body.as_bytes(), &format!("Cached title {index}"));
     }
-    let service = crate::DatabaseService::start(cache.clone())
-        .await
-        .expect("service");
+    let service =
+        crate::DatabaseService::start(crate::Database::open(&cache).await.expect("database"))
+            .await
+            .expect("service");
     let entries = list_instance_content_with_metadata(
         &cache,
         &service.client(),

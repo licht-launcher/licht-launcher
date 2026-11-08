@@ -1,19 +1,21 @@
 use std::path::PathBuf;
 
 use licht_core::{
-    CoreError, GlobalLaunch, Settings, SharedCache, apply_global_launch, configured_java,
+    CoreError, Database, GlobalLaunch, Settings, SharedCache, apply_global_launch, configured_java,
     download_concurrency, game_cache, load_settings, memory_slider_max, recommended_max_memory_mb,
     save_settings, total_memory_mb,
 };
 
-fn cache(name: &str) -> SharedCache {
+async fn database(name: &str) -> Database {
     let root = std::env::temp_dir().join(format!("licht-settings-{}-{name}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
-    SharedCache::at(root)
+    Database::open(&SharedCache::at(root))
+        .await
+        .expect("database")
 }
 
-fn settings_file(cache: &SharedCache) -> PathBuf {
-    cache.root().join("settings.json")
+fn settings_file(database: &Database) -> PathBuf {
+    database.cache().root().join("settings.json")
 }
 
 fn sample(download_concurrency: u32) -> Settings {
@@ -55,8 +57,8 @@ async fn automatic_updates_migrate_without_enabling_previously_disabled_download
     .into_iter()
     .enumerate()
     {
-        let cache = cache(&format!("old-update-preferences-{index}"));
-        std::fs::create_dir_all(cache.root()).expect("root");
+        let cache = database(&format!("old-update-preferences-{index}")).await;
+        std::fs::create_dir_all(cache.cache().root()).expect("root");
         std::fs::write(settings_file(&cache), serde_json::to_vec(&serde_json::json!({"schema":1,"checkForUpdates":check,"installUpdatesOnRestart":install})).expect("json")).expect("legacy settings");
         let loaded = load_settings(&cache).await.expect("migrate preferences");
         assert_eq!(loaded.automatic_updates, expected);
@@ -83,8 +85,8 @@ fn recommended_memory_is_half_the_ram_inside_the_bounds() {
 }
 
 #[tokio::test]
-async fn a_missing_file_returns_defaults_and_is_not_created() {
-    let cache = cache("missing");
+async fn a_missing_file_returns_defaults_and_is_not_written() {
+    let cache = database("missing").await;
 
     let settings = load_settings(&cache).await.expect("default");
 
@@ -106,12 +108,12 @@ async fn a_missing_file_returns_defaults_and_is_not_created() {
         recommended_max_memory_mb(total_memory_mb())
     );
     assert!(settings.data_directory.is_none());
-    assert!(!cache.root().exists());
+    assert!(!settings_file(&cache).exists());
 }
 
 #[tokio::test]
 async fn a_saved_value_roundtrips() {
-    let cache = cache("roundtrip");
+    let cache = database("roundtrip").await;
 
     let saved = save_settings(&cache, &sample(4)).await.expect("save");
     let loaded = load_settings(&cache).await.expect("load");
@@ -124,8 +126,8 @@ async fn a_saved_value_roundtrips() {
 
 #[tokio::test]
 async fn general_preferences_roundtrip_and_legacy_files_use_defaults() {
-    let cache = cache("general-preferences");
-    std::fs::create_dir_all(cache.root()).expect("root");
+    let cache = database("general-preferences").await;
+    std::fs::create_dir_all(cache.cache().root()).expect("root");
     std::fs::write(settings_file(&cache), r#"{"schema":1}"#).expect("legacy settings");
     let mut settings = load_settings(&cache).await.expect("legacy defaults");
     assert!(settings.hardware_acceleration);
@@ -149,8 +151,8 @@ async fn general_preferences_roundtrip_and_legacy_files_use_defaults() {
 
 #[tokio::test]
 async fn unsupported_languages_are_rejected_at_the_settings_boundary() {
-    let cache = cache("unsupported-language");
-    std::fs::create_dir_all(cache.root()).expect("root");
+    let cache = database("unsupported-language").await;
+    std::fs::create_dir_all(cache.cache().root()).expect("root");
     std::fs::write(settings_file(&cache), r#"{"schema":1,"language":"pt-BR"}"#).expect("settings");
     assert!(matches!(
         load_settings(&cache).await,
@@ -160,8 +162,8 @@ async fn unsupported_languages_are_rejected_at_the_settings_boundary() {
 
 #[tokio::test]
 async fn legacy_mib_limits_are_loaded_as_exact_bytes_per_second() {
-    let cache = cache("legacy-speed-limit");
-    std::fs::create_dir_all(cache.root()).expect("root");
+    let cache = database("legacy-speed-limit").await;
+    std::fs::create_dir_all(cache.cache().root()).expect("root");
     std::fs::write(
         settings_file(&cache),
         r#"{"schema":1,"downloadSpeedLimitMiB":3}"#,
@@ -185,8 +187,8 @@ async fn legacy_mib_limits_are_loaded_as_exact_bytes_per_second() {
 
 #[tokio::test]
 async fn byte_limits_take_precedence_and_remain_safe_for_the_frontend() {
-    let cache = cache("byte-speed-limit");
-    std::fs::create_dir_all(cache.root()).expect("root");
+    let cache = database("byte-speed-limit").await;
+    std::fs::create_dir_all(cache.cache().root()).expect("root");
     std::fs::write(
         settings_file(&cache),
         r#"{"schema":1,"downloadSpeedLimitMiB":3,"downloadSpeedLimitBytesPerSecond":1000}"#,
@@ -216,7 +218,7 @@ async fn byte_limits_take_precedence_and_remain_safe_for_the_frontend() {
 
 #[tokio::test]
 async fn global_speed_limit_roundtrips_and_rejects_zero() {
-    let cache = cache("speed-limit");
+    let cache = database("speed-limit").await;
     let mut settings = sample(4);
     assert_eq!(
         load_settings(&cache)
@@ -256,9 +258,9 @@ async fn global_speed_limit_roundtrips_and_rejects_zero() {
 
 #[tokio::test]
 async fn an_old_file_keeps_concurrency_and_fills_the_new_fields() {
-    let cache = cache("old");
+    let cache = database("old").await;
     let path = settings_file(&cache);
-    std::fs::create_dir_all(cache.root()).expect("root");
+    std::fs::create_dir_all(cache.cache().root()).expect("root");
     let original = "{\"schema\":1,\"downloadConcurrency\":4}\n";
     std::fs::write(&path, original).expect("write");
 
@@ -280,9 +282,9 @@ async fn an_old_file_keeps_concurrency_and_fills_the_new_fields() {
 
 #[tokio::test]
 async fn an_explicit_null_window_stays_empty() {
-    let cache = cache("null-window");
+    let cache = database("null-window").await;
     let path = settings_file(&cache);
-    std::fs::create_dir_all(cache.root()).expect("root");
+    std::fs::create_dir_all(cache.cache().root()).expect("root");
     std::fs::write(
         &path,
         "{\"schema\":1,\"downloadConcurrency\":8,\"width\":null,\"height\":null}\n",
@@ -297,8 +299,8 @@ async fn an_explicit_null_window_stays_empty() {
 
 #[tokio::test]
 async fn legacy_transparency_preferences_are_ignored_and_removed_on_save() {
-    let cache = cache("legacy-transparency");
-    std::fs::create_dir_all(cache.root()).expect("root");
+    let cache = database("legacy-transparency").await;
+    std::fs::create_dir_all(cache.cache().root()).expect("root");
     for disabled in [true, false] {
         let legacy = serde_json::json!({"schema": 1, "disableTransparency": disabled});
         std::fs::write(
@@ -317,14 +319,14 @@ async fn legacy_transparency_preferences_are_ignored_and_removed_on_save() {
     }
 }
 
-fn saved_file(cache: &SharedCache) -> serde_json::Value {
+fn saved_file(cache: &Database) -> serde_json::Value {
     serde_json::from_slice(&std::fs::read(settings_file(cache)).expect("settings file"))
         .expect("settings JSON")
 }
 
 #[tokio::test]
 async fn the_file_keeps_only_startup_preferences_and_the_rest_roundtrips() {
-    let cache = cache("split-storage");
+    let cache = database("split-storage").await;
     let mut settings = sample(4);
     settings.username = "Alex".to_string();
     settings.jvm_arguments = vec!["-XX:+UseG1GC".to_string()];
@@ -358,8 +360,8 @@ async fn the_file_keeps_only_startup_preferences_and_the_rest_roundtrips() {
 
 #[tokio::test]
 async fn legacy_file_values_are_used_until_they_move_to_the_database() {
-    let cache = cache("legacy-split");
-    std::fs::create_dir_all(cache.root()).expect("root");
+    let cache = database("legacy-split").await;
+    std::fs::create_dir_all(cache.cache().root()).expect("root");
     std::fs::write(
         settings_file(&cache),
         r#"{"schema":1,"username":"Alex","downloadConcurrency":4}"#,
@@ -379,9 +381,9 @@ async fn legacy_file_values_are_used_until_they_move_to_the_database() {
 
 #[tokio::test]
 async fn a_detected_java_is_stored_in_the_database() {
-    let cache = cache("java-in-database");
+    let cache = database("java-in-database").await;
     save_settings(&cache, &sample(4)).await.expect("save");
-    let java = cache.root().join("java21");
+    let java = cache.cache().root().join("java21");
     licht_core::set_java_path(&cache, 21, &java)
         .await
         .expect("set Java");
@@ -401,7 +403,7 @@ async fn a_detected_java_is_stored_in_the_database() {
 
 #[tokio::test]
 async fn database_values_win_over_stale_file_keys() {
-    let cache = cache("stale-file-keys");
+    let cache = database("stale-file-keys").await;
     save_settings(&cache, &sample(4)).await.expect("save");
     let mut file = saved_file(&cache);
     file["downloadConcurrency"] = 9.into();
@@ -418,7 +420,7 @@ async fn database_values_win_over_stale_file_keys() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn concurrent_saves_leave_a_valid_file() {
-    let cache = cache("concurrent-saves");
+    let cache = database("concurrent-saves").await;
     save_settings(&cache, &sample(1)).await.expect("initial");
     let saves = (1..=16)
         .map(|value| {
@@ -433,9 +435,43 @@ async fn concurrent_saves_leave_a_valid_file() {
     assert!((1..=16).contains(&loaded.download_concurrency));
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn reads_during_saves_never_mix_the_file_and_the_database() {
+    let cache = database("consistent-reads").await;
+    let mut light = sample(8);
+    light.theme = licht_core::LauncherTheme::Light;
+    light.username = "Alex".to_string();
+    let mut dark = sample(8);
+    dark.theme = licht_core::LauncherTheme::Dark;
+    dark.username = "Steve".to_string();
+    save_settings(&cache, &light).await.expect("first save");
+
+    let writer = {
+        let cache = cache.clone();
+        let (light, dark) = (light.clone(), dark.clone());
+        tokio::spawn(async move {
+            for index in 0..100 {
+                let next = if index % 2 == 0 { &dark } else { &light };
+                save_settings(&cache, next).await.expect("save");
+            }
+        })
+    };
+    // The theme lives in settings.json and the username in licht.db.
+    while !writer.is_finished() {
+        let loaded = load_settings(&cache).await.expect("load");
+        let pair = (loaded.theme, loaded.username.as_str());
+        assert!(
+            pair == (licht_core::LauncherTheme::Light, "Alex")
+                || pair == (licht_core::LauncherTheme::Dark, "Steve"),
+            "mixed read: {pair:?}"
+        );
+    }
+    writer.await.expect("writer");
+}
+
 #[tokio::test]
 async fn values_outside_one_to_sixteen_are_rejected_without_writing() {
-    let cache = cache("range");
+    let cache = database("range").await;
     let path = settings_file(&cache);
 
     let low = save_settings(&cache, &sample(0)).await.expect_err("zero");
@@ -453,7 +489,7 @@ async fn values_outside_one_to_sixteen_are_rejected_without_writing() {
 
 #[tokio::test]
 async fn write_concurrency_outside_one_to_sixteen_is_rejected() {
-    let cache = cache("write-range");
+    let cache = database("write-range").await;
     let mut low = sample(8);
     low.write_concurrency = 0;
     assert!(matches!(
@@ -472,7 +508,7 @@ async fn write_concurrency_outside_one_to_sixteen_is_rejected() {
 
 #[tokio::test]
 async fn unsupported_themes_and_bad_memory_are_rejected() {
-    let cache = cache("theme");
+    let cache = database("theme").await;
     let mut settings = serde_json::to_value(sample(8)).expect("settings");
     settings["theme"] = "unknown".into();
     assert!(serde_json::from_value::<Settings>(settings).is_err());
@@ -488,7 +524,7 @@ async fn unsupported_themes_and_bad_memory_are_rejected() {
 
 #[tokio::test]
 async fn exact_memory_values_survive_save_and_relocated_settings_fit_the_current_machine() {
-    let cache = cache("exact-memory");
+    let cache = database("exact-memory").await;
     let mut settings = sample(8);
     settings.max_memory_mb = 513;
     save_settings(&cache, &settings)
@@ -500,7 +536,7 @@ async fn exact_memory_values_survive_save_and_relocated_settings_fit_the_current
     );
     use sqlx::Connection;
     let mut connection = sqlx::SqliteConnection::connect_with(
-        &sqlx::sqlite::SqliteConnectOptions::new().filename(cache.root().join("licht.db")),
+        &sqlx::sqlite::SqliteConnectOptions::new().filename(cache.cache().root().join("licht.db")),
     )
     .await
     .expect("database");
@@ -521,7 +557,7 @@ async fn exact_memory_values_survive_save_and_relocated_settings_fit_the_current
 
 #[tokio::test]
 async fn all_supported_themes_survive_save_and_reload() {
-    let cache = cache("theme-roundtrip");
+    let cache = database("theme-roundtrip").await;
     for theme in [
         licht_core::LauncherTheme::Light,
         licht_core::LauncherTheme::Dark,
@@ -539,7 +575,7 @@ async fn all_supported_themes_survive_save_and_reload() {
 
 #[tokio::test]
 async fn a_relative_directory_is_rejected_and_the_default_launcher_root_is_stored_as_empty() {
-    let cache = cache("directory");
+    let cache = database("directory").await;
     let mut relative = sample(8);
     relative.data_directory = Some("games".to_string());
     assert!(matches!(
@@ -549,7 +585,7 @@ async fn a_relative_directory_is_rejected_and_the_default_launcher_root_is_store
         CoreError::SettingsDirectory
     ));
 
-    let parent = cache.root().display().to_string();
+    let parent = cache.cache().root().display().to_string();
     let mut defaults = sample(8);
     defaults.data_directory = Some(parent);
     let saved = save_settings(&cache, &defaults)
@@ -560,7 +596,7 @@ async fn a_relative_directory_is_rejected_and_the_default_launcher_root_is_store
 
 #[tokio::test]
 async fn a_custom_directory_is_remembered_without_moving_files() {
-    let home = cache("home");
+    let home = database("home").await;
     let chosen = std::env::temp_dir().join(format!("licht-data-dir-{}", std::process::id()));
     let mut settings = sample(4);
     settings.data_directory = Some(chosen.display().to_string());
@@ -579,9 +615,48 @@ async fn a_custom_directory_is_remembered_without_moving_files() {
     );
 }
 
+#[tokio::test]
+async fn a_game_folder_with_its_own_settings_file_keeps_its_concurrency() {
+    let home = database("own-game-settings").await;
+    save_settings(&home, &sample(4)).await.expect("profile");
+    let game = SharedCache::at(home.cache().root().join("legacy-game"));
+    std::fs::create_dir_all(game.root()).expect("game folder");
+    std::fs::write(
+        game.root().join("settings.json"),
+        serde_json::to_vec(&serde_json::json!({"schema": 1, "downloadConcurrency": 3}))
+            .expect("JSON"),
+    )
+    .expect("game settings");
+
+    assert_eq!(
+        download_concurrency(&game, &home)
+            .await
+            .expect("concurrency"),
+        3
+    );
+    assert!(!game.root().join("licht.db").exists());
+}
+
+#[tokio::test]
+async fn a_java_setting_must_name_a_java_executable() {
+    let cache = database("java-name").await;
+    let script = cache.cache().root().join("run.sh");
+    std::fs::write(&script, b"#!/bin/sh").expect("script");
+    let mut settings = sample(8);
+    settings.java21 = Some(script.display().to_string());
+
+    let rejected = save_settings(&cache, &settings).await;
+
+    assert!(matches!(rejected, Err(CoreError::SettingsJava)));
+    // A value saved before this check, or edited by hand, is ignored at launch.
+    assert_eq!(configured_java(&settings, 21), None);
+}
+
 #[test]
 fn a_configured_java_is_used_only_when_the_file_exists() {
-    let cache = cache("java");
+    let cache = SharedCache::at(
+        std::env::temp_dir().join(format!("licht-settings-{}-java", std::process::id())),
+    );
     std::fs::create_dir_all(cache.root()).expect("root");
     let executable = cache.root().join("java");
     std::fs::write(&executable, b"java").expect("file");
@@ -648,9 +723,9 @@ fn global_launch_inserts_memory_before_the_main_class() {
 
 #[tokio::test]
 async fn an_unknown_schema_is_left_in_place() {
-    let cache = cache("schema");
+    let cache = database("schema").await;
     let path = settings_file(&cache);
-    std::fs::create_dir_all(cache.root()).expect("root");
+    std::fs::create_dir_all(cache.cache().root()).expect("root");
     let original = "{\"schema\":2,\"downloadConcurrency\":8}\n";
     std::fs::write(&path, original).expect("write");
 
@@ -664,9 +739,9 @@ async fn an_unknown_schema_is_left_in_place() {
 
 #[tokio::test]
 async fn invalid_json_is_left_in_place() {
-    let cache = cache("invalid");
+    let cache = database("invalid").await;
     let path = settings_file(&cache);
-    std::fs::create_dir_all(cache.root()).expect("root");
+    std::fs::create_dir_all(cache.cache().root()).expect("root");
     let original = "{ not json";
     std::fs::write(&path, original).expect("write");
 

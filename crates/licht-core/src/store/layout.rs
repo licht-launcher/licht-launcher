@@ -1,7 +1,8 @@
 use std::fs::{File, OpenOptions};
 use std::path::{Path, PathBuf};
 
-use super::{db, settings};
+use super::db::{self, Database};
+use super::settings;
 use crate::{CoreError, Result, SharedCache};
 
 mod database;
@@ -13,33 +14,35 @@ mod relocation;
 pub(crate) mod requests;
 use progress::{StartupPhase, StartupReporter};
 
-pub async fn initialize_launcher() -> Result<SharedCache> {
+/// Prepares the profile and returns the database pool every later caller shares.
+pub async fn initialize_launcher() -> Result<Database> {
     initialize_launcher_with_progress(StartupReporter::default()).await
 }
 
-pub async fn initialize_launcher_with_progress(reporter: StartupReporter) -> Result<SharedCache> {
+pub async fn initialize_launcher_with_progress(reporter: StartupReporter) -> Result<Database> {
     let home = SharedCache::system()?;
     if std::env::var_os("LICHT_DATA_DIR").is_some() {
-        initialize_at_with_progress(None, &home, &reporter).await?;
-        return Ok(home);
+        return initialize_at_with_progress(None, &home, &reporter).await;
     }
     let legacy = directories::ProjectDirs::from("app.licht", "Licht", "Licht Launcher")
         .ok_or(CoreError::DataDirectory)?;
-    initialize_at_with_progress(Some(&SharedCache::at(legacy.data_dir())), &home, &reporter)
-        .await?;
-    Ok(home)
+    initialize_at_with_progress(Some(&SharedCache::at(legacy.data_dir())), &home, &reporter).await
 }
 
 #[cfg(test)]
 async fn initialize_at(legacy: &SharedCache, home: &SharedCache) -> Result<()> {
-    initialize_at_with_progress(Some(legacy), home, &StartupReporter::default()).await
+    initialize_at_with_progress(Some(legacy), home, &StartupReporter::default())
+        .await?
+        .close()
+        .await;
+    Ok(())
 }
 
 async fn initialize_at_with_progress(
     legacy: Option<&SharedCache>,
     home: &SharedCache,
     reporter: &StartupReporter,
-) -> Result<()> {
+) -> Result<Database> {
     reporter.phase(StartupPhase::Preparing)?;
     let _lock = initialization_lock_with_progress(home, "layout.lock", reporter).await?;
 
@@ -49,21 +52,33 @@ async fn initialize_at_with_progress(
             || legacy.root().join("licht.sqlite").exists()
             || legacy.root().join("versions").exists())
     {
+        // The migration publishes licht.db by renaming a staged file, so the profile
+        // pool opens only after it returns.
         migration::migrate(legacy, home, reporter).await?;
     }
+    let database = Database::open(home).await?;
+    if let Err(error) = prepare_profile(&database, reporter).await {
+        database.close().await;
+        return Err(error);
+    }
+    Ok(database)
+}
+
+async fn prepare_profile(database: &Database, reporter: &StartupReporter) -> Result<()> {
     // Older profiles keep every setting in settings.json until one save moves them.
     // The content move checkpoint lives in the same row, so it must exist first.
-    if !home.root().join("settings.json").exists() || !settings::stored_in_database(home).await? {
-        settings::save_settings(home, &settings::load_settings(home).await?).await?;
+    if !database.cache().root().join("settings.json").exists()
+        || !settings::stored_in_database(database).await?
+    {
+        settings::store_settings(database, &settings::load_settings(database).await?).await?;
     }
-    relocation::apply(home, reporter).await?;
-    let game = settings::game_cache(home).await?;
+    relocation::apply(database, reporter).await?;
+    let game = settings::game_cache(database).await?;
     tokio::fs::create_dir_all(game.root()).await?;
     tokio::fs::create_dir_all(game.cache_dir()?).await?;
     tokio::fs::create_dir_all(game.instances_dir()?).await?;
     reporter.phase(StartupPhase::RestoringCache)?;
-    installation::migrate(home, &game, reporter).await?;
-    Ok(())
+    installation::migrate(database, &game, reporter).await
 }
 
 pub fn startup_preferences() -> Result<settings::StartupPreferences> {
@@ -97,7 +112,13 @@ pub async fn run_startup_migration_preview(fail: bool, reporter: StartupReporter
     let home = SharedCache::at(root.join("destination"));
     let result = async {
         std::fs::create_dir_all(legacy.root().join("versions"))?;
-        settings::save_settings(&legacy, &settings::load_settings(&legacy).await?).await?;
+        let database = Database::open(&legacy).await?;
+        let saved = async {
+            settings::store_settings(&database, &settings::load_settings(&database).await?).await
+        }
+        .await;
+        database.close().await;
+        saved?;
         let instance = legacy.instance_dir("Preview")?;
         std::fs::create_dir_all(instance.join("mods"))?;
         for index in 0..100 {
@@ -117,7 +138,11 @@ pub async fn run_startup_migration_preview(fail: bool, reporter: StartupReporter
                 b"conflict",
             )?;
         }
-        initialize_at_with_progress(Some(&legacy), &home, &reporter).await
+        initialize_at_with_progress(Some(&legacy), &home, &reporter)
+            .await?
+            .close()
+            .await;
+        Ok(())
     }
     .await;
     if root.exists() {

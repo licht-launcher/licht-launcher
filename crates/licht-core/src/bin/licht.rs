@@ -157,12 +157,12 @@ async fn versions(args: &[String]) -> licht_core::Result<i32> {
 
 async fn launch(args: &[String]) -> licht_core::Result<i32> {
     let args = parse_launch_args(args)?;
-    let settings_home = licht_core::initialize_launcher().await?;
+    let pool = licht_core::initialize_launcher().await?;
     let cache = match &args.cache {
         Some(root) => SharedCache::at(root),
-        None => game_cache(&settings_home).await?,
+        None => game_cache(&pool).await?,
     };
-    let settings = load_settings(&settings_home).await?;
+    let settings = load_settings(&pool).await?;
     let json = std::fs::read_to_string(cache.version_json(&args.version_id)?)?;
     let version = parse_version(&json)?;
     let environment = host_environment()?;
@@ -175,7 +175,7 @@ async fn launch(args: &[String]) -> licht_core::Result<i32> {
             path
         }
     };
-    let database = licht_core::DatabaseService::start(settings_home.clone()).await?;
+    let database = licht_core::DatabaseService::start(pool).await?;
     let profile = match load_instance(&database.client(), &instance).await {
         Ok(profile) => Some(profile),
         Err(CoreError::Io(error)) if error.kind() == std::io::ErrorKind::NotFound => None,

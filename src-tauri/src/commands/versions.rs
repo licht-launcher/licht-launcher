@@ -56,7 +56,7 @@ pub async fn repair_instance(
 async fn install_one(
     app: &AppHandle,
     game: &SharedCache,
-    settings: &SharedCache,
+    settings: &licht_core::Database,
     version_id: &str,
     progress_version_id: &str,
 ) -> Result<String, CoreError> {
