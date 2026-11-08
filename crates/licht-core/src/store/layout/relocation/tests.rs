@@ -4,7 +4,7 @@ use super::{DirectoryState, PendingMove, write_state};
 use crate::store::db::Database;
 use crate::store::layout::progress::{StartupPhase, StartupReporter};
 use crate::store::layout::{initialize_at, tests::fixture};
-use crate::{Result, SharedCache};
+use crate::{CoreError, Result, SharedCache};
 
 async fn write_checkpoint(home: &SharedCache, state: &DirectoryState) -> Result<()> {
     let database = Database::open(home).await?;
@@ -16,6 +16,17 @@ async fn write_checkpoint(home: &SharedCache, state: &DirectoryState) -> Result<
 async fn apply(home: &SharedCache, reporter: &StartupReporter) -> Result<()> {
     let database = Database::open(home).await?;
     let applied = super::apply(&database, reporter).await;
+    database.close().await;
+    applied
+}
+
+async fn apply_with(
+    home: &SharedCache,
+    reporter: &StartupReporter,
+    free_space: impl Fn(&std::path::Path) -> Result<u64>,
+) -> Result<()> {
+    let database = Database::open(home).await?;
+    let applied = super::apply_with(&database, reporter, free_space).await;
     database.close().await;
     applied
 }
@@ -679,6 +690,118 @@ async fn conflicting_destination_preserves_files_and_can_be_retried() {
     initialize_at(&legacy, &home).await.expect("move back");
     assert_eq!(
         fs::read(source.root().join("file")).expect("moved back"),
+        b"original"
+    );
+}
+
+async fn choose_sibling_directory(home: &SharedCache) -> SharedCache {
+    let mut settings = crate::settings::load_settings_at(home)
+        .await
+        .expect("settings");
+    settings.data_directory = Some(
+        home.root()
+            .parent()
+            .expect("parent")
+            .join("chosen")
+            .display()
+            .to_string(),
+    );
+    crate::settings::testing::save_settings_at(home, &settings)
+        .await
+        .expect("save");
+    crate::settings::testing::game_cache_at(home)
+        .await
+        .expect("target")
+}
+
+#[tokio::test]
+async fn a_destination_without_room_refuses_the_move_and_keeps_the_checkpoint() {
+    let (legacy, home) = fixture("relocation-no-space");
+    initialize_at(&legacy, &home).await.expect("initialize");
+    let source = crate::settings::testing::game_cache_at(&home)
+        .await
+        .expect("source");
+    fs::write(source.root().join("file"), vec![7; 4096]).expect("source");
+    let target = choose_sibling_directory(&home).await;
+    let error = apply_with(&home, &StartupReporter::default(), |_| Ok(4096))
+        .await
+        .expect_err("not enough room");
+    let CoreError::InsufficientSpace {
+        required,
+        available,
+    } = error
+    else {
+        panic!("unexpected error: {error}");
+    };
+    assert!(required >= 4096 + super::FREE_SPACE_HEADROOM);
+    assert_eq!(available, 4096);
+    assert_eq!(
+        fs::read(source.root().join("file")).expect("source preserved"),
+        vec![7; 4096]
+    );
+    assert!(!target.root().exists());
+    let source_root = source.root().display().to_string();
+    let (active, _, copied) = stored_roots(&home).await;
+    assert_eq!(active.as_deref(), Some(source_root.as_str()));
+    assert!(!copied);
+    let mut settings = crate::settings::load_settings_at(&home)
+        .await
+        .expect("settings");
+    settings.data_directory = None;
+    crate::settings::testing::save_settings_at(&home, &settings)
+        .await
+        .expect("restore previous choice");
+    initialize_at(&legacy, &home).await.expect("cancel move");
+    assert_eq!(stored_roots(&home).await, (Some(source_root), None, false));
+}
+
+#[tokio::test]
+async fn files_already_at_the_destination_do_not_count_toward_the_space_check() {
+    let (legacy, home) = fixture("relocation-resume-space");
+    initialize_at(&legacy, &home).await.expect("initialize");
+    let source = crate::settings::testing::game_cache_at(&home)
+        .await
+        .expect("source");
+    let copied = vec![1; 1024 * 1024];
+    fs::write(source.root().join("copied"), &copied).expect("copied source");
+    fs::write(source.root().join("missing"), vec![2; 512]).expect("missing source");
+    let target = choose_sibling_directory(&home).await;
+    fs::create_dir_all(target.root()).expect("target");
+    fs::write(target.root().join("copied"), &copied).expect("interrupted copy");
+    let error = apply_with(&home, &StartupReporter::default(), |_| Ok(0))
+        .await
+        .expect_err("not enough room");
+    let CoreError::InsufficientSpace { required, .. } = error else {
+        panic!("unexpected error: {error}");
+    };
+    assert!(required >= 512 + super::FREE_SPACE_HEADROOM);
+    assert!(required < copied.len() as u64 + super::FREE_SPACE_HEADROOM);
+    apply_with(&home, &StartupReporter::default(), move |_| Ok(required))
+        .await
+        .expect("exactly enough room");
+    assert_eq!(
+        fs::read(target.root().join("missing")).expect("moved"),
+        vec![2; 512]
+    );
+    assert!(!source.root().exists());
+}
+
+#[tokio::test]
+async fn an_unknown_destination_volume_does_not_block_the_move() {
+    let (legacy, home) = fixture("relocation-unknown-volume");
+    initialize_at(&legacy, &home).await.expect("initialize");
+    let source = crate::settings::testing::game_cache_at(&home)
+        .await
+        .expect("source");
+    fs::write(source.root().join("file"), b"original").expect("source");
+    let target = choose_sibling_directory(&home).await;
+    apply_with(&home, &StartupReporter::default(), |_| {
+        Err(CoreError::StorageUnavailable)
+    })
+    .await
+    .expect("move without a free-space reading");
+    assert_eq!(
+        fs::read(target.root().join("file")).expect("moved"),
         b"original"
     );
 }

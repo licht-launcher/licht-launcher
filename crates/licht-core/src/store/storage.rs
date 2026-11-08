@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
-use sysinfo::{DiskRefreshKind, Disks};
+use sysinfo::{Disk, DiskRefreshKind, Disks};
 use ts_rs::TS;
 
 use crate::{CoreError, Result, SharedCache};
@@ -40,20 +40,9 @@ pub fn storage_summary(game: &SharedCache) -> Result<StorageSummary> {
     if !directory.is_dir() {
         return Err(CoreError::StorageUnavailable);
     }
-    let disks = Disks::new_with_refreshed_list_specifics(DiskRefreshKind::nothing());
-    let volumes = disks.list().iter().filter_map(|disk| {
-        // Canonicalize both sides to handle symlinks and Windows verbatim prefixes.
-        match std::fs::canonicalize(disk.mount_point()) {
-            Ok(mount) => Some((
-                mount,
-                disk_label(&disk.name().to_string_lossy(), disk.mount_point()),
-            )),
-            Err(error) => {
-                tracing::debug!(%error, "Skipping an inaccessible storage mount");
-                None
-            }
-        }
-    });
+    let disk_name = select_volume(&directory, DiskRefreshKind::nothing(), |disk| {
+        disk_label(&disk.name().to_string_lossy(), disk.mount_point())
+    })?;
     let categories = measure_categories(game, &directory)?;
     let managed_bytes = categories.iter().try_fold(0_u64, |total, usage| {
         total
@@ -61,7 +50,7 @@ pub fn storage_summary(game: &SharedCache) -> Result<StorageSummary> {
             .ok_or(CoreError::StorageUnavailable)
     })?;
     Ok(StorageSummary {
-        disk_name: select_disk(&directory, volumes)?,
+        disk_name,
         managed_bytes,
         categories,
     })
@@ -112,10 +101,35 @@ fn measure_categories(game: &SharedCache, directory: &Path) -> Result<Vec<Storag
     ])
 }
 
-fn select_disk(
+/// Free bytes on the volume holding `directory`, which must be canonical.
+pub(crate) fn available_space(directory: &Path) -> Result<u64> {
+    select_volume(
+        directory,
+        DiskRefreshKind::nothing().with_storage(),
+        Disk::available_space,
+    )
+}
+
+fn select_volume<T>(
     directory: &Path,
-    volumes: impl Iterator<Item = (PathBuf, String)>,
-) -> Result<String> {
+    refreshes: DiskRefreshKind,
+    read: impl Fn(&Disk) -> T,
+) -> Result<T> {
+    let disks = Disks::new_with_refreshed_list_specifics(refreshes);
+    let volumes = disks.list().iter().filter_map(|disk| {
+        // Canonicalize both sides to handle symlinks and Windows verbatim prefixes.
+        match std::fs::canonicalize(disk.mount_point()) {
+            Ok(mount) => Some((mount, read(disk))),
+            Err(error) => {
+                tracing::debug!(%error, "Skipping an inaccessible storage mount");
+                None
+            }
+        }
+    });
+    select_disk(directory, volumes)
+}
+
+fn select_disk<T>(directory: &Path, volumes: impl Iterator<Item = (PathBuf, T)>) -> Result<T> {
     volumes
         .filter(|(mount, _)| directory.starts_with(mount))
         .max_by_key(|(mount, _)| mount.components().count())
@@ -144,6 +158,11 @@ fn disk_label(name: &str, mount: &Path) -> String {
 }
 
 fn managed_size(directory: &Path) -> Result<u64> {
+    managed_size_where(directory, |_| true)
+}
+
+/// Logical size of the managed files under `directory` that `include` accepts.
+pub(crate) fn managed_size_where(directory: &Path, include: impl Fn(&Path) -> bool) -> Result<u64> {
     let metadata = match std::fs::symlink_metadata(directory) {
         Ok(metadata) => metadata,
         // Optional managed folders may not exist yet or may disappear during a scan.
@@ -151,7 +170,11 @@ fn managed_size(directory: &Path) -> Result<u64> {
         Err(error) => return Err(error.into()),
     };
     if metadata.is_file() {
-        return Ok(metadata.len());
+        return Ok(if include(directory) {
+            metadata.len()
+        } else {
+            0
+        });
     }
     if !metadata.is_dir() {
         return Ok(0);
@@ -180,7 +203,7 @@ fn managed_size(directory: &Path) -> Result<u64> {
             };
             if metadata.is_dir() {
                 pending.push(path);
-            } else if metadata.is_file() {
+            } else if metadata.is_file() && include(&path) {
                 total = total
                     .checked_add(metadata.len())
                     .ok_or(CoreError::StorageUnavailable)?;
@@ -199,7 +222,7 @@ mod tests {
         let root = std::env::temp_dir();
         let mounted = root.join("mounted");
         let directory = mounted.join("game");
-        let name = select_disk(
+        let name = select_disk::<String>(
             &directory,
             [(mounted, "Game Disk".into()), (root, "Other Disk".into())].into_iter(),
         )
@@ -211,7 +234,7 @@ mod tests {
     fn similar_directory_names_do_not_match_an_unrelated_mount() {
         let root = std::env::temp_dir();
         assert!(matches!(
-            select_disk(
+            select_disk::<String>(
                 &root.join("mounted-other").join("game"),
                 [(root.join("mounted"), "Other Disk".into())].into_iter(),
             ),
@@ -327,6 +350,12 @@ mod tests {
         assert!(!summary.disk_name.is_empty());
         assert!(!summary.disk_name.contains(r"\\?\"));
         std::fs::remove_dir_all(launcher).expect("cleanup");
+    }
+
+    #[test]
+    fn the_volume_holding_the_temporary_directory_reports_free_space() {
+        let directory = std::fs::canonicalize(std::env::temp_dir()).expect("temp directory");
+        assert!(available_space(&directory).expect("local volume") > 0);
     }
 
     #[test]
