@@ -39,6 +39,23 @@ events are throttled to approximately 100 ms. Shared types are generated with
 - `src/lib`: generic helpers (`cn`, error messages, formatting) and the
   `ts-rs` types in `src/lib/generated`.
 
+Each component lives in its own folder named after it, for example
+`src/components/ui/button/`:
+
+- `button.tsx`: markup and behavior;
+- `button.styles.ts`: its Tailwind classes as an `as const` object (and `cva`
+  variants), omitted when the component has no classes;
+- `button.test.tsx`: its tests;
+- `index.ts`: `export * from "./button";`, so imports stay
+  `@/components/ui/button`.
+
+The shadcn CLI writes flat files (`src/components/ui/<name>.tsx`). After
+`pnpm dlx shadcn add <name>`, move the file into `src/components/ui/<name>/`,
+move its classes into `<name>.styles.ts`, and add `index.ts` and a test.
+
+`.vscode/settings.json` configures Tailwind CSS IntelliSense to recognize
+classes inside `cn`/`cva` calls and `*Styles = { ... } as const` objects.
+
 The generated `src/routeTree.gen.ts` is committed so typechecking does not depend
 on a Vite build. Hash history (`/#/`) avoids requiring the Tauri window to rewrite
 paths to `index.html`. Interface copy is English. Feature state uses React hooks
