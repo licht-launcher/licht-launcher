@@ -14,7 +14,7 @@
   <a href="https://github.com/licht-launcher/licht-launcher/actions/workflows/ci.yml"><img src="https://github.com/licht-launcher/licht-launcher/actions/workflows/ci.yml/badge.svg?branch=main" alt="Build status"></a>
   <a href="https://github.com/licht-launcher/licht-launcher/releases/latest"><img src="https://img.shields.io/github/v/release/licht-launcher/licht-launcher?label=latest%20release" alt="Latest release"></a>
   <a href="https://github.com/licht-launcher/licht-launcher/releases"><img src="https://img.shields.io/github/downloads/licht-launcher/licht-launcher/total?label=downloads" alt="Downloads"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPLv3-blue" alt="GPLv3 license"></a>
 </p>
 
 <p align="center">
@@ -72,7 +72,7 @@ Licht Launcher is free and open source. It does not include a Minecraft license;
 
 Found a problem or have an idea? [Open an issue](https://github.com/licht-launcher/licht-launcher/issues) with your launcher version, operating system, and what happened. Please remove private information from screenshots and logs before sharing them.
 
-For private security reports, privacy questions, or other private enquiries, email [mateus.fneiva@gmail.com](mailto:mateus.fneiva@gmail.com).
+For private security reports, follow the [security policy](SECURITY.md). For privacy questions or other private enquiries, email [mateus.fneiva@gmail.com](mailto:mateus.fneiva@gmail.com).
 
 ## Privacy and trust
 
@@ -102,6 +102,6 @@ Licht Launcher is free and open source. If you would like to support its develop
 
 ## License and credits
 
-Licensed under the [MIT License](LICENSE). Created and maintained by Mateus Neiva.
+Licensed under the [GNU General Public License v3.0 or later](LICENSE). Releases published before this change remain available under the MIT License. Created and maintained by Mateus Neiva.
 
 **Unofficial project, not affiliated with Mojang Studios or Microsoft.**

@@ -17,9 +17,11 @@ References to Minecraft describe compatibility and do not imply endorsement.
 ## Software license
 
 Licht Launcher's source code and original contributions are distributed under
-the [MIT License](LICENSE). The permissions, copyright notice, warranty
-disclaimer, and limitation of liability in that license apply to the software.
-These terms do not replace the MIT License or restrict the rights it grants.
+the [GNU General Public License v3.0 or later](LICENSE). The permissions,
+copyright notice, warranty disclaimer, and limitation of liability in that
+license apply to the software. These terms do not replace the GPL or restrict
+the rights it grants. Releases published before the move to the GPL remain
+available under the MIT License.
 Third-party dependencies and content retain their own licenses.
 
 ## Minecraft and Microsoft services
@@ -68,7 +70,7 @@ is in the [README](README.md#uninstall) and
 The [Privacy Policy](PRIVACY.md) describes authentication data, local storage,
 network requests, automatic features, and your controls.
 
-The software is provided as described in the MIT License, without a warranty
+The software is provided as described in the GPL, without a warranty
 of uninterrupted operation, compatibility with every game or mod, or continued
 access to third-party APIs. Third-party service rules and availability can
 change independently of the launcher. Nothing here removes rights that cannot

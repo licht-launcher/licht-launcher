@@ -18,9 +18,9 @@ before implementation. Work on one item at a time. Dependencies, architecture,
 authentication/security decisions, shared Rust/frontend APIs, and roadmap
 items marked for approval require discussion first.
 
-For suspected vulnerabilities or private reports, email
-[mateus.fneiva@gmail.com](mailto:mateus.fneiva@gmail.com) instead of publishing
-exploitable details, credentials, or personal data in an issue.
+For suspected vulnerabilities, follow the [security policy](SECURITY.md)
+instead of publishing exploitable details, credentials, or personal data in an
+issue.
 
 ## Development and testing
 
@@ -43,7 +43,7 @@ Submit a PR against `main` with:
 External contributions require maintainer review before merging. Changes to
 CI, build scripts, dependencies, downloads, authentication, and signing deserve
 particular attention. Respect copyright and licenses; original contributions
-are submitted under the project's [MIT License](LICENSE), with existing
+are submitted under the project's [GPL-3.0-or-later license](LICENSE), with existing
 third-party notices and licenses preserved.
 
 ## Releases and signing responsibilities
