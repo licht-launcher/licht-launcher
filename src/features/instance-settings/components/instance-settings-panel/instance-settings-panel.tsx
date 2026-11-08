@@ -9,6 +9,8 @@ import { InstanceBaseSection } from "@/features/instance-settings/sections/insta
 import { OverridesSection } from "@/features/instance-settings/sections/overrides-section";
 import type { SettingsSnapshot } from "@/lib/generated/SettingsSnapshot";
 
+import { instanceSettingsPanelStyles } from "./instance-settings-panel.styles";
+
 export function InstanceSettingsPanel({
   section,
   draft,
@@ -44,16 +46,18 @@ export function InstanceSettingsPanel({
 }) {
   const meta = INSTANCE_SECTIONS.find((item) => item.id === section);
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-r-xl bg-muted/30">
+    <div className={instanceSettingsPanelStyles.root}>
       <ScrollArea
-        className="min-h-0 flex-1"
+        className={instanceSettingsPanelStyles.scrollArea}
         /* Radix top/bottom are inline; height:auto so h-full does not ignore bottom. */
         scrollbarStyle={{ top: "2.5rem", bottom: "0.75rem", height: "auto" }}
       >
-        <div className="flex flex-col gap-4 px-6 pt-6 pr-12 pb-6">
-          <div className="flex flex-col gap-1">
-            <h2 className="text-base leading-7 font-medium">{meta?.label}</h2>
-            <p className="text-sm text-muted-foreground">{meta?.description}</p>
+        <div className={instanceSettingsPanelStyles.content}>
+          <div className={instanceSettingsPanelStyles.header}>
+            <h2 className={instanceSettingsPanelStyles.title}>{meta?.label}</h2>
+            <p className={instanceSettingsPanelStyles.description}>
+              {meta?.description}
+            </p>
           </div>
           {section === "general" ? (
             <GeneralSection

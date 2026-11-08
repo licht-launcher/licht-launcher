@@ -31,6 +31,8 @@ import {
 import { friendlyError, messageOf } from "@/lib/errors";
 import type { DownloadJobSnapshot } from "@/lib/generated/DownloadJobSnapshot";
 
+import { downloadControlsStyles } from "./download-controls.styles";
+
 export function DownloadControls({
   job,
   title,
@@ -136,7 +138,7 @@ export function DownloadControls({
                 : "A new instance that has not finished installing will be removed from your library, along with its files. Existing instances and their files will be kept."}
           </DialogDescription>
           {cancelling && job.error && (
-            <p role="alert" className="text-sm text-destructive">
+            <p role="alert" className={downloadControlsStyles.error}>
               {job.error}
             </p>
           )}

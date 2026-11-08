@@ -19,6 +19,8 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import type { VersionSummary } from "@/lib/generated/VersionSummary";
 
+import { editInstanceVersionDialogStyles } from "./edit-instance-version-dialog.styles";
+
 function releaseOptions(
   versions: VersionSummary[],
   versionId: string,
@@ -65,7 +67,7 @@ export function EditInstanceVersionDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className={editInstanceVersionDialogStyles.content}>
         <DialogHeader>
           <DialogTitle>Edit game version</DialogTitle>
           <DialogDescription>
@@ -73,32 +75,38 @@ export function EditInstanceVersionDialog({
             change is saved.
           </DialogDescription>
         </DialogHeader>
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1">
-            <span className="text-sm font-medium">Platform</span>
-            <div className="flex h-8 items-center rounded-lg bg-muted/40 px-2.5 text-sm">
-              Vanilla
-            </div>
+        <div className={editInstanceVersionDialogStyles.body}>
+          <div className={editInstanceVersionDialogStyles.field}>
+            <span className={editInstanceVersionDialogStyles.label}>
+              Platform
+            </span>
+            <div className={editInstanceVersionDialogStyles.value}>Vanilla</div>
           </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-sm font-medium" id="edit-game-version-label">
+          <div className={editInstanceVersionDialogStyles.field}>
+            <span
+              className={editInstanceVersionDialogStyles.label}
+              id="edit-game-version-label"
+            >
               Game version
             </span>
             {versionsPending ? (
-              <div className="flex h-8 items-center gap-2 text-sm text-muted-foreground">
-                <Spinner className="size-3.5" aria-hidden />
+              <div className={editInstanceVersionDialogStyles.loading}>
+                <Spinner
+                  className={editInstanceVersionDialogStyles.loadingIcon}
+                  aria-hidden
+                />
                 Loading versions…
               </div>
             ) : versionsError && versionChoices.length === 0 ? (
-              <div className="flex flex-col gap-2">
-                <p className="text-sm text-muted-foreground">
+              <div className={editInstanceVersionDialogStyles.errorBlock}>
+                <p className={editInstanceVersionDialogStyles.message}>
                   Could not load the version list. Check your connection and try
                   again.
                 </p>
                 <Button
                   type="button"
                   variant="outline"
-                  className="self-start"
+                  className={editInstanceVersionDialogStyles.retryButton}
                   onClick={onRetryVersions}
                 >
                   Retry
@@ -112,7 +120,7 @@ export function EditInstanceVersionDialog({
               >
                 <SelectTrigger
                   aria-labelledby="edit-game-version-label"
-                  className="w-full font-normal"
+                  className={editInstanceVersionDialogStyles.selectTrigger}
                 >
                   <SelectValue />
                 </SelectTrigger>

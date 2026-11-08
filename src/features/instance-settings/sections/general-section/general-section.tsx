@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
+import { generalSectionStyles } from "./general-section.styles";
+
 export function GeneralSection({
   name,
   busy,
@@ -35,13 +37,13 @@ export function GeneralSection({
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-2">
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium" htmlFor="instance-name">
+    <div className={generalSectionStyles.root}>
+      <div className={generalSectionStyles.group}>
+        <div className={generalSectionStyles.groupText}>
+          <label className={generalSectionStyles.label} htmlFor="instance-name">
             Name
           </label>
-          <p id="instance-name-hint" className="text-sm text-muted-foreground">
+          <p id="instance-name-hint" className={generalSectionStyles.hint}>
             Display name for this instance. The folder on disk stays the same.
           </p>
         </div>
@@ -62,18 +64,18 @@ export function GeneralSection({
         />
       </div>
 
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-col gap-2">
-          <div className="flex flex-col gap-1">
-            <h3 className="text-sm font-medium">Open folder</h3>
-            <p className="text-sm text-muted-foreground">
+      <div className={generalSectionStyles.actions}>
+        <div className={generalSectionStyles.group}>
+          <div className={generalSectionStyles.groupText}>
+            <h3 className={generalSectionStyles.label}>Open folder</h3>
+            <p className={generalSectionStyles.hint}>
               Open this instance directory in the system file manager.
             </p>
           </div>
           <Button
             type="button"
             variant="secondary"
-            className="self-start"
+            className={generalSectionStyles.action}
             disabled={busy}
             onClick={onOpenFolder}
           >
@@ -81,17 +83,17 @@ export function GeneralSection({
             Open folder
           </Button>
         </div>
-        <div className="flex flex-col gap-2">
-          <div className="flex flex-col gap-1">
-            <h3 className="text-sm font-medium">Duplicate</h3>
-            <p className="text-sm text-muted-foreground">
+        <div className={generalSectionStyles.group}>
+          <div className={generalSectionStyles.groupText}>
+            <h3 className={generalSectionStyles.label}>Duplicate</h3>
+            <p className={generalSectionStyles.hint}>
               Copy this instance, including world saves, under a new name.
             </p>
           </div>
           <Button
             type="button"
             variant="secondary"
-            className="self-start"
+            className={generalSectionStyles.action}
             disabled={busy}
             onClick={onDuplicate}
           >
@@ -101,10 +103,10 @@ export function GeneralSection({
         </div>
       </div>
 
-      <div className="flex flex-col gap-2 border-t border-border pt-4">
-        <div className="flex flex-col gap-1">
-          <h3 className="text-sm font-medium">Delete</h3>
-          <p className="text-sm text-muted-foreground">
+      <div className={generalSectionStyles.dangerGroup}>
+        <div className={generalSectionStyles.groupText}>
+          <h3 className={generalSectionStyles.label}>Delete</h3>
+          <p className={generalSectionStyles.hint}>
             Permanently remove this instance and its saves. This cannot be
             undone.
           </p>
@@ -112,7 +114,7 @@ export function GeneralSection({
         <Button
           type="button"
           variant="destructive"
-          className="self-start"
+          className={generalSectionStyles.action}
           disabled={busy}
           onClick={onDelete}
         >

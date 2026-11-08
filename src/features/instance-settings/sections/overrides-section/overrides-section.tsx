@@ -5,6 +5,8 @@ import { MemorySection } from "@/features/instance-settings/sections/memory-sect
 import { WindowSection } from "@/features/instance-settings/sections/window-section";
 import type { SettingsSnapshot } from "@/lib/generated/SettingsSnapshot";
 
+import { overridesSectionStyles } from "./overrides-section.styles";
+
 export function OverridesSection({
   draft,
   snapshot,
@@ -15,33 +17,33 @@ export function OverridesSection({
   onChange: (patch: Partial<InstanceDraft>) => void;
 }) {
   return (
-    <div className="flex flex-col gap-8">
+    <div className={overridesSectionStyles.root}>
       <section
-        className="flex flex-col gap-4"
+        className={overridesSectionStyles.section}
         aria-labelledby="override-window-title"
       >
-        <h3 id="override-window-title" className="text-sm font-medium">
+        <h3 id="override-window-title" className={overridesSectionStyles.title}>
           Window
         </h3>
         <WindowSection draft={draft} onChange={onChange} />
       </section>
       <section
-        className="flex flex-col gap-4 border-t border-border pt-6"
+        className={overridesSectionStyles.dividedSection}
         aria-labelledby="override-memory-title"
       >
-        <h3 id="override-memory-title" className="text-sm font-medium">
+        <h3 id="override-memory-title" className={overridesSectionStyles.title}>
           Memory
         </h3>
         <MemorySection draft={draft} snapshot={snapshot} onChange={onChange} />
       </section>
       <section
-        className="flex flex-col gap-4 border-t border-border pt-6"
+        className={overridesSectionStyles.dividedSection}
         aria-labelledby="override-java-title"
       >
-        <h3 id="override-java-title" className="text-sm font-medium">
+        <h3 id="override-java-title" className={overridesSectionStyles.title}>
           Java
         </h3>
-        <div className="flex flex-col gap-6">
+        <div className={overridesSectionStyles.javaFields}>
           <JavaSection draft={draft} onChange={onChange} />
           <ArgumentsSection draft={draft} onChange={onChange} />
         </div>

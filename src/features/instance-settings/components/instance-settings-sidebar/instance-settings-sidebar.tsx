@@ -7,6 +7,8 @@ import {
   type InstanceSectionId,
 } from "@/features/instance-settings/model/sections";
 
+import { instanceSettingsSidebarStyles } from "./instance-settings-sidebar.styles";
+
 export function InstanceSettingsSidebar({
   name,
   section,
@@ -19,16 +21,16 @@ export function InstanceSettingsSidebar({
   onOpenGlobalSettings: () => void;
 }) {
   return (
-    <div className="flex w-56 shrink-0 flex-col gap-4 bg-black/20 px-2 py-6">
-      <div className="flex flex-col gap-2 px-2">
-        <DialogTitle className="border border-transparent pl-2 text-lg">
+    <div className={instanceSettingsSidebarStyles.root}>
+      <div className={instanceSettingsSidebarStyles.header}>
+        <DialogTitle className={instanceSettingsSidebarStyles.title}>
           {name}
         </DialogTitle>
         <Button
           type="button"
           variant="secondary"
           size="sm"
-          className="w-full justify-between"
+          className={instanceSettingsSidebarStyles.instanceButton}
           onClick={onOpenGlobalSettings}
         >
           Open Global Settings
@@ -37,7 +39,7 @@ export function InstanceSettingsSidebar({
       </div>
       <nav
         aria-label="Instance settings sections"
-        className="flex flex-col gap-1"
+        className={instanceSettingsSidebarStyles.nav}
       >
         {INSTANCE_SECTIONS.map((item) => {
           const Icon = item.icon;
@@ -46,7 +48,7 @@ export function InstanceSettingsSidebar({
               key={item.id}
               type="button"
               variant={section === item.id ? "secondary" : "ghost"}
-              className="justify-start px-4"
+              className={instanceSettingsSidebarStyles.navButton}
               aria-current={section === item.id ? "page" : undefined}
               onClick={() => onSectionChange(item.id)}
             >

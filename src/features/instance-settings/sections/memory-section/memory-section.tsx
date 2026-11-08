@@ -4,6 +4,8 @@ import { MemoryInput } from "@/features/settings/components/memory-input";
 import { MemorySlider } from "@/features/settings/components/memory-slider";
 import type { SettingsSnapshot } from "@/lib/generated/SettingsSnapshot";
 
+import { memorySectionStyles } from "./memory-section.styles";
+
 export function MemorySection({
   draft,
   snapshot,
@@ -14,10 +16,13 @@ export function MemorySection({
   onChange: (patch: Partial<InstanceDraft>) => void;
 }) {
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1">
-        <div className="flex items-center justify-between gap-3">
-          <label htmlFor="override-memory" className="text-sm">
+    <div className={memorySectionStyles.root}>
+      <div className={memorySectionStyles.toggle}>
+        <div className={memorySectionStyles.toggleRow}>
+          <label
+            htmlFor="override-memory"
+            className={memorySectionStyles.label}
+          >
             Customize memory allocation
           </label>
           <Switch
@@ -28,13 +33,13 @@ export function MemorySection({
             onCheckedChange={(overrideMemory) => onChange({ overrideMemory })}
           />
         </div>
-        <p id="override-memory-hint" className="text-sm text-muted-foreground">
+        <p id="override-memory-hint" className={memorySectionStyles.hint}>
           Set memory allocation separately for this instance.
         </p>
       </div>
       {draft.overrideMemory ? (
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between gap-3 text-sm">
+        <div className={memorySectionStyles.fields}>
+          <div className={memorySectionStyles.valueRow}>
             <span>Memory</span>
             <MemoryInput
               valueMb={draft.maxMemoryMb}
@@ -54,7 +59,7 @@ export function MemorySection({
               onChange({ maxMemoryMb });
             }}
           />
-          <p className="text-sm text-muted-foreground">
+          <p className={memorySectionStyles.hint}>
             Memory allocation. The minimum stays 512 MB.
           </p>
         </div>

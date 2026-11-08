@@ -2,6 +2,8 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import type { InstanceDraft } from "@/features/instance-settings/model/draft";
 
+import { argumentsSectionStyles } from "./arguments-section.styles";
+
 export function ArgumentsSection({
   draft,
   onChange,
@@ -10,10 +12,13 @@ export function ArgumentsSection({
   onChange: (patch: Partial<InstanceDraft>) => void;
 }) {
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1">
-        <div className="flex items-center justify-between gap-3">
-          <label htmlFor="override-jvm" className="text-sm">
+    <div className={argumentsSectionStyles.root}>
+      <div className={argumentsSectionStyles.toggle}>
+        <div className={argumentsSectionStyles.toggleRow}>
+          <label
+            htmlFor="override-jvm"
+            className={argumentsSectionStyles.label}
+          >
             Customize Java arguments
           </label>
           <Switch
@@ -26,14 +31,14 @@ export function ArgumentsSection({
             }
           />
         </div>
-        <p id="override-jvm-hint" className="text-sm text-muted-foreground">
+        <p id="override-jvm-hint" className={argumentsSectionStyles.hint}>
           Set Java arguments separately for this instance.
         </p>
       </div>
       {draft.overrideJvmArguments ? (
-        <div className="flex flex-col gap-1">
+        <div className={argumentsSectionStyles.toggle}>
           <label
-            className="flex flex-col gap-1 text-sm"
+            className={argumentsSectionStyles.field}
             htmlFor="instance-jvm-arguments"
           >
             Java arguments
@@ -46,7 +51,7 @@ export function ArgumentsSection({
               }
             />
           </label>
-          <p className="text-sm text-muted-foreground">
+          <p className={argumentsSectionStyles.hint}>
             Extra JVM flags, separated by spaces.
           </p>
         </div>

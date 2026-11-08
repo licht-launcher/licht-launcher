@@ -2,6 +2,8 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import type { InstanceDraft } from "@/features/instance-settings/model/draft";
 
+import { windowSectionStyles } from "./window-section.styles";
+
 export function WindowSection({
   draft,
   onChange,
@@ -10,10 +12,13 @@ export function WindowSection({
   onChange: (patch: Partial<InstanceDraft>) => void;
 }) {
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1">
-        <div className="flex items-center justify-between gap-3">
-          <label htmlFor="override-window" className="text-sm">
+    <div className={windowSectionStyles.root}>
+      <div className={windowSectionStyles.toggle}>
+        <div className={windowSectionStyles.toggleRow}>
+          <label
+            htmlFor="override-window"
+            className={windowSectionStyles.label}
+          >
             Customize window settings
           </label>
           <Switch
@@ -24,16 +29,19 @@ export function WindowSection({
             onCheckedChange={(overrideWindow) => onChange({ overrideWindow })}
           />
         </div>
-        <p id="override-window-hint" className="text-sm text-muted-foreground">
+        <p id="override-window-hint" className={windowSectionStyles.hint}>
           Configure fullscreen and launch resolution separately for this
           instance.
         </p>
       </div>
       {draft.overrideWindow ? (
         <>
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center justify-between gap-3">
-              <label htmlFor="instance-fullscreen" className="text-sm">
+          <div className={windowSectionStyles.toggle}>
+            <div className={windowSectionStyles.toggleRow}>
+              <label
+                htmlFor="instance-fullscreen"
+                className={windowSectionStyles.label}
+              >
                 Full screen
               </label>
               <Switch
@@ -46,14 +54,14 @@ export function WindowSection({
             </div>
             <p
               id="instance-fullscreen-hint"
-              className="text-sm text-muted-foreground"
+              className={windowSectionStyles.hint}
             >
               The game starts in full screen. Width and height are not used.
             </p>
           </div>
-          <div className="flex max-w-xs flex-col gap-1">
+          <div className={windowSectionStyles.sizeField}>
             <label
-              className="flex flex-col gap-1 text-sm"
+              className={windowSectionStyles.field}
               htmlFor="instance-width"
             >
               Width
@@ -69,9 +77,9 @@ export function WindowSection({
               />
             </label>
           </div>
-          <div className="flex max-w-xs flex-col gap-1">
+          <div className={windowSectionStyles.sizeField}>
             <label
-              className="flex flex-col gap-1 text-sm"
+              className={windowSectionStyles.field}
               htmlFor="instance-height"
             >
               Height

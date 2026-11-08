@@ -8,6 +8,8 @@ import type { InstanceDraft } from "@/features/instance-settings/model/draft";
 import { browseJava } from "@/lib/commands";
 import { friendlyError, messageOf } from "@/lib/errors";
 
+import { javaSectionStyles } from "./java-section.styles";
+
 export function JavaSection({
   draft,
   onChange,
@@ -28,10 +30,10 @@ export function JavaSection({
   });
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1">
-        <div className="flex items-center justify-between gap-3">
-          <label htmlFor="override-java" className="text-sm">
+    <div className={javaSectionStyles.root}>
+      <div className={javaSectionStyles.toggle}>
+        <div className={javaSectionStyles.toggleRow}>
+          <label htmlFor="override-java" className={javaSectionStyles.label}>
             Customize Java installation
           </label>
           <Switch
@@ -42,16 +44,13 @@ export function JavaSection({
             onCheckedChange={(overrideJava) => onChange({ overrideJava })}
           />
         </div>
-        <p id="override-java-hint" className="text-sm text-muted-foreground">
+        <p id="override-java-hint" className={javaSectionStyles.hint}>
           Use a custom Java executable for this instance.
         </p>
       </div>
       {draft.overrideJava ? (
-        <div className="flex flex-col gap-2">
-          <label
-            className="flex flex-col gap-1 text-sm"
-            htmlFor="instance-java"
-          >
+        <div className={javaSectionStyles.fields}>
+          <label className={javaSectionStyles.field} htmlFor="instance-java">
             Java path
             <Input
               id="instance-java"
@@ -64,7 +63,7 @@ export function JavaSection({
             type="button"
             variant="secondary"
             size="sm"
-            className="self-start"
+            className={javaSectionStyles.action}
             disabled={browse.isPending}
             onClick={() => {
               browse.mutate();

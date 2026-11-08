@@ -32,6 +32,8 @@ import { formatDownloadLimit } from "@/lib/download-speed";
 import { friendlyError, messageOf } from "@/lib/errors";
 import { requestOpenSettings } from "@/lib/shell-events";
 
+import { downloadsPageStyles } from "./downloads-page.styles";
+
 export function DownloadsPage() {
   const jobs = useDownloadJobs();
   const current = jobs.data ?? [];
@@ -88,16 +90,13 @@ export function DownloadsPage() {
       ));
 
   return (
-    <section
-      aria-label="Downloads"
-      className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-4"
-    >
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
-        <h1 className="flex items-center gap-2 text-lg font-semibold">
-          <Download aria-hidden className="size-5 text-muted-foreground" />
+    <section aria-label="Downloads" className={downloadsPageStyles.root}>
+      <div className={downloadsPageStyles.header}>
+        <h1 className={downloadsPageStyles.title}>
+          <Download aria-hidden className={downloadsPageStyles.titleIcon} />
           Downloads
         </h1>
-        <div className="flex items-center gap-2">
+        <div className={downloadsPageStyles.actions}>
           <Button
             variant="secondary"
             size="sm"
@@ -124,13 +123,10 @@ export function DownloadsPage() {
           </Button>
         </div>
       </div>
-      <div className="grid min-h-0 flex-1 grid-cols-3 gap-4">
-        <section
-          aria-label="Queue"
-          className="col-span-2 flex min-h-0 min-w-0 flex-col gap-3 rounded-lg border border-border/60 bg-black/20 p-4"
-        >
+      <div className={downloadsPageStyles.layout}>
+        <section aria-label="Queue" className={downloadsPageStyles.queue}>
           {jobs.isError && (
-            <div role="alert" className="flex items-center gap-2 text-sm">
+            <div role="alert" className={downloadsPageStyles.alert}>
               <span>Could not load downloads.</span>
               <Button
                 variant="outline"
@@ -148,17 +144,17 @@ export function DownloadsPage() {
               description="Your next download will appear here."
             />
           ) : current.length > 0 ? (
-            <ScrollArea className="min-h-0 flex-1">
-              <div className="flex flex-col gap-3">
+            <ScrollArea className={downloadsPageStyles.scrollArea}>
+              <div className={downloadsPageStyles.groups}>
                 {groups
                   .filter((group) => group.entries.length > 0)
                   .map((group) => (
                     <section
                       key={group.kind}
                       aria-label={group.label}
-                      className="flex flex-col"
+                      className={downloadsPageStyles.group}
                     >
-                      <h3 className="text-xs font-medium text-muted-foreground">
+                      <h3 className={downloadsPageStyles.groupTitle}>
                         {group.kind === "queued"
                           ? `${group.label} (${group.entries.length})`
                           : group.label}
@@ -170,7 +166,7 @@ export function DownloadsPage() {
                           disabled={busy}
                         />
                       ) : (
-                        <div className="divide-y divide-border/60">
+                        <div className={downloadsPageStyles.list}>
                           {group.entries.map((job) => (
                             <DownloadRow
                               key={job.id}
@@ -189,9 +185,12 @@ export function DownloadsPage() {
             </ScrollArea>
           ) : null}
         </section>
-        <aside aria-label="Download information" className="min-h-0 min-w-0">
-          <ScrollArea className="h-full">
-            <div className="flex min-w-0 flex-col gap-4">
+        <aside
+          aria-label="Download information"
+          className={downloadsPageStyles.aside}
+        >
+          <ScrollArea className={downloadsPageStyles.asideScroll}>
+            <div className={downloadsPageStyles.asideContent}>
               <SpeedChart
                 title="Transfer speed"
                 series={[
@@ -210,7 +209,7 @@ export function DownloadsPage() {
               />
               {settings.data?.settings.downloadSpeedLimitBytesPerSecond !=
                 null && (
-                <p className="text-xs text-muted-foreground">
+                <p className={downloadsPageStyles.note}>
                   Limited to{" "}
                   {formatDownloadLimit(
                     settings.data.settings.downloadSpeedLimitBytesPerSecond,
@@ -218,29 +217,29 @@ export function DownloadsPage() {
                 </p>
               )}
               {settings.isError && (
-                <p role="alert" className="text-sm text-destructive">
+                <p role="alert" className={downloadsPageStyles.error}>
                   Could not load download settings.
                 </p>
               )}
               <StoragePanel active={running.length > 0} />
               {telemetry.data?.paused && (
-                <p className="text-xs text-muted-foreground">
+                <p className={downloadsPageStyles.note}>
                   Downloads paused. An ongoing preparation step will finish
                   before pausing.
                 </p>
               )}
               {telemetry.subscriptionError && (
-                <p role="alert" className="text-sm text-destructive">
+                <p role="alert" className={downloadsPageStyles.error}>
                   Live speed updates are unavailable.
                 </p>
               )}
               {telemetry.isError && (
-                <p role="alert" className="text-sm text-destructive">
+                <p role="alert" className={downloadsPageStyles.error}>
                   Could not load download telemetry.
                 </p>
               )}
               {instances.isError && (
-                <p role="alert" className="text-sm text-destructive">
+                <p role="alert" className={downloadsPageStyles.error}>
                   Instance details are unavailable.
                 </p>
               )}

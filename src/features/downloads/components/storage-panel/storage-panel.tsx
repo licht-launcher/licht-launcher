@@ -6,6 +6,8 @@ import { getStorageSummary } from "@/lib/commands";
 import type { StorageCategory } from "@/lib/generated/StorageCategory";
 import { cn } from "@/lib/utils";
 
+import { storagePanelStyles } from "./storage-panel.styles";
+
 const categories: Record<
   StorageCategory,
   { label: string; color: SegmentColor }
@@ -66,22 +68,20 @@ export function StoragePanel({
     <section
       aria-label="Launcher Storage"
       className={cn(
-        "flex min-w-0 flex-col gap-3",
-        !embedded && "rounded-lg border border-border/60 bg-black/20 p-4",
+        storagePanelStyles.root,
+        !embedded && storagePanelStyles.card,
       )}
     >
-      <div className="flex items-center justify-between gap-3">
-        <Heading className="flex items-center gap-2 text-sm font-medium">
-          Launcher Storage
-        </Heading>
+      <div className={storagePanelStyles.header}>
+        <Heading className={storagePanelStyles.title}>Launcher Storage</Heading>
         {storage && (
-          <span className="text-sm font-medium tabular-nums">
+          <span className={storagePanelStyles.total}>
             {formatSize(storage.managedBytes)}
           </span>
         )}
       </div>
       {query.isError && !previewLoading && (
-        <div role="alert" className="flex flex-wrap items-center gap-2 text-sm">
+        <div role="alert" className={storagePanelStyles.legend}>
           <span>Could not load storage information.</span>
           <Button
             variant={embedded ? "ghost" : "outline"}

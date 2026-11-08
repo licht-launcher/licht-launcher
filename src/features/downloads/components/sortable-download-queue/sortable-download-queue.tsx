@@ -12,6 +12,8 @@ import { friendlyError, messageOf } from "@/lib/errors";
 import type { DownloadJobSnapshot } from "@/lib/generated/DownloadJobSnapshot";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 
+import { sortableDownloadQueueStyles } from "./sortable-download-queue.styles";
+
 function orderedSnapshots(
   current: DownloadJobSnapshot[],
   ids: string[],
@@ -55,7 +57,12 @@ function SortableRow({
   });
   const title = instance?.name ?? job.instanceFolder ?? "Download";
   return (
-    <div ref={ref} className={isDragSource ? "opacity-60" : undefined}>
+    <div
+      ref={ref}
+      className={
+        isDragSource ? sortableDownloadQueueStyles.dragging : undefined
+      }
+    >
       <DownloadRow
         job={job}
         instance={instance}
@@ -65,7 +72,7 @@ function SortableRow({
             type="button"
             variant="ghost"
             size="icon-sm"
-            className="shrink-0 cursor-grab touch-none text-muted-foreground active:cursor-grabbing"
+            className={sortableDownloadQueueStyles.handle}
             aria-label={`Reorder download for ${title}`}
             disabled={disabled}
           >
@@ -155,7 +162,7 @@ export function SortableDownloadQueue({
         reorder.mutate(ids);
       }}
     >
-      <div className="divide-y divide-border/60">
+      <div className={sortableDownloadQueueStyles.list}>
         {jobs.map((job) =>
           job.status === "queued" || job.status === "paused" ? (
             <SortableRow

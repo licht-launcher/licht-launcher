@@ -10,6 +10,8 @@ import type { InstanceSectionId } from "@/features/instance-settings/model/secti
 import { getSettings } from "@/lib/commands";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 
+import { instanceSettingsDialogStyles } from "./instance-settings-dialog.styles";
+
 export function InstanceSettingsDialog({
   entry,
   open,
@@ -53,7 +55,7 @@ export function InstanceSettingsDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="flex h-3/4 max-h-screen gap-0 overflow-hidden p-0 sm:max-w-4xl">
+      <DialogContent className={instanceSettingsDialogStyles.content}>
         {entry ? (
           <InstanceSettingsSidebar
             name={entry.name}
@@ -84,9 +86,9 @@ export function InstanceSettingsDialog({
             onDelete={onDelete}
           />
         ) : (
-          <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center bg-muted/30 p-6">
+          <div className={instanceSettingsDialogStyles.loading}>
             <Spinner
-              className="size-5 text-muted-foreground"
+              className={instanceSettingsDialogStyles.spinner}
               aria-label="Loading instance settings"
             />
           </div>

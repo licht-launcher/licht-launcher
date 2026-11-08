@@ -27,6 +27,8 @@ import type { DownloadJobSnapshot } from "@/lib/generated/DownloadJobSnapshot";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 import { cn } from "@/lib/utils";
 
+import { downloadsPopoverStyles } from "./downloads-popover.styles";
+
 export function DownloadRow({
   job,
   instance,
@@ -50,24 +52,21 @@ export function DownloadRow({
   return (
     <section
       aria-label={`Download for ${title}`}
-      className="flex flex-col gap-2 py-3"
+      className={downloadsPopoverStyles.job}
     >
-      <div className="flex items-center gap-2">
+      <div className={downloadsPopoverStyles.jobHeader}>
         {dragHandle}
         {job.javaMajor !== undefined ? (
-          <Download
-            aria-hidden
-            className="size-6 shrink-0 text-muted-foreground"
-          />
+          <Download aria-hidden className={downloadsPopoverStyles.jobIcon} />
         ) : (
           <InstanceIcon
             iconPath={instance?.iconPath}
             size={modpack ? "md" : "sm"}
           />
         )}
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium">{title}</p>
-          <p className="text-xs text-muted-foreground">{detail}</p>
+        <div className={downloadsPopoverStyles.jobText}>
+          <p className={downloadsPopoverStyles.jobTitle}>{title}</p>
+          <p className={downloadsPopoverStyles.jobDetail}>{detail}</p>
         </div>
         {!completed && <DownloadControls job={job} title={title} compact />}
       </div>
@@ -78,12 +77,12 @@ export function DownloadRow({
         />
       )}
       {known && !completed && (
-        <p className="text-xs tabular-nums text-muted-foreground">
+        <p className={downloadsPopoverStyles.jobProgress}>
           {progressText(job.progress, job.phase)}
         </p>
       )}
       {job.error && (
-        <p role="alert" className="text-xs text-destructive">
+        <p role="alert" className={downloadsPopoverStyles.jobError}>
           {job.error}
         </p>
       )}
@@ -146,7 +145,7 @@ export function DownloadsPopover({
       variant="ghost"
       className={cn(
         triggerClassName,
-        showLabel && current !== undefined && "w-full max-w-lg justify-start",
+        showLabel && current !== undefined && downloadsPopoverStyles.trigger,
       )}
       aria-label={`Downloads: ${label}`}
       onClick={onOpen}
@@ -154,16 +153,19 @@ export function DownloadsPopover({
       {showLabel && current !== undefined ? (
         <>
           {current.javaMajor !== undefined ? (
-            <Download aria-hidden className="size-6 shrink-0" />
+            <Download
+              aria-hidden
+              className={downloadsPopoverStyles.triggerIcon}
+            />
           ) : (
             <InstanceIcon iconPath={currentInstance?.iconPath} />
           )}
-          <span className="flex min-w-0 flex-1 flex-col gap-1">
-            <span className="flex min-w-0 items-center justify-between gap-2">
-              <span className="truncate text-xs font-medium">
+          <span className={downloadsPopoverStyles.triggerBody}>
+            <span className={downloadsPopoverStyles.triggerHeader}>
+              <span className={downloadsPopoverStyles.triggerTitle}>
                 {downloadStatusText(current)}
               </span>
-              <span className="flex shrink-0 items-center gap-2 text-xs tabular-nums">
+              <span className={downloadsPopoverStyles.triggerMeta}>
                 {queued > 0 ? <span>{queued} queued</span> : null}
                 {currentProgress !== null ? (
                   <span>{Math.floor(currentProgress)}%</span>
@@ -173,20 +175,26 @@ export function DownloadsPopover({
             <Progress
               aria-label="Current download progress"
               value={currentProgress}
-              className="h-1"
+              className={downloadsPopoverStyles.triggerProgress}
             />
           </span>
         </>
       ) : (
         <>
           {active ? (
-            <Loader2 aria-hidden className="size-3.5 shrink-0 animate-spin" />
+            <Loader2
+              aria-hidden
+              className={downloadsPopoverStyles.triggerSpinner}
+            />
           ) : (
-            <Download aria-hidden className="size-3.5 shrink-0" />
+            <Download
+              aria-hidden
+              className={downloadsPopoverStyles.triggerDownloadIcon}
+            />
           )}
           {showLabel ? <span>Downloads</span> : null}
           {showLabel && (label === "Idle" || query.isPending) ? null : (
-            <span className="tabular-nums">{label}</span>
+            <span className={downloadsPopoverStyles.triggerCount}>{label}</span>
           )}
         </>
       )}
@@ -196,14 +204,15 @@ export function DownloadsPopover({
   return (
     <Popover>
       <PopoverTrigger asChild>{trigger}</PopoverTrigger>
-      <PopoverContent side={side} align="end" className="w-96 p-3">
-        <div className="flex flex-col gap-3">
-          <p className="text-sm font-medium">Downloads</p>
+      <PopoverContent
+        side={side}
+        align="end"
+        className={downloadsPopoverStyles.content}
+      >
+        <div className={downloadsPopoverStyles.body}>
+          <p className={downloadsPopoverStyles.title}>Downloads</p>
           {query.isError && (
-            <div
-              role="alert"
-              className="flex items-center justify-between gap-2 text-sm"
-            >
+            <div role="alert" className={downloadsPopoverStyles.toolbar}>
               <span>Could not load downloads.</span>
               <Button
                 variant="outline"
@@ -215,18 +224,24 @@ export function DownloadsPopover({
             </div>
           )}
           {!query.isPending && !query.isError && jobs.length === 0 && (
-            <p className="text-sm text-muted-foreground">
+            <p className={downloadsPopoverStyles.empty}>
               No downloads in progress
             </p>
           )}
           {instances.isError && (
-            <p role="alert" className="text-xs text-destructive">
+            <p role="alert" className={downloadsPopoverStyles.jobError}>
               Instance details are unavailable.
             </p>
           )}
           {jobs.length > 0 && (
-            <ScrollArea className={jobs.length > 2 ? "h-80" : "h-auto"}>
-              <div className="flex flex-col divide-y divide-border/60">
+            <ScrollArea
+              className={
+                jobs.length > 2
+                  ? downloadsPopoverStyles.scrollAreaTall
+                  : downloadsPopoverStyles.scrollAreaAuto
+              }
+            >
+              <div className={downloadsPopoverStyles.jobs}>
                 {jobs.map((job) => (
                   <DownloadRow
                     key={job.id}
