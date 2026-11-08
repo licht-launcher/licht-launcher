@@ -9,6 +9,20 @@ use tokio::sync::{Mutex as AsyncMutex, OwnedMutexGuard, watch};
 use crate::startup::state::{Session, StartupRuntime};
 
 const MAX_SAFE_BYTES: u64 = 9_007_199_254_740_991;
+/// Lets end-to-end tests run a development build without background update checks
+/// reaching the network. Release builds ignore it.
+const SKIP_UPDATE_CHECK_VARIABLE: &str = "LICHT_SKIP_UPDATE_CHECK";
+
+fn automatic_checks_skipped() -> bool {
+    skip_requested(
+        cfg!(debug_assertions),
+        std::env::var_os(SKIP_UPDATE_CHECK_VARIABLE).as_deref(),
+    )
+}
+
+fn skip_requested(debug_build: bool, value: Option<&std::ffi::OsStr>) -> bool {
+    debug_build && value == Some(std::ffi::OsStr::new("1"))
+}
 
 pub struct Runtime {
     state: Mutex<(AppUpdateState, Instant)>,
@@ -343,6 +357,15 @@ mod tests {
     }
 
     #[test]
+    fn only_development_builds_honor_the_update_check_skip() {
+        let enabled = Some(std::ffi::OsStr::new("1"));
+        assert!(skip_requested(true, enabled));
+        assert!(!skip_requested(false, enabled));
+        assert!(!skip_requested(true, Some(std::ffi::OsStr::new("true"))));
+        assert!(!skip_requested(true, None));
+    }
+
+    #[test]
     fn native_update_operations_are_serialized_without_queueing_duplicates() {
         let runtime = Runtime::new();
         let first = runtime.reserve().expect("first operation");
@@ -391,6 +414,7 @@ pub fn start(
             loop {
                 let automatic = *preferences.borrow_and_update();
                 if automatic
+                    && !automatic_checks_skipped()
                     && licht_core::app_update_can_check(runtime.snapshot()?.phase)
                     && let Ok(_operation) = runtime.reserve()
                     && check(&app, &runtime, Arc::clone(&startup_worker), true)
