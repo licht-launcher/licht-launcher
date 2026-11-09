@@ -1,6 +1,4 @@
 use anyhow::Context;
-#[cfg(windows)]
-use tauri::Manager;
 use tauri::{WebviewUrl, WebviewWindowBuilder};
 
 mod app_updates;
@@ -33,12 +31,16 @@ pub fn run() -> anyhow::Result<()> {
             (true, licht_core::LauncherTheme::Dark)
         });
 
-    let application = tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_window_controls::init())
+        .plugin(tauri_plugin_window_controls::init());
+    // Only end-to-end test builds let WebdriverIO inspect windows and run scripts.
+    #[cfg(feature = "e2e")]
+    let builder = builder.plugin(tauri_plugin_wdio::init());
+    let application = builder
         .manage(std::sync::Arc::clone(&runtime))
         .manage(updates)
         .manage(commands::LaunchSessions::new())
@@ -190,10 +192,9 @@ fn create_main_window(app: &tauri::AppHandle, custom_title_bar: bool) -> tauri::
         .background_color(tauri::window::Color(0x16, 0x17, 0x1a, 0xff));
 
     #[cfg(windows)]
-    let builder = if app.state::<desktop::Runtime>().hardware_acceleration {
-        builder
-    } else {
-        builder.additional_browser_args("--disable-gpu")
+    let builder = match desktop::webview_browser_args(app) {
+        Some(args) => builder.additional_browser_args(&args),
+        None => builder,
     };
 
     #[cfg(windows)]

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "build": {
+    "beforeBuildCommand": "pnpm build:web:e2e"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "security": {
+      "capabilities": [
+        "default",
+        "startup",
+        {
+          "identifier": "e2e",
+          "description": "End-to-end test builds let WebdriverIO inspect windows and run scripts.",
+          "windows": ["main", "startup"],
+          "permissions": ["wdio:default"]
+        }
+      ]
+    }
+  }
+}

@@ -175,6 +175,32 @@ pub fn game_finished(app: &AppHandle, folder: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Extra WebView2 browser arguments for a new window, if any.
+#[cfg(windows)]
+pub fn webview_browser_args(app: &AppHandle) -> Option<String> {
+    let hardware_acceleration = app.state::<Runtime>().hardware_acceleration;
+    // msedgedriver passes its remote debugging port in this variable, but WebView2
+    // did not apply it on the CI runner because the app (through wry) always sets
+    // its own arguments. End-to-end builds forward it explicitly.
+    #[cfg(feature = "e2e")]
+    let driver = std::env::var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS").ok();
+    #[cfg(not(feature = "e2e"))]
+    let driver: Option<String> = None;
+    browser_args(hardware_acceleration, driver.as_deref())
+}
+
+#[cfg(any(windows, test))]
+fn browser_args(hardware_acceleration: bool, driver: Option<&str>) -> Option<String> {
+    let mut args = Vec::new();
+    if !hardware_acceleration {
+        args.push("--disable-gpu");
+    }
+    if let Some(driver) = driver.map(str::trim).filter(|value| !value.is_empty()) {
+        args.push(driver);
+    }
+    (!args.is_empty()).then(|| args.join(" "))
+}
+
 pub fn configure_webview(window: &WebviewWindow) -> tauri::Result<()> {
     #[cfg(target_os = "linux")]
     {
@@ -197,4 +223,32 @@ pub fn configure_webview(window: &WebviewWindow) -> tauri::Result<()> {
     #[cfg(not(target_os = "linux"))]
     let _ = window;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::browser_args;
+
+    #[test]
+    fn hardware_acceleration_needs_no_extra_arguments() {
+        assert_eq!(browser_args(true, None), None);
+        assert_eq!(browser_args(true, Some("  ")), None);
+    }
+
+    #[test]
+    fn disabled_acceleration_keeps_only_disable_gpu() {
+        assert_eq!(browser_args(false, None).as_deref(), Some("--disable-gpu"));
+    }
+
+    #[test]
+    fn webdriver_arguments_are_appended() {
+        assert_eq!(
+            browser_args(true, Some("--remote-debugging-port=0")).as_deref(),
+            Some("--remote-debugging-port=0")
+        );
+        assert_eq!(
+            browser_args(false, Some(" --remote-debugging-port=0 ")).as_deref(),
+            Some("--disable-gpu --remote-debugging-port=0")
+        );
+    }
 }
