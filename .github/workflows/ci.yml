@@ -21,48 +21,30 @@ concurrency:
 
 # Frontend checks and rustfmt give the same result on every OS, so they run on Linux
 # only; anything that compiles the Rust code runs on both supported platforms.
+# Check steps run even when an earlier check failed, so one run reports every problem.
 jobs:
-  lint:
-    name: Lint
+  frontend:
+    name: Frontend
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up toolchains
+        id: setup
         uses: ./.github/actions/setup
 
-      - name: Check frontend lint and formatting
+      - name: Check lint and formatting
         run: pnpm lint
 
-  typecheck:
-    name: Typecheck
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Set up toolchains
-        uses: ./.github/actions/setup
-
       - name: Check TypeScript types
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         run: pnpm typecheck
 
-  frontend-tests:
-    name: Frontend tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Set up toolchains
-        uses: ./.github/actions/setup
-
       # Vitest adds its GitHub Actions reporter on CI: failure annotations plus a job summary.
-      - name: Run frontend tests with coverage
+      - name: Run tests with coverage
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         run: pnpm test:coverage
 
       - name: Add coverage to the job summary
@@ -84,83 +66,52 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-  rust-format:
-    name: Rust format
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+  rust:
+    name: Rust (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # pnpm is needed because the Clippy and test scripts live in package.json.
       - name: Set up toolchains
+        id: setup
         uses: ./.github/actions/setup
         with:
-          node: "false"
           rust: "true"
-          rust-components: rustfmt
+          rust-components: ${{ runner.os == 'Linux' && 'rustfmt clippy llvm-tools-preview' || 'clippy' }}
+          system-deps: "true"
+          cache-key: cargo-rust-${{ matrix.os }}
 
       - name: Check Rust formatting
+        if: runner.os == 'Linux'
         run: cargo fmt --all --check
 
-  clippy:
-    name: Clippy (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest, ubuntu-latest]
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      # pnpm is needed because the Clippy script lives in package.json.
-      - name: Set up toolchains
-        uses: ./.github/actions/setup
-        with:
-          rust: "true"
-          rust-components: clippy
-          system-deps: "true"
-          cache-key: cargo-clippy-${{ matrix.os }}
-
       - name: Run Clippy
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         run: pnpm lint:rust
 
-  rust-tests:
-    name: Rust tests (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest, ubuntu-latest]
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Set up toolchains
-        uses: ./.github/actions/setup
-        with:
-          rust: "true"
-          rust-components: ${{ runner.os == 'Linux' && 'llvm-tools-preview' || '' }}
-          system-deps: "true"
-          cache-key: cargo-test-${{ matrix.os }}
-
       - name: Run Rust tests
-        if: runner.os == 'Windows'
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' && runner.os == 'Windows' }}
         run: pnpm test:rust
 
       # Coverage instrumentation makes builds much slower, so only Linux measures it.
       - name: Install cargo-llvm-cov
-        if: runner.os == 'Linux'
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' && runner.os == 'Linux' }}
         run: cargo install cargo-llvm-cov --version 0.9.1 --locked
 
       - name: Run Rust tests with coverage
-        if: runner.os == 'Linux'
+        id: coverage
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' && runner.os == 'Linux' }}
         run: cargo llvm-cov --workspace --locked --no-report
 
       - name: Build Rust coverage reports
-        if: ${{ !cancelled() && runner.os == 'Linux' }}
+        if: ${{ !cancelled() && steps.coverage.outcome != 'skipped' && runner.os == 'Linux' }}
         run: |
           cargo llvm-cov report --html
           cargo llvm-cov report --json --summary-only --output-path target/llvm-cov/summary.json
