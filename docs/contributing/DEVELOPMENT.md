@@ -88,3 +88,36 @@ tests). Run either half on its own when you only touched one side.
 For build/packaging changes, also run the relevant build described in the
 development environment section above. Report checks you could not run and actual
 failures; do not disable lint rules or weaken tests to obtain a passing result.
+
+### End-to-end tests
+
+`e2e/` drives the real application with WebdriverIO and
+[`@wdio/tauri-service`](https://webdriver.io/docs/desktop-testing/tauri/) through
+`tauri-driver` (Windows and Linux only). The `E2E` workflow runs them on pull
+requests that touch the app.
+
+One-time setup:
+
+- `cargo install tauri-driver --version 2.1.0 --locked` (or point
+  `TAURI_DRIVER_PATH` at an existing `tauri-driver` binary).
+- Linux: install `webkit2gtk-driver` (provides `WebKitWebDriver`); use
+  `xvfb-run` when there is no display.
+- Windows: nothing else; the service downloads the Microsoft Edge Driver that
+  matches the installed WebView2 into a new `%TEMP%\msedgedriver\<major>-<random>`
+  folder on every run (about 26 MB). To skip that, put a matching
+  `msedgedriver.exe` on `PATH`; the service reuses it when the major version matches.
+
+Run:
+
+```sh
+pnpm build:e2e
+pnpm test:e2e
+```
+
+`pnpm build:e2e` builds a debug binary with the `e2e` Cargo feature and
+`src-tauri/tauri.e2e.conf.json`, which add the `tauri-plugin-wdio` bridge that
+the service needs. Release builds never enable that feature. Each run starts
+the app with a temporary `LICHT_DATA_DIR`, so your own launcher data is never
+touched, and with `LICHT_SKIP_UPDATE_CHECK=1`, which debug builds honor to skip
+background update checks. Keep end-to-end tests off flows that need the
+network or a Microsoft account (downloads, sign-in, launching the game).
