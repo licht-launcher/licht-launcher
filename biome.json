@@ -11,6 +11,7 @@
       "src/**/*.{ts,tsx,css,json}",
       "!src/routeTree.gen.ts",
       "!src/lib/generated",
+      "e2e/**/*.{ts,json}",
       "*.json",
       "*.ts",
       "src-tauri/tauri.conf.json"
