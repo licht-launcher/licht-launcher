@@ -19,73 +19,141 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+# Frontend checks and rustfmt give the same result on every OS, so they run on Linux
+# only; anything that compiles the Rust code runs on both supported platforms.
+# Check steps run even when an earlier check failed, so one run reports every problem.
 jobs:
-  checks:
-    name: Checks (${{ matrix.os }})
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up toolchains
+        id: setup
+        uses: ./.github/actions/setup
+
+      - name: Check lint and formatting
+        run: pnpm lint
+
+      - name: Check TypeScript types
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: pnpm typecheck
+
+      # Vitest adds its GitHub Actions reporter on CI: failure annotations plus a job summary.
+      - name: Run tests with coverage
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: pnpm test:coverage
+
+      - name: Add coverage to the job summary
+        if: ${{ !cancelled() && hashFiles('coverage/summary.txt') != '' }}
+        run: |
+          {
+            echo "### Frontend coverage"
+            echo '```'
+            cat coverage/summary.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-frontend
+          path: coverage/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  rust:
+    name: Rust (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # pnpm is needed because the Clippy and test scripts live in package.json.
+      - name: Set up toolchains
+        id: setup
+        uses: ./.github/actions/setup
+        with:
+          rust: "true"
+          rust-components: ${{ runner.os == 'Linux' && 'rustfmt clippy llvm-tools-preview' || 'clippy' }}
+          system-deps: "true"
+          cache-key: cargo-rust-${{ matrix.os }}
+
+      - name: Check Rust formatting
+        if: runner.os == 'Linux'
+        run: cargo fmt --all --check
+
+      - name: Run Clippy
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: pnpm lint:rust
+
+      - name: Run Rust tests
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' && runner.os == 'Windows' }}
+        run: pnpm test:rust
+
+      # Coverage instrumentation makes builds much slower, so only Linux measures it.
+      - name: Install cargo-llvm-cov
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' && runner.os == 'Linux' }}
+        run: cargo install cargo-llvm-cov --version 0.9.1 --locked
+
+      - name: Run Rust tests with coverage
+        id: coverage
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' && runner.os == 'Linux' }}
+        run: cargo llvm-cov --workspace --locked --no-report
+
+      - name: Build Rust coverage reports
+        if: ${{ !cancelled() && steps.coverage.outcome != 'skipped' && runner.os == 'Linux' }}
+        run: |
+          cargo llvm-cov report --html
+          cargo llvm-cov report --json --summary-only --output-path target/llvm-cov/summary.json
+          {
+            echo "### Rust coverage"
+            echo "| Metric | Covered | Total | Percent |"
+            echo "| --- | ---: | ---: | ---: |"
+            jq -r '.data[0].totals | to_entries[]
+              | select(.key == "lines" or .key == "functions" or .key == "regions")
+              | "| \(.key) | \(.value.covered) | \(.value.count) | \(.value.percent * 100 | round / 100)% |"' \
+              target/llvm-cov/summary.json
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage report
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-rust
+          path: target/llvm-cov/html/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  build:
+    name: Build (${{ matrix.os }})
+    if: ${{ !inputs.skip_tauri_build }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
         os: [windows-latest, ubuntu-latest]
-
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Set up pnpm
-        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-
-      - name: Set up Node.js
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      # Same key as the release workflow, which restores this cache for its builds.
+      - name: Set up toolchains
+        uses: ./.github/actions/setup
         with:
-          node-version: 24.21.0
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Install Linux system dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends \
-            build-essential \
-            pkg-config \
-            libwebkit2gtk-4.1-dev \
-            libssl-dev \
-            libxdo-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev
-
-      - name: Set up Rust
-        run: rustup toolchain install 1.99.0 --profile minimal --component rustfmt --component clippy
-
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-        with:
-          shared-key: cargo-${{ matrix.os }}
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-
-      - name: Install frontend dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Check frontend lint and formatting
-        run: pnpm lint
-
-      - name: Check TypeScript types
-        run: pnpm typecheck
-
-      - name: Run frontend tests
-        run: pnpm test
-
-      - name: Check Rust formatting
-        run: cargo fmt --all --check
-
-      - name: Run Clippy
-        run: pnpm lint:rust
-
-      - name: Run Rust tests
-        run: pnpm test:rust
+          rust: "true"
+          system-deps: "true"
+          cache-key: cargo-${{ matrix.os }}
 
       - name: Build Tauri application
-        if: ${{ !inputs.skip_tauri_build }}
         run: pnpm tauri build --ci --no-bundle -- --locked

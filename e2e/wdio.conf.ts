@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { stopDriversStartedByThisRun } from "./support/drivers.ts";
+import { captureFailure } from "./support/failures.ts";
 import { switchToMainWindow } from "./support/windows.ts";
 
 const rootDir = path.resolve(
@@ -59,6 +60,15 @@ export const config: WebdriverIO.Config = {
   },
   async before() {
     await switchToMainWindow();
+  },
+  async afterTest(test, _context, { passed }) {
+    if (!passed) {
+      // `e2e/logs` is uploaded as a CI artifact when the run fails.
+      await captureFailure(
+        path.join(rootDir, "e2e", "logs", "failures"),
+        test.fullTitle,
+      );
+    }
   },
   onComplete() {
     stopDriversStartedByThisRun();
