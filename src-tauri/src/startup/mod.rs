@@ -22,10 +22,9 @@ pub fn create_window(app: &AppHandle, label: &str) -> tauri::Result<()> {
         .theme(crate::theme::native_theme(theme))
         .initialization_script(crate::theme::initialization_script(theme)?);
     #[cfg(windows)]
-    let builder = if app.state::<crate::desktop::Runtime>().hardware_acceleration {
-        builder
-    } else {
-        builder.additional_browser_args("--disable-gpu")
+    let builder = match crate::desktop::webview_browser_args(app) {
+        Some(args) => builder.additional_browser_args(&args),
+        None => builder,
     };
     let window = builder.build()?;
     crate::desktop::configure_webview(&window)?;

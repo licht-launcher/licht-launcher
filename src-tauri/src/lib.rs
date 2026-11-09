@@ -1,6 +1,4 @@
 use anyhow::Context;
-#[cfg(windows)]
-use tauri::Manager;
 use tauri::{WebviewUrl, WebviewWindowBuilder};
 
 mod app_updates;
@@ -194,10 +192,9 @@ fn create_main_window(app: &tauri::AppHandle, custom_title_bar: bool) -> tauri::
         .background_color(tauri::window::Color(0x16, 0x17, 0x1a, 0xff));
 
     #[cfg(windows)]
-    let builder = if app.state::<desktop::Runtime>().hardware_acceleration {
-        builder
-    } else {
-        builder.additional_browser_args("--disable-gpu")
+    let builder = match desktop::webview_browser_args(app) {
+        Some(args) => builder.additional_browser_args(&args),
+        None => builder,
     };
 
     #[cfg(windows)]
