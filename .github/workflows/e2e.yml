@@ -25,6 +25,9 @@ jobs:
     name: E2E (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
+    # Same as the CI Rust job: smaller debug builds, and an equal cache key.
+    env:
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
     strategy:
       fail-fast: false
       matrix:
