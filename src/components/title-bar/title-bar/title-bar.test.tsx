@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-
+import * as nativeCaption from "@/api/native-caption";
 import { TitleBar } from "@/components/title-bar/title-bar";
 import { DownloadJobsProvider } from "@/features/downloads/components/download-jobs-provider";
 import { snapshot } from "@/features/settings/fixtures/snapshot";
@@ -9,7 +9,6 @@ import {
   INSTALL_UPDATE_EVENT,
   UPDATE_CHECK_STATUS_EVENT,
 } from "@/features/updater/components/update-check";
-import * as nativeCaption from "@/lib/native-caption";
 
 const minimize = vi.fn();
 const close = vi.fn();

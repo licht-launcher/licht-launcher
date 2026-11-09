@@ -1,15 +1,14 @@
 import { useMutation } from "@tanstack/react-query";
-
+import {
+  browseModpackFile,
+  createInstanceFromModpackFile,
+} from "@/api/commands";
 import { useFinishCreation } from "@/features/new-instance/hooks/use-finish-creation";
 import { useInstanceNames } from "@/features/new-instance/hooks/use-instance-names";
 import {
   uniqueName,
   uploadInstanceName,
 } from "@/features/new-instance/model/create-state";
-import {
-  browseModpackFile,
-  createInstanceFromModpackFile,
-} from "@/lib/commands";
 
 /**
  * Creates an instance from a pack file chosen in the system picker, named

@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
-
+import { onOpenSettingsRequest } from "@/api/shell-events";
 import type { InstanceAction } from "@/features/instances/components/instance-action-dialog";
 import type { SectionId } from "@/features/settings/model/sections";
-import { onOpenSettingsRequest } from "@/lib/shell-events";
 
 export function useInstanceDialogs() {
   const [settingsOpen, setSettingsOpen] = useState(false);

@@ -3,9 +3,9 @@ import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { getSettings } from "@/api/commands";
 import { snapshot } from "@/features/settings/fixtures/snapshot";
 import { useLauncherTheme } from "@/features/settings/hooks/use-launcher-theme";
-import { getSettings } from "@/lib/commands";
 
 const { listeners } = vi.hoisted(() => ({
   listeners: new Set<(event: { payload: unknown }) => void>(),
@@ -20,7 +20,7 @@ vi.mock("@tauri-apps/api/event", () => ({
     },
   ),
 }));
-vi.mock("@/lib/commands", () => ({ getSettings: vi.fn() }));
+vi.mock("@/api/commands", () => ({ getSettings: vi.fn() }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 
 class ColorScheme extends EventTarget {

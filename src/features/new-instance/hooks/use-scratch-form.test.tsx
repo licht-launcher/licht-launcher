@@ -2,13 +2,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-
+import { listLoaderBuilds, listVersions } from "@/api/commands";
 import { useScratchForm } from "@/features/new-instance/hooks/use-scratch-form";
-import { listLoaderBuilds, listVersions } from "@/lib/commands";
 import type { LoaderBuild } from "@/lib/generated/LoaderBuild";
 import type { VersionSummary } from "@/lib/generated/VersionSummary";
 
-vi.mock("@/lib/commands", () => ({
+vi.mock("@/api/commands", () => ({
   listVersions: vi.fn(),
   listLoaderBuilds: vi.fn(),
 }));

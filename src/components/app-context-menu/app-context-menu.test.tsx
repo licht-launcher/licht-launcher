@@ -16,7 +16,7 @@ import {
   within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
+import { onOpenSettingsRequest } from "@/api/shell-events";
 import { AppContextMenu } from "@/components/app-context-menu";
 import {
   Dialog,
@@ -26,12 +26,11 @@ import {
 } from "@/components/ui/dialog";
 import { Toaster } from "@/components/ui/sonner";
 import * as updater from "@/features/updater/components/update-check";
-import { onOpenSettingsRequest } from "@/lib/shell-events";
 
 const openRepository = vi.hoisted(() => vi.fn<() => Promise<void>>());
 
-vi.mock("@/lib/commands", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/commands")>()),
+vi.mock("@/api/commands", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/api/commands")>()),
   openRepository,
 }));
 

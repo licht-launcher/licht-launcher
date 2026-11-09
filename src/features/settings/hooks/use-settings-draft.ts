@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-
+import { getSettings, runtimeJava, saveSettings } from "@/api/commands";
 import { useToastError } from "@/features/settings/hooks/use-toast-error";
 import {
   dismissTitleBarRestartToast,
@@ -13,7 +13,6 @@ import {
   optionalSize,
   toSettings,
 } from "@/features/settings/model/draft";
-import { getSettings, runtimeJava, saveSettings } from "@/lib/commands";
 import { DOWNLOAD_SPEED_ERROR, parseDownloadLimit } from "@/lib/download-speed";
 import { friendlyError, messageOf } from "@/lib/errors";
 import type { Settings } from "@/lib/generated/Settings";

@@ -1,0 +1,466 @@
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { UserRound } from "lucide-react";
+import { useState, useSyncExternalStore } from "react";
+import {
+  closeStartupPreview,
+  openStartupPreview,
+  restartStartupPreview,
+} from "@/api/commands";
+import {
+  previewWindowSize,
+  resetWindowBounds,
+  WINDOW_SIZE_PRESETS,
+  type WindowSizePreset,
+} from "@/api/window-preview";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
+import {
+  setStorageLoadingPreview,
+  useStorageLoadingPreview,
+} from "@/features/downloads/hooks/use-storage-loading-preview";
+import {
+  MEMORY_PREVIEW_SIZES_GIB,
+  setMemoryPreview,
+  useMemoryPreview,
+} from "@/features/settings/hooks/use-memory-preview";
+import {
+  STARTUP_PREVIEW_QUERY_KEY,
+  useStartupPreviewState,
+} from "@/features/settings/hooks/use-startup-preview-state";
+import type { Draft } from "@/features/settings/model/draft";
+import {
+  getUpdateSimulation,
+  setUpdateSimulation,
+  subscribeUpdateSimulation,
+} from "@/features/updater/model/simulation";
+import { friendlyError, messageOf } from "@/lib/errors";
+import type { StartupPreviewScenario } from "@/lib/generated/StartupPreviewScenario";
+
+import { developersSectionStyles } from "./developers-section.styles";
+
+const concurrencyControls = [
+  {
+    key: "downloadConcurrency",
+    label: "Simultaneous downloads",
+    hint: "How many files download over the network at once.",
+  },
+  {
+    key: "writeConcurrency",
+    label: "Simultaneous writes",
+    hint: "How many files are written to disk at once.",
+  },
+] as const;
+
+export function DevelopersSection({
+  draft,
+  onChange,
+}: {
+  draft: Draft;
+  onChange: (patch: Partial<Draft>) => void;
+}) {
+  const queryClient = useQueryClient();
+  const storageLoading = useStorageLoadingPreview();
+  const memoryPreview = useMemoryPreview();
+  const simulateUpdate = useSyncExternalStore(
+    subscribeUpdateSimulation,
+    getUpdateSimulation,
+    () => false,
+  );
+  const [scenario, setScenario] = useState<StartupPreviewScenario>("noUpdate");
+  const scenarios: {
+    value: StartupPreviewScenario;
+    label: string;
+  }[] = [
+    {
+      value: "noUpdate",
+      label: "No update",
+    },
+    {
+      value: "update",
+      label: "Update download and installation",
+    },
+    {
+      value: "migration",
+      label: "Migration with temporary fixtures",
+    },
+    {
+      value: "updateAndMigration",
+      label: "Update followed by migration",
+    },
+    {
+      value: "checkFailure",
+      label: "Update check failure / offline",
+    },
+    {
+      value: "migrationFailure",
+      label: "Migration conflict",
+    },
+  ];
+  const previewState = useStartupPreviewState();
+  const previewOpen = previewState.data === true;
+  const preview = useMutation({
+    mutationFn: (restart: boolean) =>
+      restart
+        ? restartStartupPreview(scenario)
+        : previewOpen
+          ? closeStartupPreview()
+          : openStartupPreview(scenario),
+    onSettled: () =>
+      queryClient.invalidateQueries({ queryKey: STARTUP_PREVIEW_QUERY_KEY }),
+  });
+  const previewBusy =
+    preview.isPending ||
+    previewState.connecting ||
+    previewState.isPending ||
+    previewState.isFetching;
+  const previewError = preview.error ?? previewState.error;
+  const windowPreview = useMutation({
+    mutationFn: (preset: WindowSizePreset | "reset") =>
+      preset === "reset" ? resetWindowBounds() : previewWindowSize(preset),
+  });
+
+  return (
+    <section
+      aria-label="Developer Tools"
+      className={developersSectionStyles.root}
+    >
+      <Card title="Player">
+        <div className={developersSectionStyles.row}>
+          <div className={developersSectionStyles.rowText}>
+            <label
+              htmlFor="offline-username"
+              className={developersSectionStyles.rowLabel}
+            >
+              Offline username
+            </label>
+            <p
+              id="offline-username-hint"
+              className={developersSectionStyles.rowDescription}
+            >
+              Used when no Microsoft account is active.
+            </p>
+          </div>
+          <Input
+            id="offline-username"
+            className={developersSectionStyles.usernameInput}
+            startIcon={<UserRound aria-hidden />}
+            value={draft.username}
+            autoComplete="nickname"
+            aria-describedby="offline-username-hint"
+            onChange={(event) => onChange({ username: event.target.value })}
+          />
+        </div>
+      </Card>
+      <Card title="Window">
+        <div className={developersSectionStyles.row}>
+          <div className={developersSectionStyles.rowText}>
+            <label
+              htmlFor="disable-custom-title-bar"
+              className={developersSectionStyles.rowLabel}
+            >
+              System title bar
+            </label>
+            <div
+              id="disable-custom-title-bar-hint"
+              className={developersSectionStyles.windowSize}
+            >
+              <p className={developersSectionStyles.windowSizeValue}>
+                Use the operating system title bar instead of Licht's.
+              </p>
+            </div>
+          </div>
+          <Switch
+            id="disable-custom-title-bar"
+            className={developersSectionStyles.control}
+            aria-describedby="disable-custom-title-bar-hint"
+            checked={draft.disableCustomTitleBar}
+            onCheckedChange={(disableCustomTitleBar) =>
+              onChange({ disableCustomTitleBar })
+            }
+          />
+        </div>
+        <div
+          className={developersSectionStyles.group}
+          aria-busy={windowPreview.isPending}
+        >
+          <div className={developersSectionStyles.groupText}>
+            <h4 className={developersSectionStyles.rowLabel}>
+              Window size presets
+            </h4>
+            <p className={developersSectionStyles.rowDescription}>
+              Temporarily resize the launcher to test layouts at its supported
+              sizes.
+            </p>
+          </div>
+          <div className={developersSectionStyles.presets}>
+            {WINDOW_SIZE_PRESETS.map((preset) => (
+              <Button
+                key={preset.id}
+                type="button"
+                variant="outline"
+                size="default"
+                disabled={windowPreview.isPending}
+                onClick={() => windowPreview.mutate(preset.id)}
+              >
+                {preset.label} ({preset.width} × {preset.height})
+              </Button>
+            ))}
+          </div>
+          <div className={developersSectionStyles.wrapRow}>
+            <div className={developersSectionStyles.wrapRowText}>
+              <h4 className={developersSectionStyles.rowLabel}>
+                Restore window
+              </h4>
+              <p
+                id="reset-window-bounds-hint"
+                className={developersSectionStyles.rowDescription}
+              >
+                Restore the default size and center the window.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="default"
+              aria-describedby="reset-window-bounds-hint"
+              disabled={windowPreview.isPending}
+              onClick={() => windowPreview.mutate("reset")}
+            >
+              Reset window bounds
+            </Button>
+          </div>
+          {windowPreview.error ? (
+            <p role="alert" className={developersSectionStyles.error}>
+              {friendlyError(messageOf(windowPreview.error))}
+            </p>
+          ) : null}
+        </div>
+      </Card>
+      <Card title="Transfers">
+        {concurrencyControls.map((control) => (
+          <div key={control.key} className={developersSectionStyles.group}>
+            <div className={developersSectionStyles.groupText}>
+              <div className={developersSectionStyles.transferHeader}>
+                <span id={`${control.key}-label`}>{control.label}</span>
+                <span className={developersSectionStyles.windowSizeValue}>
+                  {draft[control.key]}
+                </span>
+              </div>
+              <p className={developersSectionStyles.rowDescription}>
+                {control.hint}
+              </p>
+            </div>
+            <Slider
+              aria-labelledby={`${control.key}-label`}
+              min={1}
+              max={16}
+              step={1}
+              value={[draft[control.key]]}
+              onValueChange={([value]) => {
+                if (value !== undefined) onChange({ [control.key]: value });
+              }}
+            />
+          </div>
+        ))}
+      </Card>
+      <Card title="Testing">
+        {import.meta.env.DEV && (
+          <div className={developersSectionStyles.group}>
+            <div className={developersSectionStyles.row}>
+              <div className={developersSectionStyles.rowText}>
+                <label
+                  htmlFor="simulate-memory"
+                  className={developersSectionStyles.rowLabel}
+                >
+                  Simulate memory
+                </label>
+                <p
+                  id="simulate-memory-hint"
+                  className={developersSectionStyles.rowDescription}
+                >
+                  Preview Memory Allocation in Instances with a different RAM
+                  size.
+                </p>
+              </div>
+              <Switch
+                id="simulate-memory"
+                className={developersSectionStyles.control}
+                aria-describedby="simulate-memory-hint"
+                checked={memoryPreview.totalMb !== null}
+                onCheckedChange={(enabled) =>
+                  setMemoryPreview(queryClient, enabled ? 32 * 1024 : null)
+                }
+              />
+            </div>
+            {memoryPreview.totalMb !== null ? (
+              <div className={developersSectionStyles.row}>
+                <label
+                  htmlFor="simulated-ram"
+                  className={developersSectionStyles.rowLabel}
+                >
+                  Simulated RAM
+                </label>
+                <Select
+                  value={String(memoryPreview.totalMb / 1024)}
+                  onValueChange={(value) => {
+                    const gib = MEMORY_PREVIEW_SIZES_GIB.find(
+                      (size) => String(size) === value,
+                    );
+                    if (gib !== undefined)
+                      setMemoryPreview(queryClient, gib * 1024);
+                  }}
+                >
+                  <SelectTrigger
+                    id="simulated-ram"
+                    aria-label="Simulated RAM"
+                    aria-describedby="simulate-memory-hint"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MEMORY_PREVIEW_SIZES_GIB.map((gib) => (
+                      <SelectItem key={gib} value={String(gib)}>
+                        {gib} GiB
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
+          </div>
+        )}
+        <div className={developersSectionStyles.row}>
+          <div className={developersSectionStyles.rowText}>
+            <label
+              htmlFor="simulate-update"
+              className={developersSectionStyles.rowLabel}
+            >
+              Simulate available update
+            </label>
+            <p
+              id="simulate-update-hint"
+              className={developersSectionStyles.rowDescription}
+            >
+              Show an update notification and action without checking for a
+              release.
+            </p>
+          </div>
+          <Switch
+            id="simulate-update"
+            className={developersSectionStyles.control}
+            aria-describedby="simulate-update-hint"
+            checked={simulateUpdate}
+            onCheckedChange={setUpdateSimulation}
+          />
+        </div>
+        {import.meta.env.DEV && (
+          <div className={developersSectionStyles.wrapRow}>
+            <div className={developersSectionStyles.wrapRowText}>
+              <label
+                htmlFor="simulate-storage-loading"
+                className={developersSectionStyles.rowLabel}
+              >
+                Simulate storage loading
+              </label>
+              <p
+                id="simulate-storage-loading-hint"
+                className={developersSectionStyles.rowDescription}
+              >
+                Open Downloads and keep storage loading until this is turned
+                off.
+              </p>
+            </div>
+            <Switch
+              id="simulate-storage-loading"
+              className={developersSectionStyles.control}
+              aria-describedby="simulate-storage-loading-hint"
+              checked={storageLoading}
+              onCheckedChange={(enabled) =>
+                setStorageLoadingPreview(queryClient, enabled)
+              }
+            />
+          </div>
+        )}
+        <div className={developersSectionStyles.group}>
+          <div className={developersSectionStyles.groupText}>
+            <h4 className={developersSectionStyles.rowLabel}>
+              Startup preview
+            </h4>
+            <p className={developersSectionStyles.rowDescription}>
+              Open a separate startup preview, or restart the launcher with the
+              selected scenario. Updates and migrations use simulated data.
+            </p>
+          </div>
+          <div className={developersSectionStyles.groupText}>
+            <Select
+              disabled={previewBusy || previewOpen}
+              value={scenario}
+              onValueChange={(value) => {
+                const selected = scenarios.find((item) => item.value === value);
+                if (selected) setScenario(selected.value);
+              }}
+            >
+              <SelectTrigger
+                id="startup-test-scenario"
+                aria-label="Startup test scenario"
+                className={developersSectionStyles.previewSelect}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {scenarios.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className={developersSectionStyles.presets}>
+            <Button
+              size="default"
+              variant={previewOpen ? "outline" : "default"}
+              className={
+                previewOpen
+                  ? developersSectionStyles.closePreviewButton
+                  : undefined
+              }
+              disabled={previewBusy}
+              onClick={() => preview.mutate(false)}
+            >
+              {previewOpen ? "Close preview" : "Open preview"}
+            </Button>
+            <Button
+              variant="outline"
+              size="default"
+              disabled={previewBusy || previewOpen}
+              onClick={() => preview.mutate(true)}
+            >
+              Restart with preview
+            </Button>
+          </div>
+          {previewError ? (
+            <p role="alert" className={developersSectionStyles.error}>
+              {messageOf(previewError)}
+            </p>
+          ) : null}
+          {previewState.eventError ? (
+            <p className={developersSectionStyles.note}>
+              Live preview status is unavailable. Polling window state.
+            </p>
+          ) : null}
+        </div>
+      </Card>
+    </section>
+  );
+}

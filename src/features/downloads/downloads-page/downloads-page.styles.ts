@@ -1,0 +1,21 @@
+export const downloadsPageStyles = {
+  root: "flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-4",
+  header: "flex shrink-0 flex-wrap items-center justify-between gap-3",
+  title: "flex items-center gap-2 text-lg font-semibold",
+  titleIcon: "size-5 text-muted-foreground",
+  actions: "flex items-center gap-2",
+  layout: "grid min-h-0 flex-1 grid-cols-3 gap-4",
+  queue:
+    "col-span-2 flex min-h-0 min-w-0 flex-col gap-3 rounded-lg border border-border/60 bg-black/20 p-4",
+  alert: "flex items-center gap-2 text-sm",
+  scrollArea: "min-h-0 flex-1",
+  groups: "flex flex-col gap-3",
+  group: "flex flex-col",
+  groupTitle: "text-xs font-medium text-muted-foreground",
+  list: "divide-y divide-border/60",
+  aside: "min-h-0 min-w-0",
+  asideScroll: "h-full",
+  asideContent: "flex min-w-0 flex-col gap-4",
+  note: "text-xs text-muted-foreground",
+  error: "text-sm text-destructive",
+} as const;

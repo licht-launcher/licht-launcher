@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { listInstances } from "@/lib/commands";
+import { listInstances } from "@/api/commands";
 
 /** Names already used by instances; shares its cache with the library list. */
 export function useInstanceNames(): string[] {

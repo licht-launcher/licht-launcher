@@ -6,7 +6,7 @@ import {
   within,
 } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-
+import { requestOpenSettings } from "@/api/shell-events";
 import {
   closeWindow,
   invoke,
@@ -15,7 +15,6 @@ import {
   setupInstancesPageTests,
 } from "@/features/instances/tests/support/render-instances";
 import { playerHeadPathFixture } from "@/features/settings/fixtures/snapshot";
-import { requestOpenSettings } from "@/lib/shell-events";
 
 describe("Launcher shell", () => {
   setupInstancesPageTests();

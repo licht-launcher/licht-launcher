@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useRef, useState } from "react";
-import { getStartupProgress } from "@/lib/commands";
+import { getStartupProgress } from "@/api/commands";
 import type { StartupProgress } from "@/lib/generated/StartupProgress";
 
 const key = ["startup-progress"] as const;

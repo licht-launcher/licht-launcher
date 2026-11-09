@@ -27,7 +27,7 @@
 - Cargo workspace:
   - `crates/licht-core`: all the logic (manifests, downloads, rules, Java, launch, auth). **No Tauri dependency.** Testable on its own.
   - `src-tauri`: thin layer. Only `#[tauri::command]` and events that call `licht-core`. **No business rules here.**
-  - `src/`: frontend. No Minecraft logic; only UI and `invoke` calls. Structure: `src/routes` (route files), `src/components/ui` (shadcn/ui), `src/features/*` (screens and UI logic by feature), `src/lib` (utilities and `invoke` wrappers).
+  - `src/`: frontend. No Minecraft logic; only UI and `invoke` calls. Structure: `src/routes` (route files), `src/components/ui` (shadcn/ui), `src/features/*` (screens and UI logic by feature), `src/api` (bridge to the Rust backend and Tauri: typed `invoke` wrappers, Rust payload parsing, app events, window and platform helpers), `src/lib` (generic helpers such as `cn`, error messages and formatting, plus the `ts-rs` types in `src/lib/generated`).
 - Rust → frontend communication: **events** (e.g. download progress). Frontend → Rust: **typed commands**.
 - Types shared between Rust and TS must be **generated with `ts-rs`**, never duplicated by hand.
 - Errors: `thiserror` in the core, `anyhow` only at the edges. **No `unwrap()`** outside tests.
