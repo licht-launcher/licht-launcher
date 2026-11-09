@@ -65,11 +65,13 @@ jobs:
       - name: Set up Rust
         run: rustup toolchain install 1.99.0 --profile minimal
 
+      # This workflow never runs on main, so it could never save a cache of its own.
+      # It reads the debug dependencies the CI Rust job saves on main instead.
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          shared-key: cargo-e2e-${{ matrix.os }}
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          shared-key: cargo-rust-${{ matrix.os }}
+          save-if: false
 
       - name: Install tauri-driver
         run: cargo install tauri-driver --version 2.1.0 --locked
