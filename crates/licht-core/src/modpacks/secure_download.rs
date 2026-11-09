@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use reqwest::Client;
 use reqwest::header::HeaderMap;
 
@@ -61,13 +63,31 @@ pub(super) fn allowlisted_download_client_with_headers(
     blocked_msg: &str,
     too_many_msg: &str,
 ) -> Result<Client> {
+    build_allowlisted_client(
+        hosts,
+        headers,
+        blocked_msg,
+        too_many_msg,
+        crate::MANIFEST_REQUEST_TIMEOUT,
+    )
+}
+
+/// `timeout` is a parameter only so tests can prove the stall detection without
+/// waiting for the production value.
+fn build_allowlisted_client(
+    hosts: &[&str],
+    headers: HeaderMap,
+    blocked_msg: &str,
+    too_many_msg: &str,
+    timeout: Duration,
+) -> Result<Client> {
     let hosts: Vec<String> = hosts.iter().map(|host| host.to_string()).collect();
     let blocked_msg = blocked_msg.to_string();
     let too_many_msg = too_many_msg.to_string();
     Client::builder()
         .default_headers(headers)
-        .connect_timeout(crate::MANIFEST_REQUEST_TIMEOUT)
-        .read_timeout(crate::MANIFEST_REQUEST_TIMEOUT)
+        .connect_timeout(timeout)
+        .read_timeout(timeout)
         .redirect(reqwest::redirect::Policy::custom(move |attempt| {
             let allowed: Vec<&str> = hosts.iter().map(String::as_str).collect();
             match redirect_hop(attempt.url().as_str(), attempt.previous().len(), &allowed) {
@@ -90,8 +110,9 @@ mod tests {
 
     #[tokio::test]
     async fn modpack_client_times_out_when_response_body_stops_arriving() {
-        use std::time::Duration;
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        const STALL_TIMEOUT: Duration = Duration::from_millis(500);
 
         let _guard = crate::test_http::lock_local_http().await;
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
@@ -116,7 +137,9 @@ mod tests {
                 .expect("partial body");
             std::future::pending::<()>().await;
         });
-        let client = allowlisted_download_client(HOSTS, BLOCKED, TOO_MANY).expect("client");
+        let client =
+            build_allowlisted_client(HOSTS, HeaderMap::new(), BLOCKED, TOO_MANY, STALL_TIMEOUT)
+                .expect("client");
         let mut response = client
             .get(format!("http://{address}/file.jar"))
             .send()
@@ -131,11 +154,8 @@ mod tests {
                 .as_ref(),
             b"x"
         );
-        let result = tokio::time::timeout(
-            crate::MANIFEST_REQUEST_TIMEOUT + Duration::from_secs(5),
-            response.chunk(),
-        )
-        .await;
+        let result =
+            tokio::time::timeout(STALL_TIMEOUT + Duration::from_secs(5), response.chunk()).await;
         server.abort();
         let error = result
             .expect("a stalled body must hit the client's inactivity timeout")

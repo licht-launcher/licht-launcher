@@ -429,6 +429,22 @@ mod tests {
         SharedCache::at(root)
     }
 
+    /// Returns the base URL of a host that drops every connection without answering.
+    /// A closed port such as `127.0.0.1:1` fails at once on Linux but takes about 2 s
+    /// per attempt on Windows, which retries the refused connection.
+    async fn dead_host() -> String {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind");
+        let address = listener.local_addr().expect("address");
+        tokio::spawn(async move {
+            while let Ok((socket, _)) = listener.accept().await {
+                drop(socket);
+            }
+        });
+        format!("http://{address}")
+    }
+
     fn minimal_version_json(id: &str, client: &[u8]) -> String {
         format!(
             r#"{{"id":"{id}","minecraftArguments":"","libraries":[],"assetIndex":{{"id":"test","sha1":"{}","size":0,"totalSize":0,"url":""}},"mainClass":"Main","downloads":{{"client":{{"sha1":"{}","size":{},"url":""}}}}}}"#,
@@ -673,8 +689,8 @@ mod tests {
             .timeout(Duration::from_millis(200))
             .build()
             .expect("client");
-        let dead = "http://127.0.0.1:1/version_manifest_v2.json";
-        let manifest = fetch_version_manifest_from_urls(&client, &cache, &[dead, dead])
+        let dead = format!("{}/version_manifest_v2.json", dead_host().await);
+        let manifest = fetch_version_manifest_from_urls(&client, &cache, &[&dead, &dead])
             .await
             .expect("cache");
         assert!(!manifest.versions.is_empty());
@@ -718,8 +734,8 @@ mod tests {
             .timeout(Duration::from_millis(200))
             .build()
             .expect("client");
-        let dead = "http://127.0.0.1:1/version_manifest_v2.json";
-        let manifest = fetch_version_manifest_from_urls(&client, &cache, &[dead, dead])
+        let dead = format!("{}/version_manifest_v2.json", dead_host().await);
+        let manifest = fetch_version_manifest_from_urls(&client, &cache, &[&dead, &dead])
             .await
             .expect("stale cache fallback");
         assert!(!manifest.versions.is_empty());
@@ -733,8 +749,8 @@ mod tests {
             .timeout(Duration::from_millis(200))
             .build()
             .expect("client");
-        let dead = "http://127.0.0.1:1/version_manifest_v2.json";
-        let error = fetch_version_manifest_from_urls(&client, &cache, &[dead, dead])
+        let dead = format!("{}/version_manifest_v2.json", dead_host().await);
+        let error = fetch_version_manifest_from_urls(&client, &cache, &[&dead, &dead])
             .await
             .expect_err("unavailable");
         assert!(matches!(error, CoreError::VersionManifestUnavailable));
@@ -782,9 +798,9 @@ mod tests {
             .timeout(Duration::from_secs(5))
             .build()
             .expect("client");
-        let dead = "http://127.0.0.1:1/version_manifest_v2.json";
+        let dead = format!("{}/version_manifest_v2.json", dead_host().await);
         let legacy = format!("http://{address}/mc/game/version_manifest_v2.json");
-        let manifest = fetch_version_manifest_from_urls(&client, &cache, &[dead, &legacy])
+        let manifest = fetch_version_manifest_from_urls(&client, &cache, &[&dead, &legacy])
             .await
             .expect("legacy");
         assert!(!manifest.versions.is_empty());
@@ -806,10 +822,11 @@ mod tests {
             .expect("client");
         // Force fetch failure by clearing cache and using dead hosts through the public
         // list path: call list_installed after simulating VersionManifestUnavailable.
+        let dead = dead_host().await;
         let error = fetch_version_manifest_from_urls(
             &client,
             &cache,
-            &["http://127.0.0.1:1/a", "http://127.0.0.1:1/b"],
+            &[&format!("{dead}/a"), &format!("{dead}/b")],
         )
         .await
         .expect_err("no cache file");
