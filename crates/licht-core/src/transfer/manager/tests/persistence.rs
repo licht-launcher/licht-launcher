@@ -80,7 +80,7 @@ async fn progress_emitted_while_pausing_is_persisted_before_the_worker_parks() {
     wait_until(|| fixture.game.root().join("transfer.started").exists()).await;
     let paused = finish(manager.pause(&job.id)).await.expect("pause");
     assert_eq!(paused.status, DownloadJobStatus::Paused);
-    let persisted = tokio::time::timeout(Duration::from_secs(10), async {
+    let persisted = tokio::time::timeout(HANG_TIMEOUT, async {
         loop {
             let stored = manager.stored_job(&job.id).await.expect("stored progress");
             if stored.progress.bytes_done == 5 {

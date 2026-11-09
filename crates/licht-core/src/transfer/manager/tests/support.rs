@@ -75,18 +75,33 @@ fn fixture_executor(
     })
 }
 
-pub(super) async fn finish<T>(future: impl std::future::Future<Output = T>) -> T {
-    tokio::time::timeout(Duration::from_secs(10), future)
-        .await
-        .expect("operation timeout")
+/// Only a guard against hangs, not a speed check: shared CI runners (notably Windows)
+/// can stall every running test for tens of seconds, which a tight budget reports as
+/// a false failure.
+pub(super) const HANG_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// Awaits `future`, panicking with the caller's location if it never finishes.
+#[track_caller]
+pub(super) fn finish<T>(
+    future: impl std::future::Future<Output = T>,
+) -> impl std::future::Future<Output = T> {
+    let caller = std::panic::Location::caller();
+    async move {
+        match tokio::time::timeout(HANG_TIMEOUT, future).await {
+            Ok(output) => output,
+            Err(_) => panic!("operation at {caller} did not finish within {HANG_TIMEOUT:?}"),
+        }
+    }
 }
-pub(super) async fn wait_until(mut predicate: impl FnMut() -> bool) {
-    finish(async {
+#[track_caller]
+pub(super) fn wait_until(
+    mut predicate: impl FnMut() -> bool,
+) -> impl std::future::Future<Output = ()> {
+    finish(async move {
         while !predicate() {
             tokio::time::sleep(Duration::from_millis(5)).await;
         }
     })
-    .await
 }
 
 pub(super) struct Fixture {
@@ -196,8 +211,9 @@ impl Fixture {
     pub(super) fn part(&self) -> PathBuf {
         self.game.root().join("payload.bin.part")
     }
-    pub(super) async fn partial(&self, bytes: u64) {
-        wait_until(|| std::fs::metadata(self.part()).is_ok_and(|file| file.len() == bytes)).await;
+    #[track_caller]
+    pub(super) fn partial(&self, bytes: u64) -> impl std::future::Future<Output = ()> {
+        wait_until(move || std::fs::metadata(self.part()).is_ok_and(|file| file.len() == bytes))
     }
 }
 impl Drop for Fixture {
@@ -308,12 +324,28 @@ impl Server {
             task,
         }
     }
-    pub(super) async fn request(&mut self) -> Request {
-        finish(self.requests.recv()).await.expect("request")
+    #[track_caller]
+    pub(super) fn request(&mut self) -> impl std::future::Future<Output = Request> {
+        let next = finish(self.requests.recv());
+        async move { next.await.expect("request") }
     }
 }
 impl Drop for Server {
     fn drop(&mut self) {
         self.task.abort();
     }
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_hang_reports_the_waiting_call_instead_of_a_generic_timeout() {
+    let hung = finish(std::future::pending::<()>());
+    let error = tokio::spawn(hung)
+        .await
+        .expect_err("a future that never finishes must time out");
+    let message = error
+        .into_panic()
+        .downcast::<String>()
+        .expect("formatted panic message");
+    assert!(message.contains(file!()), "{message}");
+    assert!(message.contains("did not finish within 60s"), "{message}");
 }
