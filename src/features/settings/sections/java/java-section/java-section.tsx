@@ -1,0 +1,129 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import {
+  browseJava,
+  detectJavaInstallations,
+  installRecommendedJava,
+  runtimeJava,
+} from "@/api/commands";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { useJavaReady } from "@/features/settings/hooks/use-java-ready";
+import { useToastError } from "@/features/settings/hooks/use-toast-error";
+import type { Draft } from "@/features/settings/model/draft";
+import {
+  JAVA_MAJORS,
+  type JavaField,
+} from "@/features/settings/model/sections";
+import { JavaMajorRow } from "@/features/settings/sections/java/java-major-row";
+import { friendlyError, messageOf } from "@/lib/errors";
+
+import { javaSectionStyles } from "./java-section.styles";
+
+export function JavaSection({
+  draft,
+  onChange,
+}: {
+  draft: Draft;
+  onChange: (patch: Partial<Draft>) => void;
+}) {
+  const queryClient = useQueryClient();
+  const javaReady = useJavaReady(true);
+
+  const runtime = useQuery({
+    queryKey: ["runtime-java"],
+    queryFn: runtimeJava,
+    staleTime: Number.POSITIVE_INFINITY,
+    retry: false,
+  });
+  useToastError(runtime.error);
+
+  const detections = useQuery({
+    queryKey: ["java-installations"],
+    queryFn: detectJavaInstallations,
+    enabled: javaReady,
+    staleTime: Number.POSITIVE_INFINITY,
+    retry: false,
+  });
+  useToastError(detections.error);
+
+  const install = useMutation({
+    mutationFn: installRecommendedJava,
+    onSuccess: (path, major) => {
+      if (path === null) return;
+      const row = JAVA_MAJORS.find((item) => item.major === major);
+      if (!row) {
+        return;
+      }
+      onChange({ [row.field]: path });
+      void queryClient.invalidateQueries({ queryKey: ["settings"] });
+    },
+    onError: (error: unknown) => {
+      toast.error(friendlyError(messageOf(error)));
+    },
+  });
+
+  const browseExecutable = useMutation({
+    mutationFn: browseJava,
+    onError: (error: unknown) => {
+      toast.error(friendlyError(messageOf(error)));
+    },
+  });
+
+  function browseFor(field: JavaField) {
+    browseExecutable.mutate(draft[field], {
+      onSuccess: (path) => {
+        if (path) {
+          onChange({ [field]: path });
+        }
+      },
+    });
+  }
+
+  return (
+    <div className={javaSectionStyles.root}>
+      <Card title="Runtimes">
+        {JAVA_MAJORS.map((row) => (
+          <JavaMajorRow
+            key={row.field}
+            row={row}
+            value={draft[row.field]}
+            found={detections.data?.[row.field] ?? []}
+            runtimePath={runtime.data?.[row.field] ?? null}
+            checkReady={javaReady}
+            detectionsPending={detections.isPending}
+            busy={install.isPending}
+            onChange={(path) => onChange({ [row.field]: path })}
+            onInstall={() => install.mutate(row.major)}
+            onRefreshDetections={() => {
+              void detections.refetch();
+            }}
+            onBrowse={() => browseFor(row.field)}
+          />
+        ))}
+      </Card>
+
+      <Card title="Launch options">
+        <div className={javaSectionStyles.groupText}>
+          <label htmlFor="jvm-arguments" className={javaSectionStyles.rowLabel}>
+            Java arguments
+          </label>
+          <p
+            id="jvm-arguments-hint"
+            className={javaSectionStyles.rowDescription}
+          >
+            Extra JVM flags, separated by spaces.
+          </p>
+        </div>
+        <Input
+          id="jvm-arguments"
+          placeholder="-XX:+UseG1GC"
+          aria-label="Java arguments"
+          aria-describedby="jvm-arguments-hint"
+          value={draft.jvmArguments}
+          onChange={(event) => onChange({ jvmArguments: event.target.value })}
+        />
+      </Card>
+    </div>
+  );
+}

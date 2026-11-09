@@ -1,14 +1,13 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-
+import { saveInstance } from "@/api/commands";
 import {
   fromEntry,
   type InstanceDraft,
   optionalSize,
   toInstanceSettings,
 } from "@/features/instance-settings/model/draft";
-import { saveInstance } from "@/lib/commands";
 import { friendlyError, messageOf } from "@/lib/errors";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 

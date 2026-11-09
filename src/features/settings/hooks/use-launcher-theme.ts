@@ -2,8 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useLayoutEffect, useState } from "react";
 import { toast } from "sonner";
+import { getSettings } from "@/api/commands";
 import { useToastError } from "@/features/settings/hooks/use-toast-error";
-import { getSettings } from "@/lib/commands";
 import type { LauncherTheme } from "@/lib/generated/LauncherTheme";
 import { initialTheme, isLauncherTheme, resolveTheme } from "@/lib/theme";
 

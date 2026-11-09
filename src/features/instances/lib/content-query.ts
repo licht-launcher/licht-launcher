@@ -1,5 +1,5 @@
 import { type QueryClient, queryOptions } from "@tanstack/react-query";
-import { listInstanceContent } from "@/lib/commands";
+import { listInstanceContent } from "@/api/commands";
 import type { InstanceContentEntry } from "@/lib/generated/InstanceContentEntry";
 
 export function instanceContentQuery(

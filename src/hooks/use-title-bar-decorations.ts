@@ -1,11 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
-
-import { useToastError } from "@/features/settings/hooks/use-toast-error";
 import {
   activeMicrosoftAccount,
   getPlayerHead,
   getSettings,
-} from "@/lib/commands";
+} from "@/api/commands";
+import { useToastError } from "@/features/settings/hooks/use-toast-error";
 
 /** Public account display data shared by the launcher chrome. */
 export function useTitleBarDecorations() {

@@ -1,7 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-
-import { VERSIONS_QUERY_KEY } from "@/features/instances/lib/versions-query";
 import {
   deleteInstance,
   duplicateInstance,
@@ -9,7 +7,8 @@ import {
   prepareInstanceDownload,
   renameInstance,
   setInstanceVersion,
-} from "@/lib/commands";
+} from "@/api/commands";
+import { VERSIONS_QUERY_KEY } from "@/features/instances/lib/versions-query";
 import { friendlyError, messageOf } from "@/lib/errors";
 
 export function useInstanceMutations({

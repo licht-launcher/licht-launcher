@@ -1,8 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { useDownloadJobs } from "@/features/downloads/hooks/use-download-jobs";
-import { VERSIONS_QUERY_KEY } from "@/features/instances/lib/versions-query";
 import {
   isVersionReady,
   launchVersion,
@@ -10,7 +8,9 @@ import {
   prepareInstanceDownload,
   stopGame,
   touchLastOpened,
-} from "@/lib/commands";
+} from "@/api/commands";
+import { useDownloadJobs } from "@/features/downloads/hooks/use-download-jobs";
+import { VERSIONS_QUERY_KEY } from "@/features/instances/lib/versions-query";
 import { friendlyError, messageOf } from "@/lib/errors";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 
