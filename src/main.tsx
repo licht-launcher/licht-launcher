@@ -16,6 +16,12 @@ import { StartupScreen } from "@/features/startup/startup-screen";
 import { routeTree } from "./routeTree.gen";
 import "./styles/tokens.css";
 
+// Only end-to-end test builds (`vite build --mode e2e`) load the WebdriverIO bridge;
+// Vite replaces MODE at build time, so other builds drop this import.
+if (import.meta.env.MODE === "e2e") {
+  await import("@wdio/tauri-plugin");
+}
+
 const queryClient = new QueryClient();
 
 const router = createRouter({

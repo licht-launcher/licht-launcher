@@ -33,12 +33,16 @@ pub fn run() -> anyhow::Result<()> {
             (true, licht_core::LauncherTheme::Dark)
         });
 
-    let application = tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_window_controls::init())
+        .plugin(tauri_plugin_window_controls::init());
+    // Only end-to-end test builds let WebdriverIO inspect windows and run scripts.
+    #[cfg(feature = "e2e")]
+    let builder = builder.plugin(tauri_plugin_wdio::init());
+    let application = builder
         .manage(std::sync::Arc::clone(&runtime))
         .manage(updates)
         .manage(commands::LaunchSessions::new())

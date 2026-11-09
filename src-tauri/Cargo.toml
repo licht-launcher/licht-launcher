@@ -26,6 +26,7 @@ tauri-plugin-opener = "=2.7.0"
 tauri-plugin-process = "=2.4.0"
 tauri-plugin-updater = "=2.13.3"
 tauri-plugin-window-controls = "=0.2.1"
+tauri-plugin-wdio = { version = "=1.5.1", optional = true }
 tokio = { version = "=1.53.2", features = ["macros", "sync", "time"] }
 tracing = "=0.1.44"
 tracing-subscriber = { version = "=0.3.23", features = ["env-filter"] }
@@ -35,3 +36,5 @@ webkit2gtk = { version = "=2.0.2", features = ["v2_16"] }
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]
+# End-to-end test builds only (`pnpm build:e2e`); never enabled for releases.
+e2e = ["dep:tauri-plugin-wdio"]
