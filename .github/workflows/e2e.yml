@@ -86,6 +86,29 @@ jobs:
         if: runner.os == 'Linux'
         run: xvfb-run --auto-servernum pnpm test:e2e
 
+      # Temporary: find why WebView2 never exposes DevTools to msedgedriver on the runner.
+      - name: Diagnose WebView2 startup (Windows)
+        if: failure() && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:LICHT_DATA_DIR = Join-Path $env:RUNNER_TEMP 'licht-diagnose'
+          $env:LICHT_SKIP_UPDATE_CHECK = '1'
+          $env:RUST_LOG = 'debug'
+          $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9222'
+          $out = Join-Path $env:RUNNER_TEMP 'licht-stdout.txt'
+          $err = Join-Path $env:RUNNER_TEMP 'licht-stderr.txt'
+          $app = Start-Process -FilePath target\debug\licht.exe -PassThru -RedirectStandardOutput $out -RedirectStandardError $err
+          Start-Sleep -Seconds 20
+          "App still running: $(-not $app.HasExited)"
+          Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" | Select-Object ProcessId, ParentProcessId, CommandLine | Format-List | Out-String -Width 600
+          try { Invoke-RestMethod http://127.0.0.1:9222/json/version | ConvertTo-Json } catch { "DevTools endpoint: $($_.Exception.Message)" }
+          Get-ChildItem -Path $env:LOCALAPPDATA, $env:TEMP -Recurse -Filter DevToolsActivePort -ErrorAction SilentlyContinue | Select-Object FullName, LastWriteTime | Format-List
+          Get-ChildItem 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients' | ForEach-Object { $item = Get-ItemProperty $_.PSPath; "$($_.PSChildName) $($item.name) $($item.pv)" }
+          "Session: $((Get-Process -Id $PID).SessionId); interactive: $([Environment]::UserInteractive)"
+          if (-not $app.HasExited) { Stop-Process -Id $app.Id -Force }
+          Get-Content $err -Tail 80
+          Get-Content $out -Tail 20
+
       - name: Upload end-to-end logs
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
