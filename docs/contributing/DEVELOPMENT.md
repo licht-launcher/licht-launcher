@@ -100,8 +100,9 @@ One-time setup:
 
 - `cargo install tauri-driver --version 2.1.0 --locked` (or point
   `TAURI_DRIVER_PATH` at an existing `tauri-driver` binary).
-- Linux: install `webkit2gtk-driver` (provides `WebKitWebDriver`); use
-  `xvfb-run` when there is no display.
+- Linux: install the package that provides `WebKitWebDriver`
+  (`webkitgtk-webdriver` on Ubuntu 26.04+, `webkit2gtk-driver` on older
+  Debian/Ubuntu); use `xvfb-run` when there is no display.
 - Windows: nothing else; the service downloads the Microsoft Edge Driver that
   matches the installed WebView2 into a new `%TEMP%\msedgedriver\<major>-<random>`
   folder on every run (about 26 MB). To skip that, put a matching

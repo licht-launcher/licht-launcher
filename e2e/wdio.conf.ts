@@ -27,6 +27,8 @@ process.env.LICHT_DATA_DIR = dataDirectory;
 process.env.LICHT_SKIP_UPDATE_CHECK = "1";
 
 const tauriDriverPath = process.env.TAURI_DRIVER_PATH;
+// CI keeps detailed WebdriverIO, driver and app logs as files to upload on failure.
+const ci = process.env.CI === "true";
 
 export const config: WebdriverIO.Config = {
   runner: "local",
@@ -39,11 +41,13 @@ export const config: WebdriverIO.Config = {
       {
         appBinaryPath,
         driverProvider: "external",
+        captureBackendLogs: ci,
         ...(tauriDriverPath === undefined ? {} : { tauriDriverPath }),
       },
     ],
   ],
-  logLevel: "warn",
+  logLevel: ci ? "info" : "warn",
+  ...(ci ? { outputDir: path.join(rootDir, "e2e", "logs") } : {}),
   waitforTimeout: 15_000,
   connectionRetryTimeout: 120_000,
   connectionRetryCount: 1,
