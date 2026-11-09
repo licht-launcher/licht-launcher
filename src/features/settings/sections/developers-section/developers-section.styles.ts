@@ -1,0 +1,22 @@
+export const developersSectionStyles = {
+  root: "flex flex-col gap-8",
+  row: "flex items-center justify-between gap-3",
+  rowText: "flex min-w-0 flex-col gap-0.5",
+  rowLabel: "text-sm font-normal",
+  rowDescription: "text-sm text-muted-foreground",
+  usernameInput: "w-40 shrink-0",
+  windowSize: "flex flex-col gap-0.5 text-sm",
+  windowSizeValue: "text-muted-foreground",
+  control: "shrink-0",
+  group: "flex flex-col gap-3",
+  groupText: "flex flex-col gap-0.5",
+  presets: "flex flex-wrap gap-2",
+  wrapRow: "flex flex-wrap items-center justify-between gap-3",
+  wrapRowText: "flex min-w-0 flex-1 flex-col gap-0.5",
+  error: "text-sm text-destructive",
+  transferHeader: "flex items-baseline justify-between gap-3 text-sm",
+  previewSelect: "w-full",
+  closePreviewButton:
+    "border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive",
+  note: "text-xs text-muted-foreground",
+} as const;

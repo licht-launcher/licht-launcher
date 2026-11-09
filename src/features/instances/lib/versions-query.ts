@@ -1,4 +1,4 @@
-import { listVersions } from "@/lib/commands";
+import { listVersions } from "@/api/commands";
 
 /** Shared key for the Mojang version manifest list. */
 export const VERSIONS_QUERY_KEY = ["versions"] as const;

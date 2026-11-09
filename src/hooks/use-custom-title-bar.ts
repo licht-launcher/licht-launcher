@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { customTitleBarActive } from "@/lib/commands";
+import { customTitleBarActive } from "@/api/commands";
 
 /**
  * Whether this process was started with Licht's custom title bar.

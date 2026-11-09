@@ -4,7 +4,7 @@ import { instanceContentQuery } from "@/features/instances/lib/content-query";
 import type { InstanceContentEntry } from "@/lib/generated/InstanceContentEntry";
 
 const listInstanceContent = vi.hoisted(() => vi.fn());
-vi.mock("@/lib/commands", () => ({ listInstanceContent }));
+vi.mock("@/api/commands", () => ({ listInstanceContent }));
 
 const entry: InstanceContentEntry = {
   name: "one.jar",

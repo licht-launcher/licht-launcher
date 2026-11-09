@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
+import { getDownloadTelemetry } from "@/api/commands";
 import type { SpeedSample } from "@/components/ui/speed-chart";
-import { getDownloadTelemetry } from "@/lib/commands";
 
 export const DOWNLOAD_TELEMETRY_QUERY_KEY = ["download-telemetry"] as const;
 export const DOWNLOAD_SPEED_HISTORY_QUERY_KEY = [
