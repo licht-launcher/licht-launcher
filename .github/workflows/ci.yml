@@ -70,10 +70,6 @@ jobs:
     name: Rust (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
-    # Full debug info makes linking the test binaries slow, mostly on Windows (MSVC
-    # writes large PDB files); line tables still give file and line in backtraces.
-    env:
-      CARGO_PROFILE_DEV_DEBUG: line-tables-only
     strategy:
       fail-fast: false
       matrix:
