@@ -63,8 +63,11 @@ jobs:
         run: rustup toolchain install 1.99.0 --profile minimal
 
       # This workflow never runs on main, so it could never save a cache of its own.
-      # It reads the debug dependencies the CI Rust job saves on main instead.
+      # It reads the debug dependencies the CI Rust job saves on main instead. Only on
+      # Windows: on Linux that job runs Clippy and coverage, so its cache holds no
+      # reusable debug builds and restoring it costs time without speeding the build.
       - name: Cache Rust dependencies
+        if: runner.os == 'Windows'
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: cargo-rust-${{ matrix.os }}
