@@ -10,7 +10,7 @@ use crate::modpacks::types::{
 use crate::{CoreError, Result};
 
 const SEARCH_URL: &str = "https://api.modrinth.com/v2/search";
-const PROJECT_VERSIONS: &str = "https://api.modrinth.com/v2/project";
+const PROJECT_URL: &str = "https://api.modrinth.com/v2/project";
 const USER_AGENT: &str = "licht-launcher/0.1.1 (https://github.com/licht-launcher/licht-launcher)";
 
 #[derive(Debug, Deserialize)]
@@ -113,10 +113,10 @@ pub(super) async fn get_modrinth_project(
     client: &Client,
     project_id: &str,
 ) -> Result<ModpackDetails> {
-    let project_url = project_url(project_id)?;
+    let project_endpoint = project_endpoint(project_id)?;
     let author_url = author_search_url(project_id)?;
     let (project, author) = tokio::join!(
-        fetch_text(client, project_url, "modrinth_project"),
+        fetch_text(client, project_endpoint, "modrinth_project"),
         fetch_text(client, author_url, "modrinth_author"),
     );
     let author = parse_search(&author?)?
@@ -128,14 +128,14 @@ pub(super) async fn get_modrinth_project(
     parse_project(&project?, author)
 }
 
-fn project_url(project_id: &str) -> Result<Url> {
+fn project_endpoint(project_id: &str) -> Result<Url> {
     let invalid = || CoreError::ModpackMeta {
         detail: "modrinth_project_id".into(),
     };
     if project_id.trim().is_empty() {
         return Err(invalid());
     }
-    let mut url = Url::parse(PROJECT_VERSIONS).map_err(|_| invalid())?;
+    let mut url = Url::parse(PROJECT_URL).map_err(|_| invalid())?;
     // `push` percent-encodes, so an id can never add path segments.
     url.path_segments_mut()
         .map_err(|_| invalid())?
@@ -202,7 +202,7 @@ pub async fn list_modrinth_versions(
     client: &Client,
     project_id: &str,
 ) -> Result<Vec<ModpackVersionItem>> {
-    let url = format!("{PROJECT_VERSIONS}/{project_id}/version");
+    let url = format!("{PROJECT_URL}/{project_id}/version");
     let response = client
         .get(&url)
         .header("User-Agent", USER_AGENT)
@@ -274,7 +274,7 @@ pub(super) async fn download_modrinth_mrpack_to(
             detail: "version_not_in_project".into(),
         });
     }
-    let url = format!("{PROJECT_VERSIONS}/{project_id}/version/{version_id}");
+    let url = format!("{PROJECT_URL}/{project_id}/version/{version_id}");
     let parsed = context
         .metadata(async {
             let response = client
@@ -385,12 +385,12 @@ mod tests {
 
     #[test]
     fn project_ids_cannot_escape_the_project_path() {
-        let url = project_url("../user/x?y").expect("url");
+        let url = project_endpoint("../user/x?y").expect("url");
         assert_eq!(
             url.as_str(),
             "https://api.modrinth.com/v2/project/..%2Fuser%2Fx%3Fy"
         );
-        assert!(project_url(" ").is_err());
+        assert!(project_endpoint(" ").is_err());
     }
 
     #[test]

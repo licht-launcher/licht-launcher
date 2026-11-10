@@ -14,6 +14,9 @@ use crate::{CoreError, Result};
 /// CurseForge clients send successfully.
 const FILE_BATCH: usize = 100;
 
+/// CurseForge rejects searches where `index + pageSize` exceeds this value.
+const SEARCH_WINDOW: u64 = 10_000;
+
 #[derive(Debug, Deserialize)]
 struct SearchResponse {
     data: Vec<ModHit>,
@@ -124,9 +127,10 @@ pub(super) struct RemoteMod {
 
 pub(super) fn parse_search(body: &str) -> Result<SourcePage> {
     let parsed: SearchResponse = serde_json::from_str(body).map_err(CoreError::LoaderJson)?;
+    // Hits past the search window cannot be paged to, so they do not count.
     let total = parsed
         .pagination
-        .map(|pagination| pagination.total_count)
+        .map(|pagination| pagination.total_count.min(SEARCH_WINDOW))
         .unwrap_or(0);
     let items = parsed
         .data
@@ -146,6 +150,19 @@ pub(super) fn parse_search(body: &str) -> Result<SourcePage> {
         })
         .collect();
     Ok(SourcePage { items, total })
+}
+
+pub(super) fn fits_search_window(index: u64, page_size: u32) -> bool {
+    index + u64::from(page_size) <= SEARCH_WINDOW
+}
+
+/// A page CurseForge would reject: no items, but the full window still counts,
+/// so the merged page count does not shrink.
+pub(super) fn past_search_window() -> SourcePage {
+    SourcePage {
+        items: Vec::new(),
+        total: SEARCH_WINDOW,
+    }
 }
 
 /// Builds the store page from `GET /v1/mods/{id}` and `GET /v1/mods/{id}/description`.
@@ -299,6 +316,23 @@ async fn fetch_remote_mods(client: &Client, key: &str, ids: &[u64]) -> Result<Ve
         mods.extend(remote_mods_from_value(&body)?);
     }
     Ok(mods)
+}
+
+pub(super) async fn get_api(client: &Client, key: &str, url: &str, label: &str) -> Result<String> {
+    let response = client
+        .get(url)
+        .header("x-api-key", key)
+        .header("Accept", "application/json")
+        .send()
+        .await?;
+    let status = response.status().as_u16();
+    let body = response.text().await?;
+    if !(200..300).contains(&status) {
+        return Err(CoreError::ModpackMeta {
+            detail: format!("{label}_http_{status}"),
+        });
+    }
+    Ok(body)
 }
 
 async fn post_api(client: &Client, key: &str, url: &str, body: Value) -> Result<Value> {
@@ -475,6 +509,21 @@ mod tests {
         )
         .expect("ok");
         assert_eq!(page.total, 5321);
+    }
+
+    #[test]
+    fn caps_the_total_at_the_search_window() {
+        let page = parse_search(r#"{"data":[],"pagination":{"totalCount":250000}}"#).expect("ok");
+        assert_eq!(page.total, 10_000);
+    }
+
+    #[test]
+    fn pages_past_the_search_window_are_not_requested() {
+        assert!(fits_search_window(9_990, 10));
+        assert!(!fits_search_window(10_000, 10));
+        let page = past_search_window();
+        assert!(page.items.is_empty());
+        assert_eq!(page.total, 10_000);
     }
 
     #[test]

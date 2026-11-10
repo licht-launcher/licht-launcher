@@ -32,23 +32,18 @@ pub fn curseforge_api_key() -> Result<String> {
     }
 }
 
-/// CurseForge rejects searches where `index + pageSize` exceeds this value.
-pub(crate) const CURSEFORGE_SEARCH_WINDOW: u64 = 10_000;
-
-pub(crate) async fn search_curseforge(
+pub(super) async fn search_curseforge(
     client: &Client,
     query: &str,
     index: u64,
     page_size: u32,
 ) -> Result<SourcePage> {
     let key = curseforge_api_key()?;
-    let body = get_api(
-        client,
-        &key,
-        search_url(query, index, page_size)?,
-        "curseforge_search",
-    )
-    .await?;
+    if !api::fits_search_window(index, page_size) {
+        return Ok(api::past_search_window());
+    }
+    let url = search_url(query, index, page_size)?;
+    let body = api::get_api(client, &key, url.as_str(), "curseforge_search").await?;
     api::parse_search(&body)
 }
 
@@ -71,40 +66,18 @@ fn search_url(query: &str, index: u64, page_size: u32) -> Result<Url> {
     Ok(url)
 }
 
-pub(crate) async fn get_curseforge_mod(client: &Client, mod_id: &str) -> Result<ModpackDetails> {
+pub(super) async fn get_curseforge_mod(client: &Client, mod_id: &str) -> Result<ModpackDetails> {
     let key = curseforge_api_key()?;
     let mod_id = mod_id.parse::<u64>().map_err(|_| CoreError::ModpackMeta {
         detail: "invalid modpack identifier".into(),
     })?;
-    let mod_url = Url::parse(&format!("{MOD_URL}/{mod_id}"));
-    let description_url = Url::parse(&format!("{MOD_URL}/{mod_id}/description"));
-    let (Ok(mod_url), Ok(description_url)) = (mod_url, description_url) else {
-        return Err(CoreError::ModpackMeta {
-            detail: "curseforge_mod_url".into(),
-        });
-    };
+    let mod_url = format!("{MOD_URL}/{mod_id}");
+    let description_url = format!("{MOD_URL}/{mod_id}/description");
     let (project, description) = tokio::join!(
-        get_api(client, &key, mod_url, "curseforge_mod"),
-        get_api(client, &key, description_url, "curseforge_description"),
+        api::get_api(client, &key, &mod_url, "curseforge_mod"),
+        api::get_api(client, &key, &description_url, "curseforge_description"),
     );
     api::parse_mod(&project?, &description?)
-}
-
-async fn get_api(client: &Client, key: &str, url: Url, label: &str) -> Result<String> {
-    let response = client
-        .get(url)
-        .header("x-api-key", key)
-        .header("Accept", "application/json")
-        .send()
-        .await?;
-    let status = response.status().as_u16();
-    let body = response.text().await?;
-    if !(200..300).contains(&status) {
-        return Err(CoreError::ModpackMeta {
-            detail: format!("{label}_http_{status}"),
-        });
-    }
-    Ok(body)
 }
 
 pub async fn list_curseforge_versions(
