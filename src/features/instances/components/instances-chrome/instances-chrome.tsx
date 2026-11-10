@@ -118,6 +118,7 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
     navigate,
   ]);
   const dialogs = useInstanceDialogs();
+  const discoverActive = pathname.startsWith("/discover");
   useEffect(() => {
     if (!import.meta.env.DEV) return;
     const preview = () => {
@@ -272,10 +273,16 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
                   selectedFolder === null ? {} : { instance: selectedFolder },
               });
             }}
+            discoverActive={discoverActive}
+            onOpenDiscover={() => {
+              dialogs.setSettingsOpen(false);
+              if (pathname === "/discover") return;
+              void navigate({ to: "/discover" });
+            }}
             onOpenSettings={dialogs.openGlobalSettings}
           />
         </TitleBar>
-        {pathname === "/downloads" ? (
+        {pathname === "/downloads" || discoverActive ? (
           content
         ) : (
           <ResizablePanelGroup

@@ -32,10 +32,14 @@ import { launcherNavigationStyles } from "./launcher-navigation.styles";
 export function LauncherNavigation({
   libraryActive,
   onOpenLibrary,
+  discoverActive,
+  onOpenDiscover,
   onOpenSettings,
 }: {
   libraryActive: boolean;
   onOpenLibrary: () => void;
+  discoverActive: boolean;
+  onOpenDiscover: () => void;
   onOpenSettings: (section: SectionId) => void;
 }) {
   const router = useRouter();
@@ -174,8 +178,12 @@ export function LauncherNavigation({
           type="button"
           variant="ghost"
           size="sm"
-          className={launcherNavigationStyles.navButton}
-          disabled
+          className={cn(
+            launcherNavigationStyles.navButton,
+            launcherNavigationStyles.navButtonCurrent,
+          )}
+          aria-current={discoverActive ? "page" : undefined}
+          onClick={onOpenDiscover}
         >
           <CompassIcon
             aria-hidden

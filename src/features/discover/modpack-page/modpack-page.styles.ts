@@ -1,0 +1,26 @@
+export const modpackPageStyles = {
+  root: "flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-4",
+  toolbar: "flex shrink-0 items-center",
+  state: "flex flex-1 items-center justify-center",
+  layout: "grid min-h-0 flex-1 grid-cols-3 gap-4",
+  main: "col-span-2 min-h-0 min-w-0",
+  mainContent: "flex min-w-0 flex-col gap-5 pr-3",
+  header: "flex min-w-0 gap-4",
+  icon: "size-20 shrink-0 rounded-xl object-cover",
+  iconFallback:
+    "flex size-20 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground [&_svg]:size-8",
+  heading: "flex min-w-0 flex-col gap-1.5",
+  title: "text-xl font-semibold",
+  author: "text-sm text-muted-foreground",
+  summary: "text-sm",
+  meta: "flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground",
+  metaItem: "flex items-center gap-1 [&_svg]:size-3.5",
+  categories: "flex flex-wrap gap-1.5",
+  actions: "flex",
+  sectionTitle: "mb-2 text-sm font-medium text-muted-foreground",
+  gallery: "grid grid-cols-3 gap-2",
+  galleryImage:
+    "aspect-video w-full rounded-lg border border-border object-cover",
+  aside: "min-h-0 min-w-0",
+  asideScroll: "h-full",
+} as const;
