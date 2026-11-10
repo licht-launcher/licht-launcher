@@ -38,6 +38,17 @@ describe("DiscoverFilters", () => {
     );
   });
 
+  it("starts with no narrowing", () => {
+    renderFilters();
+
+    expect(screen.getByRole("combobox", { name: "Source" })).toHaveTextContent(
+      "Any source",
+    );
+    expect(screen.getByRole("combobox", { name: "Loader" })).toHaveTextContent(
+      "Any loader",
+    );
+  });
+
   it("toggles a single category", () => {
     const onChange = renderFilters();
     const categories = screen.getByRole("list", { name: "Category" });

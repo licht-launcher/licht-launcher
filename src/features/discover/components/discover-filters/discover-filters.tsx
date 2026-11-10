@@ -89,7 +89,7 @@ export function DiscoverFilters({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={ANY}>Modrinth and CurseForge</SelectItem>
+                  <SelectItem value={ANY}>Any source</SelectItem>
                   {MODPACK_SOURCES.map((source) => (
                     <SelectItem key={source} value={source}>
                       {SOURCE_LABELS[source]}
