@@ -39,6 +39,7 @@ export function modpackSearchPage(
     ],
     page: 1,
     pageCount: 3,
+    unavailableSources: [],
     ...overrides,
   };
 }

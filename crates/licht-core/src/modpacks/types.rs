@@ -55,6 +55,8 @@ pub struct ModpackSearchPage {
     pub page: u32,
     /// Number of pages the largest source can serve; `0` when nothing matched.
     pub page_count: u32,
+    /// Sources that were searched but failed, so the list may be missing results.
+    pub unavailable_sources: Vec<ModpackSource>,
 }
 
 /// One modpack's store page data. `description_html` is already sanitized.

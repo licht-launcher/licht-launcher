@@ -6,19 +6,25 @@ import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { DiscoverFilters } from "@/features/discover/components/discover-filters";
 import { DEFAULT_SEARCH_FILTERS } from "@/features/discover/lib/discover-search";
 import type { ModpackSearchFilters } from "@/lib/generated/ModpackSearchFilters";
+import type { ModpackSource } from "@/lib/generated/ModpackSource";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 
 function renderFilters(
   filters: ModpackSearchFilters = DEFAULT_SEARCH_FILTERS,
   onChange = vi.fn(),
+  sources: readonly ModpackSource[] = ["modrinth", "curseforge"],
 ) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   render(
     <QueryClientProvider client={client}>
-      <DiscoverFilters filters={filters} onChange={onChange} />
+      <DiscoverFilters
+        filters={filters}
+        sources={sources}
+        onChange={onChange}
+      />
     </QueryClientProvider>,
   );
   return onChange;
@@ -47,6 +53,15 @@ describe("DiscoverFilters", () => {
     expect(screen.getByRole("combobox", { name: "Loader" })).toHaveTextContent(
       "Any loader",
     );
+  });
+
+  it("leaves out the Source filter when only Modrinth can be searched", () => {
+    renderFilters(DEFAULT_SEARCH_FILTERS, vi.fn(), ["modrinth"]);
+
+    expect(
+      screen.queryByRole("combobox", { name: "Source" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/CurseForge/)).not.toBeInTheDocument();
   });
 
   it("toggles a single category", () => {

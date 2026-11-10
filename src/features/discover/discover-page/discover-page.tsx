@@ -1,4 +1,5 @@
 import {
+  CircleAlertIcon,
   CompassIcon,
   SearchIcon,
   SearchXIcon,
@@ -12,12 +13,24 @@ import { Spinner } from "@/components/ui/spinner";
 import { DiscoverFilters } from "@/features/discover/components/discover-filters";
 import { DiscoverSort } from "@/features/discover/components/discover-sort";
 import { ModpackList } from "@/features/discover/components/modpack-list";
-import { useModpackSearch } from "@/features/discover/hooks/use-modpacks";
+import {
+  useModpackSearch,
+  useModpackSources,
+} from "@/features/discover/hooks/use-modpacks";
 import { useSearchDraft } from "@/features/discover/hooks/use-search-draft";
+import { SOURCE_LABELS } from "@/features/discover/lib/discover-search";
 import { friendlyError, messageOf } from "@/lib/errors";
 import type { ModpackSearchFilters } from "@/lib/generated/ModpackSearchFilters";
+import type { ModpackSource } from "@/lib/generated/ModpackSource";
 
 import { discoverPageStyles } from "./discover-page.styles";
+
+const MODRINTH_ONLY: readonly ModpackSource[] = ["modrinth"];
+
+function unavailableNotice(sources: readonly ModpackSource[]): string {
+  const names = sources.map((source) => SOURCE_LABELS[source]).join(" and ");
+  return `${names} results couldn't load right now. Showing the rest.`;
+}
 
 /** Store listing of Modrinth and CurseForge modpacks that loads as you scroll. */
 export function DiscoverPage({
@@ -31,8 +44,17 @@ export function DiscoverPage({
   onSearch: (query: string) => void;
   onFiltersChange: (filters: ModpackSearchFilters) => void;
 }) {
-  const search = useModpackSearch(query, filters);
-  const listKey = JSON.stringify([query, filters]);
+  const offered = useModpackSources();
+  // The sources call is local; if it ever fails, Modrinth alone still works.
+  const sources = offered.data ?? (offered.isError ? MODRINTH_ONLY : null);
+  // A link may ask for a source this build cannot search; it is ignored.
+  const effectiveFilters =
+    filters.source !== null && !sources?.includes(filters.source)
+      ? { ...filters, source: null }
+      : filters;
+  const search = useModpackSearch(query, effectiveFilters, sources !== null);
+  const unavailable = search.data?.unavailableSources ?? [];
+  const listKey = JSON.stringify([query, effectiveFilters]);
   const { fetchNextPage } = search;
   // Calls while a page is loading are ignored instead of restarting it.
   const loadMore = useCallback(
@@ -66,7 +88,11 @@ export function DiscoverPage({
         </div>
       </header>
       <div className={discoverPageStyles.body}>
-        <DiscoverFilters filters={filters} onChange={onFiltersChange} />
+        <DiscoverFilters
+          filters={effectiveFilters}
+          sources={sources ?? MODRINTH_ONLY}
+          onChange={onFiltersChange}
+        />
         <section
           aria-label="Modpacks"
           aria-busy={search.isFetching}
@@ -82,23 +108,31 @@ export function DiscoverPage({
               title="Could not load modpacks"
               description={friendlyError(messageOf(search.error))}
             />
-          ) : search.data.length === 0 ? (
+          ) : search.data.items.length === 0 ? (
             <EmptyState
               icon={<SearchXIcon />}
               title="No modpacks found"
               description="Try a different search or fewer filters."
             />
           ) : (
-            <ModpackList
-              // A new search starts at the top of a fresh list.
-              key={listKey}
-              positionKey={listKey}
-              items={search.data}
-              hasMore={search.hasNextPage}
-              loadingMore={search.isFetchingNextPage}
-              loadMoreFailed={search.isFetchNextPageError}
-              onLoadMore={loadMore}
-            />
+            <>
+              {unavailable.length > 0 && (
+                <p role="status" className={discoverPageStyles.notice}>
+                  <CircleAlertIcon aria-hidden />
+                  {unavailableNotice(unavailable)}
+                </p>
+              )}
+              <ModpackList
+                // A new search starts at the top of a fresh list.
+                key={listKey}
+                positionKey={listKey}
+                items={search.data.items}
+                hasMore={search.hasNextPage}
+                loadingMore={search.isFetchingNextPage}
+                loadMoreFailed={search.isFetchNextPageError}
+                onLoadMore={loadMore}
+              />
+            </>
           )}
         </section>
       </div>

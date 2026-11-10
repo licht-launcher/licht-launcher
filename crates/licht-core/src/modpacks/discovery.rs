@@ -39,7 +39,7 @@ pub async fn search_modpacks(
     };
     let curseforge_search = async {
         if !searches_curseforge(filters) {
-            return Ok(None);
+            return Ok(SourceOutcome::Skipped);
         }
         let only_curseforge = filters.source == Some(ModpackSource::Curseforge);
         let result =
@@ -48,26 +48,69 @@ pub async fn search_modpacks(
         curseforge_outcome(result, only_curseforge)
     };
     let (modrinth_page, curseforge_page) = tokio::join!(modrinth_search, curseforge_search);
-    let sources: Vec<SourcePage> = modrinth_page?.into_iter().chain(curseforge_page?).collect();
-    Ok(merge_search_pages(page, sources, filters.sort))
+    Ok(assemble_page(
+        page,
+        modrinth_page?,
+        curseforge_page?,
+        filters.sort,
+    ))
+}
+
+/// What one source contributed to a search.
+#[derive(Debug)]
+enum SourceOutcome {
+    Found(SourcePage),
+    /// Not searched: filtered out, or not offered (no CurseForge key).
+    Skipped,
+    /// Searched, but the request failed; the page is missing its results.
+    Failed,
 }
 
 /// When both sources are searched, a CurseForge failure leaves its share out
 /// so Modrinth results still show; a CurseForge-only search reports the error.
-fn curseforge_outcome(
-    result: Result<SourcePage>,
-    only_curseforge: bool,
-) -> Result<Option<SourcePage>> {
+fn curseforge_outcome(result: Result<SourcePage>, only_curseforge: bool) -> Result<SourceOutcome> {
     match result {
-        Ok(found) => Ok(Some(found)),
+        Ok(found) => Ok(SourceOutcome::Found(found)),
         Err(error) if only_curseforge => Err(error),
         // No key configured is the normal state for many users, not a failure.
-        Err(CoreError::CurseforgeKeyMissing) => Ok(None),
+        Err(CoreError::CurseforgeKeyMissing) => Ok(SourceOutcome::Skipped),
         Err(error) => {
             tracing::warn!(%error, "CurseForge search failed; showing Modrinth results only");
-            Ok(None)
+            Ok(SourceOutcome::Failed)
         }
     }
+}
+
+fn assemble_page(
+    page: u32,
+    modrinth: Option<SourcePage>,
+    curseforge: SourceOutcome,
+    sort: ModpackSort,
+) -> ModpackSearchPage {
+    let mut unavailable_sources = Vec::new();
+    let mut sources: Vec<SourcePage> = modrinth.into_iter().collect();
+    match curseforge {
+        SourceOutcome::Found(found) => sources.push(found),
+        SourceOutcome::Skipped => {}
+        SourceOutcome::Failed => unavailable_sources.push(ModpackSource::Curseforge),
+    }
+    ModpackSearchPage {
+        unavailable_sources,
+        ..merge_search_pages(page, sources, sort)
+    }
+}
+
+/// Sources this build can search: Modrinth always, CurseForge with a key.
+pub fn available_modpack_sources() -> Vec<ModpackSource> {
+    sources_offered(curseforge::curseforge_api_key().is_ok())
+}
+
+fn sources_offered(curseforge_configured: bool) -> Vec<ModpackSource> {
+    let mut sources = vec![ModpackSource::Modrinth];
+    if curseforge_configured {
+        sources.push(ModpackSource::Curseforge);
+    }
+    sources
 }
 
 fn searches_modrinth(filters: &ModpackSearchFilters) -> bool {
@@ -106,6 +149,7 @@ fn merge_search_pages(page: u32, sources: Vec<SourcePage>, sort: ModpackSort) ->
         items,
         page,
         page_count: u32::try_from(page_count).unwrap_or(u32::MAX),
+        unavailable_sources: Vec::new(),
     }
 }
 
@@ -295,11 +339,50 @@ mod tests {
     #[test]
     fn a_failing_curseforge_leaves_modrinth_results_when_both_are_searched() {
         let failed = curseforge_outcome(Err(CoreError::CurseforgeKeyRejected), false);
-        assert!(matches!(failed, Ok(None)));
+        assert!(matches!(failed, Ok(SourceOutcome::Failed)));
         let missing = curseforge_outcome(Err(CoreError::CurseforgeKeyMissing), false);
-        assert!(matches!(missing, Ok(None)));
+        assert!(matches!(missing, Ok(SourceOutcome::Skipped)));
         let found = curseforge_outcome(Ok(page_of("c")), false).expect("ok");
-        assert_eq!(found.map(|page| page.items.len()), Some(1));
+        assert!(matches!(found, SourceOutcome::Found(page) if page.items.len() == 1));
+    }
+
+    #[test]
+    fn a_failed_source_is_reported_but_a_skipped_one_is_not() {
+        let modrinth = Some(page_of("m"));
+        let failed = assemble_page(
+            1,
+            modrinth.clone(),
+            SourceOutcome::Failed,
+            ModpackSort::Downloads,
+        );
+        assert_eq!(failed.unavailable_sources, vec![ModpackSource::Curseforge]);
+        assert_eq!(failed.items.len(), 1);
+
+        let skipped = assemble_page(
+            1,
+            modrinth.clone(),
+            SourceOutcome::Skipped,
+            ModpackSort::Downloads,
+        );
+        assert!(skipped.unavailable_sources.is_empty());
+
+        let found = assemble_page(
+            1,
+            modrinth,
+            SourceOutcome::Found(page_of("c")),
+            ModpackSort::Downloads,
+        );
+        assert!(found.unavailable_sources.is_empty());
+        assert_eq!(found.items.len(), 2);
+    }
+
+    #[test]
+    fn curseforge_is_offered_only_with_a_key() {
+        assert_eq!(sources_offered(false), vec![ModpackSource::Modrinth]);
+        assert_eq!(
+            sources_offered(true),
+            vec![ModpackSource::Modrinth, ModpackSource::Curseforge]
+        );
     }
 
     #[test]
