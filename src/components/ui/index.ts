@@ -1,3 +1,4 @@
+export { Badge } from "@/components/ui/badge";
 export { Button, buttonVariants } from "@/components/ui/button";
 export { Card } from "@/components/ui/card";
 export { Combobox } from "@/components/ui/combobox";
@@ -14,6 +15,7 @@ export {
   DialogTrigger,
 } from "@/components/ui/dialog";
 export { Input } from "@/components/ui/input";
+export { Pagination } from "@/components/ui/pagination";
 export {
   Popover,
   PopoverAnchor,
