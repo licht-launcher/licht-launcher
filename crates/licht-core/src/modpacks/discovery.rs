@@ -150,6 +150,8 @@ mod tests {
             icon_url: None,
             author: String::new(),
             updated_at: None,
+            loaders: Vec::new(),
+            categories: Vec::new(),
         }
     }
 

@@ -6,7 +6,7 @@ use url::Url;
 use crate::modpacks::description::markdown_to_safe_html;
 use crate::modpacks::types::{
     ModpackCategory, ModpackDetails, ModpackListItem, ModpackLoader, ModpackSearchFilters,
-    ModpackSort, ModpackSource, ModpackVersionItem, SourcePage,
+    ModpackSort, ModpackSource, ModpackVersionItem, SourcePage, push_unique,
 };
 use crate::{CoreError, Result};
 
@@ -34,6 +34,9 @@ struct SearchHit {
     author: String,
     #[serde(default)]
     date_modified: Option<String>,
+    /// Modrinth lists loaders among the categories.
+    #[serde(default)]
+    categories: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -144,15 +147,34 @@ pub(super) fn parse_search(body: &str) -> Result<SourcePage> {
     let items = parsed
         .hits
         .into_iter()
-        .map(|hit| ModpackListItem {
-            id: hit.project_id,
-            source: ModpackSource::Modrinth,
-            name: hit.title,
-            description: hit.description,
-            downloads: hit.downloads,
-            icon_url: hit.icon_url,
-            author: hit.author,
-            updated_at: hit.date_modified,
+        .map(|hit| {
+            let mut loaders = Vec::new();
+            let mut categories = Vec::new();
+            for slug in &hit.categories {
+                if let Some(loader) = ModpackLoader::ALL
+                    .into_iter()
+                    .find(|loader| loader_slug(*loader) == slug)
+                {
+                    push_unique(&mut loaders, loader);
+                } else if let Some(category) = ModpackCategory::ALL
+                    .into_iter()
+                    .find(|category| category_slug(*category) == slug)
+                {
+                    push_unique(&mut categories, category);
+                }
+            }
+            ModpackListItem {
+                id: hit.project_id,
+                source: ModpackSource::Modrinth,
+                name: hit.title,
+                description: hit.description,
+                downloads: hit.downloads,
+                icon_url: hit.icon_url,
+                author: hit.author,
+                updated_at: hit.date_modified,
+                loaders,
+                categories,
+            }
         })
         .collect();
     Ok(SourcePage {
@@ -486,6 +508,32 @@ mod tests {
             query_value(&url, "facets").as_deref(),
             Some(r#"[["project_type:modpack"]]"#)
         );
+    }
+
+    #[test]
+    fn splits_loaders_from_shared_categories() {
+        let page = parse_search(
+            r#"{"hits":[{"project_id":"A","title":"A","description":"","categories":["fabric","lightweight","quilt","fabric","utility","optimization"]}],"total_hits":1}"#,
+        )
+        .expect("ok");
+        assert_eq!(
+            page.items[0].loaders,
+            vec![ModpackLoader::Fabric, ModpackLoader::Quilt]
+        );
+        assert_eq!(
+            page.items[0].categories,
+            vec![ModpackCategory::Lightweight, ModpackCategory::Optimization]
+        );
+    }
+
+    #[test]
+    fn every_loader_and_category_has_a_distinct_slug() {
+        let mut slugs: Vec<&str> = ModpackLoader::ALL.into_iter().map(loader_slug).collect();
+        slugs.extend(ModpackCategory::ALL.into_iter().map(category_slug));
+        let count = slugs.len();
+        slugs.sort_unstable();
+        slugs.dedup();
+        assert_eq!(slugs.len(), count);
     }
 
     #[test]

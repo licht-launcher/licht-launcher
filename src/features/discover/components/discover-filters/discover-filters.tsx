@@ -30,6 +30,7 @@ import {
 } from "@/features/discover/lib/filter-options";
 import { versionsQueryOptions } from "@/features/instances/lib/versions-query";
 import { createVersionChoices } from "@/features/instances/model/create-versions";
+import { PlatformIcon } from "@/features/new-instance/assets/platform-icons";
 import type { ModpackSearchFilters } from "@/lib/generated/ModpackSearchFilters";
 
 import { discoverFiltersStyles } from "./discover-filters.styles";
@@ -138,6 +139,10 @@ export function DiscoverFilters({
                   <SelectItem value={ANY}>Any loader</SelectItem>
                   {LOADER_OPTIONS.map((option) => (
                     <SelectItem key={option.value} value={option.value}>
+                      <PlatformIcon
+                        platform={option.value}
+                        className={discoverFiltersStyles.loaderIcon}
+                      />
                       {option.label}
                     </SelectItem>
                   ))}

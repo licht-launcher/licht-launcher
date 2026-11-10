@@ -23,7 +23,7 @@ import type { ModpackListItem } from "@/lib/generated/ModpackListItem";
 import { modpackListStyles } from "./modpack-list.styles";
 
 /** Initial row height guess; real heights are measured once rows render. */
-const ROW_ESTIMATE_PX = 72;
+const ROW_ESTIMATE_PX = 104;
 /** Start loading the next page when this many rows are left below the window. */
 const LOAD_AHEAD_ROWS = 5;
 const FOOTER_KEY = "load-more";
@@ -62,6 +62,8 @@ export function ModpackList({
   onLoadMore: () => void;
 }) {
   const viewportRef = useRef<HTMLDivElement>(null);
+  // One clock per list, so every row says "Updated … ago" from the same moment.
+  const [now] = useState(() => Date.now());
   // Only restore when the rows it was measured against are loaded again.
   const [restored] = useState(() =>
     lastPosition?.key === positionKey && items.length >= lastPosition.itemCount
@@ -165,7 +167,7 @@ export function ModpackList({
               style={{ transform: `translateY(${row.start}px)` }}
             >
               {modpack ? (
-                <ModpackRow modpack={modpack} />
+                <ModpackRow modpack={modpack} now={now} />
               ) : (
                 <LoadMoreFooter failed={loadMoreFailed} onRetry={onLoadMore} />
               )}

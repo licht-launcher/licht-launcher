@@ -15,6 +15,8 @@ export function modpackListItem(
     iconUrl: "https://cdn.modrinth.com/data/1KVo5zza/icon.webp",
     author: "robotkoer",
     updatedAt: "2026-11-01T10:43:19.109719Z",
+    loaders: ["fabric"],
+    categories: ["lightweight", "multiplayer", "optimization", "quests"],
     ...overrides,
   };
 }

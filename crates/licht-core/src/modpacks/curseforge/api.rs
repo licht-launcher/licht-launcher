@@ -8,7 +8,7 @@ use super::{CLASS_ID, FILES_URL, MOD_URL};
 use crate::modpacks::description::sanitize_html;
 use crate::modpacks::types::{
     ModpackCategory, ModpackDetails, ModpackListItem, ModpackLoader, ModpackSort, ModpackSource,
-    ModpackVersionItem, SourcePage,
+    ModpackVersionItem, SourcePage, push_unique,
 };
 use crate::{CoreError, Result};
 
@@ -108,6 +108,22 @@ struct ModHit {
     authors: Vec<Author>,
     #[serde(default)]
     date_modified: Option<String>,
+    #[serde(default)]
+    categories: Vec<HitCategory>,
+    #[serde(default)]
+    latest_files_indexes: Vec<FileIndex>,
+}
+
+#[derive(Debug, Deserialize)]
+struct HitCategory {
+    slug: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct FileIndex {
+    #[serde(default)]
+    mod_loader: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -151,19 +167,43 @@ pub(super) fn parse_search(body: &str) -> Result<SourcePage> {
     let items = parsed
         .data
         .into_iter()
-        .map(|hit| ModpackListItem {
-            id: hit.id.to_string(),
-            source: ModpackSource::Curseforge,
-            name: hit.name,
-            description: hit.summary,
-            downloads: hit.download_count,
-            icon_url: hit.logo.and_then(|logo| logo.url),
-            author: hit
-                .authors
-                .first()
-                .map(|author| author.name.clone())
-                .unwrap_or_default(),
-            updated_at: hit.date_modified,
+        .map(|hit| {
+            let mut loaders = Vec::new();
+            for index in &hit.latest_files_indexes {
+                let loader = index.mod_loader.and_then(|id| {
+                    ModpackLoader::ALL
+                        .into_iter()
+                        .find(|loader| mod_loader_type(*loader) == id.to_string())
+                });
+                if let Some(loader) = loader {
+                    push_unique(&mut loaders, loader);
+                }
+            }
+            let mut categories = Vec::new();
+            for category in &hit.categories {
+                if let Some(shared) = ModpackCategory::ALL
+                    .into_iter()
+                    .find(|shared| category_slug(*shared) == Some(category.slug.as_str()))
+                {
+                    push_unique(&mut categories, shared);
+                }
+            }
+            ModpackListItem {
+                id: hit.id.to_string(),
+                source: ModpackSource::Curseforge,
+                name: hit.name,
+                description: hit.summary,
+                downloads: hit.download_count,
+                icon_url: hit.logo.and_then(|logo| logo.url),
+                author: hit
+                    .authors
+                    .first()
+                    .map(|author| author.name.clone())
+                    .unwrap_or_default(),
+                updated_at: hit.date_modified,
+                loaders,
+                categories,
+            }
         })
         .collect();
     Ok(SourcePage { items, total })
@@ -589,6 +629,24 @@ mod tests {
         assert_eq!(
             page.items[0].updated_at.as_deref(),
             Some("2026-11-08T00:51:06.56Z")
+        );
+    }
+
+    #[test]
+    fn reads_loaders_and_shared_categories_of_each_hit() {
+        let page = parse_search(
+            r#"{"data":[{"id":1,"name":"A","summary":"","downloadCount":1,
+              "categories":[{"slug":"extra-large"},{"slug":"exploration"},{"slug":"tech"}],
+              "latestFilesIndexes":[{"gameVersion":"1.21.1","modLoader":6},{"gameVersion":"1.20.1"},{"gameVersion":"1.20.1","modLoader":6},{"gameVersion":"1.12.2","modLoader":1},{"gameVersion":"1.7.10","modLoader":2}]}]}"#,
+        )
+        .expect("ok");
+        assert_eq!(
+            page.items[0].loaders,
+            vec![ModpackLoader::Neoforge, ModpackLoader::Forge]
+        );
+        assert_eq!(
+            page.items[0].categories,
+            vec![ModpackCategory::KitchenSink, ModpackCategory::Technology]
         );
     }
 

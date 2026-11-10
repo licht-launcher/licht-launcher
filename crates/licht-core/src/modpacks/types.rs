@@ -31,6 +31,10 @@ pub struct ModpackListItem {
     pub author: String,
     /// RFC 3339 UTC timestamp of the last update, as reported by the source.
     pub updated_at: Option<String>,
+    /// Loaders the pack's files target, without repeats.
+    pub loaders: Vec<ModpackLoader>,
+    /// The pack's categories that match Licht's shared list, in source order.
+    pub categories: Vec<ModpackCategory>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -91,6 +95,10 @@ pub enum ModpackLoader {
     Quilt,
 }
 
+impl ModpackLoader {
+    pub const ALL: [Self; 4] = [Self::Fabric, Self::Forge, Self::Neoforge, Self::Quilt];
+}
+
 /// Licht's shared category list; each source maps it to its own categories.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -105,6 +113,28 @@ pub enum ModpackCategory {
     Optimization,
     Quests,
     Technology,
+}
+
+impl ModpackCategory {
+    pub const ALL: [Self; 10] = [
+        Self::Adventure,
+        Self::Challenging,
+        Self::Combat,
+        Self::KitchenSink,
+        Self::Lightweight,
+        Self::Magic,
+        Self::Multiplayer,
+        Self::Optimization,
+        Self::Quests,
+        Self::Technology,
+    ];
+}
+
+/// Appends `value` unless the list already has it, keeping first-seen order.
+pub(crate) fn push_unique<T: PartialEq>(list: &mut Vec<T>, value: T) {
+    if !list.contains(&value) {
+        list.push(value);
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
