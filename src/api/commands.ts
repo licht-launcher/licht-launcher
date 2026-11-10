@@ -24,6 +24,10 @@ import type { JavaDetections } from "@/lib/generated/JavaDetections";
 import type { JavaPaths } from "@/lib/generated/JavaPaths";
 import type { JavaStatus } from "@/lib/generated/JavaStatus";
 import type { LoaderBuild } from "@/lib/generated/LoaderBuild";
+import type { ModpackDetails } from "@/lib/generated/ModpackDetails";
+import type { ModpackSearchPage } from "@/lib/generated/ModpackSearchPage";
+import type { ModpackSource } from "@/lib/generated/ModpackSource";
+import type { ModpackVersionItem } from "@/lib/generated/ModpackVersionItem";
 import type { Settings } from "@/lib/generated/Settings";
 import type { SettingsSnapshot } from "@/lib/generated/SettingsSnapshot";
 import type { StartupPreviewScenario } from "@/lib/generated/StartupPreviewScenario";
@@ -146,6 +150,43 @@ export function createInstanceWithPlatform(input: {
     gameVersion: input.gameVersion,
     loaderChannel: input.loaderChannel,
     loaderVersion: input.loaderVersion,
+  });
+}
+
+export function searchModpacks(
+  query: string,
+  page: number,
+): Promise<ModpackSearchPage> {
+  return invoke("search_modpacks", { query, page });
+}
+
+export function getModpack(
+  source: ModpackSource,
+  projectId: string,
+): Promise<ModpackDetails> {
+  return invoke("get_modpack", { source, projectId });
+}
+
+export function listModpackVersions(
+  source: ModpackSource,
+  projectId: string,
+): Promise<ModpackVersionItem[]> {
+  return invoke("list_modpack_versions", { source, projectId });
+}
+
+export function createInstanceFromModpack(input: {
+  name: string;
+  source: ModpackSource;
+  projectId: string;
+  versionId: string;
+  iconUrl: string | null;
+}): Promise<InstanceEntry> {
+  return invoke("create_instance_from_modpack", {
+    name: input.name,
+    source: input.source,
+    projectId: input.projectId,
+    versionId: input.versionId,
+    iconUrl: input.iconUrl,
   });
 }
 

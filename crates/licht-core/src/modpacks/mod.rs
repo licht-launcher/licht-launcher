@@ -2,6 +2,8 @@
 
 mod archive;
 mod curseforge;
+mod description;
+mod discovery;
 mod file_hashes;
 mod modrinth;
 pub(crate) mod mrpack;
@@ -11,10 +13,13 @@ mod types;
 pub(crate) mod workspace;
 
 pub use curseforge::{CURSEFORGE_API_KEY_ENV, CURSEFORGE_INDEX_FILE, install_curseforge_files};
+pub use discovery::{get_modpack, search_modpacks};
 pub use mrpack::{
     MODPACK_INDEX_FILE, apply_mrpack_loader, install_mrpack_files, mrpack_download_tasks,
 };
-pub use types::{ModpackListItem, ModpackSource, ModpackVersionItem};
+pub use types::{
+    ModpackDetails, ModpackListItem, ModpackSearchPage, ModpackSource, ModpackVersionItem,
+};
 
 use reqwest::Client;
 
@@ -22,18 +27,6 @@ use crate::instance::{InstanceEntry, InstanceSource, instance_entry};
 use crate::settings::GlobalLaunch;
 use crate::{CoreError, Result, SharedCache};
 use std::path::Path;
-
-/// Searches Modrinth always; CurseForge when `LICHT_CURSEFORGE_API_KEY` is set.
-pub async fn search_modpacks(client: &Client, query: &str) -> Result<Vec<ModpackListItem>> {
-    let mut items = modrinth::search_modrinth(client, query).await?;
-    match curseforge::search_curseforge(client, query).await {
-        Ok(mut curse) => items.append(&mut curse),
-        Err(CoreError::CurseforgeKeyMissing) => {}
-        Err(error) => return Err(error),
-    }
-    items.sort_by_key(|item| std::cmp::Reverse(item.downloads));
-    Ok(items)
-}
 
 pub async fn list_modpack_versions(
     client: &Client,

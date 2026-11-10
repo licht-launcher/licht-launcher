@@ -52,7 +52,7 @@ and CDNs used by those providers may also receive download requests.
 | Mod-loader installation | Fabric, Quilt, Forge, NeoForge, and repositories referenced by their installation metadata receive version, installer, and library requests for the selected loader. |
 | Modpack discovery and import | Modrinth or CurseForge and their CDNs receive search terms, filters, project/version/file identifiers, and download requests. CurseForge requests use an API key when configured; the key is sent to CurseForge's API. |
 | Installed-content identification | Modrinth and, when an API key is configured, CurseForge can receive file hashes/fingerprints, project lookups, or search terms derived from content filenames. These identifiers can reveal which mods or packs are installed. Hashing and archive inspection happen locally; the metadata lookup does not upload the archive itself. |
-| Content images | Image hosts referenced by provider metadata receive requests when the UI loads project or modpack icons. |
+| Content images | Image hosts referenced by provider metadata receive requests when the UI loads project or modpack icons, gallery images, or images embedded in a modpack description. Description images can be hosted on any HTTPS host the pack author chose. |
 | Launcher updates | GitHub Releases and its download hosts receive update-manifest and installer requests. Automatic checks are enabled by default and can be disabled in Settings. |
 
 Content metadata lookups can run automatically when an instance is selected,
