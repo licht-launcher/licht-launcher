@@ -46,6 +46,7 @@ import {
   listRunningGames,
   listVersions,
   logoutMicrosoftAccount,
+  openExternalUrl,
   openFeedback,
   openInstanceFolder,
   openRepository,
@@ -461,6 +462,13 @@ describe("launcher commands", () => {
   it("opens the feedback form through the native command", async () => {
     await openFeedback();
     expect(invoke).toHaveBeenCalledWith("open_feedback");
+  });
+
+  it("opens an external link through the native command", async () => {
+    await openExternalUrl("https://modrinth.com/modpack/fo");
+    expect(invoke).toHaveBeenCalledWith("open_external_url", {
+      url: "https://modrinth.com/modpack/fo",
+    });
   });
 
   it("reads the cached player head through the native command", async () => {

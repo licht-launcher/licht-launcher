@@ -93,6 +93,7 @@ pub fn run() -> anyhow::Result<()> {
             commands::instances::remove_instance_content,
             commands::shell::open_repository,
             commands::shell::open_feedback,
+            commands::shell::open_external_url,
             commands::shell::custom_title_bar_active,
             commands::shell::restart_app,
             commands::shell::quit_app,

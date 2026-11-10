@@ -332,6 +332,11 @@ export function openFeedback(): Promise<void> {
   return invoke("open_feedback");
 }
 
+/** Opens an HTTPS link in the system browser; other URLs are rejected natively. */
+export function openExternalUrl(url: string): Promise<void> {
+  return invoke("open_external_url", { url });
+}
+
 export function getLastPlayedFolder(): Promise<string | null> {
   return invoke("get_last_played_folder");
 }

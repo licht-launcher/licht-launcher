@@ -7,6 +7,7 @@
 mod auth;
 mod diagnostics;
 mod error;
+mod external_url;
 mod game;
 mod hashes;
 mod instance;
@@ -65,6 +66,7 @@ pub use download::{
     shared_transfer_limits,
 };
 pub use error::CoreError;
+pub use external_url::external_https_url;
 pub use install::{
     ASSET_OBJECT_BASE, GameInstall, InstallArgs, InstallPlan, install_game, install_game_version,
     install_version, parse_install_args,

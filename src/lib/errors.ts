@@ -48,6 +48,7 @@ const FRIENDLY: Record<string, string> = {
   "unknown platform": "That platform is not supported.",
   "unknown channel": "That loader channel is not supported.",
   "unknown modpack source": "That modpack source is not supported.",
+  "only HTTPS links can be opened": "That link cannot be opened.",
 };
 
 export function messageOf(error: unknown): string {
