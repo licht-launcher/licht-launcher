@@ -11,6 +11,7 @@ import { Pagination } from "@/components/ui/pagination";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Spinner } from "@/components/ui/spinner";
 import { DiscoverFilters } from "@/features/discover/components/discover-filters";
+import { DiscoverSort } from "@/features/discover/components/discover-sort";
 import { ModpackRow } from "@/features/discover/components/modpack-row";
 import { useModpackSearch } from "@/features/discover/hooks/use-modpacks";
 import { useSearchDraft } from "@/features/discover/hooks/use-search-draft";
@@ -45,15 +46,21 @@ export function DiscoverPage({
           <CompassIcon aria-hidden className={discoverPageStyles.titleIcon} />
           Discover
         </h1>
-        <div className={discoverPageStyles.search}>
-          <Input
-            type="search"
-            aria-label="Search modpacks"
-            placeholder="Search modpacks"
-            startIcon={<SearchIcon />}
-            value={draft}
-            onChange={(event) => change(event.target.value)}
+        <div className={discoverPageStyles.controls}>
+          <DiscoverSort
+            value={filters.sort}
+            onChange={(sort) => onFiltersChange({ ...filters, sort })}
           />
+          <div className={discoverPageStyles.search}>
+            <Input
+              type="search"
+              aria-label="Search modpacks"
+              placeholder="Search modpacks"
+              startIcon={<SearchIcon />}
+              value={draft}
+              onChange={(event) => change(event.target.value)}
+            />
+          </div>
         </div>
       </header>
       <div className={discoverPageStyles.body}>

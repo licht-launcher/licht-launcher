@@ -1,5 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
-import { XIcon } from "lucide-react";
+import {
+  BlocksIcon,
+  GlobeIcon,
+  LayoutGridIcon,
+  type LucideIcon,
+  TagIcon,
+  XIcon,
+} from "lucide-react";
 import { type ReactNode, useId } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -20,7 +27,6 @@ import {
 import {
   CATEGORY_OPTIONS,
   LOADER_OPTIONS,
-  SORT_OPTIONS,
 } from "@/features/discover/lib/filter-options";
 import { versionsQueryOptions } from "@/features/instances/lib/versions-query";
 import { createVersionChoices } from "@/features/instances/model/create-versions";
@@ -38,7 +44,7 @@ function optionValue<T extends string>(
   return options.find((option) => option.value === value)?.value ?? null;
 }
 
-/** Discover's left sidebar: sort plus filters that narrow the search. */
+/** Discover's left sidebar: filters that narrow the search. */
 export function DiscoverFilters({
   filters,
   onChange,
@@ -68,33 +74,7 @@ export function DiscoverFilters({
     <aside aria-label="Filters" className={discoverFiltersStyles.root}>
       <ScrollArea className={discoverFiltersStyles.scrollArea}>
         <div className={discoverFiltersStyles.content}>
-          <FilterGroup title="Sort by">
-            {(labelId) => (
-              <Select
-                value={filters.sort}
-                onValueChange={(value) =>
-                  update({
-                    sort: optionValue(SORT_OPTIONS, value) ?? "downloads",
-                  })
-                }
-              >
-                <SelectTrigger
-                  aria-labelledby={labelId}
-                  className={discoverFiltersStyles.trigger}
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {SORT_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          </FilterGroup>
-          <FilterGroup title="Source">
+          <FilterGroup title="Source" icon={GlobeIcon}>
             {(labelId) => (
               <Select
                 value={filters.source ?? ANY}
@@ -119,7 +99,7 @@ export function DiscoverFilters({
               </Select>
             )}
           </FilterGroup>
-          <FilterGroup title="Game version">
+          <FilterGroup title="Game version" icon={TagIcon}>
             {() => (
               <Combobox
                 aria-label="Game version"
@@ -140,7 +120,7 @@ export function DiscoverFilters({
               />
             )}
           </FilterGroup>
-          <FilterGroup title="Loader">
+          <FilterGroup title="Loader" icon={BlocksIcon}>
             {(labelId) => (
               <Select
                 value={filters.loader ?? ANY}
@@ -165,7 +145,7 @@ export function DiscoverFilters({
               </Select>
             )}
           </FilterGroup>
-          <FilterGroup title="Category">
+          <FilterGroup title="Category" icon={LayoutGridIcon}>
             {(labelId) => (
               <ul
                 aria-labelledby={labelId}
@@ -185,6 +165,7 @@ export function DiscoverFilters({
                           update({ category: pressed ? null : option.value })
                         }
                       >
+                        <option.icon aria-hidden />
                         {option.label}
                       </Button>
                     </li>
@@ -220,15 +201,18 @@ export function DiscoverFilters({
 
 function FilterGroup({
   title,
+  icon: Icon,
   children,
 }: {
   title: string;
+  icon: LucideIcon;
   children: (labelId: string) => ReactNode;
 }) {
   const labelId = useId();
   return (
     <section aria-labelledby={labelId} className={discoverFiltersStyles.group}>
       <h2 id={labelId} className={discoverFiltersStyles.heading}>
+        <Icon aria-hidden className={discoverFiltersStyles.headingIcon} />
         {title}
       </h2>
       {children(labelId)}

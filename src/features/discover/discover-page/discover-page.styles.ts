@@ -3,7 +3,8 @@ export const discoverPageStyles = {
   header: "flex shrink-0 flex-wrap items-center justify-between gap-3",
   title: "flex items-center gap-2 text-lg font-semibold",
   titleIcon: "size-5 text-muted-foreground",
-  search: "w-full max-w-sm",
+  controls: "flex w-full max-w-lg items-center gap-2",
+  search: "min-w-0 flex-1",
   body: "flex min-h-0 flex-1 gap-4",
   main: "flex min-h-0 min-w-0 flex-1 flex-col gap-4",
   results:

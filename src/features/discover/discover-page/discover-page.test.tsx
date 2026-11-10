@@ -145,6 +145,29 @@ describe("Discover page", () => {
     );
   });
 
+  it("sorts from the control next to the search box", async () => {
+    mockSearch(() => Promise.resolve(modpackSearchPage()));
+    const { router } = await renderAt("/discover?q=atm&category=magic&page=2");
+
+    fireEvent.click(await screen.findByRole("combobox", { name: "Sort by" }));
+    fireEvent.click(
+      await screen.findByRole("option", { name: "Recently updated" }),
+    );
+
+    await waitFor(() =>
+      expect(router.state.location.search).toEqual({
+        q: "atm",
+        category: "magic",
+        sort: "updated",
+      }),
+    );
+    expect(
+      within(
+        screen.getByRole("complementary", { name: "Filters" }),
+      ).queryByRole("combobox", { name: "Sort by" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("keeps the filters when the search text changes", async () => {
     mockSearch(() => Promise.resolve(modpackSearchPage()));
     const { router } = await renderAt("/discover?loader=quilt&page=3");

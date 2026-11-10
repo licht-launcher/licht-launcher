@@ -3,7 +3,9 @@ export const discoverFiltersStyles = {
   scrollArea: "min-h-0 flex-1",
   content: "flex flex-col gap-5 p-3",
   group: "flex flex-col gap-2",
-  heading: "text-xs font-medium text-muted-foreground",
+  heading:
+    "flex items-center gap-1.5 text-xs font-medium text-muted-foreground",
+  headingIcon: "size-3.5",
   trigger: "w-full",
   categories: "flex flex-col gap-0.5",
   category:

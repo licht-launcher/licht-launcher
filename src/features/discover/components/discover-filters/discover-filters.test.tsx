@@ -63,20 +63,16 @@ describe("DiscoverFilters", () => {
     expect(onChange).toHaveBeenCalledExactlyOnceWith(DEFAULT_SEARCH_FILTERS);
   });
 
-  it("picks a loader and a sort order", async () => {
+  it("picks a loader", async () => {
     const onChange = renderFilters();
 
     fireEvent.click(screen.getByRole("combobox", { name: "Loader" }));
     fireEvent.click(await screen.findByRole("option", { name: "NeoForge" }));
-    fireEvent.click(screen.getByRole("combobox", { name: "Sort by" }));
-    fireEvent.click(
-      await screen.findByRole("option", { name: "Recently updated" }),
-    );
 
-    expect(onChange.mock.calls).toEqual([
-      [{ ...DEFAULT_SEARCH_FILTERS, loader: "neoforge" }],
-      [{ ...DEFAULT_SEARCH_FILTERS, sort: "updated" }],
-    ]);
+    expect(onChange).toHaveBeenCalledExactlyOnceWith({
+      ...DEFAULT_SEARCH_FILTERS,
+      loader: "neoforge",
+    });
   });
 
   it("offers only release game versions", async () => {

@@ -1,3 +1,17 @@
+import {
+  CompassIcon,
+  CpuIcon,
+  FeatherIcon,
+  GaugeIcon,
+  type LucideIcon,
+  PackageIcon,
+  ScrollTextIcon,
+  SkullIcon,
+  SparklesIcon,
+  SwordsIcon,
+  UsersIcon,
+} from "lucide-react";
+
 import type { ModpackCategory } from "@/lib/generated/ModpackCategory";
 import type { ModpackLoader } from "@/lib/generated/ModpackLoader";
 import type { ModpackSort } from "@/lib/generated/ModpackSort";
@@ -18,15 +32,17 @@ export const LOADER_OPTIONS: readonly Option<ModpackLoader>[] = [
 ];
 
 /** Licht's shared categories, in the order the sidebar lists them. */
-export const CATEGORY_OPTIONS: readonly Option<ModpackCategory>[] = [
-  { value: "adventure", label: "Adventure" },
-  { value: "challenging", label: "Challenging" },
-  { value: "combat", label: "Combat" },
-  { value: "kitchenSink", label: "Kitchen sink" },
-  { value: "lightweight", label: "Lightweight" },
-  { value: "magic", label: "Magic" },
-  { value: "multiplayer", label: "Multiplayer" },
-  { value: "optimization", label: "Optimization" },
-  { value: "quests", label: "Quests" },
-  { value: "technology", label: "Technology" },
+export const CATEGORY_OPTIONS: readonly (Option<ModpackCategory> & {
+  icon: LucideIcon;
+})[] = [
+  { value: "adventure", label: "Adventure", icon: CompassIcon },
+  { value: "challenging", label: "Challenging", icon: SkullIcon },
+  { value: "combat", label: "Combat", icon: SwordsIcon },
+  { value: "kitchenSink", label: "Kitchen sink", icon: PackageIcon },
+  { value: "lightweight", label: "Lightweight", icon: FeatherIcon },
+  { value: "magic", label: "Magic", icon: SparklesIcon },
+  { value: "multiplayer", label: "Multiplayer", icon: UsersIcon },
+  { value: "optimization", label: "Optimization", icon: GaugeIcon },
+  { value: "quests", label: "Quests", icon: ScrollTextIcon },
+  { value: "technology", label: "Technology", icon: CpuIcon },
 ];
