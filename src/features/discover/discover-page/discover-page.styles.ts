@@ -6,11 +6,7 @@ export const discoverPageStyles = {
   controls: "flex w-full max-w-lg items-center gap-2",
   search: "min-w-0 flex-1",
   body: "flex min-h-0 flex-1 gap-4",
-  main: "flex min-h-0 min-w-0 flex-1 flex-col gap-4",
   results:
-    "flex min-h-0 flex-1 flex-col rounded-lg border border-border bg-background",
-  scrollArea: "min-h-0 flex-1",
-  list: "flex flex-col gap-0.5 p-1.5",
+    "flex min-h-0 min-w-0 flex-1 flex-col rounded-lg border border-border bg-background",
   loading: "flex flex-1 items-center justify-center",
-  footer: "shrink-0",
 } as const;

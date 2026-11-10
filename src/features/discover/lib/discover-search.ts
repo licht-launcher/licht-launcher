@@ -21,7 +21,6 @@ export const DEFAULT_SEARCH_FILTERS: ModpackSearchFilters = {
 /** Discover's URL state; defaults are left out so links stay short. */
 export type DiscoverSearch = {
   q?: string;
-  page?: number;
   version?: string;
   loader?: ModpackLoader;
   category?: ModpackCategory;
@@ -50,13 +49,11 @@ export function parseDiscoverSearch(
   search: Record<string, unknown>,
 ): DiscoverSearch {
   const q = typeof search.q === "string" ? search.q.trim() : "";
-  const page = Number(search.page);
   const version =
     typeof search.version === "string" ? search.version.trim() : "";
   const sort = pick(search.sort, values(SORT_OPTIONS));
   return {
     q: q === "" ? undefined : q,
-    page: Number.isInteger(page) && page > 1 ? page : undefined,
     version: version === "" ? undefined : version,
     loader: pick(search.loader, values(LOADER_OPTIONS)),
     category: pick(search.category, values(CATEGORY_OPTIONS)),
@@ -79,7 +76,7 @@ export function searchFilters(search: DiscoverSearch): ModpackSearchFilters {
 /** URL params for `filters`; defaults become `undefined` and drop out. */
 export function filterParams(
   filters: ModpackSearchFilters,
-): Omit<DiscoverSearch, "q" | "page"> {
+): Omit<DiscoverSearch, "q"> {
   return {
     version: filters.gameVersion ?? undefined,
     loader: filters.loader ?? undefined,

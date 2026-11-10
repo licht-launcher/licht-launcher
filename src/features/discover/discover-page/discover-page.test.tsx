@@ -1,7 +1,11 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
-import { modpackSearchPage } from "@/features/discover/fixtures/modpacks";
+import { mockListLayout } from "@/features/discover/fixtures/list-layout";
+import {
+  modpackListItem,
+  modpackSearchPage,
+} from "@/features/discover/fixtures/modpacks";
 import { DEFAULT_SEARCH_FILTERS } from "@/features/discover/lib/discover-search";
 import {
   invoke,
@@ -16,12 +20,39 @@ function mockSearch(respond: () => Promise<unknown>) {
   );
 }
 
+/** Page `n` of three, each with its own two packs. */
+function pageOf(args: unknown) {
+  const page =
+    args !== null && typeof args === "object" && "page" in args
+      ? Number(args.page)
+      : 1;
+  return modpackSearchPage({
+    page,
+    pageCount: 3,
+    items: [
+      modpackListItem({ id: `${page}-a`, name: `Pack ${page}A` }),
+      modpackListItem({ id: `${page}-b`, name: `Pack ${page}B` }),
+    ],
+  });
+}
+
+function requestedPages() {
+  return searchCalls().map(([, args]) =>
+    args !== null && typeof args === "object" && "page" in args
+      ? args.page
+      : undefined,
+  );
+}
+
 function searchCalls() {
   return invoke.mock.calls.filter(([command]) => command === "search_modpacks");
 }
 
 describe("Discover page", () => {
   setupInstancesPageTests();
+  beforeEach(() => {
+    mockListLayout();
+  });
 
   it("opens from the navigation as a full-width store list", async () => {
     mockSearch(() => Promise.resolve(modpackSearchPage()));
@@ -51,9 +82,9 @@ describe("Discover page", () => {
     ]);
   });
 
-  it("searches once typing pauses and starts again from the first page", async () => {
-    mockSearch(() => Promise.resolve(modpackSearchPage({ page: 2 })));
-    const { router } = await renderAt("/discover?page=2");
+  it("searches once typing pauses", async () => {
+    mockSearch(() => Promise.resolve(modpackSearchPage({ pageCount: 1 })));
+    const { router } = await renderAt("/discover");
 
     fireEvent.change(
       await screen.findByRole("searchbox", { name: "Search modpacks" }),
@@ -71,24 +102,51 @@ describe("Discover page", () => {
     );
   });
 
-  it("moves to the chosen page and keeps the query", async () => {
-    mockSearch(() => Promise.resolve(modpackSearchPage()));
-    const { router } = await renderAt("/discover?q=atm");
+  it("loads the following pages as the end of the list comes into view", async () => {
+    mockContextMenuCommands((command, args) =>
+      command === "search_modpacks" ? Promise.resolve(pageOf(args)) : undefined,
+    );
+    await renderAt("/discover?q=atm");
 
-    const pagination = await screen.findByRole("navigation", {
-      name: "Pagination",
+    const results = await screen.findByRole("region", { name: "Modpacks" });
+    expect(
+      await within(results).findByRole("link", { name: /Pack 3B/ }),
+    ).toBeInTheDocument();
+    expect(requestedPages()).toEqual([1, 2, 3]);
+    expect(searchCalls()).toContainEqual([
+      "search_modpacks",
+      { query: "atm", page: 3, filters: DEFAULT_SEARCH_FILTERS },
+    ]);
+    expect(within(results).queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("offers a retry when the next page fails", async () => {
+    let failSecondPage = true;
+    mockContextMenuCommands((command, args) => {
+      if (command !== "search_modpacks") return undefined;
+      const page = pageOf(args);
+      if (page.page === 2 && failSecondPage) {
+        failSecondPage = false;
+        return Promise.reject("HTTP request failed");
+      }
+      return Promise.resolve({ ...page, pageCount: 2 });
     });
-    fireEvent.click(within(pagination).getByRole("button", { name: "Page 3" }));
+    await renderAt("/discover");
 
-    await waitFor(() =>
-      expect(router.state.location.search).toEqual({ q: "atm", page: 3 }),
-    );
-    await waitFor(() =>
-      expect(searchCalls()).toContainEqual([
-        "search_modpacks",
-        { query: "atm", page: 3, filters: DEFAULT_SEARCH_FILTERS },
-      ]),
-    );
+    const results = await screen.findByRole("region", { name: "Modpacks" });
+    const alert = await within(results).findByRole("alert");
+    expect(alert).toHaveTextContent("Could not load more modpacks.");
+    expect(
+      within(results).getByRole("link", { name: /Pack 1A/ }),
+    ).toBeVisible();
+    expect(requestedPages()).toEqual([1, 2]);
+
+    fireEvent.click(within(alert).getByRole("button", { name: "Retry" }));
+
+    expect(
+      await within(results).findByRole("link", { name: /Pack 2B/ }),
+    ).toBeInTheDocument();
+    expect(requestedPages()).toEqual([1, 2, 2]);
   });
 
   it("searches with the filters in the URL", async () => {
@@ -118,9 +176,9 @@ describe("Discover page", () => {
     );
   });
 
-  it("applies a filter from the sidebar and starts again from page one", async () => {
-    mockSearch(() => Promise.resolve(modpackSearchPage({ page: 2 })));
-    const { router } = await renderAt("/discover?q=atm&page=2");
+  it("applies a filter from the sidebar and starts a new search", async () => {
+    mockSearch(() => Promise.resolve(modpackSearchPage({ pageCount: 1 })));
+    const { router } = await renderAt("/discover?q=atm");
 
     const filters = await screen.findByRole("complementary", {
       name: "Filters",
@@ -147,7 +205,7 @@ describe("Discover page", () => {
 
   it("sorts from the control next to the search box", async () => {
     mockSearch(() => Promise.resolve(modpackSearchPage()));
-    const { router } = await renderAt("/discover?q=atm&category=magic&page=2");
+    const { router } = await renderAt("/discover?q=atm&category=magic");
 
     fireEvent.click(await screen.findByRole("combobox", { name: "Sort by" }));
     fireEvent.click(
@@ -170,7 +228,7 @@ describe("Discover page", () => {
 
   it("keeps the filters when the search text changes", async () => {
     mockSearch(() => Promise.resolve(modpackSearchPage()));
-    const { router } = await renderAt("/discover?loader=quilt&page=3");
+    const { router } = await renderAt("/discover?loader=quilt");
 
     fireEvent.change(
       await screen.findByRole("searchbox", { name: "Search modpacks" }),
@@ -194,9 +252,6 @@ describe("Discover page", () => {
     expect(
       await screen.findByRole("status", { name: "No modpacks found" }),
     ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("navigation", { name: "Pagination" }),
-    ).not.toBeInTheDocument();
   });
 
   it("shows a friendly error when the search fails", async () => {

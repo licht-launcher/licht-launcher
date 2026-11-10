@@ -4,15 +4,14 @@ import {
   SearchXIcon,
   TriangleAlertIcon,
 } from "lucide-react";
+import { useCallback } from "react";
 
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
-import { Pagination } from "@/components/ui/pagination";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Spinner } from "@/components/ui/spinner";
 import { DiscoverFilters } from "@/features/discover/components/discover-filters";
 import { DiscoverSort } from "@/features/discover/components/discover-sort";
-import { ModpackRow } from "@/features/discover/components/modpack-row";
+import { ModpackList } from "@/features/discover/components/modpack-list";
 import { useModpackSearch } from "@/features/discover/hooks/use-modpacks";
 import { useSearchDraft } from "@/features/discover/hooks/use-search-draft";
 import { friendlyError, messageOf } from "@/lib/errors";
@@ -20,23 +19,25 @@ import type { ModpackSearchFilters } from "@/lib/generated/ModpackSearchFilters"
 
 import { discoverPageStyles } from "./discover-page.styles";
 
-/** Store listing of Modrinth and CurseForge modpacks, one page at a time. */
+/** Store listing of Modrinth and CurseForge modpacks that loads as you scroll. */
 export function DiscoverPage({
   query,
-  page,
   filters,
   onSearch,
-  onPageChange,
   onFiltersChange,
 }: {
   query: string;
-  page: number;
   filters: ModpackSearchFilters;
   onSearch: (query: string) => void;
-  onPageChange: (page: number) => void;
   onFiltersChange: (filters: ModpackSearchFilters) => void;
 }) {
-  const search = useModpackSearch(query, page, filters);
+  const search = useModpackSearch(query, filters);
+  const { fetchNextPage } = search;
+  // Calls while a page is loading are ignored instead of restarting it.
+  const loadMore = useCallback(
+    () => void fetchNextPage({ cancelRefetch: false }),
+    [fetchNextPage],
+  );
   const { draft, change } = useSearchDraft(query, onSearch);
 
   return (
@@ -65,49 +66,39 @@ export function DiscoverPage({
       </header>
       <div className={discoverPageStyles.body}>
         <DiscoverFilters filters={filters} onChange={onFiltersChange} />
-        <div className={discoverPageStyles.main}>
-          <section
-            aria-label="Modpacks"
-            aria-busy={search.isFetching}
-            className={discoverPageStyles.results}
-          >
-            {search.isPending ? (
-              <div className={discoverPageStyles.loading}>
-                <Spinner />
-              </div>
-            ) : search.isError ? (
-              <EmptyState
-                icon={<TriangleAlertIcon />}
-                title="Could not load modpacks"
-                description={friendlyError(messageOf(search.error))}
-              />
-            ) : search.data.items.length === 0 ? (
-              <EmptyState
-                icon={<SearchXIcon />}
-                title="No modpacks found"
-                description="Try a different search."
-              />
-            ) : (
-              <ScrollArea key={page} className={discoverPageStyles.scrollArea}>
-                <ul className={discoverPageStyles.list}>
-                  {search.data.items.map((modpack) => (
-                    <li key={`${modpack.source}:${modpack.id}`}>
-                      <ModpackRow modpack={modpack} />
-                    </li>
-                  ))}
-                </ul>
-              </ScrollArea>
-            )}
-          </section>
-          <footer className={discoverPageStyles.footer}>
-            <Pagination
-              page={page}
-              pageCount={search.data?.pageCount ?? 0}
-              onPageChange={onPageChange}
-              disabled={search.isFetching}
+        <section
+          aria-label="Modpacks"
+          aria-busy={search.isFetching}
+          className={discoverPageStyles.results}
+        >
+          {search.isPending ? (
+            <div className={discoverPageStyles.loading}>
+              <Spinner />
+            </div>
+          ) : search.isError && !search.isFetchNextPageError ? (
+            <EmptyState
+              icon={<TriangleAlertIcon />}
+              title="Could not load modpacks"
+              description={friendlyError(messageOf(search.error))}
             />
-          </footer>
-        </div>
+          ) : search.data.length === 0 ? (
+            <EmptyState
+              icon={<SearchXIcon />}
+              title="No modpacks found"
+              description="Try a different search or fewer filters."
+            />
+          ) : (
+            <ModpackList
+              // A new search starts at the top of a fresh list.
+              key={JSON.stringify([query, filters])}
+              items={search.data}
+              hasMore={search.hasNextPage}
+              loadingMore={search.isFetchingNextPage}
+              loadMoreFailed={search.isFetchNextPageError}
+              onLoadMore={loadMore}
+            />
+          )}
+        </section>
       </div>
     </div>
   );
