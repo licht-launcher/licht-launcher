@@ -91,6 +91,77 @@ describe("Discover page", () => {
     );
   });
 
+  it("searches with the filters in the URL", async () => {
+    mockSearch(() => Promise.resolve(modpackSearchPage()));
+    await renderAt(
+      "/discover?q=atm&loader=fabric&category=magic&source=curseforge&sort=updated",
+    );
+
+    expect(
+      await screen.findByRole("button", { name: "Magic" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    await waitFor(() =>
+      expect(searchCalls()).toContainEqual([
+        "search_modpacks",
+        {
+          query: "atm",
+          page: 1,
+          filters: {
+            gameVersion: null,
+            loader: "fabric",
+            category: "magic",
+            source: "curseforge",
+            sort: "updated",
+          },
+        },
+      ]),
+    );
+  });
+
+  it("applies a filter from the sidebar and starts again from page one", async () => {
+    mockSearch(() => Promise.resolve(modpackSearchPage({ page: 2 })));
+    const { router } = await renderAt("/discover?q=atm&page=2");
+
+    const filters = await screen.findByRole("complementary", {
+      name: "Filters",
+    });
+    fireEvent.click(within(filters).getByRole("button", { name: "Quests" }));
+
+    await waitFor(() =>
+      expect(router.state.location.search).toEqual({
+        q: "atm",
+        category: "quests",
+      }),
+    );
+    await waitFor(() =>
+      expect(searchCalls()).toContainEqual([
+        "search_modpacks",
+        {
+          query: "atm",
+          page: 1,
+          filters: { ...DEFAULT_SEARCH_FILTERS, category: "quests" },
+        },
+      ]),
+    );
+  });
+
+  it("keeps the filters when the search text changes", async () => {
+    mockSearch(() => Promise.resolve(modpackSearchPage()));
+    const { router } = await renderAt("/discover?loader=quilt&page=3");
+
+    fireEvent.change(
+      await screen.findByRole("searchbox", { name: "Search modpacks" }),
+      { target: { value: "sky" } },
+    );
+
+    await waitFor(() =>
+      expect(router.state.location.search).toEqual({
+        q: "sky",
+        loader: "quilt",
+      }),
+    );
+  });
+
   it("explains when nothing matches", async () => {
     mockSearch(() =>
       Promise.resolve(modpackSearchPage({ items: [], pageCount: 0 })),

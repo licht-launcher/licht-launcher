@@ -4,6 +4,8 @@ export const discoverPageStyles = {
   title: "flex items-center gap-2 text-lg font-semibold",
   titleIcon: "size-5 text-muted-foreground",
   search: "w-full max-w-sm",
+  body: "flex min-h-0 flex-1 gap-4",
+  main: "flex min-h-0 min-w-0 flex-1 flex-col gap-4",
   results:
     "flex min-h-0 flex-1 flex-col rounded-lg border border-border bg-background",
   scrollArea: "min-h-0 flex-1",
