@@ -1,6 +1,6 @@
 use licht_core::{
-    DownloadProgress, InstanceEntry, ModpackListItem, ModpackSource, ModpackVersionItem,
-    install_curseforge_files, install_mrpack_files, load_instance,
+    DownloadProgress, InstanceEntry, ModpackDetails, ModpackSearchPage, ModpackSource,
+    ModpackVersionItem, install_curseforge_files, install_mrpack_files, load_instance,
 };
 use tauri::{AppHandle, State};
 use tokio::sync::mpsc;
@@ -11,9 +11,19 @@ use super::install_progress::emit_install_progress;
 use super::{LauncherPaths, failure, http_client};
 
 #[tauri::command]
-pub async fn search_modpacks(query: String) -> Result<Vec<ModpackListItem>, String> {
+pub async fn search_modpacks(query: String, page: u32) -> Result<ModpackSearchPage, String> {
     let client = http_client().map_err(failure)?;
-    licht_core::search_modpacks(&client, &query)
+    licht_core::search_modpacks(&client, &query, page)
+        .await
+        .map_err(failure)
+}
+
+#[tauri::command]
+pub async fn get_modpack(source: String, project_id: String) -> Result<ModpackDetails, String> {
+    let source =
+        ModpackSource::parse(&source).ok_or_else(|| "unknown modpack source".to_string())?;
+    let client = http_client().map_err(failure)?;
+    licht_core::get_modpack(&client, source, &project_id)
         .await
         .map_err(failure)
 }

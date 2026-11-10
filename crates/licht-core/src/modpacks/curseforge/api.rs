@@ -2,8 +2,11 @@ use reqwest::Client;
 use serde::Deserialize;
 use serde_json::Value;
 
-use super::{FILES_URL, MOD_URL};
-use crate::modpacks::types::{ModpackListItem, ModpackSource, ModpackVersionItem};
+use super::{CLASS_ID, FILES_URL, MOD_URL};
+use crate::modpacks::description::sanitize_html;
+use crate::modpacks::types::{
+    ModpackDetails, ModpackListItem, ModpackSource, ModpackVersionItem, SourcePage,
+};
 use crate::{CoreError, Result};
 
 /// Ids per `POST /v1/mods/files` and `POST /v1/mods` call.
@@ -14,6 +17,65 @@ const FILE_BATCH: usize = 100;
 #[derive(Debug, Deserialize)]
 struct SearchResponse {
     data: Vec<ModHit>,
+    #[serde(default)]
+    pagination: Option<Pagination>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Pagination {
+    #[serde(default)]
+    total_count: u64,
+}
+
+#[derive(Debug, Deserialize)]
+struct ModResponse {
+    data: ModDetails,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ModDetails {
+    id: u64,
+    name: String,
+    summary: String,
+    download_count: u64,
+    #[serde(default)]
+    class_id: Option<u64>,
+    #[serde(default)]
+    logo: Option<Logo>,
+    #[serde(default)]
+    authors: Vec<Author>,
+    #[serde(default)]
+    categories: Vec<Category>,
+    #[serde(default)]
+    date_modified: Option<String>,
+    #[serde(default)]
+    screenshots: Vec<Screenshot>,
+    #[serde(default)]
+    links: Option<Links>,
+}
+
+#[derive(Debug, Deserialize)]
+struct Category {
+    name: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct Screenshot {
+    url: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Links {
+    #[serde(default)]
+    website_url: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct DescriptionResponse {
+    data: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -60,9 +122,13 @@ pub(super) struct RemoteMod {
     pub(super) class_id: Option<u64>,
 }
 
-pub(super) fn parse_search(body: &str) -> Result<Vec<ModpackListItem>> {
+pub(super) fn parse_search(body: &str) -> Result<SourcePage> {
     let parsed: SearchResponse = serde_json::from_str(body).map_err(CoreError::LoaderJson)?;
-    Ok(parsed
+    let total = parsed
+        .pagination
+        .map(|pagination| pagination.total_count)
+        .unwrap_or(0);
+    let items = parsed
         .data
         .into_iter()
         .map(|hit| ModpackListItem {
@@ -78,7 +144,54 @@ pub(super) fn parse_search(body: &str) -> Result<Vec<ModpackListItem>> {
                 .map(|author| author.name.clone())
                 .unwrap_or_default(),
         })
-        .collect())
+        .collect();
+    Ok(SourcePage { items, total })
+}
+
+/// Builds the store page from `GET /v1/mods/{id}` and `GET /v1/mods/{id}/description`.
+pub(super) fn parse_mod(mod_body: &str, description_body: &str) -> Result<ModpackDetails> {
+    let parsed: ModResponse = serde_json::from_str(mod_body).map_err(CoreError::LoaderJson)?;
+    let description: DescriptionResponse =
+        serde_json::from_str(description_body).map_err(CoreError::LoaderJson)?;
+    let project = parsed.data;
+    if !project
+        .class_id
+        .is_some_and(|id| id.to_string() == CLASS_ID)
+    {
+        return Err(CoreError::ModpackMeta {
+            detail: "curseforge_mod_not_modpack".into(),
+        });
+    }
+    Ok(ModpackDetails {
+        id: project.id.to_string(),
+        source: ModpackSource::Curseforge,
+        name: project.name,
+        summary: project.summary,
+        author: project
+            .authors
+            .first()
+            .map(|author| author.name.clone())
+            .unwrap_or_default(),
+        downloads: project.download_count,
+        icon_url: project.logo.and_then(|logo| logo.url),
+        categories: project
+            .categories
+            .into_iter()
+            .map(|category| category.name)
+            .collect(),
+        updated_at: project.date_modified,
+        gallery: project
+            .screenshots
+            .into_iter()
+            .map(|screenshot| screenshot.url)
+            .filter(|url| url.starts_with("https://"))
+            .collect(),
+        project_url: project
+            .links
+            .and_then(|links| links.website_url)
+            .filter(|url| url.starts_with("https://")),
+        description_html: sanitize_html(&description.data),
+    })
 }
 
 pub(super) fn parse_versions(body: &str) -> Result<Vec<ModpackVersionItem>> {
@@ -349,9 +462,57 @@ mod tests {
             "authors":[{"name":"ATM"}]
           }]
         }"#;
-        let items = parse_search(body).expect("ok");
-        assert_eq!(items[0].id, "1");
-        assert_eq!(items[0].source, ModpackSource::Curseforge);
+        let page = parse_search(body).expect("ok");
+        assert_eq!(page.items[0].id, "1");
+        assert_eq!(page.items[0].source, ModpackSource::Curseforge);
+        assert_eq!(page.total, 0);
+    }
+
+    #[test]
+    fn reads_the_search_total_count() {
+        let page = parse_search(
+            r#"{"data":[],"pagination":{"index":0,"pageSize":10,"resultCount":0,"totalCount":5321}}"#,
+        )
+        .expect("ok");
+        assert_eq!(page.total, 5321);
+    }
+
+    #[test]
+    fn parses_a_mod_page_with_a_sanitized_description() {
+        let project = r#"{
+          "data":{
+            "id":381671,
+            "name":"All the Mods 9",
+            "summary":"big pack",
+            "downloadCount":99,
+            "classId":4471,
+            "logo":{"url":"https://media.forgecdn.net/logo.png"},
+            "authors":[{"name":"ATMTeam"}],
+            "categories":[{"name":"Kitchen Sink"}],
+            "dateModified":"2026-10-01T00:00:00Z",
+            "screenshots":[{"url":"https://media.forgecdn.net/s.png"}],
+            "links":{"websiteUrl":"https://www.curseforge.com/minecraft/modpacks/all-the-mods-9"}
+          }
+        }"#;
+        let description = r#"{"data":"<p>Hello</p><img src=\"x\" onerror=\"alert(1)\">"}"#;
+        let details = parse_mod(project, description).expect("ok");
+        assert_eq!(details.id, "381671");
+        assert_eq!(details.author, "ATMTeam");
+        assert_eq!(details.categories, vec!["Kitchen Sink"]);
+        assert_eq!(details.gallery, vec!["https://media.forgecdn.net/s.png"]);
+        assert_eq!(
+            details.project_url.as_deref(),
+            Some("https://www.curseforge.com/minecraft/modpacks/all-the-mods-9")
+        );
+        assert!(details.description_html.contains("<p>Hello</p>"));
+        assert!(!details.description_html.contains("onerror"));
+    }
+
+    #[test]
+    fn rejects_a_mod_that_is_not_a_modpack() {
+        let project =
+            r#"{"data":{"id":1,"name":"JEI","summary":"","downloadCount":1,"classId":6}}"#;
+        assert!(parse_mod(project, r#"{"data":""}"#).is_err());
     }
 
     #[test]

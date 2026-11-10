@@ -17,6 +17,7 @@ default = []
 cli = []
 
 [dependencies]
+ammonia = "=4.2.4"
 base64 = { version = "=0.22.1", default-features = false, features = ["std"] }
 directories = "=6.0.0"
 dotenvy = "=0.15.7"
@@ -27,6 +28,7 @@ futures-util = "=0.3.34"
 md-5 = "=0.10.6"
 minisign-verify = "=0.3.0"
 png = "=0.18.1"
+pulldown-cmark = { version = "=0.13.6", default-features = false, features = ["html"] }
 regex = "=1.13.1"
 reqwest = { version = "=0.13.5", default-features = false, features = ["form", "json", "rustls", "stream"] }
 serde = { version = "=1.0.229", features = ["derive"] }

@@ -1,15 +1,24 @@
 # Modrinth
 
-Licht searches Modrinth modpacks in the New Instance wizard, lists their versions,
-and imports `.mrpack` archives. No API key or Modrinth account is required for
+Licht searches Modrinth modpacks for the Discover page, loads each pack's details,
+lists its versions, and imports `.mrpack` archives. No API key or Modrinth account is required for
 these public API requests. [CurseForge](CURSEFORGE.md) is a separate integration.
 
 ## API and downloads
 
 - The client uses `https://api.modrinth.com/v2` and identifies Licht through a
   `User-Agent` containing the project name and repository URL.
-- Search filters to `project_type:modpack`, sorts by downloads, and requests up to
-  20 results. Version lists expose game versions and loader names.
+- Search filters to `project_type:modpack`, sorts by downloads, and pages with
+  `offset`/`limit` (10 results per page, merged with CurseForge's page of the same
+  number and sorted by downloads; `total_hits` sets the page count). Version lists
+  expose game versions and loader names.
+- Pack details come from `GET /v2/project/{id}`; the id is percent-encoded as a
+  single path segment and the project must be a `modpack`. The author name comes
+  from a search filtered by `project_id`, because organization-owned projects
+  have no owner in their member list. Only HTTPS gallery images are kept.
+- The Markdown `body` is rendered with `pulldown-cmark` and sanitized with
+  `ammonia` before it reaches the UI: scripts, frames, styles and event handlers
+  are removed, and links and images must be absolute HTTPS URLs.
 - Before downloading a selected archive, the client verifies that its version
   belongs to the project. It chooses the primary file, or the first file when no
   primary is marked.

@@ -3,7 +3,10 @@ use serde::Deserialize;
 use serde_json::Value;
 use url::Url;
 
-use crate::modpacks::types::{ModpackListItem, ModpackSource, ModpackVersionItem};
+use crate::modpacks::description::markdown_to_safe_html;
+use crate::modpacks::types::{
+    ModpackDetails, ModpackListItem, ModpackSource, ModpackVersionItem, SourcePage,
+};
 use crate::{CoreError, Result};
 
 const SEARCH_URL: &str = "https://api.modrinth.com/v2/search";
@@ -13,6 +16,8 @@ const USER_AGENT: &str = "licht-launcher/0.1.1 (https://github.com/licht-launche
 #[derive(Debug, Deserialize)]
 struct SearchResponse {
     hits: Vec<SearchHit>,
+    #[serde(default)]
+    total_hits: u64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -28,37 +33,62 @@ struct SearchHit {
     author: String,
 }
 
-pub async fn search_modrinth(client: &Client, query: &str) -> Result<Vec<ModpackListItem>> {
+#[derive(Debug, Deserialize)]
+struct ProjectResponse {
+    id: String,
+    slug: String,
+    title: String,
+    description: String,
+    #[serde(default)]
+    body: String,
+    project_type: String,
+    #[serde(default)]
+    downloads: u64,
+    #[serde(default)]
+    icon_url: Option<String>,
+    #[serde(default)]
+    categories: Vec<String>,
+    #[serde(default)]
+    updated: Option<String>,
+    #[serde(default)]
+    gallery: Vec<GalleryImage>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GalleryImage {
+    url: String,
+}
+
+pub(super) async fn search_modrinth(
+    client: &Client,
+    query: &str,
+    offset: u64,
+    limit: u32,
+) -> Result<SourcePage> {
+    let body = fetch_text(client, search_url(query, offset, limit)?, "modrinth_search").await?;
+    parse_search(&body)
+}
+
+fn search_url(query: &str, offset: u64, limit: u32) -> Result<Url> {
     let mut url = Url::parse(SEARCH_URL).map_err(|_| CoreError::ModpackMeta {
         detail: "modrinth_search_url".into(),
     })?;
     {
         let mut pairs = url.query_pairs_mut();
-        pairs.append_pair("limit", "20");
+        pairs.append_pair("limit", &limit.to_string());
+        pairs.append_pair("offset", &offset.to_string());
         pairs.append_pair("index", "downloads");
         pairs.append_pair("facets", r#"[["project_type:modpack"]]"#);
         if !query.trim().is_empty() {
             pairs.append_pair("query", query.trim());
         }
     }
-    let response = client
-        .get(url)
-        .header("User-Agent", USER_AGENT)
-        .send()
-        .await?;
-    let status = response.status().as_u16();
-    let body = response.text().await?;
-    if !(200..300).contains(&status) {
-        return Err(CoreError::ModpackMeta {
-            detail: format!("modrinth_search_http_{status}"),
-        });
-    }
-    parse_search(&body)
+    Ok(url)
 }
 
-pub fn parse_search(body: &str) -> Result<Vec<ModpackListItem>> {
+pub(super) fn parse_search(body: &str) -> Result<SourcePage> {
     let parsed: SearchResponse = serde_json::from_str(body).map_err(CoreError::LoaderJson)?;
-    Ok(parsed
+    let items = parsed
         .hits
         .into_iter()
         .map(|hit| ModpackListItem {
@@ -70,7 +100,102 @@ pub fn parse_search(body: &str) -> Result<Vec<ModpackListItem>> {
             icon_url: hit.icon_url,
             author: hit.author,
         })
-        .collect())
+        .collect();
+    Ok(SourcePage {
+        items,
+        total: parsed.total_hits,
+    })
+}
+
+/// The project endpoint has no author name for organization-owned packs, so the
+/// author comes from the same search index the listing shows.
+pub(super) async fn get_modrinth_project(
+    client: &Client,
+    project_id: &str,
+) -> Result<ModpackDetails> {
+    let project_url = project_url(project_id)?;
+    let author_url = author_search_url(project_id)?;
+    let (project, author) = tokio::join!(
+        fetch_text(client, project_url, "modrinth_project"),
+        fetch_text(client, author_url, "modrinth_author"),
+    );
+    let author = parse_search(&author?)?
+        .items
+        .into_iter()
+        .next()
+        .map(|item| item.author)
+        .unwrap_or_default();
+    parse_project(&project?, author)
+}
+
+fn project_url(project_id: &str) -> Result<Url> {
+    let invalid = || CoreError::ModpackMeta {
+        detail: "modrinth_project_id".into(),
+    };
+    if project_id.trim().is_empty() {
+        return Err(invalid());
+    }
+    let mut url = Url::parse(PROJECT_VERSIONS).map_err(|_| invalid())?;
+    // `push` percent-encodes, so an id can never add path segments.
+    url.path_segments_mut()
+        .map_err(|_| invalid())?
+        .push(project_id);
+    Ok(url)
+}
+
+fn author_search_url(project_id: &str) -> Result<Url> {
+    let mut url = Url::parse(SEARCH_URL).map_err(|_| CoreError::ModpackMeta {
+        detail: "modrinth_search_url".into(),
+    })?;
+    let facets = serde_json::json!([[format!("project_id:{project_id}")]]);
+    url.query_pairs_mut()
+        .append_pair("limit", "1")
+        .append_pair("facets", &facets.to_string());
+    Ok(url)
+}
+
+pub(super) fn parse_project(body: &str, author: String) -> Result<ModpackDetails> {
+    let project: ProjectResponse = serde_json::from_str(body).map_err(CoreError::LoaderJson)?;
+    if project.project_type != "modpack" {
+        return Err(CoreError::ModpackMeta {
+            detail: "modrinth_project_not_modpack".into(),
+        });
+    }
+    Ok(ModpackDetails {
+        id: project.id,
+        source: ModpackSource::Modrinth,
+        name: project.title,
+        summary: project.description,
+        author,
+        downloads: project.downloads,
+        icon_url: project.icon_url,
+        categories: project.categories,
+        updated_at: project.updated,
+        gallery: project
+            .gallery
+            .into_iter()
+            .map(|image| image.url)
+            .filter(|url| url.starts_with("https://"))
+            .collect(),
+        project_url: Some(format!("https://modrinth.com/modpack/{}", project.slug)),
+        description_html: markdown_to_safe_html(&project.body),
+    })
+}
+
+async fn fetch_text(client: &Client, url: Url, label: &str) -> Result<String> {
+    let response = client
+        .get(url)
+        .header("User-Agent", USER_AGENT)
+        .send()
+        .await?;
+    let status = response.status().as_u16();
+    let body = response.text().await?;
+    if !(200..300).contains(&status) {
+        return Err(CoreError::ModpackMeta {
+            detail: format!("{label}_http_{status}"),
+        });
+    }
+    Ok(body)
 }
 
 pub async fn list_modrinth_versions(
@@ -235,8 +360,83 @@ mod tests {
             "author":"team"
           }]
         }"#;
-        let items = parse_search(body).expect("ok");
-        assert_eq!(items[0].name, "Cobblemon");
-        assert_eq!(items[0].source, ModpackSource::Modrinth);
+        let page = parse_search(body).expect("ok");
+        assert_eq!(page.items[0].name, "Cobblemon");
+        assert_eq!(page.items[0].source, ModpackSource::Modrinth);
+        assert_eq!(page.total, 0);
+    }
+
+    #[test]
+    fn reads_the_total_hit_count() {
+        let page =
+            parse_search(r#"{"hits":[],"offset":20,"limit":10,"total_hits":19217}"#).expect("ok");
+        assert!(page.items.is_empty());
+        assert_eq!(page.total, 19217);
+    }
+
+    #[test]
+    fn search_url_pages_with_offset_and_limit() {
+        let url = search_url(" cobble ", 30, 10).expect("url");
+        let pairs: Vec<(String, String)> = url.query_pairs().into_owned().collect();
+        assert!(pairs.contains(&("limit".into(), "10".into())));
+        assert!(pairs.contains(&("offset".into(), "30".into())));
+        assert!(pairs.contains(&("query".into(), "cobble".into())));
+    }
+
+    #[test]
+    fn project_ids_cannot_escape_the_project_path() {
+        let url = project_url("../user/x?y").expect("url");
+        assert_eq!(
+            url.as_str(),
+            "https://api.modrinth.com/v2/project/..%2Fuser%2Fx%3Fy"
+        );
+        assert!(project_url(" ").is_err());
+    }
+
+    #[test]
+    fn author_lookup_filters_the_search_by_project_id() {
+        let url = author_search_url("1KVo5zza").expect("url");
+        let facets = url
+            .query_pairs()
+            .find(|(key, _)| key == "facets")
+            .map(|(_, value)| value.into_owned());
+        assert_eq!(facets.as_deref(), Some(r#"[["project_id:1KVo5zza"]]"#));
+    }
+
+    #[test]
+    fn parses_a_project_page_with_a_sanitized_body() {
+        let body = r#"{
+          "id":"1KVo5zza",
+          "slug":"fabulously-optimized",
+          "title":"Fabulously Optimized",
+          "description":"Fast and pretty",
+          "body":"**Hi**<script>alert(1)</script>",
+          "project_type":"modpack",
+          "downloads":42,
+          "icon_url":"https://cdn.modrinth.com/icon.webp",
+          "categories":["optimization"],
+          "updated":"2026-11-01T10:43:19.109719Z",
+          "gallery":[
+            {"url":"https://cdn.modrinth.com/a.webp","featured":false,"ordering":1},
+            {"url":"http://insecure.example/b.png","featured":false,"ordering":2}
+          ]
+        }"#;
+        let details = parse_project(body, "robotkoer".into()).expect("ok");
+        assert_eq!(details.name, "Fabulously Optimized");
+        assert_eq!(details.author, "robotkoer");
+        assert_eq!(details.categories, vec!["optimization"]);
+        assert_eq!(details.gallery, vec!["https://cdn.modrinth.com/a.webp"]);
+        assert_eq!(
+            details.project_url.as_deref(),
+            Some("https://modrinth.com/modpack/fabulously-optimized")
+        );
+        assert!(details.description_html.contains("<strong>Hi</strong>"));
+        assert!(!details.description_html.contains("script"));
+    }
+
+    #[test]
+    fn rejects_a_project_that_is_not_a_modpack() {
+        let body = r#"{"id":"A","slug":"a","title":"A","description":"","project_type":"mod"}"#;
+        assert!(parse_project(body, String::new()).is_err());
     }
 }

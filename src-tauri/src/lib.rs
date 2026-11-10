@@ -76,6 +76,7 @@ pub fn run() -> anyhow::Result<()> {
             commands::instances::list_loader_builds,
             commands::instances::create_instance_with_platform,
             commands::modpacks::search_modpacks,
+            commands::modpacks::get_modpack,
             commands::modpacks::list_modpack_versions,
             commands::modpacks::create_instance_from_modpack,
             commands::modpacks::create_instance_from_modpack_file,

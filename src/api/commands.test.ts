@@ -13,6 +13,7 @@ import {
   checkAppUpdate,
   clearLastPlayedFolder,
   closeStartupPreview,
+  createInstanceFromModpack,
   createInstanceFromModpackFile,
   createInstanceWithPlatform,
   customTitleBarActive,
@@ -23,6 +24,7 @@ import {
   getAppUpdateState,
   getBuildDiagnostics,
   getLastPlayedFolder,
+  getModpack,
   getPlayerHead,
   getSettings,
   getStartupProgress,
@@ -40,6 +42,7 @@ import {
   listInstances,
   listLoaderBuilds,
   listMicrosoftAccounts,
+  listModpackVersions,
   listRunningGames,
   listVersions,
   logoutMicrosoftAccount,
@@ -59,6 +62,7 @@ import {
   runtimeJava,
   saveInstance,
   saveSettings,
+  searchModpacks,
   setActiveMicrosoftAccount,
   setInstanceVersion,
   setLastPlayedFolder,
@@ -251,6 +255,35 @@ describe("launcher commands", () => {
     expect(invoke).toHaveBeenCalledWith("create_instance_from_modpack_file", {
       name: "Cobblemon",
       path: "C:\\packs\\cobble.mrpack",
+    });
+    await searchModpacks("cobble", 2);
+    expect(invoke).toHaveBeenCalledWith("search_modpacks", {
+      query: "cobble",
+      page: 2,
+    });
+    await getModpack("curseforge", "381671");
+    expect(invoke).toHaveBeenCalledWith("get_modpack", {
+      source: "curseforge",
+      projectId: "381671",
+    });
+    await listModpackVersions("modrinth", "ABC");
+    expect(invoke).toHaveBeenCalledWith("list_modpack_versions", {
+      source: "modrinth",
+      projectId: "ABC",
+    });
+    await createInstanceFromModpack({
+      name: "Cobblemon",
+      source: "modrinth",
+      projectId: "ABC",
+      versionId: "v1",
+      iconUrl: null,
+    });
+    expect(invoke).toHaveBeenCalledWith("create_instance_from_modpack", {
+      name: "Cobblemon",
+      source: "modrinth",
+      projectId: "ABC",
+      versionId: "v1",
+      iconUrl: null,
     });
     await renameInstance("Survival", "Classic");
     expect(invoke).toHaveBeenCalledWith("rename_instance", {

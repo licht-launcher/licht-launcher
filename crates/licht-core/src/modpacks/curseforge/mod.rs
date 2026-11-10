@@ -8,7 +8,7 @@ use reqwest::Client;
 use serde_json::Value;
 use url::Url;
 
-use crate::modpacks::types::{ModpackListItem, ModpackVersionItem};
+use crate::modpacks::types::{ModpackDetails, ModpackVersionItem, SourcePage};
 use crate::{CoreError, Result};
 
 pub(crate) use install::import_curseforge_into;
@@ -32,8 +32,27 @@ pub fn curseforge_api_key() -> Result<String> {
     }
 }
 
-pub async fn search_curseforge(client: &Client, query: &str) -> Result<Vec<ModpackListItem>> {
+/// CurseForge rejects searches where `index + pageSize` exceeds this value.
+pub(crate) const CURSEFORGE_SEARCH_WINDOW: u64 = 10_000;
+
+pub(crate) async fn search_curseforge(
+    client: &Client,
+    query: &str,
+    index: u64,
+    page_size: u32,
+) -> Result<SourcePage> {
     let key = curseforge_api_key()?;
+    let body = get_api(
+        client,
+        &key,
+        search_url(query, index, page_size)?,
+        "curseforge_search",
+    )
+    .await?;
+    api::parse_search(&body)
+}
+
+fn search_url(query: &str, index: u64, page_size: u32) -> Result<Url> {
     let mut url = Url::parse(SEARCH_URL).map_err(|_| CoreError::ModpackMeta {
         detail: "curseforge_search_url".into(),
     })?;
@@ -43,14 +62,38 @@ pub async fn search_curseforge(client: &Client, query: &str) -> Result<Vec<Modpa
         pairs.append_pair("classId", CLASS_ID);
         pairs.append_pair("sortField", "2");
         pairs.append_pair("sortOrder", "desc");
-        pairs.append_pair("pageSize", "20");
+        pairs.append_pair("index", &index.to_string());
+        pairs.append_pair("pageSize", &page_size.to_string());
         if !query.trim().is_empty() {
             pairs.append_pair("searchFilter", query.trim());
         }
     }
+    Ok(url)
+}
+
+pub(crate) async fn get_curseforge_mod(client: &Client, mod_id: &str) -> Result<ModpackDetails> {
+    let key = curseforge_api_key()?;
+    let mod_id = mod_id.parse::<u64>().map_err(|_| CoreError::ModpackMeta {
+        detail: "invalid modpack identifier".into(),
+    })?;
+    let mod_url = Url::parse(&format!("{MOD_URL}/{mod_id}"));
+    let description_url = Url::parse(&format!("{MOD_URL}/{mod_id}/description"));
+    let (Ok(mod_url), Ok(description_url)) = (mod_url, description_url) else {
+        return Err(CoreError::ModpackMeta {
+            detail: "curseforge_mod_url".into(),
+        });
+    };
+    let (project, description) = tokio::join!(
+        get_api(client, &key, mod_url, "curseforge_mod"),
+        get_api(client, &key, description_url, "curseforge_description"),
+    );
+    api::parse_mod(&project?, &description?)
+}
+
+async fn get_api(client: &Client, key: &str, url: Url, label: &str) -> Result<String> {
     let response = client
         .get(url)
-        .header("x-api-key", &key)
+        .header("x-api-key", key)
         .header("Accept", "application/json")
         .send()
         .await?;
@@ -58,10 +101,10 @@ pub async fn search_curseforge(client: &Client, query: &str) -> Result<Vec<Modpa
     let body = response.text().await?;
     if !(200..300).contains(&status) {
         return Err(CoreError::ModpackMeta {
-            detail: format!("curseforge_search_http_{status}"),
+            detail: format!("{label}_http_{status}"),
         });
     }
-    api::parse_search(&body)
+    Ok(body)
 }
 
 pub async fn list_curseforge_versions(
@@ -176,6 +219,15 @@ fn parse_pack_download_url(body: &str) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn search_url_pages_with_index_and_page_size() {
+        let url = search_url("atm", 20, 10).expect("url");
+        let pairs: Vec<(String, String)> = url.query_pairs().into_owned().collect();
+        assert!(pairs.contains(&("index".into(), "20".into())));
+        assert!(pairs.contains(&("pageSize".into(), "10".into())));
+        assert!(pairs.contains(&("searchFilter".into(), "atm".into())));
+    }
 
     #[test]
     fn pack_download_url_must_be_a_cdn_host() {

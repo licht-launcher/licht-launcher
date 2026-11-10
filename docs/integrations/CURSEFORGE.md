@@ -1,6 +1,6 @@
 # CurseForge API
 
-Licht can list and import CurseForge modpacks in the New Instance wizard when an API key is available.
+Licht can list, show and import CurseForge modpacks on the Discover page when an API key is available.
 
 ## Key
 
@@ -16,7 +16,9 @@ This project does **not** embed a CurseForge key in the repository. Forks and of
 
 ## Scope in Licht
 
-- Search Minecraft modpacks and list file versions.
+- Search Minecraft modpacks with `index`/`pageSize` (10 per page, merged with Modrinth's page of the same number). CurseForge rejects searches past `index + pageSize > 10000`, so its share of the page count is capped there and later pages only show Modrinth results.
+- Load a pack's details with `GET /v1/mods/{id}` and `GET /v1/mods/{id}/description`; the mod must be in the modpack class. The HTML description is sanitized with `ammonia` (no scripts, frames, styles or event handlers; HTTPS links and images only), and only HTTPS screenshots and website links are kept.
+- List file versions.
 - Download a pack archive from the CurseForge CDN over HTTPS. Allowed hosts are `edge.forgecdn.net`, `mediafilez.forgecdn.net`, and `media.forgecdn.net`, checked again on every redirect. The API key is sent as the `x-api-key` header and is not written into the instance or the logs.
 - Read `manifest.json`: Minecraft version, overlays from `overrides/` (and `override/`), and the `files` list.
 - Resolve each file with `POST /v1/mods/files` and `POST /v1/mods`. SHA1 is checked when the API sends one; MD5 is checked when that is the hash available. The resolved list is stored in `licht-curseforge.json` and downloaded on install, in the same pass as `.mrpack` files.

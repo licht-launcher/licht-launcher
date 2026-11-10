@@ -65,6 +65,9 @@ fn the_committed_bindings_match_ts_rs() {
     StartupProgress::export_all(&config).expect("startup progress");
     StartupPreviewScenario::export_all(&config).expect("startup preview scenarios");
     licht_core::LoaderBuild::export_all(&config).expect("loader build");
+    licht_core::ModpackSearchPage::export_all(&config).expect("modpack search page");
+    licht_core::ModpackDetails::export_all(&config).expect("modpack details");
+    licht_core::ModpackVersionItem::export_all(&config).expect("modpack version item");
 
     let expected = generated_dir();
     let expected_names = file_names(&expected);
