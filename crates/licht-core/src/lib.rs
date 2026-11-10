@@ -98,8 +98,9 @@ pub use loaders::{
     list_loader_versions,
 };
 pub use modpacks::{
-    CURSEFORGE_API_KEY_ENV, CURSEFORGE_INDEX_FILE, MODPACK_INDEX_FILE, ModpackDetails,
-    ModpackListItem, ModpackSearchPage, ModpackSource, ModpackVersionItem, apply_mrpack_loader,
+    CURSEFORGE_API_KEY_ENV, CURSEFORGE_INDEX_FILE, MODPACK_INDEX_FILE, ModpackCategory,
+    ModpackDetails, ModpackListItem, ModpackLoader, ModpackSearchFilters, ModpackSearchPage,
+    ModpackSort, ModpackSource, ModpackVersionItem, apply_mrpack_loader,
     create_instance_from_modpack, get_modpack, install_curseforge_files, install_mrpack_files,
     list_modpack_versions, mrpack_download_tasks, search_modpacks,
 };

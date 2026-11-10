@@ -9,7 +9,13 @@ use reqwest::Client;
 use serde_json::Value;
 use url::Url;
 
-use crate::modpacks::types::{ModpackDetails, ModpackVersionItem, SourcePage};
+use std::collections::HashMap;
+
+use tokio::sync::OnceCell;
+
+use crate::modpacks::types::{
+    ModpackCategory, ModpackDetails, ModpackSearchFilters, ModpackVersionItem, SourcePage,
+};
 use crate::{CoreError, Result};
 
 pub(crate) use install::import_curseforge_into;
@@ -18,6 +24,7 @@ pub use install::install_curseforge_files;
 const SEARCH_URL: &str = "https://api.curseforge.com/v1/mods/search";
 const MOD_URL: &str = "https://api.curseforge.com/v1/mods";
 const FILES_URL: &str = "https://api.curseforge.com/v1/mods/files";
+const CATEGORIES_URL: &str = "https://api.curseforge.com/v1/categories";
 const GAME_ID: &str = "432";
 const CLASS_ID: &str = "4471";
 
@@ -33,22 +40,67 @@ pub fn curseforge_api_key() -> Result<String> {
     }
 }
 
+/// Modpack category ids by slug, loaded once per run (they rarely change).
+static MODPACK_CATEGORIES: OnceCell<HashMap<String, u64>> = OnceCell::const_new();
+
+/// Whether a CurseForge search can honor this category filter.
+pub(super) fn serves_category(category: ModpackCategory) -> bool {
+    api::category_slug(category).is_some()
+}
+
 pub(super) async fn search_curseforge(
     client: &Client,
     query: &str,
     index: u64,
     page_size: u32,
+    filters: &ModpackSearchFilters,
 ) -> Result<SourcePage> {
     let key = curseforge_api_key()?;
     if !api::fits_search_window(index, page_size) {
         return Ok(api::past_search_window());
     }
-    let url = search_url(query, index, page_size)?;
+    let category_id = match filters.category {
+        None => None,
+        Some(category) => match category_id(client, &key, category).await? {
+            Some(id) => Some(id),
+            None => {
+                tracing::warn!(
+                    ?category,
+                    "CurseForge has no matching modpack category; leaving it out of this search"
+                );
+                return Ok(SourcePage {
+                    items: Vec::new(),
+                    total: 0,
+                });
+            }
+        },
+    };
+    let url = search_url(query, index, page_size, filters, category_id)?;
     let body = api::get_api(client, &key, url.as_str(), "curseforge_search").await?;
     api::parse_search(&body)
 }
 
-fn search_url(query: &str, index: u64, page_size: u32) -> Result<Url> {
+async fn category_id(client: &Client, key: &str, category: ModpackCategory) -> Result<Option<u64>> {
+    let Some(slug) = api::category_slug(category) else {
+        return Ok(None);
+    };
+    let ids = MODPACK_CATEGORIES
+        .get_or_try_init(|| async {
+            let url = format!("{CATEGORIES_URL}?gameId={GAME_ID}&classId={CLASS_ID}");
+            let body = api::get_api(client, key, &url, "curseforge_categories").await?;
+            api::parse_categories(&body)
+        })
+        .await?;
+    Ok(ids.get(slug).copied())
+}
+
+fn search_url(
+    query: &str,
+    index: u64,
+    page_size: u32,
+    filters: &ModpackSearchFilters,
+    category_id: Option<u64>,
+) -> Result<Url> {
     let mut url = Url::parse(SEARCH_URL).map_err(|_| CoreError::ModpackMeta {
         detail: "curseforge_search_url".into(),
     })?;
@@ -56,8 +108,17 @@ fn search_url(query: &str, index: u64, page_size: u32) -> Result<Url> {
         let mut pairs = url.query_pairs_mut();
         pairs.append_pair("gameId", GAME_ID);
         pairs.append_pair("classId", CLASS_ID);
-        pairs.append_pair("sortField", "2");
+        pairs.append_pair("sortField", api::sort_field(filters.sort));
         pairs.append_pair("sortOrder", "desc");
+        if let Some(version) = filters.game_version() {
+            pairs.append_pair("gameVersion", version);
+        }
+        if let Some(loader) = filters.loader {
+            pairs.append_pair("modLoaderType", api::mod_loader_type(loader));
+        }
+        if let Some(id) = category_id {
+            pairs.append_pair("categoryId", &id.to_string());
+        }
         pairs.append_pair("index", &index.to_string());
         pairs.append_pair("pageSize", &page_size.to_string());
         if !query.trim().is_empty() {
@@ -100,9 +161,7 @@ pub async fn list_curseforge_versions(
     let status = response.status().as_u16();
     let body = response.text().await?;
     if !(200..300).contains(&status) {
-        return Err(CoreError::ModpackMeta {
-            detail: format!("curseforge_files_http_{status}"),
-        });
+        return Err(api::status_error(status, "curseforge_files"));
     }
     api::parse_versions(&body)
 }
@@ -196,11 +255,41 @@ mod tests {
 
     #[test]
     fn search_url_pages_with_index_and_page_size() {
-        let url = search_url("atm", 20, 10).expect("url");
+        let url = search_url("atm", 20, 10, &ModpackSearchFilters::default(), None).expect("url");
         let pairs: Vec<(String, String)> = url.query_pairs().into_owned().collect();
         assert!(pairs.contains(&("index".into(), "20".into())));
         assert!(pairs.contains(&("pageSize".into(), "10".into())));
         assert!(pairs.contains(&("searchFilter".into(), "atm".into())));
+    }
+
+    #[test]
+    fn filters_become_curseforge_search_parameters() {
+        let filters = ModpackSearchFilters {
+            game_version: Some("1.20.1".into()),
+            loader: Some(crate::modpacks::types::ModpackLoader::Fabric),
+            category: Some(ModpackCategory::Technology),
+            source: None,
+            sort: crate::modpacks::types::ModpackSort::Updated,
+        };
+        let url = search_url("", 0, 10, &filters, Some(4472)).expect("url");
+        let pairs: Vec<(String, String)> = url.query_pairs().into_owned().collect();
+        assert!(pairs.contains(&("sortField".into(), "3".into())));
+        assert!(pairs.contains(&("gameVersion".into(), "1.20.1".into())));
+        assert!(pairs.contains(&("modLoaderType".into(), "4".into())));
+        assert!(pairs.contains(&("categoryId".into(), "4472".into())));
+    }
+
+    #[test]
+    fn sorting_by_downloads_uses_total_downloads_without_extra_filters() {
+        let url = search_url("", 0, 10, &ModpackSearchFilters::default(), None).expect("url");
+        let keys: Vec<String> = url.query_pairs().map(|(key, _)| key.into_owned()).collect();
+        assert!(
+            url.query_pairs()
+                .any(|(key, value)| key == "sortField" && value == "6")
+        );
+        for absent in ["gameVersion", "modLoaderType", "categoryId", "searchFilter"] {
+            assert!(!keys.iter().any(|key| key == absent), "{absent}");
+        }
     }
 
     #[test]

@@ -29,6 +29,8 @@ pub struct ModpackListItem {
     pub downloads: u64,
     pub icon_url: Option<String>,
     pub author: String,
+    /// RFC 3339 UTC timestamp of the last update, as reported by the source.
+    pub updated_at: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -77,4 +79,62 @@ pub struct ModpackDetails {
 pub(crate) struct SourcePage {
     pub(crate) items: Vec<ModpackListItem>,
     pub(crate) total: u64,
+}
+
+/// Mod loaders a modpack search can be narrowed to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ModpackLoader {
+    Fabric,
+    Forge,
+    Neoforge,
+    Quilt,
+}
+
+/// Licht's shared category list; each source maps it to its own categories.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ModpackCategory {
+    Adventure,
+    Challenging,
+    Combat,
+    KitchenSink,
+    Lightweight,
+    Magic,
+    Multiplayer,
+    Optimization,
+    Quests,
+    Technology,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ModpackSort {
+    #[default]
+    Downloads,
+    Updated,
+    Relevance,
+}
+
+/// Optional narrowing of the merged modpack search. `None` means "any".
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ModpackSearchFilters {
+    /// A Minecraft version id such as `1.20.1`.
+    pub game_version: Option<String>,
+    pub loader: Option<ModpackLoader>,
+    pub category: Option<ModpackCategory>,
+    /// Search only this source; `None` searches both.
+    pub source: Option<ModpackSource>,
+    pub sort: ModpackSort,
+}
+
+impl ModpackSearchFilters {
+    /// The game version without surrounding spaces, or `None` when blank.
+    pub(crate) fn game_version(&self) -> Option<&str> {
+        self.game_version
+            .as_deref()
+            .map(str::trim)
+            .filter(|version| !version.is_empty())
+    }
 }

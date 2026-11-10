@@ -182,6 +182,8 @@ pub enum CoreError {
     ModpackMeta { detail: String },
     #[error("LICHT_CURSEFORGE_API_KEY is missing or empty")]
     CurseforgeKeyMissing,
+    #[error("CurseForge rejected the API key")]
+    CurseforgeKeyRejected,
     #[error("only HTTPS links can be opened")]
     ExternalUrl,
     #[error("curseforge download host is not allowed")]

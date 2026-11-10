@@ -2,6 +2,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { modpackSearchPage } from "@/features/discover/fixtures/modpacks";
+import { DEFAULT_SEARCH_FILTERS } from "@/features/discover/lib/discover-search";
 import {
   invoke,
   mockContextMenuCommands,
@@ -46,7 +47,7 @@ describe("Discover page", () => {
     ).not.toBeInTheDocument();
     expect(searchCalls()).toContainEqual([
       "search_modpacks",
-      { query: "", page: 1 },
+      { query: "", page: 1, filters: DEFAULT_SEARCH_FILTERS },
     ]);
   });
 
@@ -65,7 +66,7 @@ describe("Discover page", () => {
     await waitFor(() =>
       expect(searchCalls()).toContainEqual([
         "search_modpacks",
-        { query: "cobble", page: 1 },
+        { query: "cobble", page: 1, filters: DEFAULT_SEARCH_FILTERS },
       ]),
     );
   });
@@ -85,7 +86,7 @@ describe("Discover page", () => {
     await waitFor(() =>
       expect(searchCalls()).toContainEqual([
         "search_modpacks",
-        { query: "atm", page: 3 },
+        { query: "atm", page: 3, filters: DEFAULT_SEARCH_FILTERS },
       ]),
     );
   });

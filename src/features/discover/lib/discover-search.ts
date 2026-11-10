@@ -1,4 +1,14 @@
+import type { ModpackSearchFilters } from "@/lib/generated/ModpackSearchFilters";
 import type { ModpackSource } from "@/lib/generated/ModpackSource";
+
+/** No narrowing: every source, sorted by downloads. */
+export const DEFAULT_SEARCH_FILTERS: ModpackSearchFilters = {
+  gameVersion: null,
+  loader: null,
+  category: null,
+  source: null,
+  sort: "downloads",
+};
 
 export type DiscoverSearch = {
   q?: string;

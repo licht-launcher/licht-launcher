@@ -18,7 +18,8 @@ pub use mrpack::{
     MODPACK_INDEX_FILE, apply_mrpack_loader, install_mrpack_files, mrpack_download_tasks,
 };
 pub use types::{
-    ModpackDetails, ModpackListItem, ModpackSearchPage, ModpackSource, ModpackVersionItem,
+    ModpackCategory, ModpackDetails, ModpackListItem, ModpackLoader, ModpackSearchFilters,
+    ModpackSearchPage, ModpackSort, ModpackSource, ModpackVersionItem,
 };
 
 use reqwest::Client;

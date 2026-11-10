@@ -17,6 +17,9 @@ This project does **not** embed a CurseForge key in the repository. Forks and of
 ## Scope in Licht
 
 - Search Minecraft modpacks with `index`/`pageSize` (10 per page, merged with Modrinth's page of the same number). CurseForge rejects searches past `index + pageSize > 10000`, so its share of the page count is capped there and later pages only show Modrinth results.
+- Optional filters map to `gameVersion`, `modLoaderType` (Forge 1, Fabric 4, Quilt 5, NeoForge 6) and `categoryId`. Sorting maps to `sortField` 6 (total downloads), 3 (last updated) or 2 (popularity, used for relevance, since there is no text relevance sort).
+- Licht's shared categories map to CurseForge modpack category slugs (Adventure → `adventure-and-rpg`, Challenging → `hardcore`, Combat → `combat-pvp`, Kitchen sink → `extra-large`, Lightweight → `small-light`, Technology → `tech`; Magic, Multiplayer and Quests keep their names). Their ids are read once per run from `GET /v1/categories?gameId=432&classId=4471`. Optimization has no CurseForge match, so that filter searches Modrinth only, as does a slug the API no longer lists (logged as a warning).
+- Without a key, CurseForge is skipped silently unless the search asks for CurseForge only, which reports the missing key.
 - Load a pack's details with `GET /v1/mods/{id}` and `GET /v1/mods/{id}/description`; the mod must be in the modpack class. The HTML description is sanitized with `ammonia` (no scripts, frames, styles or event handlers; HTTPS links and images only), and only HTTPS screenshots and website links are kept.
 - List file versions.
 - Download a pack archive from the CurseForge CDN over HTTPS. Allowed hosts are `edge.forgecdn.net`, `mediafilez.forgecdn.net`, and `media.forgecdn.net`, checked again on every redirect. The API key is sent as the `x-api-key` header and is not written into the instance or the logs.

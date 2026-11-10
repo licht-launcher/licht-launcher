@@ -5,7 +5,8 @@ use url::Url;
 
 use crate::modpacks::description::markdown_to_safe_html;
 use crate::modpacks::types::{
-    ModpackDetails, ModpackListItem, ModpackSource, ModpackVersionItem, SourcePage,
+    ModpackCategory, ModpackDetails, ModpackListItem, ModpackLoader, ModpackSearchFilters,
+    ModpackSort, ModpackSource, ModpackVersionItem, SourcePage,
 };
 use crate::{CoreError, Result};
 
@@ -31,6 +32,8 @@ struct SearchHit {
     icon_url: Option<String>,
     #[serde(default)]
     author: String,
+    #[serde(default)]
+    date_modified: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -64,12 +67,14 @@ pub(super) async fn search_modrinth(
     query: &str,
     offset: u64,
     limit: u32,
+    filters: &ModpackSearchFilters,
 ) -> Result<SourcePage> {
-    let body = fetch_text(client, search_url(query, offset, limit)?, "modrinth_search").await?;
+    let url = search_url(query, offset, limit, filters)?;
+    let body = fetch_text(client, url, "modrinth_search").await?;
     parse_search(&body)
 }
 
-fn search_url(query: &str, offset: u64, limit: u32) -> Result<Url> {
+fn search_url(query: &str, offset: u64, limit: u32, filters: &ModpackSearchFilters) -> Result<Url> {
     let mut url = Url::parse(SEARCH_URL).map_err(|_| CoreError::ModpackMeta {
         detail: "modrinth_search_url".into(),
     })?;
@@ -77,13 +82,61 @@ fn search_url(query: &str, offset: u64, limit: u32) -> Result<Url> {
         let mut pairs = url.query_pairs_mut();
         pairs.append_pair("limit", &limit.to_string());
         pairs.append_pair("offset", &offset.to_string());
-        pairs.append_pair("index", "downloads");
-        pairs.append_pair("facets", r#"[["project_type:modpack"]]"#);
+        pairs.append_pair("index", sort_index(filters.sort));
+        pairs.append_pair("facets", &search_facets(filters).to_string());
         if !query.trim().is_empty() {
             pairs.append_pair("query", query.trim());
         }
     }
     Ok(url)
+}
+
+/// Facets are ANDed between the inner lists; loaders are categories on Modrinth.
+fn search_facets(filters: &ModpackSearchFilters) -> Value {
+    let mut facets = vec![vec!["project_type:modpack".to_string()]];
+    if let Some(version) = filters.game_version() {
+        facets.push(vec![format!("versions:{version}")]);
+    }
+    if let Some(loader) = filters.loader {
+        facets.push(vec![format!("categories:{}", loader_slug(loader))]);
+    }
+    if let Some(category) = filters.category {
+        facets.push(vec![format!("categories:{}", category_slug(category))]);
+    }
+    serde_json::json!(facets)
+}
+
+fn sort_index(sort: ModpackSort) -> &'static str {
+    match sort {
+        ModpackSort::Downloads => "downloads",
+        ModpackSort::Updated => "updated",
+        ModpackSort::Relevance => "relevance",
+    }
+}
+
+fn loader_slug(loader: ModpackLoader) -> &'static str {
+    match loader {
+        ModpackLoader::Fabric => "fabric",
+        ModpackLoader::Forge => "forge",
+        ModpackLoader::Neoforge => "neoforge",
+        ModpackLoader::Quilt => "quilt",
+    }
+}
+
+/// Modrinth's modpack categories (`GET /v2/tag/category`); the shared list mirrors them.
+fn category_slug(category: ModpackCategory) -> &'static str {
+    match category {
+        ModpackCategory::Adventure => "adventure",
+        ModpackCategory::Challenging => "challenging",
+        ModpackCategory::Combat => "combat",
+        ModpackCategory::KitchenSink => "kitchen-sink",
+        ModpackCategory::Lightweight => "lightweight",
+        ModpackCategory::Magic => "magic",
+        ModpackCategory::Multiplayer => "multiplayer",
+        ModpackCategory::Optimization => "optimization",
+        ModpackCategory::Quests => "quests",
+        ModpackCategory::Technology => "technology",
+    }
 }
 
 pub(super) fn parse_search(body: &str) -> Result<SourcePage> {
@@ -99,6 +152,7 @@ pub(super) fn parse_search(body: &str) -> Result<SourcePage> {
             downloads: hit.downloads,
             icon_url: hit.icon_url,
             author: hit.author,
+            updated_at: hit.date_modified,
         })
         .collect();
     Ok(SourcePage {
@@ -376,11 +430,74 @@ mod tests {
 
     #[test]
     fn search_url_pages_with_offset_and_limit() {
-        let url = search_url(" cobble ", 30, 10).expect("url");
+        let url = search_url(" cobble ", 30, 10, &ModpackSearchFilters::default()).expect("url");
         let pairs: Vec<(String, String)> = url.query_pairs().into_owned().collect();
         assert!(pairs.contains(&("limit".into(), "10".into())));
         assert!(pairs.contains(&("offset".into(), "30".into())));
         assert!(pairs.contains(&("query".into(), "cobble".into())));
+    }
+
+    fn query_value(url: &Url, key: &str) -> Option<String> {
+        url.query_pairs()
+            .find(|(name, _)| name == key)
+            .map(|(_, value)| value.into_owned())
+    }
+
+    #[test]
+    fn without_filters_searches_every_modpack_by_downloads() {
+        let url = search_url("", 0, 10, &ModpackSearchFilters::default()).expect("url");
+        assert_eq!(query_value(&url, "index").as_deref(), Some("downloads"));
+        assert_eq!(
+            query_value(&url, "facets").as_deref(),
+            Some(r#"[["project_type:modpack"]]"#)
+        );
+        assert_eq!(query_value(&url, "query"), None);
+    }
+
+    #[test]
+    fn filters_become_anded_facets_and_the_sort_index() {
+        let filters = ModpackSearchFilters {
+            game_version: Some(" 1.20.1 ".into()),
+            loader: Some(ModpackLoader::Neoforge),
+            category: Some(ModpackCategory::KitchenSink),
+            source: None,
+            sort: ModpackSort::Updated,
+        };
+        let url = search_url("", 0, 10, &filters).expect("url");
+        assert_eq!(query_value(&url, "index").as_deref(), Some("updated"));
+        assert_eq!(
+            query_value(&url, "facets").as_deref(),
+            Some(
+                r#"[["project_type:modpack"],["versions:1.20.1"],["categories:neoforge"],["categories:kitchen-sink"]]"#
+            )
+        );
+    }
+
+    #[test]
+    fn a_blank_game_version_is_ignored() {
+        let filters = ModpackSearchFilters {
+            game_version: Some("  ".into()),
+            sort: ModpackSort::Relevance,
+            ..ModpackSearchFilters::default()
+        };
+        let url = search_url("", 0, 10, &filters).expect("url");
+        assert_eq!(query_value(&url, "index").as_deref(), Some("relevance"));
+        assert_eq!(
+            query_value(&url, "facets").as_deref(),
+            Some(r#"[["project_type:modpack"]]"#)
+        );
+    }
+
+    #[test]
+    fn reads_the_last_update_of_each_hit() {
+        let page = parse_search(
+            r#"{"hits":[{"project_id":"A","title":"A","description":"","date_modified":"2026-11-01T10:43:19.109719Z"}],"total_hits":1}"#,
+        )
+        .expect("ok");
+        assert_eq!(
+            page.items[0].updated_at.as_deref(),
+            Some("2026-11-01T10:43:19.109719Z")
+        );
     }
 
     #[test]

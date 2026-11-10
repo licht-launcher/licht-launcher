@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::Value;
@@ -5,7 +7,8 @@ use serde_json::Value;
 use super::{CLASS_ID, FILES_URL, MOD_URL};
 use crate::modpacks::description::sanitize_html;
 use crate::modpacks::types::{
-    ModpackDetails, ModpackListItem, ModpackSource, ModpackVersionItem, SourcePage,
+    ModpackCategory, ModpackDetails, ModpackListItem, ModpackLoader, ModpackSort, ModpackSource,
+    ModpackVersionItem, SourcePage,
 };
 use crate::{CoreError, Result};
 
@@ -29,6 +32,17 @@ struct SearchResponse {
 struct Pagination {
     #[serde(default)]
     total_count: u64,
+}
+
+#[derive(Debug, Deserialize)]
+struct CategoriesResponse {
+    data: Vec<CategoryEntry>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CategoryEntry {
+    id: u64,
+    slug: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -92,6 +106,8 @@ struct ModHit {
     logo: Option<Logo>,
     #[serde(default)]
     authors: Vec<Author>,
+    #[serde(default)]
+    date_modified: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -147,9 +163,56 @@ pub(super) fn parse_search(body: &str) -> Result<SourcePage> {
                 .first()
                 .map(|author| author.name.clone())
                 .unwrap_or_default(),
+            updated_at: hit.date_modified,
         })
         .collect();
     Ok(SourcePage { items, total })
+}
+
+/// Category ids by slug, from `GET /v1/categories?classId=4471`.
+pub(super) fn parse_categories(body: &str) -> Result<HashMap<String, u64>> {
+    let parsed: CategoriesResponse = serde_json::from_str(body).map_err(CoreError::LoaderJson)?;
+    Ok(parsed
+        .data
+        .into_iter()
+        .map(|category| (category.slug, category.id))
+        .collect())
+}
+
+/// CurseForge's modpack category for each shared category; `None` when it has no match.
+pub(super) fn category_slug(category: ModpackCategory) -> Option<&'static str> {
+    match category {
+        ModpackCategory::Adventure => Some("adventure-and-rpg"),
+        ModpackCategory::Challenging => Some("hardcore"),
+        ModpackCategory::Combat => Some("combat-pvp"),
+        ModpackCategory::KitchenSink => Some("extra-large"),
+        ModpackCategory::Lightweight => Some("small-light"),
+        ModpackCategory::Magic => Some("magic"),
+        ModpackCategory::Multiplayer => Some("multiplayer"),
+        ModpackCategory::Optimization => None,
+        ModpackCategory::Quests => Some("quests"),
+        ModpackCategory::Technology => Some("tech"),
+    }
+}
+
+/// `ModLoaderType` values from the CurseForge API reference.
+pub(super) fn mod_loader_type(loader: ModpackLoader) -> &'static str {
+    match loader {
+        ModpackLoader::Forge => "1",
+        ModpackLoader::Fabric => "4",
+        ModpackLoader::Quilt => "5",
+        ModpackLoader::Neoforge => "6",
+    }
+}
+
+/// `ModsSearchSortField` values. CurseForge has no text relevance sort, so
+/// relevance uses its popularity ranking.
+pub(super) fn sort_field(sort: ModpackSort) -> &'static str {
+    match sort {
+        ModpackSort::Downloads => "6",
+        ModpackSort::Updated => "3",
+        ModpackSort::Relevance => "2",
+    }
 }
 
 pub(super) fn fits_search_window(index: u64, page_size: u32) -> bool {
@@ -328,11 +391,19 @@ pub(super) async fn get_api(client: &Client, key: &str, url: &str, label: &str) 
     let status = response.status().as_u16();
     let body = response.text().await?;
     if !(200..300).contains(&status) {
-        return Err(CoreError::ModpackMeta {
-            detail: format!("{label}_http_{status}"),
-        });
+        return Err(status_error(status, label));
     }
     Ok(body)
+}
+
+/// CurseForge answers 401/403 when the `x-api-key` header is not a valid key.
+pub(super) fn status_error(status: u16, label: &str) -> CoreError {
+    match status {
+        401 | 403 => CoreError::CurseforgeKeyRejected,
+        _ => CoreError::ModpackMeta {
+            detail: format!("{label}_http_{status}"),
+        },
+    }
 }
 
 async fn post_api(client: &Client, key: &str, url: &str, body: Value) -> Result<Value> {
@@ -346,9 +417,7 @@ async fn post_api(client: &Client, key: &str, url: &str, body: Value) -> Result<
     let status = response.status().as_u16();
     let text = response.text().await?;
     if !(200..300).contains(&status) {
-        return Err(CoreError::ModpackMeta {
-            detail: format!("curseforge_api_http_{status}"),
-        });
+        return Err(status_error(status, "curseforge_api"));
     }
     serde_json::from_str(&text).map_err(CoreError::LoaderJson)
 }
@@ -509,6 +578,56 @@ mod tests {
         )
         .expect("ok");
         assert_eq!(page.total, 5321);
+    }
+
+    #[test]
+    fn reads_the_last_update_of_each_hit() {
+        let page = parse_search(
+            r#"{"data":[{"id":1,"name":"A","summary":"","downloadCount":1,"dateModified":"2026-11-08T00:51:06.56Z"}]}"#,
+        )
+        .expect("ok");
+        assert_eq!(
+            page.items[0].updated_at.as_deref(),
+            Some("2026-11-08T00:51:06.56Z")
+        );
+    }
+
+    #[test]
+    fn maps_category_slugs_to_ids() {
+        let ids = parse_categories(
+            r#"{"data":[{"id":4472,"slug":"tech","name":"Tech","classId":4471},{"id":4473,"slug":"magic","name":"Magic","classId":4471}]}"#,
+        )
+        .expect("ok");
+        assert_eq!(ids.get("tech"), Some(&4472));
+        assert_eq!(ids.get("magic"), Some(&4473));
+    }
+
+    #[test]
+    fn every_shared_category_but_optimization_has_a_curseforge_match() {
+        assert_eq!(category_slug(ModpackCategory::Technology), Some("tech"));
+        assert_eq!(
+            category_slug(ModpackCategory::KitchenSink),
+            Some("extra-large")
+        );
+        assert_eq!(category_slug(ModpackCategory::Optimization), None);
+    }
+
+    #[test]
+    fn a_rejected_key_is_its_own_error() {
+        for status in [401, 403] {
+            assert!(matches!(
+                status_error(status, "curseforge_search"),
+                CoreError::CurseforgeKeyRejected
+            ));
+        }
+    }
+
+    #[test]
+    fn other_failures_keep_the_request_label() {
+        match status_error(500, "curseforge_search") {
+            CoreError::ModpackMeta { detail } => assert_eq!(detail, "curseforge_search_http_500"),
+            other => panic!("unexpected error: {other:?}"),
+        }
     }
 
     #[test]

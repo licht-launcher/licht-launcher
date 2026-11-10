@@ -5,13 +5,14 @@ import {
   listModpackVersions,
   searchModpacks,
 } from "@/api/commands";
+import { DEFAULT_SEARCH_FILTERS } from "@/features/discover/lib/discover-search";
 import type { ModpackSource } from "@/lib/generated/ModpackSource";
 
 /** One page of the merged store search; keeps the previous page while paging. */
 export function useModpackSearch(query: string, page: number) {
   return useQuery({
     queryKey: ["modpacks", "search", query, page],
-    queryFn: () => searchModpacks(query, page),
+    queryFn: () => searchModpacks(query, page, DEFAULT_SEARCH_FILTERS),
     placeholderData: keepPreviousData,
   });
 }

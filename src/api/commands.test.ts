@@ -257,10 +257,18 @@ describe("launcher commands", () => {
       name: "Cobblemon",
       path: "C:\\packs\\cobble.mrpack",
     });
-    await searchModpacks("cobble", 2);
+    const filters = {
+      gameVersion: "1.20.1",
+      loader: "fabric",
+      category: "magic",
+      source: null,
+      sort: "updated",
+    } as const;
+    await searchModpacks("cobble", 2, filters);
     expect(invoke).toHaveBeenCalledWith("search_modpacks", {
       query: "cobble",
       page: 2,
+      filters,
     });
     await getModpack("curseforge", "381671");
     expect(invoke).toHaveBeenCalledWith("get_modpack", {
