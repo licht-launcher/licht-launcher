@@ -4,7 +4,7 @@ Unofficial Minecraft: Java Edition launcher for **Windows and Linux**, built wit
 
 > **How to use:** always ask for **one item at a time** ("do item 9.2"). Flow for each item: **plan → approval → implementation → PR → review**. Follow `AGENTS.md`.
 
-Legend: `[ ]` pending · `[x]` done · 🛑 = decision that requires explicit approval before coding · 📚 = Rust concepts that show up
+Legend: `[ ]` pending · `[x]` done · 🛑 = decision that requires explicit approval before coding
 
 Closed phases are kept only in the status table below; their history lives in git.
 

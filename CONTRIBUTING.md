@@ -36,9 +36,7 @@ Submit a PR against `main` with:
 
 - what changed and why;
 - how to test, including commands actually run and their results;
-- decisions made and points needing maintainer review;
-- a **Rust concepts used** section explaining new Rust concepts in plain
-  language, or stating that no Rust code changed.
+- decisions made and points needing maintainer review.
 
 External contributions require maintainer review before merging. Changes to
 CI, build scripts, dependencies, downloads, authentication, and signing deserve
