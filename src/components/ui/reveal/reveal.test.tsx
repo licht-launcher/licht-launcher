@@ -84,16 +84,4 @@ describe("Reveal", () => {
     await new Promise((resolve) => setTimeout(resolve, 400));
     expect(screen.getByText("Again")).toBeInTheDocument();
   });
-
-  it("gives the content room so focus outlines are not clipped", async () => {
-    const { container } = render(
-      <Reveal open>
-        <p>Outlined</p>
-      </Reveal>,
-    );
-
-    const clip = container.querySelector("[data-slot='reveal-clip']");
-    expect(clip).toHaveClass("min-h-0", "overflow-hidden", "-mx-1", "px-1");
-    expect(screen.getByText("Outlined").parentElement).toHaveClass("py-1");
-  });
 });

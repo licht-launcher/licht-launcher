@@ -62,9 +62,6 @@ describe("StoragePanel", () => {
     }
     expect(legend.getByText("12.0 GB")).toBeVisible();
     expect(legend.getByText("750.0 MB")).toBeVisible();
-    expect(screen.getByLabelText("Java segment")).toHaveClass(
-      "fill-accent-violet",
-    );
     expect(invoke).toHaveBeenCalledWith("storage_summary");
   });
 

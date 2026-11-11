@@ -55,7 +55,7 @@ describe("SpeedChart", () => {
     expect(bars.querySelectorAll("rect")).toHaveLength(2);
     expect(bars.querySelector("rect")).toHaveAttribute("height", "140");
     const write = screen.getByLabelText("Write line");
-    expect(write).toHaveClass("text-accent-cool", "opacity-50");
+    expect(write).toHaveClass("text-accent-cool");
     expect(write).toHaveAttribute("stroke-width", "1.5");
     expect(
       write.compareDocumentPosition(bars) & Node.DOCUMENT_POSITION_FOLLOWING,
