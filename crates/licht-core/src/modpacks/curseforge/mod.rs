@@ -5,6 +5,7 @@ mod cdn;
 mod install;
 pub(crate) mod storage;
 
+use futures_util::{StreamExt, TryStreamExt, stream};
 use reqwest::Client;
 use serde_json::Value;
 use url::Url;
@@ -130,9 +131,7 @@ fn search_url(
 
 pub(super) async fn get_curseforge_mod(client: &Client, mod_id: &str) -> Result<ModpackDetails> {
     let key = curseforge_api_key()?;
-    let mod_id = mod_id.parse::<u64>().map_err(|_| CoreError::ModpackMeta {
-        detail: "invalid modpack identifier".into(),
-    })?;
+    let mod_id = parse_mod_id(mod_id)?;
     let mod_url = format!("{MOD_URL}/{mod_id}");
     let description_url = format!("{MOD_URL}/{mod_id}/description");
     let (project, description) = tokio::join!(
@@ -142,28 +141,60 @@ pub(super) async fn get_curseforge_mod(client: &Client, mod_id: &str) -> Result<
     api::parse_mod(&project?, &description?)
 }
 
-pub async fn list_curseforge_versions(
+/// Files fetched per request; CurseForge's maximum page size.
+const FILES_PAGE_SIZE: u64 = 50;
+/// At most this many file pages (1,000 files) per pack, to bound requests.
+const MAX_FILE_PAGES: u64 = 20;
+
+/// File pages requested at once after the first one.
+const FILE_PAGE_CONCURRENCY: usize = 4;
+
+/// Every file of a pack. The first page carries the total, so the other pages
+/// are then fetched a few at a time instead of one after another.
+pub(super) async fn list_curseforge_versions(
     client: &Client,
     mod_id: &str,
 ) -> Result<Vec<ModpackVersionItem>> {
     let key = curseforge_api_key()?;
-    let mut url =
-        Url::parse(&format!("{MOD_URL}/{mod_id}/files")).map_err(|_| CoreError::ModpackMeta {
-            detail: "curseforge_files_url".into(),
-        })?;
-    url.query_pairs_mut().append_pair("pageSize", "20");
-    let response = client
-        .get(url)
-        .header("x-api-key", &key)
-        .header("Accept", "application/json")
-        .send()
-        .await?;
-    let status = response.status().as_u16();
-    let body = response.text().await?;
-    if !(200..300).contains(&status) {
-        return Err(api::status_error(status, "curseforge_files"));
+    let key = key.as_str();
+    let mod_id = parse_mod_id(mod_id)?;
+    let fetch_page = move |index: u64| async move {
+        let url = format!("{MOD_URL}/{mod_id}/files?index={index}&pageSize={FILES_PAGE_SIZE}");
+        let body = api::get_api(client, key, &url, "curseforge_files").await?;
+        api::parse_versions(&body)
+    };
+    let first = fetch_page(0).await?;
+    if first.total > MAX_FILE_PAGES * FILES_PAGE_SIZE {
+        tracing::warn!(
+            mod_id,
+            total = first.total,
+            "CurseForge pack has more files than Licht lists"
+        );
     }
-    api::parse_versions(&body)
+    let others: Vec<api::FilesPage> = stream::iter(remaining_file_indexes(first.total))
+        .map(fetch_page)
+        .buffered(FILE_PAGE_CONCURRENCY)
+        .try_collect()
+        .await?;
+    let mut versions = first.items;
+    for page in others {
+        versions.extend(page.items);
+    }
+    Ok(versions)
+}
+
+/// Start indexes of the file pages after the first, up to `MAX_FILE_PAGES`.
+fn remaining_file_indexes(total: u64) -> Vec<u64> {
+    (1..MAX_FILE_PAGES)
+        .map(|page| page * FILES_PAGE_SIZE)
+        .take_while(|index| *index < total)
+        .collect()
+}
+
+fn parse_mod_id(mod_id: &str) -> Result<u64> {
+    mod_id.parse::<u64>().map_err(|_| CoreError::ModpackMeta {
+        detail: "invalid modpack identifier".into(),
+    })
 }
 
 pub(super) async fn download_curseforge_pack_to(
@@ -252,6 +283,25 @@ fn parse_pack_download_url(body: &str) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_first_files_page_says_which_others_to_fetch() {
+        assert_eq!(remaining_file_indexes(148), vec![50, 100]);
+        assert_eq!(remaining_file_indexes(50), Vec::<u64>::new());
+        assert_eq!(remaining_file_indexes(51), vec![50]);
+        // No total in the reply: the first page is all there is.
+        assert_eq!(remaining_file_indexes(0), Vec::<u64>::new());
+    }
+
+    #[test]
+    fn file_pages_stop_at_the_cap() {
+        let indexes = remaining_file_indexes(5_000);
+        assert_eq!(
+            u64::try_from(indexes.len()).expect("len"),
+            MAX_FILE_PAGES - 1
+        );
+        assert_eq!(indexes.last(), Some(&950));
+    }
 
     #[test]
     fn search_url_pages_with_index_and_page_size() {

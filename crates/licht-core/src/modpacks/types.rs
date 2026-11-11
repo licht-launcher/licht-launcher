@@ -43,7 +43,21 @@ pub struct ModpackVersionItem {
     pub id: String,
     pub name: String,
     pub game_versions: Vec<String>,
-    pub loaders: Vec<String>,
+    pub loaders: Vec<ModpackLoader>,
+    pub version_type: ModpackVersionType,
+    /// RFC 3339 UTC timestamp of the release, as reported by the source.
+    pub published_at: Option<String>,
+    #[ts(type = "number")]
+    pub downloads: u64,
+}
+
+/// Release channel of a pack version.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ModpackVersionType {
+    Release,
+    Beta,
+    Alpha,
 }
 
 /// One page of the merged Modrinth + CurseForge modpack search.
@@ -55,9 +69,12 @@ pub struct ModpackSearchPage {
     pub page: u32,
     /// Number of pages the largest source can serve; `0` when nothing matched.
     pub page_count: u32,
+    /// Sources that were searched but failed, so the list may be missing results.
+    pub unavailable_sources: Vec<ModpackSource>,
 }
 
-/// One modpack's store page data. `description_html` is already sanitized.
+/// One modpack's store page data. `description_html` is already sanitized,
+/// and every URL here is HTTPS.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ModpackDetails {
@@ -68,14 +85,54 @@ pub struct ModpackDetails {
     pub author: String,
     #[ts(type = "number")]
     pub downloads: u64,
+    /// Followers on Modrinth; CurseForge has no equivalent.
+    #[ts(type = "number | null")]
+    pub followers: Option<u64>,
     pub icon_url: Option<String>,
-    pub categories: Vec<String>,
+    /// The pack's categories that match Licht's shared list, in source order.
+    pub categories: Vec<ModpackCategory>,
+    pub loaders: Vec<ModpackLoader>,
+    /// Minecraft versions the pack supports, newest first.
+    pub game_versions: Vec<String>,
+    pub license: Option<ModpackLicense>,
+    /// RFC 3339 timestamp of the first release, as reported by the source.
+    pub published_at: Option<String>,
     /// RFC 3339 timestamp of the last update, as reported by the source.
     pub updated_at: Option<String>,
-    /// HTTPS image URLs, in the order the source lists them.
-    pub gallery: Vec<String>,
+    /// Images in the order the source lists them.
+    pub gallery: Vec<ModpackImage>,
     pub project_url: Option<String>,
+    pub links: ModpackLinks,
     pub description_html: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ModpackLicense {
+    pub name: String,
+    pub url: Option<String>,
+}
+
+/// Where to learn more about a pack, when the author provides it.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ModpackLinks {
+    pub source: Option<String>,
+    pub issues: Option<String>,
+    pub wiki: Option<String>,
+    pub discord: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ModpackImage {
+    pub url: String,
+    pub title: Option<String>,
+}
+
+/// Keeps a link only when it is an absolute HTTPS URL.
+pub(crate) fn https_only(url: Option<String>) -> Option<String> {
+    url.filter(|value| value.starts_with("https://"))
 }
 
 /// One source's slice of a search page, with that source's total hit count.

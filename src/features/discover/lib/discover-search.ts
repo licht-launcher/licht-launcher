@@ -28,10 +28,7 @@ export type DiscoverSearch = {
   sort?: ModpackSort;
 };
 
-export const MODPACK_SOURCES: readonly ModpackSource[] = [
-  "modrinth",
-  "curseforge",
-];
+const MODPACK_SOURCES: readonly ModpackSource[] = ["modrinth", "curseforge"];
 
 function pick<T extends string>(
   value: unknown,

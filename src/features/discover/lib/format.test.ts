@@ -33,15 +33,21 @@ describe("formatVersionLabel", () => {
         id: "v7",
         name: "7.0.0",
         gameVersions: ["1.21.10"],
-        loaders: ["fabric"],
+        loaders: ["neoforge"],
+        versionType: "release",
+        publishedAt: null,
+        downloads: 0,
       }),
-    ).toBe("7.0.0 (1.21.10 · fabric)");
+    ).toBe("7.0.0 (1.21.10 · NeoForge)");
     expect(
       formatVersionLabel({
         id: "f1",
         name: "ATM9 1.0",
         gameVersions: [],
         loaders: [],
+        versionType: "release",
+        publishedAt: null,
+        downloads: 0,
       }),
     ).toBe("ATM9 1.0");
   });
