@@ -82,6 +82,48 @@ describe("Modpack page", () => {
     );
   });
 
+  it("starts a fresh install form when moving to another pack", async () => {
+    mockContextMenuCommands((command, args) => {
+      if (command === "get_modpack") {
+        const projectId =
+          args !== null && typeof args === "object" && "projectId" in args
+            ? String(args.projectId)
+            : "";
+        return Promise.resolve(
+          modpackDetails({
+            id: projectId,
+            name: projectId === "other" ? "Other Pack" : "Fabulously Optimized",
+          }),
+        );
+      }
+      if (command === "list_modpack_versions") {
+        return Promise.resolve(modpackVersions());
+      }
+      return undefined;
+    });
+    const { router } = await renderAt("/discover/modrinth/other");
+    await screen.findByRole("heading", { level: 1, name: "Other Pack" });
+    await router.navigate({
+      to: "/discover/$source/$projectId",
+      params: { source: "modrinth", projectId: "1KVo5zza" },
+    });
+    fireEvent.change(
+      await screen.findByRole("textbox", { name: "Instance Name" }),
+      { target: { value: "My pack" } },
+    );
+
+    // The other pack is cached, so its page shows without a loading state.
+    await router.navigate({
+      to: "/discover/$source/$projectId",
+      params: { source: "modrinth", projectId: "other" },
+    });
+
+    await screen.findByRole("heading", { level: 1, name: "Other Pack" });
+    expect(screen.getByRole("textbox", { name: "Instance Name" })).toHaveValue(
+      "",
+    );
+  });
+
   it("explains when the pack cannot be loaded", async () => {
     mockModpack(() => Promise.reject("HTTP request failed"));
     await renderAt("/discover/modrinth/1KVo5zza");

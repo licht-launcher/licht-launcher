@@ -34,6 +34,12 @@ export function ModpackDescription({ html }: { html: string }) {
               event.preventDefault();
               openLink(href);
             }}
+            // A middle click would otherwise open the link in a new webview window.
+            onAuxClick={(event) => {
+              if (event.button !== 1) return;
+              event.preventDefault();
+              openLink(href);
+            }}
           >
             {children}
           </a>

@@ -38,6 +38,25 @@ describe("ModpackDescription", () => {
     });
   });
 
+  it("opens a middle-clicked link in the system browser too", () => {
+    render(
+      <ModpackDescription html='<p><a href="https://download.fo/install">install</a></p>' />,
+    );
+
+    const link = screen.getByRole("link", { name: "install" });
+    const middleClick = new MouseEvent("auxclick", {
+      bubbles: true,
+      cancelable: true,
+      button: 1,
+    });
+    fireEvent(link, middleClick);
+
+    expect(middleClick.defaultPrevented).toBe(true);
+    expect(invoke).toHaveBeenCalledExactlyOnceWith("open_external_url", {
+      url: "https://download.fo/install",
+    });
+  });
+
   it("keeps the text of a link without an address", () => {
     render(<ModpackDescription html="<p><a>plain</a></p>" />);
 

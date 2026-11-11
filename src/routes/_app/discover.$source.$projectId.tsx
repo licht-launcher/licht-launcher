@@ -22,7 +22,12 @@ function ModpackRoute() {
           description="This link points to an unknown modpack source."
         />
       ) : (
-        <ModpackPage source={source} projectId={params.projectId} />
+        <ModpackPage
+          // Another pack starts with a fresh install form, not this one's picks.
+          key={`${source}/${params.projectId}`}
+          source={source}
+          projectId={params.projectId}
+        />
       )}
     </PageTransition>
   );
