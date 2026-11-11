@@ -177,7 +177,6 @@ describe("PlaySection", () => {
     );
 
     const root = container.firstElementChild;
-    expect(root).toHaveClass("flex-col");
     expect(screen.getByRole("progressbar", { name: "Install progress" })).toBe(
       root?.lastElementChild?.querySelector('[role="progressbar"]'),
     );

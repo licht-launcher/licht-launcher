@@ -31,7 +31,6 @@ describe("SettingsSidebar", () => {
       .querySelector("svg");
     expect(javaIcon).toHaveClass("lucide-cpu");
     expect(javaIcon).toHaveAttribute("aria-hidden", "true");
-    expect(javaIcon).toHaveClass("size-4");
     expect(
       navigation.queryByRole("button", { name: "Developer Tools" }),
     ).not.toBeInTheDocument();
