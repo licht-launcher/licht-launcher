@@ -37,9 +37,12 @@ export function useModpackSearch(
     enabled,
     queryFn: ({ pageParam }) => searchModpacks(query, pageParam, filters),
     initialPageParam: 1,
-    // Count from the page we asked for, so a reply cannot loop the list.
-    getNextPageParam: (last, _pages, lastPageParam) =>
-      lastPageParam < last.pageCount ? lastPageParam + 1 : undefined,
+    // Count from the page we asked for, so a reply cannot loop the list. A page
+    // missing a failed source counts fewer pages, so the largest count wins.
+    getNextPageParam: (_last, pages, lastPageParam) =>
+      lastPageParam < Math.max(...pages.map((page) => page.pageCount))
+        ? lastPageParam + 1
+        : undefined,
     select: (data) => ({
       items: mergeSearchPages(data.pages),
       unavailableSources: [

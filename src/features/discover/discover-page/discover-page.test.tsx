@@ -308,6 +308,26 @@ describe("Discover page", () => {
     ).toBeInTheDocument();
   });
 
+  it("keeps loading pages after one came back without a failed source", async () => {
+    mockDiscover((command, args) => {
+      if (command !== "search_modpacks") return undefined;
+      const page = pageOf(args);
+      // Page 2 misses CurseForge, so it only counts Modrinth's two pages.
+      return Promise.resolve(
+        page.page === 2
+          ? { ...page, pageCount: 2, unavailableSources: ["curseforge"] }
+          : page,
+      );
+    });
+    await renderAt("/discover");
+
+    const results = await screen.findByRole("region", { name: "Modpacks" });
+    expect(
+      await within(results).findByRole("link", { name: /Pack 3B/ }),
+    ).toBeInTheDocument();
+    expect(requestedPages()).toEqual([1, 2, 3]);
+  });
+
   it("does not show the previous results while a new search loads", async () => {
     mockDiscover((command, args) => {
       if (command !== "search_modpacks") return undefined;
