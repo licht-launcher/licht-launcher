@@ -58,7 +58,8 @@ export function formatTimeAgo(
   const elapsed = now - time;
   for (const [unit, size] of RELATIVE_UNITS) {
     if (Math.abs(elapsed) >= size) {
-      return relativeFormat.format(-Math.floor(elapsed / size), unit);
+      // Truncate toward zero, so a date ahead of the clock counts the same way.
+      return relativeFormat.format(-Math.trunc(elapsed / size), unit);
     }
   }
   return "just now";

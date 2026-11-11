@@ -1,7 +1,13 @@
 import { Link } from "@tanstack/react-router";
-import { CalendarClockIcon, DownloadIcon, PackageIcon } from "lucide-react";
+import {
+  CalendarClockIcon,
+  DownloadIcon,
+  PackageIcon,
+  StoreIcon,
+} from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { SOURCE_LABELS } from "@/features/discover/lib/discover-search";
 import {
   CATEGORY_BY_VALUE,
   LOADER_LABELS,
@@ -110,6 +116,11 @@ export function ModpackRow({
             </time>
           </span>
         )}
+        {/* The same pack can be listed by both stores; this tells them apart. */}
+        <span className={modpackRowStyles.stat}>
+          <StoreIcon aria-hidden />
+          {SOURCE_LABELS[modpack.source]}
+        </span>
       </span>
     </Link>
   );

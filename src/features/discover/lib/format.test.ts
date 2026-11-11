@@ -62,6 +62,10 @@ describe("formatTimeAgo", () => {
     expect(formatTimeAgo("2025-04-02T07:44:02.187Z", now)).toBe("last year");
   });
 
+  it("counts whole units for a date slightly ahead of the clock", () => {
+    expect(formatTimeAgo("2026-11-10T13:30:00Z", now)).toBe("in 1 hour");
+  });
+
   it("returns null when there is no readable date", () => {
     expect(formatTimeAgo(null, now)).toBeNull();
     expect(formatTimeAgo("soon", now)).toBeNull();

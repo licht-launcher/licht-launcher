@@ -32,7 +32,8 @@ describe("ModpackRow", () => {
     });
     expect(link).toHaveAttribute("href", "/discover/modrinth/1KVo5zza");
     expect(within(link).getByText("by robotkoer")).toBeInTheDocument();
-    expect(within(link).queryByText("Modrinth")).not.toBeInTheDocument();
+    // The same pack can be listed by both stores; the source tells them apart.
+    expect(within(link).getByText("Modrinth")).toBeInTheDocument();
     expect(link).toHaveTextContent("19.2M downloads");
   });
 
@@ -46,7 +47,7 @@ describe("ModpackRow", () => {
     });
     expect(within(link).queryByRole("img")).not.toBeInTheDocument();
     expect(within(link).queryByText(/^by /)).not.toBeInTheDocument();
-    expect(within(link).queryByText("CurseForge")).not.toBeInTheDocument();
+    expect(within(link).getByText("CurseForge")).toBeInTheDocument();
   });
 
   it("shows loaders, up to three categories and when it was updated", async () => {
