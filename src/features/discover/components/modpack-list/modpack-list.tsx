@@ -2,6 +2,7 @@ import {
   defaultRangeExtractor,
   type Range,
   useVirtualizer,
+  type VirtualItem,
 } from "@tanstack/react-virtual";
 import {
   type FocusEvent,
@@ -27,17 +28,33 @@ const ROW_ESTIMATE_PX = 72;
 const LOAD_AHEAD_ROWS = 5;
 const FOOTER_KEY = "load-more";
 
+type ListPosition = {
+  key: string;
+  itemCount: number;
+  offset: number;
+  measurements: VirtualItem[];
+};
+
+/**
+ * Where the last list was left. Opening a pack unmounts the list, so coming
+ * back to the same search restores this instead of starting at the top.
+ */
+let lastPosition: ListPosition | null = null;
+
 /**
  * Virtualized, endless list of search results: only the rows in view (plus a
  * few) are in the DOM, and the next page is requested before the end shows.
+ * `positionKey` names the search, so its scroll position can be restored.
  */
 export function ModpackList({
+  positionKey,
   items,
   hasMore,
   loadingMore,
   loadMoreFailed,
   onLoadMore,
 }: {
+  positionKey: string;
   items: readonly ModpackListItem[];
   hasMore: boolean;
   loadingMore: boolean;
@@ -45,6 +62,13 @@ export function ModpackList({
   onLoadMore: () => void;
 }) {
   const viewportRef = useRef<HTMLDivElement>(null);
+  // Only restore when the rows it was measured against are loaded again.
+  const [restored] = useState(() =>
+    lastPosition?.key === positionKey && items.length >= lastPosition.itemCount
+      ? lastPosition
+      : null,
+  );
+  const itemCount = useRef(items.length);
   const [focusedKey, setFocusedKey] = useState<string | null>(null);
   const keys = useMemo(() => items.map(modpackKey), [items]);
   const focusedIndex = focusedKey === null ? -1 : keys.indexOf(focusedKey);
@@ -66,8 +90,26 @@ export function ModpackList({
     getItemKey: (index) => keys[index] ?? FOOTER_KEY,
     rangeExtractor,
     overscan: 4,
+    initialOffset: restored?.offset ?? 0,
+    initialMeasurementsCache: restored?.measurements ?? [],
   });
   const rows = virtualizer.getVirtualItems();
+
+  useEffect(() => {
+    itemCount.current = items.length;
+  }, [items.length]);
+
+  useEffect(
+    () => () => {
+      lastPosition = {
+        key: positionKey,
+        itemCount: itemCount.current,
+        offset: virtualizer.scrollOffset ?? 0,
+        measurements: virtualizer.takeSnapshot(),
+      };
+    },
+    [positionKey, virtualizer],
+  );
   const lastRendered = rows.at(-1)?.index ?? -1;
 
   useEffect(() => {

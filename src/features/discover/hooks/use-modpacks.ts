@@ -1,8 +1,4 @@
-import {
-  keepPreviousData,
-  useInfiniteQuery,
-  useQuery,
-} from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 
 import {
   getModpack,
@@ -30,7 +26,9 @@ export function useModpackSearch(query: string, filters: ModpackSearchFilters) {
       lastPageParam < last.pageCount ? lastPageParam + 1 : undefined,
     select: (data) => mergeSearchPages(data.pages),
     staleTime: SEARCH_STALE_TIME_MS,
-    placeholderData: keepPreviousData,
+    // A refetch reloads every loaded page in turn, two APIs each; a new
+    // search or a remount after `staleTime` is enough to refresh results.
+    refetchOnWindowFocus: false,
   });
 }
 

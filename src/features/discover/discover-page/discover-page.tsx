@@ -32,6 +32,7 @@ export function DiscoverPage({
   onFiltersChange: (filters: ModpackSearchFilters) => void;
 }) {
   const search = useModpackSearch(query, filters);
+  const listKey = JSON.stringify([query, filters]);
   const { fetchNextPage } = search;
   // Calls while a page is loading are ignored instead of restarting it.
   const loadMore = useCallback(
@@ -90,7 +91,8 @@ export function DiscoverPage({
           ) : (
             <ModpackList
               // A new search starts at the top of a fresh list.
-              key={JSON.stringify([query, filters])}
+              key={listKey}
+              positionKey={listKey}
               items={search.data}
               hasMore={search.hasNextPage}
               loadingMore={search.isFetchingNextPage}

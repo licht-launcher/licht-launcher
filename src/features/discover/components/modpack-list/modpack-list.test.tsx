@@ -6,7 +6,7 @@ import {
 } from "@tanstack/react-router";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import type { ComponentProps } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { ModpackList } from "@/features/discover/components/modpack-list";
 import { mockListLayout } from "@/features/discover/fixtures/list-layout";
@@ -24,6 +24,7 @@ async function renderList(props: Partial<Props> = {}) {
     routeTree: createRootRoute({
       component: () => (
         <ModpackList
+          positionKey="search"
           items={items}
           hasMore={false}
           loadingMore={false}
@@ -40,9 +41,64 @@ async function renderList(props: Partial<Props> = {}) {
   return onLoadMore;
 }
 
+const manyItems = Array.from({ length: 30 }, (_, index) =>
+  modpackListItem({ id: `m${index}`, name: `Many ${index}` }),
+);
+
+async function renderManyAt(positionKey: string) {
+  const router = createRouter({
+    routeTree: createRootRoute({
+      component: () => (
+        <ModpackList
+          positionKey={positionKey}
+          items={manyItems}
+          hasMore={false}
+          loadingMore={false}
+          loadMoreFailed={false}
+          onLoadMore={vi.fn()}
+        />
+      ),
+    }),
+    history: createMemoryHistory({ initialEntries: ["/discover"] }),
+  });
+  const view = render(<RouterProvider router={router} />);
+  // Any row: a restored list does not start at the first one.
+  await screen.findAllByRole("link", { name: /Many \d+/ });
+  const viewport = view.container.querySelector<HTMLElement>(
+    '[data-slot="scroll-area-viewport"]',
+  );
+  if (viewport === null) throw new Error("no scroll viewport");
+  return { viewport, unmount: view.unmount };
+}
+
 describe("ModpackList", () => {
   beforeEach(() => {
     mockListLayout();
+    // jsdom has no element scrolling; record where the list asks to scroll.
+    Object.defineProperty(HTMLElement.prototype, "scrollTo", {
+      configurable: true,
+      writable: true,
+      value(this: HTMLElement, options?: ScrollToOptions) {
+        if (options?.top !== undefined) this.scrollTop = options.top;
+      },
+    });
+    onTestFinished(() => {
+      Reflect.deleteProperty(HTMLElement.prototype, "scrollTo");
+    });
+  });
+
+  it("comes back to where the same search was left", async () => {
+    const first = await renderManyAt("search:magic");
+    first.viewport.scrollTop = 900;
+    fireEvent.scroll(first.viewport);
+    first.unmount();
+
+    const again = await renderManyAt("search:magic");
+    expect(again.viewport.scrollTop).toBe(900);
+    again.unmount();
+
+    const other = await renderManyAt("search:tech");
+    expect(other.viewport.scrollTop).toBe(0);
   });
 
   it("lists every result with its position", async () => {

@@ -1,5 +1,12 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { focusManager } from "@tanstack/react-query";
+import {
+  act,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { mockListLayout } from "@/features/discover/fixtures/list-layout";
 import {
@@ -241,6 +248,53 @@ describe("Discover page", () => {
         loader: "quilt",
       }),
     );
+  });
+
+  it("does not show the previous results while a new search loads", async () => {
+    mockContextMenuCommands((command, args) => {
+      if (command !== "search_modpacks") return undefined;
+      const filters =
+        args !== null && typeof args === "object" && "filters" in args
+          ? (args.filters as { category: string | null })
+          : { category: null };
+      // The filtered search never answers, so it stays loading.
+      return filters.category === null
+        ? Promise.resolve(modpackSearchPage({ pageCount: 1 }))
+        : new Promise(() => {});
+    });
+    await renderAt("/discover");
+
+    const results = await screen.findByRole("region", { name: "Modpacks" });
+    await within(results).findByRole("link", { name: /Fabulously Optimized/ });
+    fireEvent.click(screen.getByRole("button", { name: "Magic" }));
+
+    await waitFor(() =>
+      expect(
+        within(results).queryByRole("link", { name: /Fabulously Optimized/ }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(results).toHaveAttribute("aria-busy", "true");
+  });
+
+  it("does not reload every loaded page when the window regains focus", async () => {
+    mockSearch(() => Promise.resolve(modpackSearchPage({ pageCount: 1 })));
+    await renderAt("/discover");
+    await screen.findByRole("link", { name: /Fabulously Optimized/ });
+    const before = searchCalls().length;
+    // Only Date is faked: the results are now older than their fresh window.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    onTestFinished(() => {
+      vi.useRealTimers();
+    });
+    vi.setSystemTime(Date.now() + 60 * 60_000);
+
+    act(() => {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(searchCalls()).toHaveLength(before);
   });
 
   it("explains when nothing matches", async () => {
