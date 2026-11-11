@@ -15,7 +15,15 @@ pub use loader::apply_mrpack_loader;
 pub const MODPACK_INDEX_FILE: &str = "licht-modpack.json";
 
 /// Files at the instance root that a pack must never overwrite.
-const PROTECTED_ROOT_NAMES: [&str; 3] = ["instance.json", ".instance.json.tmp", MODPACK_INDEX_FILE];
+///
+/// The legacy CurseForge index is included so a Modrinth pack cannot plant one
+/// that the CurseForge installer would later import.
+const PROTECTED_ROOT_NAMES: [&str; 4] = [
+    "instance.json",
+    ".instance.json.tmp",
+    MODPACK_INDEX_FILE,
+    super::CURSEFORGE_INDEX_FILE,
+];
 pub(crate) use import::import_mrpack_into;
 pub(crate) use install::mrpack_download_client;
 pub(crate) use loader::apply_mrpack_loader_with_context;

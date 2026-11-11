@@ -3,9 +3,10 @@ use std::path::Path;
 
 use super::index::MRPACK_DOWNLOAD_HOSTS;
 use crate::modpacks::file_hashes::{ensure_sha512, prepare_download};
+use crate::modpacks::path_safety::instance_key;
 use crate::modpacks::secure_download::allowlisted_download_client;
 use crate::transfer::verification::VerificationProgress;
-use crate::{CoreError, Result, SharedCache};
+use crate::{Result, SharedCache};
 use reqwest::Client;
 
 /// Downloads every client-required file from the stored Modrinth index into the instance.
@@ -43,11 +44,7 @@ async fn install_files(
     let progress = progress
         .component(crate::DownloadComponent::Modpack)
         .with_size_hints();
-    let instances = instance_dir.parent().ok_or(CoreError::CachePath)?;
-    let folder = instance_dir
-        .file_name()
-        .and_then(|name| name.to_str())
-        .ok_or(CoreError::InstanceName)?;
+    let (instances, folder) = instance_key(instance_dir)?;
     if database.modpack_header(instances, folder).await?.is_none() {
         return Ok(());
     }
@@ -111,6 +108,7 @@ pub(crate) fn mrpack_download_client() -> Result<Client> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::CoreError;
     use sha2::{Digest, Sha512};
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 

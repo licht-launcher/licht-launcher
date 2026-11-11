@@ -192,6 +192,10 @@ pub enum CoreError {
     CurseforgeFileMissing { file_id: u64 },
     #[error("modpack archive is invalid")]
     ModpackArchive,
+    #[error(
+        "the instance's licht-curseforge.json from an older Licht version is invalid; reinstall the modpack or delete that file"
+    )]
+    CurseforgeLegacyIndex(#[source] Box<CoreError>),
 }
 
 #[cfg(test)]

@@ -1,7 +1,7 @@
 //! Modpack discovery (Modrinth / CurseForge) and `.mrpack` import.
 
 mod archive;
-mod curseforge;
+pub(crate) mod curseforge;
 mod description;
 mod discovery;
 mod file_hashes;
