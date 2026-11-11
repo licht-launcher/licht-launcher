@@ -196,6 +196,10 @@ pub enum CoreError {
         "the instance's licht-curseforge.json from an older Licht version is invalid; reinstall the modpack or delete that file"
     )]
     CurseforgeLegacyIndex(#[source] Box<CoreError>),
+    #[error(
+        "the instance's licht-modpack.json from an older Licht version is invalid; reinstall the modpack or delete that file"
+    )]
+    ModrinthLegacyIndex(#[source] Box<CoreError>),
 }
 
 #[cfg(test)]
