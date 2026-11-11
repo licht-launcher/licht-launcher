@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   modpackDetails,
+  modpackSearchPage,
   modpackVersions,
 } from "@/features/discover/fixtures/modpacks";
 import {
@@ -19,6 +20,10 @@ function mockModpack(details: () => Promise<unknown>) {
       return Promise.resolve(modpackVersions());
     }
     if (command === "open_external_url") return Promise.resolve();
+    // Going back to the store list searches as soon as the list renders.
+    if (command === "search_modpacks") {
+      return Promise.resolve(modpackSearchPage());
+    }
     return undefined;
   });
 }
