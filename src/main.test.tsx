@@ -8,6 +8,13 @@ vi.mock("@tauri-apps/api/window", () => ({
   }),
 }));
 
+// The route tree is irrelevant to startup errors, and importing it here would
+// load every screen inside this test's timeout.
+vi.mock("./routeTree.gen", async () => {
+  const { createRootRoute } = await import("@tanstack/react-router");
+  return { routeTree: createRootRoute() };
+});
+
 describe("frontend startup", () => {
   beforeEach(() => {
     vi.resetModules();

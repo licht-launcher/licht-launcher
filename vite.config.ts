@@ -34,7 +34,9 @@ export default defineConfig({
   plugins: [
     tanstackRouter({
       target: "react",
-      autoCodeSplitting: true,
+      // Under Vitest, lazy route chunks would load inside the first test of
+      // each file and count against its timeout.
+      autoCodeSplitting: !process.env.VITEST,
       quoteStyle: "double",
       semicolons: true,
     }),

@@ -1,6 +1,7 @@
 import type { TestingLibraryMatchers } from "@testing-library/jest-dom/matchers";
 import * as matchers from "@testing-library/jest-dom/matchers";
 import { cleanup } from "@testing-library/react";
+import "sonner";
 import { afterEach, expect } from "vitest";
 
 // The jest-dom Vitest adapter still declares the pre-Vitest 5 Assertion interface.
@@ -9,6 +10,13 @@ declare module "vitest" {
 }
 
 expect.extend(matchers);
+
+// Sonner injects its stylesheet on import, unlike the app CSS that Vitest skips.
+// jsdom matches every rule against an element and its ancestors on each
+// getComputedStyle call, which made role queries in full-app tests CPU-bound.
+for (const style of document.head.querySelectorAll("style")) {
+  if (style.textContent?.includes("[data-sonner-toaster]")) style.remove();
+}
 
 class ResizeObserverStub implements ResizeObserver {
   observe() {}
