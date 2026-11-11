@@ -494,6 +494,26 @@ async fn modpack_cancellation_removes_new_indexes_but_preserves_repair_indexes()
             .replace_modpack(&instances, &instance.folder, stored)
             .await
             .expect("store");
+        fixture
+            .database()
+            .replace_curseforge_files(
+                &instances,
+                &instance.folder,
+                vec![crate::modpacks::curseforge::storage::StoredCurseforgeFile {
+                    relative_path: "mods/a.jar".into(),
+                    url: "https://edge.forgecdn.net/files/1/2/a.jar".into(),
+                    sha1: None,
+                    md5: Some("5eb63bbbe01eeed093cb22bb8f5acdc3".into()),
+                    size: 11,
+                    project_id: 1,
+                    file_id: 2,
+                    file_name: "a.jar".into(),
+                    name: "A".into(),
+                    required: true,
+                }],
+            )
+            .await
+            .expect("store CurseForge files");
         let job = manager
             .start(&instance.folder, operation)
             .await
@@ -524,6 +544,15 @@ async fn modpack_cancellation_removes_new_indexes_but_preserves_repair_indexes()
                 .await
                 .expect("index")
                 .is_some(),
+            preserved
+        );
+        assert_eq!(
+            !fixture
+                .database()
+                .curseforge_files(&instances, &instance.folder)
+                .await
+                .expect("CurseForge files")
+                .is_empty(),
             preserved
         );
     }

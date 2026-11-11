@@ -80,7 +80,7 @@ async fn version_nine_downloads_gain_a_persistent_fifo_order_without_losing_stat
     .expect("second");
     database.close().await;
     let mut connection = open_migrated(&cache).await.expect("legacy fixture");
-    sqlx::raw_sql("DROP TABLE settings; DROP INDEX download_jobs_queue; ALTER TABLE download_jobs DROP COLUMN queue_order; PRAGMA user_version = 9;")
+    sqlx::raw_sql("DROP TABLE settings; DROP INDEX download_jobs_queue; ALTER TABLE download_jobs DROP COLUMN queue_order; DROP TABLE curseforge_files; PRAGMA user_version = 9;")
         .execute(&mut connection).await.expect("version nine schema");
     connection.close().await.expect("close legacy");
     let mut migrated = open_migrated(&cache).await.expect("migrate queue");
@@ -143,7 +143,7 @@ async fn concurrent_first_opens_share_a_complete_migrated_schema() {
     futures_util::future::join_all((0..4).map(|_| async {
         barrier.wait().await;
         let mut connection = open_migrated(&cache).await.expect("concurrent open");
-        assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 12);
+        assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 13);
         assert_eq!(scalar(&mut connection, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('meta', 'download_jobs', 'download_job_artifacts')").await, 3);
         assert_artifact_path_lookup_is_indexed(&mut connection).await;
         connection.close().await.expect("close");
@@ -223,7 +223,7 @@ async fn a_version_one_database_gains_download_jobs_without_losing_existing_meta
         stored_last_played(&cache).await.expect("metadata"),
         Some("survival".into())
     );
-    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 12);
+    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 13);
     connection.close().await.expect("close");
 }
 
@@ -231,15 +231,15 @@ async fn a_version_one_database_gains_download_jobs_without_losing_existing_meta
 async fn a_newer_database_schema_is_rejected_without_downgrading_it() {
     let cache = cache("future-schema");
     let mut connection = raw_database(&cache).await;
-    sqlx::query("PRAGMA user_version = 13")
+    sqlx::query("PRAGMA user_version = 14")
         .execute(&mut connection)
         .await
         .expect("future schema");
     assert!(matches!(
         open_migrated(&cache).await,
-        Err(CoreError::DatabaseSchema { schema: 13 })
+        Err(CoreError::DatabaseSchema { schema: 14 })
     ));
-    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 13);
+    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 14);
     let journal: String = sqlx::query_scalar("PRAGMA journal_mode")
         .fetch_one(&mut connection)
         .await
@@ -356,7 +356,7 @@ async fn version_three_gains_indexed_artifact_lookup_without_changing_stored_dat
     connection.close().await.expect("close");
     let mut connection = open_migrated(&cache).await.expect("migrate");
     assert_artifact_path_lookup_is_indexed(&mut connection).await;
-    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 12);
+    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 13);
     let associations: Vec<(i64, String)> =
         sqlx::query_as("SELECT job_id, path FROM download_job_artifacts ORDER BY path")
             .fetch_all(&mut connection)
@@ -413,7 +413,7 @@ async fn version_four_gains_content_fingerprints_without_losing_metadata() {
 
     for _ in 0..2 {
         let mut connection = open_migrated(&cache).await.expect("open migrated database");
-        assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 12);
+        assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 13);
         assert_eq!(
             scalar(&mut connection, "SELECT COUNT(*) FROM content_fingerprints").await,
             0
@@ -432,7 +432,7 @@ async fn version_four_gains_content_fingerprints_without_losing_metadata() {
 async fn version_five_gains_modpack_tables_and_preserves_fingerprints() {
     let cache = cache("version-five-modpacks");
     let mut connection = open_migrated(&cache).await.expect("database");
-    sqlx::raw_sql("DROP TABLE settings; DROP TABLE native_outputs; DROP TABLE native_generations; DROP TABLE download_job_checkpoints; DROP TABLE instances; DROP TABLE modpack_files; DROP TABLE modpack_dependencies; DROP TABLE modpack_indexes; PRAGMA user_version = 5;
+    sqlx::raw_sql("DROP TABLE settings; DROP TABLE native_outputs; DROP TABLE native_generations; DROP TABLE download_job_checkpoints; DROP TABLE instances; DROP TABLE modpack_files; DROP TABLE modpack_dependencies; DROP TABLE modpack_indexes; DROP TABLE curseforge_files; PRAGMA user_version = 5;
         INSERT INTO meta VALUES ('fixture', 'preserved');")
         .execute(&mut connection).await.expect("version five fixture");
     sqlx::query(
@@ -444,7 +444,7 @@ async fn version_five_gains_modpack_tables_and_preserves_fingerprints() {
     .expect("fingerprint");
     connection.close().await.expect("close");
     let mut connection = open_migrated(&cache).await.expect("migrate");
-    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 12);
+    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 13);
     assert_eq!(scalar(&mut connection, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('modpack_indexes', 'modpack_dependencies', 'modpack_files')").await, 3);
     assert_eq!(scalar(&mut connection, "SELECT COUNT(*) FROM content_fingerprints WHERE instance_folder = 'First' AND relative_path = 'mods/a.jar' AND size = 10").await, 1);
     let value: String = sqlx::query_scalar("SELECT value FROM meta WHERE key = 'fixture'")
@@ -459,11 +459,11 @@ async fn version_five_gains_modpack_tables_and_preserves_fingerprints() {
 async fn version_seven_adds_empty_checkpoints_without_marking_old_jobs_complete() {
     let cache = cache("version-seven-checkpoints");
     let mut connection = open_migrated(&cache).await.expect("database");
-    sqlx::raw_sql("DROP TABLE settings; DROP TABLE native_outputs; DROP TABLE native_generations; DROP TABLE download_job_checkpoints; INSERT INTO meta VALUES ('fixture', 'preserved'); PRAGMA user_version = 7;")
+    sqlx::raw_sql("DROP TABLE settings; DROP TABLE native_outputs; DROP TABLE native_generations; DROP TABLE download_job_checkpoints; INSERT INTO meta VALUES ('fixture', 'preserved'); DROP TABLE curseforge_files; PRAGMA user_version = 7;")
         .execute(&mut connection).await.expect("version seven fixture");
     connection.close().await.expect("close");
     let mut connection = open_migrated(&cache).await.expect("upgrade");
-    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 12);
+    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 13);
     assert_eq!(
         scalar(
             &mut connection,
@@ -484,11 +484,11 @@ async fn version_seven_adds_empty_checkpoints_without_marking_old_jobs_complete(
 async fn version_eight_adds_native_cache_tables_without_changing_existing_data() {
     let cache = cache("version-eight-native-cache");
     let mut connection = open_migrated(&cache).await.expect("database");
-    sqlx::raw_sql("DROP TABLE settings; DROP TABLE native_outputs; DROP TABLE native_generations; INSERT INTO meta VALUES ('native-fixture', 'preserved'); PRAGMA user_version = 8;")
+    sqlx::raw_sql("DROP TABLE settings; DROP TABLE native_outputs; DROP TABLE native_generations; INSERT INTO meta VALUES ('native-fixture', 'preserved'); DROP TABLE curseforge_files; PRAGMA user_version = 8;")
         .execute(&mut connection).await.expect("version eight fixture");
     connection.close().await.expect("close");
     let mut connection = open_migrated(&cache).await.expect("upgrade");
-    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 12);
+    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 13);
     assert_eq!(
         scalar(&mut connection, "SELECT COUNT(*) FROM native_generations").await,
         0
@@ -529,6 +529,7 @@ async fn version_eleven_gains_content_roots_and_drops_the_old_move_checkpoint() 
         INSERT INTO settings VALUES (1, 'Alex', 0, 854, 480, 2048, '[]', NULL, NULL, NULL, NULL, 4, 8, NULL, 0);
         INSERT INTO meta VALUES ('content_directory_state', '{\"active\":\"/old/data\",\"pending\":null}');
         INSERT INTO meta VALUES ('settings-fixture', 'preserved');
+        DROP TABLE curseforge_files;
         PRAGMA user_version = 11;",
     )
     .execute(&mut connection)
@@ -536,7 +537,7 @@ async fn version_eleven_gains_content_roots_and_drops_the_old_move_checkpoint() 
     .expect("version eleven fixture");
     connection.close().await.expect("close");
     let mut connection = open_migrated(&cache).await.expect("upgrade");
-    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 12);
+    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 13);
     let row: (
         String,
         i64,
@@ -572,6 +573,48 @@ async fn version_eleven_gains_content_roots_and_drops_the_old_move_checkpoint() 
 }
 
 #[tokio::test]
+async fn version_twelve_gains_curseforge_files_and_preserves_modpack_indexes() {
+    let cache = cache("version-twelve-curseforge");
+    let mut connection = open_migrated(&cache).await.expect("database");
+    sqlx::raw_sql(
+        "DROP TABLE curseforge_files;
+        INSERT INTO modpack_indexes (instances_directory, instance_folder, name) VALUES ('/data/instances', 'Pack', 'Fixture');
+        PRAGMA user_version = 12;",
+    )
+    .execute(&mut connection)
+    .await
+    .expect("version twelve fixture");
+    connection.close().await.expect("close");
+    let mut connection = open_migrated(&cache).await.expect("upgrade");
+    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 13);
+    assert_eq!(
+        scalar(&mut connection, "SELECT COUNT(*) FROM curseforge_files").await,
+        0
+    );
+    assert_eq!(
+        scalar(&mut connection, "SELECT COUNT(*) FROM modpack_indexes").await,
+        1
+    );
+    let insert = |sha1: Option<&'static str>, md5: Option<&'static str>| {
+        sqlx::query(
+            "INSERT INTO curseforge_files VALUES ('/data/instances', 'Pack', 0, 'mods/a.jar',
+                'https://edge.forgecdn.net/files/1/2/a.jar', ?1, ?2, 11, 1, 2, 'a.jar', 'A', 1)",
+        )
+        .bind(sha1)
+        .bind(md5)
+    };
+    assert!(
+        insert(None, None).execute(&mut connection).await.is_err(),
+        "a file needs SHA1 or MD5"
+    );
+    insert(None, Some("5eb63bbbe01eeed093cb22bb8f5acdc3"))
+        .execute(&mut connection)
+        .await
+        .expect("MD5 alone is enough");
+    connection.close().await.expect("close");
+}
+
+#[tokio::test]
 async fn a_copied_move_needs_a_destination() {
     let cache = cache("copied-needs-destination");
     let mut connection = open_migrated(&cache).await.expect("database");
@@ -596,11 +639,11 @@ async fn a_copied_move_needs_a_destination() {
 async fn version_ten_adds_an_empty_settings_table_without_changing_existing_data() {
     let cache = cache("version-ten-settings");
     let mut connection = open_migrated(&cache).await.expect("database");
-    sqlx::raw_sql("DROP TABLE settings; INSERT INTO meta VALUES ('settings-fixture', 'preserved'); PRAGMA user_version = 10;")
+    sqlx::raw_sql("DROP TABLE settings; INSERT INTO meta VALUES ('settings-fixture', 'preserved'); DROP TABLE curseforge_files; PRAGMA user_version = 10;")
         .execute(&mut connection).await.expect("version ten fixture");
     connection.close().await.expect("close");
     let mut connection = open_migrated(&cache).await.expect("upgrade");
-    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 12);
+    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 13);
     assert_eq!(
         scalar(&mut connection, "SELECT COUNT(*) FROM settings").await,
         0

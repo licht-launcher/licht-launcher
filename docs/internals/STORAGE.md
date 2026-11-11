@@ -106,7 +106,7 @@ accepted requests, and awaits dispatcher and connection closure. Dropping the
 service owner signals shutdown, but explicit shutdown is needed to await it and
 receive close errors.
 
-The database uses schema version 7 and a five-second busy timeout. Up-to-date
+The database uses schema version 13 and a five-second busy timeout. Up-to-date
 schema checks avoid a writer transaction; migrations recheck the version inside
 their transaction. Standalone persistence functions also use SQLx repositories
 and explicitly close their short-lived connections.
@@ -129,6 +129,23 @@ imported nor removed, and folders without a SQLite profile are not automatically
 registered. The CLI can still launch an unregistered game directory using global
 settings. Legacy game-directory behavior is described in
 [Compatibility](COMPATIBILITY.md#launchwrapper-game-directory).
+
+### Modpack indexes
+
+Resolved pack files are keyed by `(instances_directory, instance_folder)`, like
+instance profiles. Modrinth packs use `modpack_indexes`, `modpack_dependencies` and
+`modpack_files` (SHA1 and SHA512 required). CurseForge packs use `curseforge_files`:
+one ordered row per file with the CDN URL, an optional SHA1 and MD5 (at least one is
+required), size, project and file ids, names and the `required` flag.
+
+Deleting or duplicating an instance deletes or copies both kinds of rows, and a
+content-directory move rewrites their `instances_directory`. Starting a new install
+clears them before the pack is imported again.
+
+Builds up to v0.2.3 kept these lists in the instance folder. A leftover
+`licht-curseforge.json` is imported into `curseforge_files` the next time the pack
+files are installed or repaired, then removed; an invalid file fails that job and is
+kept. Leftover `licht-modpack.json` files are not imported.
 
 ## Verification
 

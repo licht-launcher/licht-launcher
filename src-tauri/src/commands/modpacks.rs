@@ -111,7 +111,7 @@ pub async fn install_modpack_files(
     let installing = tauri::async_runtime::spawn(async move {
         install_mrpack_files(&database, &cache, &settings, &dir, progress.clone()).await?;
         // CurseForge uses its own allowlisted client (forgecdn hosts).
-        install_curseforge_files(&cache, &settings, &dir, progress).await
+        install_curseforge_files(&database, &cache, &settings, &dir, progress).await
     });
     let mut throttle = ProgressThrottle::new();
     while let Some(progress) = incoming.recv().await {

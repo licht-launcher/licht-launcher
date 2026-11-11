@@ -142,8 +142,14 @@ pub(crate) fn execute(
                 context.clone(),
             )
             .await?;
-            install_curseforge_files(&runtime.game, &runtime.settings, &dir, context.clone())
-                .await?;
+            install_curseforge_files(
+                &runtime.database,
+                &runtime.game,
+                &runtime.settings,
+                &dir,
+                context.clone(),
+            )
+            .await?;
             context.checkpoint().await?;
             runtime
                 .database

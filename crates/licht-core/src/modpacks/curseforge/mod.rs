@@ -3,6 +3,7 @@
 mod api;
 mod cdn;
 mod install;
+pub(crate) mod storage;
 
 use reqwest::Client;
 use serde_json::Value;
@@ -22,7 +23,7 @@ const CLASS_ID: &str = "4471";
 
 pub const CURSEFORGE_API_KEY_ENV: &str = "LICHT_CURSEFORGE_API_KEY";
 
-/// Resolved CurseForge files for one instance, parallel to `licht-modpack.json`.
+/// Legacy per-instance list of resolved CurseForge files, imported into SQLite on first use.
 pub const CURSEFORGE_INDEX_FILE: &str = "licht-curseforge.json";
 
 pub fn curseforge_api_key() -> Result<String> {

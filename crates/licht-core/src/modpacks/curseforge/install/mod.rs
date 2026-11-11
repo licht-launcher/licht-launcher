@@ -10,11 +10,12 @@ use std::path::Path;
 
 use reqwest::Client;
 
-use self::index::{CurseforgeIndex, pending_task, write_index};
+use self::index::{legacy_files, pending_task, stored_files};
 use self::manifest::{Manifest, manifest_from_zip};
 use self::overrides::{extract_override_files, list_override_files, override_prefixes};
 use self::plan::{Plan, format_blocked, resolve_plan};
 use super::cdn::cdn_client;
+use super::storage::StoredCurseforgeFile;
 use super::{CURSEFORGE_INDEX_FILE, curseforge_api_key};
 use crate::instance::InstanceEntry;
 use crate::modpacks::MODPACK_INDEX_FILE;
@@ -30,28 +31,36 @@ const PROTECTED_ROOT_NAMES: [&str; 4] = [
     CURSEFORGE_INDEX_FILE,
 ];
 
-/// Downloads files recorded in [`CURSEFORGE_INDEX_FILE`].
+/// Downloads every file from the stored CurseForge index into the instance.
 ///
-/// No-op when the index is missing. Each request and redirect must be HTTPS on
-/// a CurseForge CDN host. The API key is a default header on that client, not
-/// part of the stored URL.
+/// No-op when no files are stored. A legacy [`CURSEFORGE_INDEX_FILE`] is
+/// imported into SQLite first and then removed. Each request and redirect must
+/// be HTTPS on a CurseForge CDN host. The API key is a default header on that
+/// client, not part of the stored URL.
 pub async fn install_curseforge_files(
+    database: &crate::DatabaseClient,
     game: &SharedCache,
     settings: &crate::Database,
     instance_dir: &Path,
     progress: impl Into<crate::InstallationContext>,
 ) -> Result<()> {
     let progress = progress.into().component(crate::DownloadComponent::Modpack);
-    let index_path = instance_dir.join(CURSEFORGE_INDEX_FILE);
-    if !index_path.is_file() {
+    let instances = instance_dir.parent().ok_or(CoreError::CachePath)?;
+    let folder = instance_dir
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or(CoreError::InstanceName)?;
+    let mut files = database.curseforge_files(instances, folder).await?;
+    if files.is_empty() {
+        files = import_legacy_index(database, instances, folder, instance_dir).await?;
+    }
+    if files.is_empty() {
         return Ok(());
     }
     progress.stage(crate::DownloadPhase::Verifying).await?;
-    let body = fs::read_to_string(&index_path)?;
-    let index: CurseforgeIndex = serde_json::from_str(&body).map_err(CoreError::LoaderJson)?;
-    let mut verification = VerificationProgress::start(&progress, index.files.len()).await?;
+    let mut verification = VerificationProgress::start(&progress, files.len()).await?;
     let mut pending = Vec::new();
-    for file in &index.files {
+    for file in &files {
         if let Some(item) = pending_task(file, instance_dir)? {
             pending.push(item);
         }
@@ -93,6 +102,30 @@ pub async fn install_curseforge_files(
         verification.checked().await?;
     }
     Ok(())
+}
+
+/// Moves a v0.2.x `licht-curseforge.json` into SQLite. An invalid file is kept.
+async fn import_legacy_index(
+    database: &crate::DatabaseClient,
+    instances: &Path,
+    folder: &str,
+    instance_dir: &Path,
+) -> Result<Vec<StoredCurseforgeFile>> {
+    let path = instance_dir.join(CURSEFORGE_INDEX_FILE);
+    let body = match fs::read_to_string(&path) {
+        Ok(body) => body,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => return Err(error.into()),
+    };
+    let files = legacy_files(&body)?;
+    database
+        .replace_curseforge_files(instances, folder, files.clone())
+        .await?;
+    // SQLite is now the source of truth, so a leftover file is never read again.
+    if let Err(error) = fs::remove_file(&path) {
+        tracing::warn!(%error, "could not remove an imported CurseForge index file");
+    }
+    Ok(files)
 }
 
 pub(crate) async fn import_curseforge_into(
@@ -153,7 +186,9 @@ async fn import_planned(
     let entries = list_override_files(bytes, &prefixes)?;
     let instance_dir = instances_dir.join(&entry.folder);
     extract_override_files(bytes, &instance_dir, &entries)?;
-    write_index(&instance_dir, plan)?;
+    database
+        .replace_curseforge_files(instances_dir, &entry.folder, stored_files(plan)?)
+        .await?;
     crate::update_instance_version(
         database,
         instances_dir,
@@ -165,12 +200,10 @@ async fn import_planned(
 
 #[cfg(test)]
 mod tests {
-    use super::index::{IndexFile, IndexHashes};
     use super::plan::{BlockedMod, PlannedFile};
     use super::test_support::{temp_dir, zip_with};
     use super::*;
     use crate::{GlobalLaunch, InstanceSource, ModpackSource, create_pending_instance};
-    use serde_json::Value;
     use tokio::sync::mpsc;
 
     const SHA1: &str = "2aae6c35c94fcfb415dbe95f408b9ce91ee846ed";
@@ -238,20 +271,26 @@ mod tests {
         let profile = crate::load_instance(&service.client(), &dir).await.unwrap();
         assert_eq!(profile.name, pending.name);
         assert!(!dir.join("instance.json").exists());
-        let index: Value =
-            serde_json::from_str(&fs::read_to_string(dir.join(CURSEFORGE_INDEX_FILE)).unwrap())
-                .unwrap();
-        assert_eq!(index["source"], "curseforge");
-        assert_eq!(index["files"][0]["path"], "mods/sodium.jar");
+        assert!(!dir.join(CURSEFORGE_INDEX_FILE).exists());
         assert_eq!(
-            index["files"][0]["downloads"][0],
-            "https://edge.forgecdn.net/files/1/2/sodium.jar"
+            service
+                .client()
+                .curseforge_files(&instances, &entry.folder)
+                .await
+                .expect("stored files"),
+            [StoredCurseforgeFile {
+                relative_path: "mods/sodium.jar".into(),
+                url: "https://edge.forgecdn.net/files/1/2/sodium.jar".into(),
+                sha1: Some("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".into()),
+                md5: None,
+                size: 10,
+                project_id: 7,
+                file_id: 8,
+                file_name: "sodium.jar".into(),
+                name: "Sodium".into(),
+                required: true,
+            }]
         );
-        assert_eq!(
-            index["files"][0]["hashes"]["sha1"],
-            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-        );
-        assert!(index["files"][0]["hashes"].get("md5").is_none());
         service.shutdown().await.expect("shutdown");
         let _ = fs::remove_dir_all(&root);
     }
@@ -310,10 +349,12 @@ mod tests {
             profile
         );
         assert!(
-            !instances
-                .join(&pending.folder)
-                .join(CURSEFORGE_INDEX_FILE)
-                .exists()
+            service
+                .client()
+                .curseforge_files(&instances, &pending.folder)
+                .await
+                .expect("stored files")
+                .is_empty()
         );
         service.shutdown().await.expect("shutdown");
         let _ = fs::remove_dir_all(&root);
@@ -377,35 +418,128 @@ mod tests {
         let mods = instance.join("mods");
         fs::create_dir_all(&mods).unwrap();
         fs::write(mods.join("a.jar"), b"hello world").unwrap();
-        let index = CurseforgeIndex {
-            source: "curseforge".into(),
-            files: vec![IndexFile {
-                path: "mods/a.jar".into(),
-                downloads: vec!["https://edge.forgecdn.net/files/1/2/a.jar".into()],
-                hashes: IndexHashes {
+        let service =
+            crate::DatabaseService::start(crate::Database::open(&cache).await.expect("database"))
+                .await
+                .expect("database");
+        service
+            .client()
+            .replace_curseforge_files(
+                &root,
+                "instance",
+                vec![StoredCurseforgeFile {
+                    relative_path: "mods/a.jar".into(),
+                    url: "https://edge.forgecdn.net/files/1/2/a.jar".into(),
                     sha1: Some(SHA1.into()),
                     md5: Some(MD5.into()),
-                },
-                file_size: 11,
-                project_id: 1,
-                file_id: 2,
-                file_name: "a.jar".into(),
-                name: "A".into(),
-                required: true,
-            }],
-        };
-        fs::write(
-            instance.join(CURSEFORGE_INDEX_FILE),
-            serde_json::to_string(&index).unwrap(),
-        )
-        .unwrap();
-        let (progress, _incoming) = mpsc::channel(4);
-        let settings = crate::Database::open(&cache).await.expect("database");
-        let installed = install_curseforge_files(&cache, &settings, &instance, progress).await;
-        settings.close().await;
+                    size: 11,
+                    project_id: 1,
+                    file_id: 2,
+                    file_name: "a.jar".into(),
+                    name: "A".into(),
+                    required: true,
+                }],
+            )
+            .await
+            .expect("stored files");
+        let installed = install_cached(&service.client(), &cache, &instance).await;
+        service.shutdown().await.expect("shutdown");
         installed.expect("cached file should not be downloaded");
         assert_eq!(fs::read(mods.join("a.jar")).unwrap(), b"hello world");
         let _ = fs::remove_dir_all(&root);
+    }
+
+    #[tokio::test]
+    async fn imports_a_legacy_index_into_sqlite_and_removes_the_file() {
+        let root = temp_dir("legacy");
+        let cache = SharedCache::at(root.join("cache"));
+        let instance = root.join("instance");
+        for path in ["mods/a.jar", "resourcepacks/b.zip"] {
+            let file = instance.join(path);
+            fs::create_dir_all(file.parent().unwrap()).unwrap();
+            fs::write(file, b"hello world").unwrap();
+        }
+        fs::write(instance.join(CURSEFORGE_INDEX_FILE), LEGACY_INDEX).unwrap();
+        let service =
+            crate::DatabaseService::start(crate::Database::open(&cache).await.expect("database"))
+                .await
+                .expect("database");
+        let client = service.client();
+        // The second run reads SQLite only, so it must not need the removed file.
+        for _ in 0..2 {
+            install_cached(&client, &cache, &instance)
+                .await
+                .expect("cached files should not be downloaded");
+            assert!(!instance.join(CURSEFORGE_INDEX_FILE).exists());
+        }
+        let stored = client
+            .curseforge_files(&root, "instance")
+            .await
+            .expect("stored files");
+        service.shutdown().await.expect("shutdown");
+        assert_eq!(
+            stored
+                .iter()
+                .map(|file| (
+                    file.relative_path.as_str(),
+                    file.sha1.as_deref(),
+                    file.md5.as_deref(),
+                    file.required
+                ))
+                .collect::<Vec<_>>(),
+            [
+                ("mods/a.jar", Some(SHA1), Some(MD5), true),
+                ("resourcepacks/b.zip", None, Some(MD5), false),
+            ]
+        );
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[tokio::test]
+    async fn keeps_an_invalid_legacy_index_and_stores_nothing() {
+        let root = temp_dir("legacy-invalid");
+        let cache = SharedCache::at(root.join("cache"));
+        let instance = root.join("instance");
+        fs::create_dir_all(&instance).unwrap();
+        let unsafe_index = LEGACY_INDEX.replace("mods/a.jar", "../a.jar");
+        for body in ["not json", unsafe_index.as_str()] {
+            fs::write(instance.join(CURSEFORGE_INDEX_FILE), body).unwrap();
+            let service = crate::DatabaseService::start(
+                crate::Database::open(&cache).await.expect("database"),
+            )
+            .await
+            .expect("database");
+            let installed = install_cached(&service.client(), &cache, &instance).await;
+            let stored = service
+                .client()
+                .curseforge_files(&root, "instance")
+                .await
+                .expect("stored files");
+            service.shutdown().await.expect("shutdown");
+            assert!(installed.is_err(), "{body}");
+            assert!(stored.is_empty(), "{body}");
+            assert_eq!(
+                fs::read_to_string(instance.join(CURSEFORGE_INDEX_FILE)).unwrap(),
+                body
+            );
+        }
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    const LEGACY_INDEX: &str =
+        include_str!("../../../../tests/fixtures/curseforge/licht-curseforge.json");
+
+    async fn install_cached(
+        database: &crate::DatabaseClient,
+        cache: &SharedCache,
+        instance: &Path,
+    ) -> Result<()> {
+        let (progress, _incoming) = mpsc::channel(16);
+        let settings = crate::Database::open(cache).await.expect("database");
+        let installed =
+            install_curseforge_files(database, cache, &settings, instance, progress).await;
+        settings.close().await;
+        installed
     }
 
     fn sample_manifest() -> Manifest {

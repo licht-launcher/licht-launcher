@@ -1,0 +1,36 @@
+{
+  "source": "curseforge",
+  "files": [
+    {
+      "path": "mods/a.jar",
+      "downloads": [
+        "https://edge.forgecdn.net/files/1/2/a.jar"
+      ],
+      "hashes": {
+        "sha1": "2aae6c35c94fcfb415dbe95f408b9ce91ee846ed",
+        "md5": "5eb63bbbe01eeed093cb22bb8f5acdc3"
+      },
+      "fileSize": 11,
+      "projectId": 1,
+      "fileId": 2,
+      "fileName": "a.jar",
+      "name": "A",
+      "required": true
+    },
+    {
+      "path": "resourcepacks/b.zip",
+      "downloads": [
+        "https://mediafilez.forgecdn.net/files/3/4/b.zip"
+      ],
+      "hashes": {
+        "md5": "5eb63bbbe01eeed093cb22bb8f5acdc3"
+      },
+      "fileSize": 11,
+      "projectId": 3,
+      "fileId": 4,
+      "fileName": "b.zip",
+      "name": "B",
+      "required": false
+    }
+  ]
+}
