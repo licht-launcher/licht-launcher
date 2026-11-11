@@ -46,7 +46,7 @@ describe("ModpackInstallPanel", () => {
 
     expect(
       await within(panel).findByRole("combobox", { name: "Version" }),
-    ).toHaveTextContent("7.0.0 (1.21.10 · fabric)");
+    ).toHaveTextContent("7.0.0 (1.21.10 · Fabric)");
     expect(
       within(panel).getByRole("textbox", { name: "Instance Name" }),
     ).toHaveAttribute("placeholder", "Fabulously Optimized");

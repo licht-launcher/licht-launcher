@@ -130,9 +130,7 @@ fn search_url(
 
 pub(super) async fn get_curseforge_mod(client: &Client, mod_id: &str) -> Result<ModpackDetails> {
     let key = curseforge_api_key()?;
-    let mod_id = mod_id.parse::<u64>().map_err(|_| CoreError::ModpackMeta {
-        detail: "invalid modpack identifier".into(),
-    })?;
+    let mod_id = parse_mod_id(mod_id)?;
     let mod_url = format!("{MOD_URL}/{mod_id}");
     let description_url = format!("{MOD_URL}/{mod_id}/description");
     let (project, description) = tokio::join!(
@@ -142,28 +140,38 @@ pub(super) async fn get_curseforge_mod(client: &Client, mod_id: &str) -> Result<
     api::parse_mod(&project?, &description?)
 }
 
-pub async fn list_curseforge_versions(
+/// Files fetched per request; CurseForge's maximum page size.
+const FILES_PAGE_SIZE: u64 = 50;
+/// At most this many file pages (1,000 files) per pack, to bound requests.
+const MAX_FILE_PAGES: u64 = 20;
+
+/// Every file of a pack, fetched page by page.
+pub(super) async fn list_curseforge_versions(
     client: &Client,
     mod_id: &str,
 ) -> Result<Vec<ModpackVersionItem>> {
     let key = curseforge_api_key()?;
-    let mut url =
-        Url::parse(&format!("{MOD_URL}/{mod_id}/files")).map_err(|_| CoreError::ModpackMeta {
-            detail: "curseforge_files_url".into(),
-        })?;
-    url.query_pairs_mut().append_pair("pageSize", "20");
-    let response = client
-        .get(url)
-        .header("x-api-key", &key)
-        .header("Accept", "application/json")
-        .send()
-        .await?;
-    let status = response.status().as_u16();
-    let body = response.text().await?;
-    if !(200..300).contains(&status) {
-        return Err(api::status_error(status, "curseforge_files"));
+    let mod_id = parse_mod_id(mod_id)?;
+    let mut versions = Vec::new();
+    for page in 0..MAX_FILE_PAGES {
+        let index = page * FILES_PAGE_SIZE;
+        let url = format!("{MOD_URL}/{mod_id}/files?index={index}&pageSize={FILES_PAGE_SIZE}");
+        let body = api::get_api(client, &key, &url, "curseforge_files").await?;
+        let files = api::parse_versions(&body)?;
+        let fetched = u64::try_from(files.items.len()).unwrap_or(u64::MAX);
+        versions.extend(files.items);
+        if fetched < FILES_PAGE_SIZE || index + fetched >= files.total {
+            return Ok(versions);
+        }
     }
-    api::parse_versions(&body)
+    tracing::warn!(mod_id, "CurseForge pack has more files than Licht lists");
+    Ok(versions)
+}
+
+fn parse_mod_id(mod_id: &str) -> Result<u64> {
+    mod_id.parse::<u64>().map_err(|_| CoreError::ModpackMeta {
+        detail: "invalid modpack identifier".into(),
+    })
 }
 
 pub(super) async fn download_curseforge_pack_to(
