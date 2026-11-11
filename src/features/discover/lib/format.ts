@@ -1,3 +1,4 @@
+import { LOADER_LABELS } from "@/features/discover/lib/filter-options";
 import type { ModpackVersionItem } from "@/lib/generated/ModpackVersionItem";
 
 const downloadsFormat = new Intl.NumberFormat("en", {
@@ -32,9 +33,12 @@ export function formatUpdatedAt(timestamp: string | null): string | null {
   return Number.isNaN(date.getTime()) ? null : dateFormat.format(date);
 }
 
-/** Version picker label, e.g. `7.0.0 (1.21.10 · fabric)`. */
+/** Version picker label, e.g. `7.0.0 (1.21.10 · Fabric)`. */
 export function formatVersionLabel(version: ModpackVersionItem): string {
-  const details = [version.gameVersions.join(", "), version.loaders.join(", ")]
+  const loaders = version.loaders.map(
+    (loader) => LOADER_LABELS.get(loader) ?? loader,
+  );
+  const details = [version.gameVersions.join(", "), loaders.join(", ")]
     .filter((part) => part !== "")
     .join(" · ");
   return details === "" ? version.name : `${version.name} (${details})`;

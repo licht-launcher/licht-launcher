@@ -13,6 +13,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { useInstallModpack } from "@/features/discover/hooks/use-install-modpack";
 import { useModpackVersions } from "@/features/discover/hooks/use-modpacks";
+import { defaultVersionId } from "@/features/discover/lib/default-version";
 import { formatVersionLabel } from "@/features/discover/lib/format";
 import { FormSection } from "@/features/new-instance/components/form-section";
 import { NameField } from "@/features/new-instance/components/name-field";
@@ -31,7 +32,7 @@ export function ModpackInstallPanel({ modpack }: { modpack: ModpackDetails }) {
   const suggestedName = uniqueName(modpack.name, takenNames);
   const [name, setName] = useState("");
   const [pickedVersion, setPickedVersion] = useState<string | null>(null);
-  const versionId = pickedVersion ?? versions.data?.[0]?.id ?? null;
+  const versionId = pickedVersion ?? defaultVersionId(versions.data ?? []);
 
   return (
     <Card title="Install">
@@ -47,7 +48,7 @@ export function ModpackInstallPanel({ modpack }: { modpack: ModpackDetails }) {
           divided={false}
           icon={LayersIcon}
           title="Choose a version"
-          description="The newest version is selected."
+          description="The newest release is selected."
         >
           {versions.isPending ? (
             <p className={modpackInstallPanelStyles.status}>

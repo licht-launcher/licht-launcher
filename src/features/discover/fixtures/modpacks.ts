@@ -55,10 +55,29 @@ export function modpackDetails(
     author: "robotkoer",
     downloads: 19_192_625,
     iconUrl: "https://cdn.modrinth.com/data/1KVo5zza/icon.webp",
+    followers: 5_070,
     categories: ["optimization", "lightweight"],
+    loaders: ["fabric"],
+    gameVersions: ["1.21.10", "1.21.8"],
+    license: {
+      name: "BSD 3-Clause",
+      url: "https://github.com/Fabulously-Optimized/fabulously-optimized/blob/main/LICENSE.md",
+    },
+    publishedAt: "2022-02-10T06:28:19.045034Z",
     updatedAt: "2026-11-01T10:43:19.109719Z",
-    gallery: ["https://cdn.modrinth.com/data/1KVo5zza/images/title.webp"],
+    gallery: [
+      {
+        url: "https://cdn.modrinth.com/data/1KVo5zza/images/title.webp",
+        title: "Title screen",
+      },
+    ],
     projectUrl: "https://modrinth.com/modpack/fabulously-optimized",
+    links: {
+      source: "https://github.com/Fabulously-Optimized/fabulously-optimized",
+      issues: null,
+      wiki: null,
+      discord: null,
+    },
     descriptionHtml:
       '<h2>Features</h2><p>Read the <a href="https://download.fo/install" rel="noopener noreferrer">install guide</a>.</p>',
     ...overrides,
@@ -72,12 +91,18 @@ export function modpackVersions(): ModpackVersionItem[] {
       name: "7.0.0",
       gameVersions: ["1.21.10"],
       loaders: ["fabric"],
+      versionType: "release",
+      publishedAt: "2026-11-01T10:43:19.109719Z",
+      downloads: 160_447,
     },
     {
       id: "v6",
       name: "6.4.0",
       gameVersions: ["1.21.8"],
       loaders: ["fabric"],
+      versionType: "beta",
+      publishedAt: "2026-09-12T08:00:00Z",
+      downloads: 98_120,
     },
   ];
 }

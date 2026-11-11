@@ -29,15 +29,21 @@ use crate::settings::GlobalLaunch;
 use crate::{CoreError, Result, SharedCache};
 use std::path::Path;
 
+/// Every version of a pack, newest first (undated versions last).
 pub async fn list_modpack_versions(
     client: &Client,
     source: ModpackSource,
     project_id: &str,
 ) -> Result<Vec<ModpackVersionItem>> {
-    match source {
-        ModpackSource::Modrinth => modrinth::list_modrinth_versions(client, project_id).await,
-        ModpackSource::Curseforge => curseforge::list_curseforge_versions(client, project_id).await,
-    }
+    let mut versions = match source {
+        ModpackSource::Modrinth => modrinth::list_modrinth_versions(client, project_id).await?,
+        ModpackSource::Curseforge => {
+            curseforge::list_curseforge_versions(client, project_id).await?
+        }
+    };
+    // RFC 3339 UTC timestamps compare correctly as text; `None` sorts last here.
+    versions.sort_by(|a, b| b.published_at.cmp(&a.published_at));
+    Ok(versions)
 }
 
 #[allow(clippy::too_many_arguments)]
