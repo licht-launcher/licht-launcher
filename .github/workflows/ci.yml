@@ -103,7 +103,7 @@ jobs:
           retention-days: 14
 
   rust:
-    name: Rust (${{ matrix.os }})
+    name: Rust
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ${{ matrix.os }}
@@ -178,7 +178,7 @@ jobs:
           retention-days: 14
 
   build:
-    name: Build (${{ matrix.os }})
+    name: Build
     needs: changes
     if: ${{ needs.changes.outputs.code == 'true' && !inputs.skip_tauri_build }}
     runs-on: ${{ matrix.os }}
