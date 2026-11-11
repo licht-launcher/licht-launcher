@@ -603,10 +603,17 @@ async fn version_twelve_gains_curseforge_files_and_preserves_modpack_indexes() {
         .bind(sha1)
         .bind(md5)
     };
-    assert!(
-        insert(None, None).execute(&mut connection).await.is_err(),
-        "a file needs SHA1 or MD5"
-    );
+    for (sha1, md5) in [
+        (None, None),
+        (Some(""), None),
+        (Some("  "), Some("")),
+        (None, Some(" ")),
+    ] {
+        assert!(
+            insert(sha1, md5).execute(&mut connection).await.is_err(),
+            "a file needs a non-blank SHA1 or MD5: {sha1:?} {md5:?}"
+        );
+    }
     insert(None, Some("5eb63bbbe01eeed093cb22bb8f5acdc3"))
         .execute(&mut connection)
         .await

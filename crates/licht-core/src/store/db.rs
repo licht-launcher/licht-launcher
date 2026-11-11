@@ -344,7 +344,7 @@ async fn migrate(connection: &mut SqliteConnection) -> Result<()> {
                 file_id INTEGER NOT NULL CHECK(file_id >= 0),
                 file_name TEXT NOT NULL, name TEXT NOT NULL,
                 required INTEGER NOT NULL CHECK(required IN (0, 1)),
-                CHECK(sha1 IS NOT NULL OR md5 IS NOT NULL),
+                CHECK(trim(coalesce(sha1, '')) <> '' OR trim(coalesce(md5, '')) <> ''),
                 PRIMARY KEY (instances_directory, instance_folder, position),
                 UNIQUE (instances_directory, instance_folder, relative_path)
             );

@@ -108,6 +108,7 @@ mod tests {
         let names = [
             "overrides/instance.json",
             "overrides/licht-modpack.json",
+            "overrides/licht-curseforge.json",
             "overrides/C:evil.txt",
             "overrides/CON",
             "overrides/mods/CON.txt",
@@ -147,6 +148,10 @@ mod tests {
                 .unwrap();
             assert_eq!(profile.name, pending.name, "{name}");
             assert!(!instance_dir.join("instance.json").exists(), "{name}");
+            assert!(
+                !instance_dir.join(crate::CURSEFORGE_INDEX_FILE).exists(),
+                "{name}"
+            );
             assert!(!instance_dir.join("C:evil.txt").exists(), "{name}");
             assert!(!instance_dir.join("CON").exists(), "{name}");
             service.shutdown().await.expect("shutdown");

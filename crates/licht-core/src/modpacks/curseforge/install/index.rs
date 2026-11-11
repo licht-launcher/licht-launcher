@@ -102,8 +102,9 @@ fn verifiable(mut file: StoredCurseforgeFile) -> Result<StoredCurseforgeFile> {
     Ok(file)
 }
 
-fn number(value: u64) -> Result<i64> {
-    i64::try_from(value).map_err(|_| CoreError::ModpackArchive)
+/// Converts between the API's `u64` and SQLite's `i64`, rejecting values that do not fit.
+fn number<T, U: TryInto<T>>(value: U) -> Result<T> {
+    value.try_into().map_err(|_| CoreError::ModpackArchive)
 }
 
 pub(super) fn pending_task(
@@ -129,7 +130,7 @@ pub(super) fn pending_task(
             url,
             destination,
             sha1,
-            size: u64::try_from(file.size).map_err(|_| CoreError::ModpackArchive)?,
+            size: number(file.size)?,
         },
         md5,
     }))

@@ -144,8 +144,11 @@ clears them before the pack is imported again.
 
 Builds up to v0.2.3 kept these lists in the instance folder. A leftover
 `licht-curseforge.json` is imported into `curseforge_files` the next time the pack
-files are installed or repaired, then removed; an invalid file fails that job and is
-kept. Leftover `licht-modpack.json` files are not imported.
+files are installed or repaired, then removed. Instances with a Modrinth index skip
+this import, and Modrinth packs may not write that file. An invalid file fails the
+job and is kept. If the file cannot be removed, the import is undone and the job
+fails, so rows and file never coexist. Leftover `licht-modpack.json` files are not
+imported.
 
 ## Verification
 
