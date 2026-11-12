@@ -129,17 +129,6 @@ pub fn run() -> anyhow::Result<()> {
         .context("Failed to build Licht Launcher")?;
     let mut closing = false;
     application.run(move |app, event| {
-        if let tauri::RunEvent::WindowEvent {
-            ref label,
-            event: tauri::WindowEvent::CloseRequested { ref api, .. },
-            ..
-        } = event
-            && label == "main"
-            && desktop::hide_on_close(app)
-        {
-            api.prevent_close();
-            return;
-        }
         if let tauri::RunEvent::ExitRequested { ref api, code, .. } = event
             && !runtime
                 .shutdown_complete

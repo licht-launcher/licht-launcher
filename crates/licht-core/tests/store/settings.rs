@@ -40,7 +40,6 @@ fn sample(download_concurrency: u32) -> Settings {
         automatic_updates: true,
         language: licht_core::LauncherLanguage::English,
         hardware_acceleration: true,
-        minimize_to_tray: true,
         minimize_on_game_start: false,
         restore_on_game_exit: false,
     }
@@ -94,7 +93,6 @@ async fn a_missing_file_returns_defaults_and_is_not_written() {
     assert!(settings.automatic_updates);
     assert_eq!(settings.language, licht_core::LauncherLanguage::English);
     assert!(settings.hardware_acceleration);
-    assert!(settings.minimize_to_tray);
     assert!(!settings.minimize_on_game_start);
     assert!(!settings.restore_on_game_exit);
     assert_eq!(settings.theme, licht_core::LauncherTheme::Dark);
@@ -128,14 +126,16 @@ async fn a_saved_value_roundtrips() {
 async fn general_preferences_roundtrip_and_legacy_files_use_defaults() {
     let cache = database("general-preferences").await;
     std::fs::create_dir_all(cache.cache().root()).expect("root");
-    std::fs::write(settings_file(&cache), r#"{"schema":1}"#).expect("legacy settings");
+    std::fs::write(
+        settings_file(&cache),
+        r#"{"schema":1,"minimizeToTray":true}"#,
+    )
+    .expect("legacy settings");
     let mut settings = load_settings(&cache).await.expect("legacy defaults");
     assert!(settings.hardware_acceleration);
-    assert!(settings.minimize_to_tray);
     assert!(!settings.minimize_on_game_start);
     assert!(!settings.restore_on_game_exit);
     settings.hardware_acceleration = false;
-    settings.minimize_to_tray = false;
     settings.minimize_on_game_start = true;
     settings.restore_on_game_exit = true;
     save_settings(&cache, &settings)
@@ -146,7 +146,7 @@ async fn general_preferences_roundtrip_and_legacy_files_use_defaults() {
         serde_json::from_slice(&std::fs::read(settings_file(&cache)).expect("settings"))
             .expect("json");
     assert_eq!(saved["language"], "en");
-    assert_eq!(saved["minimizeToTray"], false);
+    assert!(saved.get("minimizeToTray").is_none());
 }
 
 #[tokio::test]
@@ -349,7 +349,6 @@ async fn the_file_keeps_only_startup_preferences_and_the_rest_roundtrips() {
             "hardwareAcceleration",
             "language",
             "minimizeOnGameStart",
-            "minimizeToTray",
             "restoreOnGameExit",
             "schema",
             "theme"

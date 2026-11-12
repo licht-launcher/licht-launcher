@@ -61,10 +61,7 @@ keep the updater.
 GNOME runtime, which provides WebKitGTK 4.1. The release workflow:
 
 1. copies the `.deb` to `flatpak/licht-launcher.deb`;
-2. checks out [flathub/shared-modules](https://github.com/flathub/shared-modules)
-   at the commit pinned in `SHARED_MODULES_COMMIT` into `flatpak/shared-modules`
-   (it provides `libayatana-appindicator` for the tray icon);
-3. runs `flatpak-builder` and `flatpak build-bundle` to produce the `.flatpak` file.
+2. runs `flatpak-builder` and `flatpak build-bundle` to produce the `.flatpak` file.
 
 Inside the sandbox the launcher detects `/.flatpak-info` and reports updates as
 managed by Flatpak instead of downloading packages itself. Users install a newer

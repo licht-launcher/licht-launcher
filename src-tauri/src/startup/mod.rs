@@ -109,7 +109,8 @@ async fn initialize(
         tracing::error!(%error, "Could not apply launcher behavior preferences");
         session.update(app, |state| {
             state.warning = Some(
-                "System tray setup failed. Closing the window will exit the launcher.".to_string(),
+                "Could not apply appearance preferences. Restart the launcher to try again."
+                    .to_string(),
             )
         })?;
     }

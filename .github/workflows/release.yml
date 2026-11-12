@@ -106,7 +106,6 @@ jobs:
             libwebkit2gtk-4.1-dev \
             libssl-dev \
             libxdo-dev \
-            libayatana-appindicator3-dev \
             librsvg2-dev \
             patchelf \
             libfuse2
@@ -209,8 +208,6 @@ jobs:
     timeout-minutes: 60
     env:
       RELEASE_PREFIX: ${{ needs.metadata.outputs.prefix }}
-      # Pinned flathub/shared-modules commit that provides libayatana-appindicator for the tray icon.
-      SHARED_MODULES_COMMIT: 785a5394b6e430280e24ef393d813e151eb254f4
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -226,13 +223,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends elfutils flatpak flatpak-builder
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-
-      - name: Fetch Flathub shared modules
-        run: |
-          git init --quiet flatpak/shared-modules
-          git -C flatpak/shared-modules fetch --quiet --depth 1 \
-            https://github.com/flathub/shared-modules.git "$SHARED_MODULES_COMMIT"
-          git -C flatpak/shared-modules checkout --quiet --detach FETCH_HEAD
 
       - name: Build Flatpak bundle
         run: |
