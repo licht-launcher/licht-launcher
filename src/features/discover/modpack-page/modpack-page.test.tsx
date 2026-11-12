@@ -8,10 +8,8 @@ import {
 } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { mockListLayout } from "@/features/discover/fixtures/list-layout";
 import {
   modpackDetails,
-  modpackSearchPage,
   modpackVersions,
 } from "@/features/discover/fixtures/modpacks";
 import {
@@ -28,13 +26,6 @@ function mockModpack(details: () => Promise<unknown>) {
       return Promise.resolve(modpackVersions());
     }
     if (command === "open_external_url") return Promise.resolve();
-    // Going back to the store list asks for the sources, then searches.
-    if (command === "modpack_sources") {
-      return Promise.resolve(["modrinth", "curseforge"]);
-    }
-    if (command === "search_modpacks") {
-      return Promise.resolve(modpackSearchPage());
-    }
     return undefined;
   });
 }
@@ -116,36 +107,6 @@ describe("Modpack page", () => {
         url: "https://modrinth.com/modpack/fabulously-optimized",
       }),
     );
-  });
-
-  it("goes back to the store list", async () => {
-    mockModpack(() => Promise.resolve(modpackDetails()));
-    const { router } = await renderAt("/discover/modrinth/1KVo5zza");
-
-    fireEvent.click(await screen.findByRole("link", { name: "Discover" }));
-
-    await waitFor(() =>
-      expect(router.state.location.pathname).toBe("/discover"),
-    );
-  });
-
-  it("goes back to the store list with the search it came from", async () => {
-    mockListLayout();
-    mockModpack(() => Promise.resolve(modpackDetails()));
-    const { router } = await renderAt("/discover?q=atm&sort=updated");
-
-    fireEvent.click(
-      await screen.findByRole("link", { name: /All the Mods 9/ }),
-    );
-    fireEvent.click(await screen.findByRole("link", { name: "Discover" }));
-
-    await waitFor(() =>
-      expect(router.state.location.pathname).toBe("/discover"),
-    );
-    expect(router.state.location.search).toEqual({
-      q: "atm",
-      sort: "updated",
-    });
   });
 
   it("does not reload the pack or its versions when the window regains focus", async () => {

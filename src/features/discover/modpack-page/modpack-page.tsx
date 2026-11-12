@@ -1,6 +1,4 @@
-import { Link } from "@tanstack/react-router";
 import {
-  ArrowLeftIcon,
   FileTextIcon,
   ImagesIcon,
   LayersIcon,
@@ -8,7 +6,6 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
-import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Spinner } from "@/components/ui/spinner";
@@ -23,7 +20,6 @@ import {
   useModpack,
   useModpackVersions,
 } from "@/features/discover/hooks/use-modpacks";
-import { lastDiscoverSearch } from "@/features/discover/lib/last-search";
 import { friendlyError, messageOf } from "@/lib/errors";
 import type { ModpackDetails } from "@/lib/generated/ModpackDetails";
 import type { ModpackSource } from "@/lib/generated/ModpackSource";
@@ -42,14 +38,6 @@ export function ModpackPage({
 
   return (
     <div className={modpackPageStyles.root}>
-      <div className={modpackPageStyles.toolbar}>
-        <Button asChild variant="outline" size="sm">
-          <Link to="/discover" search={lastDiscoverSearch()}>
-            <ArrowLeftIcon aria-hidden />
-            Discover
-          </Link>
-        </Button>
-      </div>
       {modpack.isPending ? (
         <div className={modpackPageStyles.state}>
           <Spinner />
