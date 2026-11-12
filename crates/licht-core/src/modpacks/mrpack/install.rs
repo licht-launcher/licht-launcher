@@ -7,6 +7,7 @@ use super::storage::StoredModpack;
 use crate::modpacks::file_hashes::{ensure_sha512, prepare_download};
 use crate::modpacks::path_safety::instance_key;
 use crate::modpacks::secure_download::allowlisted_download_client;
+use crate::modpacks::{CURSEFORGE_INDEX_FILE, remove_legacy_index};
 use crate::transfer::verification::VerificationProgress;
 use crate::{CoreError, Result, SharedCache};
 use reqwest::Client;
@@ -16,8 +17,8 @@ use serde_json::Value;
 ///
 /// No-op when no files are stored (vanilla / CurseForge without mrpack files).
 /// A legacy [`MODPACK_INDEX_FILE`] is imported into SQLite first and then
-/// removed, unless the instance has CurseForge files. A redirect is followed only when that hop is HTTPS and the host is
-/// `cdn.modrinth.com`.
+/// removed, unless the instance has CurseForge files. A redirect is followed
+/// only when that hop is HTTPS and the host is `cdn.modrinth.com`.
 pub async fn install_mrpack_files(
     database: &crate::DatabaseClient,
     game: &SharedCache,
@@ -119,17 +120,19 @@ async fn import_legacy_index(
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
         Err(error) => return Err(error.into()),
     };
-    if !database
-        .curseforge_files(instances, folder)
-        .await?
-        .is_empty()
+    // A CurseForge index, stored or still waiting in its legacy file, decides the instance.
+    if instance_dir.join(CURSEFORGE_INDEX_FILE).exists()
+        || !database
+            .curseforge_files(instances, folder)
+            .await?
+            .is_empty()
     {
         return Ok(false);
     }
     let index = legacy_index(&body, instance_dir)
         .map_err(|error| CoreError::ModrinthLegacyIndex(Box::new(error)))?;
     database.replace_modpack(instances, folder, index).await?;
-    if let Err(error) = fs::remove_file(&path) {
+    if let Err(error) = remove_legacy_index(&path) {
         // The job fails either way; a failed undo leaves the rows, which still win over the file.
         // Deleting also clears CurseForge rows, which this instance was checked not to have.
         if let Err(undo) = database.delete_modpack(instances, folder).await {
@@ -427,6 +430,32 @@ mod tests {
         installed.expect("a CurseForge instance has no Modrinth files");
         assert!(header.is_none());
         assert_eq!(stored, curseforge);
+        assert!(instance.join(MODPACK_INDEX_FILE).exists());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[tokio::test]
+    async fn leaves_a_legacy_index_alone_while_a_curseforge_one_waits_for_import() {
+        let root = temp_dir("legacy-both");
+        let cache = SharedCache::at(root.join("cache"));
+        let instance = root.join("instance");
+        place_pack_files(&instance);
+        std::fs::write(instance.join(MODPACK_INDEX_FILE), LEGACY_INDEX).unwrap();
+        std::fs::write(
+            instance.join(crate::modpacks::CURSEFORGE_INDEX_FILE),
+            "not json",
+        )
+        .unwrap();
+        let service = start_database(&cache).await;
+        let client = service.client();
+        let installed = install_cached(&client, &cache, &instance).await;
+        let header = client
+            .modpack_header(&root, "instance")
+            .await
+            .expect("header");
+        service.shutdown().await.expect("shutdown");
+        installed.expect("the CurseForge import decides this instance");
+        assert!(header.is_none());
         assert!(instance.join(MODPACK_INDEX_FILE).exists());
         let _ = std::fs::remove_dir_all(&root);
     }
