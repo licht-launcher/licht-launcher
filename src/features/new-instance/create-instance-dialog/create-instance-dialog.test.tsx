@@ -65,7 +65,7 @@ describe("CreateInstanceDialog", () => {
     ).toEqual(["From scratch", "From a modpack", "Upload a pack file"]);
     expect(
       within(menu).getByRole("menuitem", { name: "From a modpack" }),
-    ).toHaveAttribute("aria-disabled", "true");
+    ).not.toHaveAttribute("aria-disabled", "true");
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
