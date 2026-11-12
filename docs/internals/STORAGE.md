@@ -45,6 +45,13 @@ empty, up to `%APPDATA%\Licht`. Files that changed since the copy or were never
 copied stay in place. A cleanup error is logged and does not stop the launcher;
 the legacy `settings.json` or `licht.sqlite` remains, so the next startup retries.
 
+Version 0.2.3 described each instance only with the `instance.json` in its
+folder. Once per instances directory, startup registers each folder that has
+that file and no SQLite profile, removes the imported file, and moves its
+`icon.png` into the icon cache. This also recovers instances that 0.3.0 copied
+without registering. Folders that already have a profile keep it, and a profile
+file that cannot be read is logged and left in place.
+
 ## Settings storage
 
 `settings.json` holds only what the launcher reads before the database opens:
@@ -140,9 +147,9 @@ filesystem cleanup succeeds. Missing registered directories are omitted from the
 list. Duplication copies game files and creates a separate database profile,
 without copying obsolete root profile files or the installation workspace.
 
-New instances never write `instance.json`. Existing profile files are neither
-imported nor removed, and folders without a SQLite profile are not automatically
-registered. The CLI can still launch an unregistered game directory using global
+New instances never write `instance.json`. Apart from the one-time import of
+legacy profiles described above, profile files are neither imported nor
+removed, and folders without a SQLite profile are not automatically registered. The CLI can still launch an unregistered game directory using global
 settings. Legacy game-directory behavior is described in
 [Compatibility](COMPATIBILITY.md#launchwrapper-game-directory).
 

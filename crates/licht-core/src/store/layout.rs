@@ -10,6 +10,7 @@ mod database;
 mod files;
 mod installation;
 mod migration;
+mod profiles;
 pub(crate) mod progress;
 mod relocation;
 pub(crate) mod requests;
@@ -90,6 +91,7 @@ async fn prepare_profile(
     tokio::fs::create_dir_all(game.cache_dir()?).await?;
     tokio::fs::create_dir_all(game.instances_dir()?).await?;
     reporter.phase(StartupPhase::RestoringCache)?;
+    profiles::import_legacy(database, &game, reporter).await?;
     installation::migrate(database, &game, reporter).await
 }
 
