@@ -21,8 +21,22 @@ import {
   setupInstancesPageTests,
 } from "@/features/instances/tests/support/render-instances";
 
+const BOTH_SOURCES = ["modrinth", "curseforge"];
+
+/** Answers `modpack_sources` (both by default), then defers to `implement`. */
+function mockDiscover(
+  implement: (command: string, args?: unknown) => unknown,
+  sources: string[] = BOTH_SOURCES,
+) {
+  mockContextMenuCommands((command, args) =>
+    command === "modpack_sources"
+      ? Promise.resolve(sources)
+      : implement(command, args),
+  );
+}
+
 function mockSearch(respond: () => Promise<unknown>) {
-  mockContextMenuCommands((command) =>
+  mockDiscover((command) =>
     command === "search_modpacks" ? respond() : undefined,
   );
 }
@@ -110,7 +124,7 @@ describe("Discover page", () => {
   });
 
   it("loads the following pages as the end of the list comes into view", async () => {
-    mockContextMenuCommands((command, args) =>
+    mockDiscover((command, args) =>
       command === "search_modpacks" ? Promise.resolve(pageOf(args)) : undefined,
     );
     await renderAt("/discover?q=atm");
@@ -129,7 +143,7 @@ describe("Discover page", () => {
 
   it("offers a retry when the next page fails", async () => {
     let failSecondPage = true;
-    mockContextMenuCommands((command, args) => {
+    mockDiscover((command, args) => {
       if (command !== "search_modpacks") return undefined;
       const page = pageOf(args);
       if (page.page === 2 && failSecondPage) {
@@ -250,8 +264,72 @@ describe("Discover page", () => {
     );
   });
 
+  it("quietly searches Modrinth only when CurseForge is not offered", async () => {
+    mockDiscover(
+      (command) =>
+        command === "search_modpacks"
+          ? Promise.resolve(modpackSearchPage({ pageCount: 1 }))
+          : undefined,
+      ["modrinth"],
+    );
+    await renderAt("/discover?source=curseforge");
+
+    const filters = await screen.findByRole("complementary", {
+      name: "Filters",
+    });
+    await waitFor(() =>
+      expect(searchCalls()).toContainEqual([
+        "search_modpacks",
+        { query: "", page: 1, filters: DEFAULT_SEARCH_FILTERS },
+      ]),
+    );
+    expect(
+      within(filters).queryByRole("combobox", { name: "Source" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/LICHT_|API key/)).not.toBeInTheDocument();
+  });
+
+  it("says so when CurseForge results could not load", async () => {
+    mockSearch(() =>
+      Promise.resolve(
+        modpackSearchPage({ pageCount: 1, unavailableSources: ["curseforge"] }),
+      ),
+    );
+    await renderAt("/discover");
+
+    const results = await screen.findByRole("region", { name: "Modpacks" });
+    expect(
+      await within(results).findByText(
+        "CurseForge results couldn't load right now. Showing the rest.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(results).getByRole("link", { name: /Fabulously Optimized/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps loading pages after one came back without a failed source", async () => {
+    mockDiscover((command, args) => {
+      if (command !== "search_modpacks") return undefined;
+      const page = pageOf(args);
+      // Page 2 misses CurseForge, so it only counts Modrinth's two pages.
+      return Promise.resolve(
+        page.page === 2
+          ? { ...page, pageCount: 2, unavailableSources: ["curseforge"] }
+          : page,
+      );
+    });
+    await renderAt("/discover");
+
+    const results = await screen.findByRole("region", { name: "Modpacks" });
+    expect(
+      await within(results).findByRole("link", { name: /Pack 3B/ }),
+    ).toBeInTheDocument();
+    expect(requestedPages()).toEqual([1, 2, 3]);
+  });
+
   it("does not show the previous results while a new search loads", async () => {
-    mockContextMenuCommands((command, args) => {
+    mockDiscover((command, args) => {
       if (command !== "search_modpacks") return undefined;
       const filters =
         args !== null && typeof args === "object" && "filters" in args

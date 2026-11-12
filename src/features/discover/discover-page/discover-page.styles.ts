@@ -9,4 +9,6 @@ export const discoverPageStyles = {
   results:
     "flex min-h-0 min-w-0 flex-1 flex-col rounded-lg border border-border bg-background",
   loading: "flex flex-1 items-center justify-center",
+  notice:
+    "flex shrink-0 items-center gap-2 border-b border-border px-4 py-2 text-xs text-muted-foreground [&_svg]:size-3.5",
 } as const;

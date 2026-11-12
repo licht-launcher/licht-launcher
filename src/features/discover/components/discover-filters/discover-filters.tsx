@@ -20,7 +20,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  MODPACK_SOURCES,
   parseModpackSource,
   SOURCE_LABELS,
 } from "@/features/discover/lib/discover-search";
@@ -30,7 +29,9 @@ import {
 } from "@/features/discover/lib/filter-options";
 import { versionsQueryOptions } from "@/features/instances/lib/versions-query";
 import { createVersionChoices } from "@/features/instances/model/create-versions";
+import { PlatformIcon } from "@/features/new-instance/assets/platform-icons";
 import type { ModpackSearchFilters } from "@/lib/generated/ModpackSearchFilters";
+import type { ModpackSource } from "@/lib/generated/ModpackSource";
 
 import { discoverFiltersStyles } from "./discover-filters.styles";
 
@@ -47,9 +48,12 @@ function optionValue<T extends string>(
 /** Discover's left sidebar: filters that narrow the search. */
 export function DiscoverFilters({
   filters,
+  sources,
   onChange,
 }: {
   filters: ModpackSearchFilters;
+  /** Sources this build can search; the Source group needs at least two. */
+  sources: readonly ModpackSource[];
   onChange: (filters: ModpackSearchFilters) => void;
 }) {
   const versions = useQuery(versionsQueryOptions);
@@ -74,31 +78,33 @@ export function DiscoverFilters({
     <aside aria-label="Filters" className={discoverFiltersStyles.root}>
       <ScrollArea className={discoverFiltersStyles.scrollArea}>
         <div className={discoverFiltersStyles.content}>
-          <FilterGroup title="Source" icon={GlobeIcon}>
-            {(labelId) => (
-              <Select
-                value={filters.source ?? ANY}
-                onValueChange={(value) =>
-                  update({ source: parseModpackSource(value) })
-                }
-              >
-                <SelectTrigger
-                  aria-labelledby={labelId}
-                  className={discoverFiltersStyles.trigger}
+          {sources.length > 1 && (
+            <FilterGroup title="Source" icon={GlobeIcon}>
+              {(labelId) => (
+                <Select
+                  value={filters.source ?? ANY}
+                  onValueChange={(value) =>
+                    update({ source: parseModpackSource(value) })
+                  }
                 >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ANY}>Any source</SelectItem>
-                  {MODPACK_SOURCES.map((source) => (
-                    <SelectItem key={source} value={source}>
-                      {SOURCE_LABELS[source]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          </FilterGroup>
+                  <SelectTrigger
+                    aria-labelledby={labelId}
+                    className={discoverFiltersStyles.trigger}
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ANY}>Any source</SelectItem>
+                    {sources.map((source) => (
+                      <SelectItem key={source} value={source}>
+                        {SOURCE_LABELS[source]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </FilterGroup>
+          )}
           <FilterGroup title="Game version" icon={TagIcon}>
             {() => (
               <Combobox
@@ -138,6 +144,10 @@ export function DiscoverFilters({
                   <SelectItem value={ANY}>Any loader</SelectItem>
                   {LOADER_OPTIONS.map((option) => (
                     <SelectItem key={option.value} value={option.value}>
+                      <PlatformIcon
+                        platform={option.value}
+                        className={discoverFiltersStyles.loaderIcon}
+                      />
                       {option.label}
                     </SelectItem>
                   ))}

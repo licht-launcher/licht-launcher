@@ -46,3 +46,12 @@ export const CATEGORY_OPTIONS: readonly (Option<ModpackCategory> & {
   { value: "quests", label: "Quests", icon: ScrollTextIcon },
   { value: "technology", label: "Technology", icon: CpuIcon },
 ];
+
+/** Label and icon of each shared category, for tags outside the sidebar. */
+export const CATEGORY_BY_VALUE = new Map(
+  CATEGORY_OPTIONS.map((option) => [option.value, option]),
+);
+
+export const LOADER_LABELS = new Map(
+  LOADER_OPTIONS.map((option) => [option.value, option.label]),
+);
