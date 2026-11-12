@@ -52,7 +52,7 @@
   "bundle": {
     "active": true,
     "createUpdaterArtifacts": true,
-    "targets": ["nsis", "appimage", "deb"],
+    "targets": ["nsis", "msi", "appimage", "deb"],
     "icon": [
       "icons/32x32.png",
       "icons/64x64.png",

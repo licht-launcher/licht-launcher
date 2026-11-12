@@ -72,7 +72,7 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            bundles: nsis
+            bundles: nsis,msi
           - os: ubuntu-latest
             bundles: appimage,deb
 
@@ -142,14 +142,23 @@ jobs:
           }
           Copy-Item $signature[0].FullName `
             "release-assets/$env:RELEASE_PREFIX-windows-x64-setup.exe.sig"
+          $msi = Get-ChildItem "target/release/bundle/msi/*.msi" -ErrorAction SilentlyContinue
+          if (-not $msi) {
+            throw "MSI installer not found"
+          }
+          Copy-Item $msi[0].FullName `
+            "release-assets/$env:RELEASE_PREFIX-windows-x64.msi"
+          $msiSignature = Get-ChildItem "target/release/bundle/msi/*.msi.sig" -ErrorAction SilentlyContinue
+          if (-not $msiSignature) {
+            throw "MSI updater signature not found"
+          }
+          Copy-Item $msiSignature[0].FullName `
+            "release-assets/$env:RELEASE_PREFIX-windows-x64.msi.sig"
 
       - name: Stage Linux artifacts
         if: runner.os == 'Linux'
         run: |
           mkdir -p release-assets
-          cp target/release/licht \
-            "release-assets/${RELEASE_PREFIX}-linux-x64-portable"
-          chmod +x "release-assets/${RELEASE_PREFIX}-linux-x64-portable"
           shopt -s nullglob
           appimages=(target/release/bundle/appimage/*.AppImage)
           debs=(target/release/bundle/deb/*.deb)
@@ -179,9 +188,57 @@ jobs:
           name: licht-${{ matrix.os }}
           path: release-assets/*
 
+  flatpak:
+    name: Build Flatpak
+    needs: [metadata, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      RELEASE_PREFIX: ${{ needs.metadata.outputs.prefix }}
+      # Pinned flathub/shared-modules commit that provides libayatana-appindicator for the tray icon.
+      SHARED_MODULES_COMMIT: 785a5394b6e430280e24ef393d813e151eb254f4
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: licht-ubuntu-latest
+          path: linux-assets
+
+      - name: Install Flatpak tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends flatpak flatpak-builder
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+
+      - name: Fetch Flathub shared modules
+        run: |
+          git init --quiet flatpak/shared-modules
+          git -C flatpak/shared-modules fetch --quiet --depth 1 \
+            https://github.com/flathub/shared-modules.git "$SHARED_MODULES_COMMIT"
+          git -C flatpak/shared-modules checkout --quiet --detach FETCH_HEAD
+
+      - name: Build Flatpak bundle
+        run: |
+          cp "linux-assets/${RELEASE_PREFIX}-linux-x64.deb" flatpak/licht-launcher.deb
+          flatpak-builder --user --install-deps-from=flathub --disable-rofiles-fuse \
+            --force-clean --repo=flatpak-repo flatpak-build flatpak/app.licht.launcher.yml
+          mkdir -p release-assets
+          flatpak build-bundle \
+            --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo \
+            flatpak-repo "release-assets/${RELEASE_PREFIX}-linux-x64.flatpak" app.licht.launcher
+
+      - name: Upload Flatpak bundle
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: licht-flatpak
+          path: release-assets/*
+
   publish:
     name: Publish GitHub Release
-    needs: [metadata, quality_checks, build]
+    needs: [metadata, quality_checks, build, flatpak]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -203,16 +260,26 @@ jobs:
           name: licht-ubuntu-latest
           path: release-assets
 
+      - name: Download Flatpak bundle
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: licht-flatpak
+          path: release-assets
+
       - name: Create updater manifest
         shell: bash
         run: |
           windows_signature="$(cat "release-assets/${RELEASE_PREFIX}-windows-x64-setup.exe.sig")"
+          windows_msi_signature="$(cat "release-assets/${RELEASE_PREFIX}-windows-x64.msi.sig")"
           linux_signature="$(cat "release-assets/${RELEASE_PREFIX}-linux-x64.AppImage.sig")"
+          # The updater looks up "{os}-{arch}-{installer}" before "{os}-{arch}", so MSI
+          # installs update through the MSI instead of creating a second NSIS install.
           jq -n \
             --arg version "$RELEASE_VERSION" \
             --arg prefix "$RELEASE_PREFIX" \
             --arg release_url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}" \
             --arg windows_signature "$windows_signature" \
+            --arg windows_msi_signature "$windows_msi_signature" \
             --arg linux_signature "$linux_signature" \
             '{
               version: $version,
@@ -222,6 +289,10 @@ jobs:
                 "windows-x86_64": {
                   signature: $windows_signature,
                   url: ($release_url + "/" + $prefix + "-windows-x64-setup.exe")
+                },
+                "windows-x86_64-msi": {
+                  signature: $windows_msi_signature,
+                  url: ($release_url + "/" + $prefix + "-windows-x64.msi")
                 },
                 "linux-x86_64": {
                   signature: $linux_signature,
@@ -244,10 +315,11 @@ jobs:
             Unofficial project — not affiliated with Mojang Studios or Microsoft.
 
             ### Downloads
-            | Platform | Portable | Installer |
+            | Platform | Portable | Installers |
             | --- | --- | --- |
-            | Windows (x64) | `${{ needs.metadata.outputs.prefix }}-windows-x64-portable.exe` | `${{ needs.metadata.outputs.prefix }}-windows-x64-setup.exe` (NSIS) |
-            | Linux (x64) | `${{ needs.metadata.outputs.prefix }}-linux-x64-portable` | `.AppImage` and `.deb` |
+            | Windows (x64) | `${{ needs.metadata.outputs.prefix }}-windows-x64-portable.exe` | `-windows-x64-setup.exe` (NSIS, current user) and `-windows-x64.msi` (all users) |
+            | Linux (x64) | `${{ needs.metadata.outputs.prefix }}-linux-x64.AppImage` | `-linux-x64.deb` and `-linux-x64.flatpak` |
 
-            The portable builds are single binaries; no installer required.
+            The Windows portable build and the AppImage run without installation.
+            Install the Flatpak bundle with `flatpak install --user <file>.flatpak`; it updates through new bundles, not the in-app updater.
           files: release-assets/*
