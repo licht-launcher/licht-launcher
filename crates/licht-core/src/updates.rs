@@ -25,6 +25,8 @@ pub enum AppUpdatePhase {
     Failed,
     /// Another package manager (Flatpak) owns updates for this installation.
     ExternallyManaged,
+    /// A portable build: no installer placed it, so it cannot replace itself.
+    Portable,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
@@ -371,6 +373,7 @@ mod tests {
             AppUpdatePhase::Ready,
             AppUpdatePhase::Installing,
             AppUpdatePhase::ExternallyManaged,
+            AppUpdatePhase::Portable,
         ] {
             assert!(!app_update_can_check(phase));
         }

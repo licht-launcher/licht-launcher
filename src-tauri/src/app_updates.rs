@@ -31,12 +31,40 @@ pub struct Runtime {
     automatic: watch::Sender<bool>,
 }
 
+/// Where this installation's updates come from, decided once at startup.
+fn initial_phase(flatpak: bool, release_build: bool, installer_bundled: bool) -> AppUpdatePhase {
+    if flatpak {
+        AppUpdatePhase::ExternallyManaged
+    } else if release_build && !installer_bundled {
+        // The installers patch their bundle type into the binary; the portable
+        // build keeps none, and the updater would otherwise install a copy.
+        AppUpdatePhase::Portable
+    } else {
+        AppUpdatePhase::Idle
+    }
+}
+
+/// Phases where the launcher must not check, download or install updates itself.
+fn self_update_disabled(phase: AppUpdatePhase) -> Option<&'static str> {
+    match phase {
+        AppUpdatePhase::ExternallyManaged => {
+            Some("Updates for this installation are managed by Flatpak.")
+        }
+        AppUpdatePhase::Portable => Some(
+            "This portable build does not update itself. Download new versions from GitHub Releases.",
+        ),
+        _ => None,
+    }
+}
+
 impl Runtime {
     pub fn new() -> Arc<Self> {
         let mut initial = AppUpdateState::new(false);
-        if licht_core::app_updates_managed_externally() {
-            initial.phase = AppUpdatePhase::ExternallyManaged;
-        }
+        initial.phase = initial_phase(
+            licht_core::app_updates_managed_externally(),
+            !cfg!(debug_assertions),
+            tauri::utils::platform::bundle_type().is_some(),
+        );
         Arc::new(Self {
             state: Mutex::new((initial, Instant::now())),
             operation: Arc::new(AsyncMutex::new(())),
@@ -370,6 +398,28 @@ mod tests {
     }
 
     #[test]
+    fn a_release_build_without_a_bundle_type_is_portable() {
+        assert_eq!(initial_phase(false, true, false), AppUpdatePhase::Portable);
+        assert_eq!(initial_phase(false, true, true), AppUpdatePhase::Idle);
+        // Development builds are never bundled and keep the updater usable.
+        assert_eq!(initial_phase(false, false, false), AppUpdatePhase::Idle);
+        assert_eq!(
+            initial_phase(true, true, false),
+            AppUpdatePhase::ExternallyManaged
+        );
+    }
+
+    #[test]
+    fn flatpak_and_portable_builds_refuse_self_updates() {
+        assert!(self_update_disabled(AppUpdatePhase::ExternallyManaged).is_some());
+        assert!(
+            self_update_disabled(AppUpdatePhase::Portable)
+                .is_some_and(|reason| reason.contains("GitHub Releases"))
+        );
+        assert!(self_update_disabled(AppUpdatePhase::Idle).is_none());
+    }
+
+    #[test]
     fn native_update_operations_are_serialized_without_queueing_duplicates() {
         let runtime = Runtime::new();
         let first = runtime.reserve().expect("first operation");
@@ -387,7 +437,7 @@ pub fn start(
 ) -> anyhow::Result<()> {
     let runtime = Arc::clone(app.state::<Arc<Runtime>>().inner());
     runtime.preferences_changed(&app, automatic)?;
-    if runtime.snapshot()?.phase == AppUpdatePhase::ExternallyManaged {
+    if self_update_disabled(runtime.snapshot()?.phase).is_some() {
         return Ok(());
     }
     let initial_operation = runtime.reserve()?;
@@ -458,10 +508,10 @@ fn require_self_managed(runtime: &Runtime) -> Result<(), String> {
     let state = runtime
         .snapshot()
         .map_err(|_| "Could not read application update state".to_string())?;
-    if state.phase == AppUpdatePhase::ExternallyManaged {
-        return Err("Updates for this installation are managed by Flatpak.".to_string());
+    match self_update_disabled(state.phase) {
+        Some(reason) => Err(reason.to_string()),
+        None => Ok(()),
     }
-    Ok(())
 }
 
 #[tauri::command]

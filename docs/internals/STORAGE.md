@@ -142,13 +142,16 @@ Deleting or duplicating an instance deletes or copies both kinds of rows, and a
 content-directory move rewrites their `instances_directory`. Starting a new install
 clears them before the pack is imported again.
 
-Builds up to v0.2.3 kept these lists in the instance folder. A leftover
-`licht-curseforge.json` is imported into `curseforge_files` the next time the pack
-files are installed or repaired, then removed. Instances with a Modrinth index skip
-this import, and Modrinth packs may not write that file. An invalid file fails the
-job and is kept. If the file cannot be removed, the import is undone and the job
-fails, so rows and file never coexist. Leftover `licht-modpack.json` files are not
-imported.
+Builds up to v0.2.3 kept these lists in the instance folder. The next time the
+pack files are installed or repaired, a leftover `licht-modpack.json` is imported
+into the Modrinth tables and a leftover `licht-curseforge.json` into
+`curseforge_files`, then the file is removed. Stored rows always win: a file is only
+imported when the instance has no rows of either kind, and neither kind of pack may
+write the other's file. A `licht-modpack.json` also waits while a
+`licht-curseforge.json` is present, so the CurseForge import decides that instance.
+A file that another run already removed counts as removed. An invalid file fails the
+job and is kept. If the file cannot
+be removed, the import is undone and the job fails, so rows and file never coexist.
 
 ## Verification
 
