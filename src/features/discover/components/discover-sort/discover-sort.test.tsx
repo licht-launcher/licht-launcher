@@ -11,7 +11,12 @@ describe("DiscoverSort", () => {
     const trigger = screen.getByRole("combobox", { name: "Sort by" });
     expect(trigger).toHaveTextContent("Downloads");
     fireEvent.click(trigger);
-    fireEvent.click(await screen.findByRole("option", { name: "Relevance" }));
+    const options = await screen.findAllByRole("option");
+    // Each order is drawn with its own icon.
+    for (const option of options) {
+      expect(option.querySelector("svg")).not.toBeNull();
+    }
+    fireEvent.click(screen.getByRole("option", { name: "Relevance" }));
 
     expect(onChange).toHaveBeenCalledExactlyOnceWith("relevance");
   });

@@ -64,6 +64,25 @@ describe("DiscoverFilters", () => {
     expect(screen.queryByText(/CurseForge/)).not.toBeInTheDocument();
   });
 
+  it("collapses and expands a filter group", () => {
+    renderFilters();
+    const toggle = screen.getByRole("button", { name: "Loader" });
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+
+    fireEvent.click(toggle);
+
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(
+      screen.queryByRole("combobox", { name: "Loader" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(toggle);
+
+    expect(screen.getByRole("combobox", { name: "Loader" })).toHaveTextContent(
+      "Any loader",
+    );
+  });
+
   it("toggles a single category", () => {
     const onChange = renderFilters();
     const categories = screen.getByRole("list", { name: "Category" });

@@ -1,5 +1,3 @@
-import { ArrowUpDownIcon } from "lucide-react";
-
 import {
   Select,
   SelectContent,
@@ -32,12 +30,12 @@ export function DiscoverSort({
         aria-label="Sort by"
         className={discoverSortStyles.trigger}
       >
-        <ArrowUpDownIcon aria-hidden className={discoverSortStyles.icon} />
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
         {SORT_OPTIONS.map((option) => (
           <SelectItem key={option.value} value={option.value}>
+            <option.icon aria-hidden className={discoverSortStyles.icon} />
             {option.label}
           </SelectItem>
         ))}

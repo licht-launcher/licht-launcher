@@ -66,43 +66,45 @@ export function ModpackRow({
         <span className={modpackRowStyles.description}>
           {modpack.description}
         </span>
-        {(modpack.loaders.length > 0 || categories.length > 0) && (
-          <span className={modpackRowStyles.tags}>
-            {modpack.loaders.map((loader) => (
-              <LoaderBadge key={loader} loader={loader} />
-            ))}
-            {categories.map((category) => (
-              <Badge key={category.value}>
-                <category.icon aria-hidden />
-                {category.label}
-              </Badge>
-            ))}
+        <span className={modpackRowStyles.footer}>
+          {(modpack.loaders.length > 0 || categories.length > 0) && (
+            <span className={modpackRowStyles.tags}>
+              {modpack.loaders.map((loader) => (
+                <LoaderBadge key={loader} loader={loader} />
+              ))}
+              {categories.map((category) => (
+                <Badge key={category.value}>
+                  <category.icon aria-hidden />
+                  {category.label}
+                </Badge>
+              ))}
+            </span>
+          )}
+          <span className={modpackRowStyles.meta}>
+            <span className={modpackRowStyles.stat}>
+              <DownloadIcon aria-hidden />
+              <span>
+                {formatDownloads(modpack.downloads)}
+                <span className={modpackRowStyles.srOnly}> downloads</span>
+              </span>
+            </span>
+            {updated && (
+              <span className={modpackRowStyles.stat}>
+                <CalendarClockIcon aria-hidden />
+                <time
+                  dateTime={modpack.updatedAt ?? undefined}
+                  title={formatUpdatedAt(modpack.updatedAt) ?? undefined}
+                >
+                  Updated {updated}
+                </time>
+              </span>
+            )}
+            {/* The same pack can be listed by both stores; this tells them apart. */}
+            <span className={modpackRowStyles.stat}>
+              <StoreIcon aria-hidden />
+              {SOURCE_LABELS[modpack.source]}
+            </span>
           </span>
-        )}
-      </span>
-      <span className={modpackRowStyles.meta}>
-        <span className={modpackRowStyles.stat}>
-          <DownloadIcon aria-hidden />
-          <span>
-            {formatDownloads(modpack.downloads)}
-            <span className={modpackRowStyles.srOnly}> downloads</span>
-          </span>
-        </span>
-        {updated && (
-          <span className={modpackRowStyles.stat}>
-            <CalendarClockIcon aria-hidden />
-            <time
-              dateTime={modpack.updatedAt ?? undefined}
-              title={formatUpdatedAt(modpack.updatedAt) ?? undefined}
-            >
-              Updated {updated}
-            </time>
-          </span>
-        )}
-        {/* The same pack can be listed by both stores; this tells them apart. */}
-        <span className={modpackRowStyles.stat}>
-          <StoreIcon aria-hidden />
-          {SOURCE_LABELS[modpack.source]}
         </span>
       </span>
     </Link>

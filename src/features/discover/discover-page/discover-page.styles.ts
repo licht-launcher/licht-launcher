@@ -6,9 +6,8 @@ export const discoverPageStyles = {
   controls: "flex w-full max-w-lg items-center gap-2",
   search: "min-w-0 flex-1",
   body: "flex min-h-0 flex-1 gap-4",
-  results:
-    "flex min-h-0 min-w-0 flex-1 flex-col rounded-lg border border-border bg-background",
+  results: "flex min-h-0 min-w-0 flex-1 flex-col",
   loading: "flex flex-1 items-center justify-center",
   notice:
-    "flex shrink-0 items-center gap-2 border-b border-border px-4 py-2 text-xs text-muted-foreground [&_svg]:size-3.5",
+    "flex shrink-0 items-center gap-2 px-1 pb-2 text-xs text-muted-foreground [&_svg]:size-3.5",
 } as const;

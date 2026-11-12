@@ -1,6 +1,8 @@
 import {
+  CalendarClockIcon,
   CompassIcon,
   CpuIcon,
+  DownloadIcon,
   FeatherIcon,
   GaugeIcon,
   type LucideIcon,
@@ -9,6 +11,7 @@ import {
   SkullIcon,
   SparklesIcon,
   SwordsIcon,
+  TextSearchIcon,
   UsersIcon,
 } from "lucide-react";
 
@@ -18,10 +21,12 @@ import type { ModpackSort } from "@/lib/generated/ModpackSort";
 
 type Option<T extends string> = { value: T; label: string };
 
-export const SORT_OPTIONS: readonly Option<ModpackSort>[] = [
-  { value: "downloads", label: "Downloads" },
-  { value: "updated", label: "Recently updated" },
-  { value: "relevance", label: "Relevance" },
+export const SORT_OPTIONS: readonly (Option<ModpackSort> & {
+  icon: LucideIcon;
+})[] = [
+  { value: "downloads", label: "Downloads", icon: DownloadIcon },
+  { value: "updated", label: "Recently updated", icon: CalendarClockIcon },
+  { value: "relevance", label: "Relevance", icon: TextSearchIcon },
 ];
 
 export const LOADER_OPTIONS: readonly Option<ModpackLoader>[] = [

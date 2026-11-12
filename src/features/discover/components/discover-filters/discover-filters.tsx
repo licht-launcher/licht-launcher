@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import {
   BlocksIcon,
+  ChevronDownIcon,
   GlobeIcon,
   LayoutGridIcon,
   type LucideIcon,
@@ -10,6 +11,11 @@ import {
 import { type ReactNode, useId } from "react";
 
 import { Button } from "@/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Combobox } from "@/components/ui/combobox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -88,6 +94,7 @@ export function DiscoverFilters({
                   }
                 >
                   <SelectTrigger
+                    size="sm"
                     aria-labelledby={labelId}
                     className={discoverFiltersStyles.trigger}
                   >
@@ -109,6 +116,7 @@ export function DiscoverFilters({
             {() => (
               <Combobox
                 aria-label="Game version"
+                size="sm"
                 options={versionChoices}
                 value={filters.gameVersion ?? ""}
                 disabled={versions.isPending || versions.isError}
@@ -135,6 +143,7 @@ export function DiscoverFilters({
                 }
               >
                 <SelectTrigger
+                  size="sm"
                   aria-labelledby={labelId}
                   className={discoverFiltersStyles.trigger}
                 >
@@ -220,12 +229,25 @@ function FilterGroup({
 }) {
   const labelId = useId();
   return (
-    <section aria-labelledby={labelId} className={discoverFiltersStyles.group}>
-      <h2 id={labelId} className={discoverFiltersStyles.heading}>
-        <Icon aria-hidden className={discoverFiltersStyles.headingIcon} />
-        {title}
-      </h2>
-      {children(labelId)}
-    </section>
+    <Collapsible defaultOpen asChild>
+      <section
+        aria-labelledby={labelId}
+        className={discoverFiltersStyles.group}
+      >
+        <h2 id={labelId}>
+          <CollapsibleTrigger className={discoverFiltersStyles.heading}>
+            <Icon aria-hidden className={discoverFiltersStyles.headingIcon} />
+            {title}
+            <ChevronDownIcon
+              aria-hidden
+              className={discoverFiltersStyles.chevron}
+            />
+          </CollapsibleTrigger>
+        </h2>
+        <CollapsibleContent className={discoverFiltersStyles.groupContent}>
+          {children(labelId)}
+        </CollapsibleContent>
+      </section>
+    </Collapsible>
   );
 }
