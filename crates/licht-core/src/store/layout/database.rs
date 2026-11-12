@@ -58,6 +58,7 @@ pub(super) async fn remap(database: &Database, mappings: &[Relocation]) -> Resul
             "UPDATE modpack_indexes SET instances_directory = ?1 WHERE instances_directory = ?2",
             "UPDATE modpack_dependencies SET instances_directory = ?1 WHERE instances_directory = ?2",
             "UPDATE modpack_files SET instances_directory = ?1 WHERE instances_directory = ?2",
+            "UPDATE curseforge_files SET instances_directory = ?1 WHERE instances_directory = ?2",
         ] {
             sqlx::query(query)
                 .bind(mapping.destination.to_str().ok_or(CoreError::CachePath)?)

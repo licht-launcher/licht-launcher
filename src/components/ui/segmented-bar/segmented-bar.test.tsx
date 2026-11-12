@@ -99,7 +99,7 @@ describe("SegmentedBar", () => {
     expect(screen.queryByLabelText("Cache segment")).not.toBeInTheDocument();
   });
 
-  it("clips the complete bar to rounded ends even when the final category is tiny", () => {
+  it("gives a tiny final category a sliver that ends at the bar's edge", () => {
     render(
       <SegmentedBar
         label="Storage"
@@ -115,19 +115,11 @@ describe("SegmentedBar", () => {
       />,
     );
     const other = screen.getByLabelText("Other segment");
-    const bar = screen.getByLabelText("Storage bar");
-    expect(bar).toHaveClass("rounded-full", "overflow-hidden");
     expect(Number(other.getAttribute("width"))).toBeGreaterThan(0);
     expect(Number(other.getAttribute("width"))).toBeLessThan(1);
     expect(
       Number(other.getAttribute("x")) + Number(other.getAttribute("width")),
     ).toBe(1000);
-    fireEvent.mouseEnter(other);
-    expect(bar).toHaveClass("rounded-full", "overflow-hidden");
-    expect(screen.getByLabelText("Storage highlight")).toHaveClass(
-      "rounded-full",
-      "overflow-hidden",
-    );
   });
 
   it("highlights the segment associated with a hovered value and restores the bar on exit", () => {

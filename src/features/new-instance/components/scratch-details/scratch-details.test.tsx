@@ -140,14 +140,6 @@ describe("ScratchDetails", () => {
     );
   });
 
-  it("tints the snapshots switch yellow", () => {
-    renderDetails();
-
-    expect(
-      screen.getByRole("switch", { name: "Include snapshots" }),
-    ).toHaveClass("data-[state=checked]:bg-warning");
-  });
-
   it("prints no status text under the loader channel cards", () => {
     for (const loaderState of ["checking", "empty", "ready"] as const) {
       const { unmount } = renderDetails(

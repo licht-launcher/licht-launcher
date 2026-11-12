@@ -1,7 +1,7 @@
 //! Modpack discovery (Modrinth / CurseForge) and `.mrpack` import.
 
 mod archive;
-mod curseforge;
+pub(crate) mod curseforge;
 mod description;
 mod discovery;
 mod file_hashes;
@@ -13,12 +13,13 @@ mod types;
 pub(crate) mod workspace;
 
 pub use curseforge::{CURSEFORGE_API_KEY_ENV, CURSEFORGE_INDEX_FILE, install_curseforge_files};
-pub use discovery::{get_modpack, search_modpacks};
+pub use discovery::{available_modpack_sources, get_modpack, search_modpacks};
 pub use mrpack::{
     MODPACK_INDEX_FILE, apply_mrpack_loader, install_mrpack_files, mrpack_download_tasks,
 };
 pub use types::{
-    ModpackDetails, ModpackListItem, ModpackSearchPage, ModpackSource, ModpackVersionItem,
+    ModpackCategory, ModpackDetails, ModpackListItem, ModpackLoader, ModpackSearchFilters,
+    ModpackSearchPage, ModpackSort, ModpackSource, ModpackVersionItem,
 };
 
 use reqwest::Client;
@@ -28,15 +29,31 @@ use crate::settings::GlobalLaunch;
 use crate::{CoreError, Result, SharedCache};
 use std::path::Path;
 
+/// Removes a v0.2.x index file after its rows were stored. A file that is
+/// already gone was removed by another run that stored the same rows, so the
+/// import stands.
+pub(crate) fn remove_legacy_index(path: &Path) -> std::io::Result<()> {
+    match std::fs::remove_file(path) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        removed => removed,
+    }
+}
+
+/// Every version of a pack, newest first (undated versions last).
 pub async fn list_modpack_versions(
     client: &Client,
     source: ModpackSource,
     project_id: &str,
 ) -> Result<Vec<ModpackVersionItem>> {
-    match source {
-        ModpackSource::Modrinth => modrinth::list_modrinth_versions(client, project_id).await,
-        ModpackSource::Curseforge => curseforge::list_curseforge_versions(client, project_id).await,
-    }
+    let mut versions = match source {
+        ModpackSource::Modrinth => modrinth::list_modrinth_versions(client, project_id).await?,
+        ModpackSource::Curseforge => {
+            curseforge::list_curseforge_versions(client, project_id).await?
+        }
+    };
+    // RFC 3339 UTC timestamps compare correctly as text; `None` sorts last here.
+    versions.sort_by(|a, b| b.published_at.cmp(&a.published_at));
+    Ok(versions)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -197,4 +214,22 @@ pub(crate) async fn restore_instance_icon(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_legacy_index_already_removed_by_another_run_counts_as_removed() {
+        let directory =
+            std::env::temp_dir().join(format!("licht-legacy-index-remove-{}", std::process::id()));
+        std::fs::create_dir_all(&directory).expect("directory");
+        let file = directory.join(MODPACK_INDEX_FILE);
+        std::fs::write(&file, "{}").expect("index");
+        remove_legacy_index(&file).expect("removed");
+        assert!(!file.exists());
+        remove_legacy_index(&file).expect("already gone");
+        std::fs::remove_dir_all(directory).expect("cleanup");
+    }
 }

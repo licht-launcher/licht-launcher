@@ -4,6 +4,7 @@ use sqlx::SqliteConnection;
 use tokio::sync::oneshot;
 
 use super::{DatabaseClient, respond, unavailable};
+use crate::modpacks::curseforge::storage::StoredCurseforgeFile;
 use crate::modpacks::mrpack::storage::{StoredModpack, StoredModpackFile, StoredModpackHeader};
 use crate::store::repositories::modpacks::ModpackRepository;
 use crate::{CoreError, Result};
@@ -25,6 +26,17 @@ pub(super) enum Request {
         oneshot::Sender<Result<Vec<StoredModpackFile>>>,
     ),
     Replace(String, String, StoredModpack, oneshot::Sender<Result<()>>),
+    CurseforgeFiles(
+        String,
+        String,
+        oneshot::Sender<Result<Vec<StoredCurseforgeFile>>>,
+    ),
+    ReplaceCurseforgeFiles(
+        String,
+        String,
+        Vec<StoredCurseforgeFile>,
+        oneshot::Sender<Result<()>>,
+    ),
     Duplicate(String, String, String, oneshot::Sender<Result<()>>),
     Delete(String, String, oneshot::Sender<Result<()>>),
 }
@@ -98,6 +110,38 @@ impl DatabaseClient {
         response.await.map_err(|_| unavailable())?
     }
 
+    pub(crate) async fn curseforge_files(
+        &self,
+        instances: &Path,
+        folder: &str,
+    ) -> Result<Vec<StoredCurseforgeFile>> {
+        let (reply, response) = oneshot::channel();
+        self.send(super::Request::Modpacks(Request::CurseforgeFiles(
+            directory(instances)?,
+            folder.to_string(),
+            reply,
+        )))
+        .await?;
+        response.await.map_err(|_| unavailable())?
+    }
+
+    pub(crate) async fn replace_curseforge_files(
+        &self,
+        instances: &Path,
+        folder: &str,
+        files: Vec<StoredCurseforgeFile>,
+    ) -> Result<()> {
+        let (reply, response) = oneshot::channel();
+        self.send(super::Request::Modpacks(Request::ReplaceCurseforgeFiles(
+            directory(instances)?,
+            folder.to_string(),
+            files,
+            reply,
+        )))
+        .await?;
+        response.await.map_err(|_| unavailable())?
+    }
+
     pub(crate) async fn duplicate_modpack(
         &self,
         instances: &Path,
@@ -144,6 +188,15 @@ pub(super) async fn execute(connection: &mut SqliteConnection, request: Request)
         Request::Replace(directory, folder, index, reply) => respond(
             reply,
             ModpackRepository::replace(connection, &directory, &folder, &index).await,
+        ),
+        Request::CurseforgeFiles(directory, folder, reply) => respond(
+            reply,
+            ModpackRepository::curseforge_files(connection, &directory, &folder).await,
+        ),
+        Request::ReplaceCurseforgeFiles(directory, folder, files, reply) => respond(
+            reply,
+            ModpackRepository::replace_curseforge_files(connection, &directory, &folder, &files)
+                .await,
         ),
         Request::Duplicate(directory, source, destination, reply) => respond(
             reply,

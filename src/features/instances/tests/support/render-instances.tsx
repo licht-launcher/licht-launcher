@@ -17,6 +17,7 @@ import {
 import { afterEach, beforeEach, expect, vi } from "vitest";
 
 import { Toaster } from "@/components/ui/sonner";
+import { forgetDiscoverSearch } from "@/features/discover/lib/last-search";
 import { completedDownload } from "@/features/downloads/fixtures/job";
 import { storageSummary } from "@/features/downloads/fixtures/storage";
 import {
@@ -185,6 +186,7 @@ export async function openInstanceContextMenu(name = "Next") {
 
 export function setupInstancesPageTests() {
   beforeEach(() => {
+    forgetDiscoverSearch();
     listeners.clear();
     invoke.mockReset();
     closeWindow.mockReset().mockResolvedValue(undefined);

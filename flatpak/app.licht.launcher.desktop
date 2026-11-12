@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Licht Launcher
+Comment=Unofficial launcher for Minecraft: Java Edition
+Exec=licht
+Icon=app.licht.launcher
+Terminal=false
+Categories=Game;

@@ -10,7 +10,7 @@ use super::repositories::metadata::MetadataRepository;
 use crate::{CoreError, Result, SharedCache};
 
 const DB_FILE: &str = "licht.db";
-const SCHEMA_VERSION: u32 = 12;
+const SCHEMA_VERSION: u32 = 13;
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 // The database actor keeps one connection; the rest serve short reads and writes.
 const MAX_CONNECTIONS: u32 = 4;
@@ -328,6 +328,27 @@ async fn migrate(connection: &mut SqliteConnection) -> Result<()> {
                     AND (pending_copied = 0 OR pending_content_root IS NOT NULL));
             DELETE FROM meta WHERE key = 'content_directory_state';
             PRAGMA user_version = 12;",
+        )
+        .execute(&mut *transaction)
+        .await?;
+    }
+    if version < 13 {
+        // CurseForge files may carry SHA1, MD5 or both; one is required to verify a download.
+        sqlx::raw_sql(
+            "CREATE TABLE curseforge_files (
+                instances_directory TEXT NOT NULL, instance_folder TEXT NOT NULL,
+                position INTEGER NOT NULL CHECK(position >= 0), relative_path TEXT NOT NULL,
+                url TEXT NOT NULL, sha1 TEXT, md5 TEXT,
+                size INTEGER NOT NULL CHECK(size >= 0),
+                project_id INTEGER NOT NULL CHECK(project_id >= 0),
+                file_id INTEGER NOT NULL CHECK(file_id >= 0),
+                file_name TEXT NOT NULL, name TEXT NOT NULL,
+                required INTEGER NOT NULL CHECK(required IN (0, 1)),
+                CHECK(trim(coalesce(sha1, '')) <> '' OR trim(coalesce(md5, '')) <> ''),
+                PRIMARY KEY (instances_directory, instance_folder, position),
+                UNIQUE (instances_directory, instance_folder, relative_path)
+            );
+            PRAGMA user_version = 13;",
         )
         .execute(&mut *transaction)
         .await?;

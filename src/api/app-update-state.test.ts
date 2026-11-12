@@ -12,6 +12,14 @@ describe("application update state boundary", () => {
     });
     expect(parseAppUpdateState(state)).toEqual(state);
   });
+  it("accepts updates managed by Flatpak", () => {
+    const state = appUpdateState({ phase: "externallyManaged" });
+    expect(parseAppUpdateState(state)).toEqual(state);
+  });
+  it("accepts a portable build that does not update itself", () => {
+    const state = appUpdateState({ phase: "portable" });
+    expect(parseAppUpdateState(state)).toEqual(state);
+  });
   it.each([
     null,
     {},

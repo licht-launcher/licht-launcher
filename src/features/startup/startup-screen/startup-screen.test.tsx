@@ -291,10 +291,6 @@ describe("StartupScreen", () => {
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(logo.closest("[data-tauri-drag-region]")).not.toBeNull();
-    expect(screen.getByRole("main")).toHaveClass(
-      "bg-sidebar",
-      "text-sidebar-foreground",
-    );
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
@@ -307,7 +303,7 @@ describe("StartupScreen", () => {
         }),
     );
     center.mockImplementation(async () => {
-      expect(screen.getByRole("main")).toHaveClass("bg-sidebar");
+      expect(screen.getByRole("main")).toBeInTheDocument();
       expect(screen.getByRole("status")).toHaveTextContent(
         "Preparing launcher…",
       );

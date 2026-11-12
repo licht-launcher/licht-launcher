@@ -1,0 +1,15 @@
+export const modpackPageStyles = {
+  root: "flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-4",
+  toolbar: "flex shrink-0 items-center",
+  state: "flex flex-1 items-center justify-center",
+  layout: "grid min-h-0 flex-1 grid-cols-3 gap-4",
+  tabs: "col-span-2 flex min-h-0 min-w-0 flex-col gap-3",
+  tabsList: "w-fit shrink-0",
+  tabsTrigger: "cursor-pointer gap-1.5 px-3",
+  tabCount: "rounded-full bg-muted px-1.5 text-xs tabular-nums",
+  tabContent: "mt-0 flex min-h-0 flex-1 flex-col outline-none",
+  tabScroll: "min-h-0 flex-1",
+  tabBody: "pr-3",
+  aside: "min-h-0 min-w-0",
+  asideScroll: "h-full",
+} as const;

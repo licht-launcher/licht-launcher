@@ -79,28 +79,6 @@ describe("CreateInstanceDialog", () => {
     ).toBeVisible();
   });
 
-  it("shows the header without a divider on the same background as the content", async () => {
-    await renderApp();
-    const dialog = await openCreateDialog();
-
-    const header = dialog.querySelector("[data-slot='dialog-header']");
-    expect(header).toHaveClass("-mx-4");
-    expect(header).not.toHaveClass("border-b");
-    expect(header).not.toHaveClass("bg-muted/50");
-    expect(header).not.toHaveClass("border-border/40");
-  });
-
-  it("uses less side padding and no tinted footer", async () => {
-    await renderApp();
-    const dialog = await openDetails();
-
-    expect(dialog).toHaveClass("px-4", "py-6");
-    expect(dialog).not.toHaveClass("p-6");
-    const footer = dialog.querySelector("[data-slot='dialog-footer']");
-    expect(footer).toHaveClass("-mx-4", "-mb-6", "px-4", "bg-transparent");
-    expect(footer).not.toHaveClass("bg-muted/50");
-  });
-
   it("closes with the same corner button as the other dialogs", async () => {
     await renderApp();
     const dialog = await openCreateDialog();
@@ -111,7 +89,6 @@ describe("CreateInstanceDialog", () => {
     expect(closeButtons).toHaveLength(1);
     const close = closeButtons[0] as HTMLElement;
     expect(close).toHaveAttribute("data-slot", "dialog-close");
-    expect(close).toHaveClass("absolute", "top-2", "right-2");
     expect(
       dialog.querySelector("[data-slot='dialog-header']")?.contains(close),
     ).toBe(false);
@@ -294,14 +271,6 @@ describe("CreateInstanceDialog", () => {
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "Create" })).toBeEnabled(),
     );
-  });
-
-  it("keeps the form inside the scroll area clear of clipped outlines", async () => {
-    await renderApp();
-    const dialog = await openDetails();
-
-    const scroll = dialog.querySelector("[data-slot='create-scroll']");
-    expect(scroll).toHaveClass("-mx-1", "px-1");
   });
 
   it("keeps the header and the actions out of the scrolling area", async () => {

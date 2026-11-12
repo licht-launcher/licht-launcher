@@ -1,0 +1,48 @@
+# Repackages the .deb produced by `pnpm tauri build --bundles deb`.
+# The release workflow copies it to flatpak/licht-launcher.deb and checks out
+# flathub/shared-modules at a pinned commit into flatpak/shared-modules.
+id: app.licht.launcher
+runtime: org.gnome.Platform
+runtime-version: "51"
+sdk: org.gnome.Sdk
+command: licht
+finish-args:
+  - --share=ipc
+  - --share=network
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --socket=pulseaudio
+  # OpenGL for the game.
+  - --device=dri
+  # Keeps custom application directories and Java paths picked in settings usable.
+  - --filesystem=home
+  # System tray icon.
+  - --talk-name=org.kde.StatusNotifierWatcher
+
+modules:
+  # The tray icon loads libayatana-appindicator at runtime.
+  - shared-modules/libayatana-appindicator/libayatana-appindicator-gtk3.json
+
+  - name: licht-launcher
+    buildsystem: simple
+    sources:
+      - type: file
+        path: licht-launcher.deb
+      - type: file
+        path: app.licht.launcher.desktop
+      - type: file
+        path: app.licht.launcher.metainfo.xml
+    build-commands:
+      - ar x licht-launcher.deb
+      - tar -xf data.tar.*
+      - install -Dm755 usr/bin/licht /app/bin/licht
+      - install -Dm644 app.licht.launcher.desktop /app/share/applications/app.licht.launcher.desktop
+      - install -Dm644 app.licht.launcher.metainfo.xml /app/share/metainfo/app.licht.launcher.metainfo.xml
+      # Flatpak validates icon dimensions against the directory name, so the
+      # high-density "@2" variants Tauri emits are skipped.
+      - |
+        for icon in usr/share/icons/hicolor/*/apps/licht.png; do
+          size="$(basename "$(dirname "$(dirname "$icon")")")"
+          case "$size" in *@*) continue ;; esac
+          install -Dm644 "$icon" "/app/share/icons/hicolor/${size}/apps/app.licht.launcher.png"
+        done

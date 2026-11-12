@@ -7,6 +7,7 @@
 mod auth;
 mod diagnostics;
 mod error;
+mod external_url;
 mod game;
 mod hashes;
 mod instance;
@@ -24,7 +25,7 @@ mod updates;
 
 pub use updates::{
     APP_UPDATE_INTERVAL_SECONDS, AppUpdateCache, AppUpdatePackage, AppUpdatePhase, AppUpdateState,
-    app_update_can_check,
+    app_update_can_check, app_updates_managed_externally,
 };
 
 pub(crate) use game::install;
@@ -65,6 +66,7 @@ pub use download::{
     shared_transfer_limits,
 };
 pub use error::CoreError;
+pub use external_url::external_https_url;
 pub use install::{
     ASSET_OBJECT_BASE, GameInstall, InstallArgs, InstallPlan, install_game, install_game_version,
     install_version, parse_install_args,
@@ -96,8 +98,9 @@ pub use loaders::{
     list_loader_versions,
 };
 pub use modpacks::{
-    CURSEFORGE_API_KEY_ENV, CURSEFORGE_INDEX_FILE, MODPACK_INDEX_FILE, ModpackDetails,
-    ModpackListItem, ModpackSearchPage, ModpackSource, ModpackVersionItem, apply_mrpack_loader,
+    CURSEFORGE_API_KEY_ENV, CURSEFORGE_INDEX_FILE, MODPACK_INDEX_FILE, ModpackCategory,
+    ModpackDetails, ModpackListItem, ModpackLoader, ModpackSearchFilters, ModpackSearchPage,
+    ModpackSort, ModpackSource, ModpackVersionItem, apply_mrpack_loader, available_modpack_sources,
     create_instance_from_modpack, get_modpack, install_curseforge_files, install_mrpack_files,
     list_modpack_versions, mrpack_download_tasks, search_modpacks,
 };

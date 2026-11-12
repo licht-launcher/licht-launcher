@@ -1,104 +1,148 @@
-# Licht Launcher (Tauri v2)
+# Licht Launcher
+
+Rules for anyone (human or agent) changing this repository. They are not
+suggestions: code that breaks them does not get merged.
 
 ## Context
 
-- **Unofficial** Minecraft: Java Edition launcher, cross-platform (**Windows and Linux**), built with **Tauri v2**.
-- Frontend: React + TypeScript + Vite, Tailwind CSS, shadcn/ui (Radix UI), Lucide, TanStack Router (file-based routes in `src/routes`, hash history), TanStack Query, TanStack Virtual. See `package.json` for exact dependencies. Backend: Rust.
-- Display name: **Licht Launcher**. Repository/packages: `licht-launcher`. Binary/CLI: `licht`. Core crate: `licht-core`.
-- The project owner is a senior TypeScript/Node developer, but has **LITTLE knowledge of Rust**.
-- The full plan is in `docs/ROADMAP.md`. Work on **one task at a time**; explicitly requested maintenance or documentation tasks do not need a roadmap item.
+- **Unofficial** Minecraft: Java Edition launcher for **Windows and Linux**, built with **Tauri v2**.
+- Backend: Rust (Cargo workspace). Frontend: React, strict TypeScript, Vite, Tailwind CSS, shadcn/ui (Radix UI), Lucide, TanStack Router (file-based routes in `src/routes`, hash history), TanStack Query and TanStack Virtual. `package.json` and `Cargo.toml` are the source of truth for versions.
+- Names: display name **Licht Launcher**; repository/packages `licht-launcher`; binary/CLI `licht`; core crate `licht-core`.
+- Pending work lives in `docs/ROADMAP.md`. Layers and boundaries are detailed in `docs/contributing/ARCHITECTURE.md`; setup and checks in `docs/contributing/DEVELOPMENT.md`.
 
-## How to work with me
+## Workflow
 
-- Before any code, present a **short PLAN** (files that will be created/changed, approach, alternatives) and wait for my approval.
-- **Ask** when there is a decision: new dependency, architecture change, public API between Rust and the frontend, security/authentication, any ambiguity. Items marked with 🛑 in the roadmap always require my approval. Do not decide on your own.
-- One task = one branch = one small, focused PR. Never mix topics.
-- **Do not write code beyond what the task asks.** No "for the future" abstractions, no extra features, no refactoring that was not requested.
-- Follow the architecture below. If you think it should change, **propose it first**; do not change it.
-- File edits inside an already approved plan do not need individual confirmation.
-- If something in the task conflicts with this file or the roadmap, stop and tell me.
+- Before writing code, present a **short plan**: files to create/change, approach, alternatives considered, and how it will be tested. Wait for approval.
+- **Ask first** for: new dependencies, architecture changes, the command/event API between Rust and the frontend, security or authentication, data stored on disk, and any ambiguity in the requirement. Roadmap items marked 🛑 always need approval.
+- One task = one branch (`feat/...`, `fix/...`, `chore/...`) = one small, focused PR. Never mix topics.
+- Do only what the task asks. No speculative abstractions, extra features or unrequested refactors. If you spot a problem outside the scope, report it instead of fixing it.
+- If the task conflicts with this file, the architecture or the roadmap, stop and say so.
+- Edits inside an approved plan do not need individual confirmation.
 
 ## Language
 
-- Code, identifiers, comments, commit messages (Conventional Commits: `feat:`, `fix:`, `test:`, `chore:`...), UI text and PR descriptions in **English**.
+- Code, identifiers, comments, commit messages (Conventional Commits), PR descriptions and UI copy in **English**.
 
 ## Architecture
 
-- Cargo workspace:
-  - `crates/licht-core`: all the logic (manifests, downloads, rules, Java, launch, auth). **No Tauri dependency.** Testable on its own.
-  - `src-tauri`: thin layer. Only `#[tauri::command]` and events that call `licht-core`. **No business rules here.**
-  - `src/`: frontend. No Minecraft logic; only UI and `invoke` calls. Structure: `src/routes` (route files), `src/components/ui` (shadcn/ui), `src/features/*` (screens and UI logic by feature), `src/api` (bridge to the Rust backend and Tauri: typed `invoke` wrappers, Rust payload parsing, app events, window and platform helpers), `src/lib` (generic helpers such as `cn`, error messages and formatting, plus the `ts-rs` types in `src/lib/generated`).
-- Rust → frontend communication: **events** (e.g. download progress). Frontend → Rust: **typed commands**.
-- Types shared between Rust and TS must be **generated with `ts-rs`**, never duplicated by hand.
-- Errors: `thiserror` in the core, `anyhow` only at the edges. **No `unwrap()`** outside tests.
-- Logs with `tracing`.
-- Use **Tauri v2**. Do not use v1 APIs or examples.
+- `crates/licht-core`: all domain logic (manifests, downloads, rules, Java, launch, instances, auth, loaders, modpacks). **No Tauri dependency.** Testable on its own; it also builds the `licht` CLI.
+- `src-tauri`: thin adapter. Only `#[tauri::command]` handlers, events and app wiring that delegate to `licht-core`. **No business rules.**
+- `src/`: UI only, no Minecraft logic.
+  - `src/routes`: route files that mount feature screens.
+  - `src/features/<feature>`: screens, components, hooks and UI logic for one feature.
+  - `src/components/ui`: shared design-system components.
+  - `src/api`: the only place that talks to Tauri (typed `invoke` wrappers, payload parsing, events, window/platform helpers).
+  - `src/lib`: generic helpers and the `ts-rs` types in `src/lib/generated`.
+- Frontend → Rust: **typed commands**. Rust → frontend: **events** (progress throttled to ~100 ms).
+- Types shared between Rust and TypeScript are **generated with `ts-rs`**, never written by hand.
+- Use **Tauri v2** APIs only.
+- If you believe the architecture should change, propose it; do not change it in passing.
 
-## UI and design system (consistency over creativity)
+## Code quality
 
-- Use **only** the components in `src/components/ui` and the **theme tokens** (CSS variables). If a component is missing, propose adding it to the design system instead of creating a one-off style.
-- One folder per component with `<name>.tsx`, `<name>.styles.ts` (Tailwind classes), `<name>.test.tsx` and `index.ts`. Components added with the shadcn CLI must be moved into this layout. See `docs/contributing/ARCHITECTURE.md`.
-- **Forbidden:** inline styles, loose colors/sizes (e.g. `#3b82f6`, `w-[137px]`) outside the tokens, and any new UI library without my approval.
-- Before creating a screen, **list the existing components** that will be used and which ones are missing.
-- Accessibility: everything operable by keyboard, with visible focus and correct labels (Radix already helps; do not remove that).
-- The frontend runs in **WebView2 (Windows)** and **WebKitGTK (Linux)**. Avoid `backdrop-filter`, blurs, large shadows, and complex animations. If you use a modern CSS feature, tell me so I can test it on both systems.
-- Calls to Rust go through TanStack Query (cache, loading, and error). Progress events with throttling (~100 ms). Virtualize lists expected to exceed ~100 items.
+### General
 
-## Rust (beginner level: prefer simple code)
+- Small, single-purpose functions and modules with clear names. Prefer simple, explicit code over clever code.
+- Make invalid states unrepresentable: model domain data with precise types (enums, discriminated unions, newtypes) instead of loose strings and flags.
+- Validate external input at the boundary (HTTP responses, files on disk, Tauri payloads, user input) and work with trusted types inside.
+- Never swallow errors. Handle them or propagate them with context; the user must get an actionable message.
+- No dead code, commented-out code, leftover debug output, or TODOs without an issue.
+- Comments explain the non-obvious *why*, not the *what*.
+- Match the patterns already in the codebase. Search for an existing helper before creating one.
 
-- Prefer clarity over "advanced idiomatic". Avoid complex lifetimes, custom macros, and `unsafe`. If it is unavoidable, explain it and ask for approval.
-- Use `clone()` without guilt when it simplifies things.
-- In every PR, include a **"Rust concepts used"** section in the description, explaining in plain language (with a TS/Node comparison when it makes sense) any new concept: ownership, borrowing, `Result`, traits, async/tokio.
-- When there is a compiler error, **explain the cause** before fixing it.
-- Comment only the non-obvious "why".
+### Rust
 
-## Quality (required before opening a PR)
+- Idiomatic, `clippy`-clean code (`-D warnings`). No `#[allow(...)]` without a comment justifying it.
+- Errors: `thiserror` types in `licht-core`, with variants the caller can act on; `anyhow` only at the edges (`src-tauri`, CLI). **No `unwrap()`/`expect()`/`panic!` outside tests**, except for invariants that are documented at the call site.
+- No `unsafe`. Async with `tokio`; never block the runtime (use `spawn_blocking` for blocking I/O or CPU-heavy work).
+- Logging with `tracing`, with structured fields. Never log tokens, credentials or personal data.
+- Keep the public API of each module minimal (`pub(crate)` by default).
 
-- Run everything with `pnpm check` (or `pnpm check:rust` / `pnpm check:web`).
-- Rust: `cargo fmt --check`, `cargo clippy -- -D warnings`, `cargo test`
-- Frontend: `pnpm lint`, `pnpm typecheck`, `pnpm test` (Vitest + Testing Library; new components with at least one render/interaction test)
-- Automated tests for all core logic. Use **fixtures** (real Mojang JSONs saved in `tests/fixtures`). **No test may depend on the network.**
-- If a check fails and you cannot fix it, say so in the PR instead of hiding it.
+### TypeScript and React
 
-## PR format
+- `strict` TypeScript. No `any`, no non-null assertions to silence the compiler, no `@ts-ignore`/`@ts-expect-error`; use `unknown` and narrow.
+- Data from Rust goes through TanStack Query (cache, loading and error states). Components never call `invoke` directly; they use `src/api`.
+- Keep logic out of components: pure functions in `lib/`/`model/` and hooks in `hooks/` within the feature, so they can be tested in isolation.
+- Virtualize lists expected to exceed ~100 items.
+- Never disable lint rules (Biome) to make code pass.
 
-- Short title. Description with: what changed, why, how to test, decisions made, Rust concepts used, points where I want my opinion.
+## UI and design system
+
+- Use **only** components from `src/components/ui` and **theme tokens** (CSS variables). If a component is missing, propose adding it to the design system instead of creating a one-off style.
+- One folder per component: `<name>.tsx`, `<name>.styles.ts` (Tailwind classes), `<name>.test.tsx` and `index.ts`. Components added with the shadcn CLI must be moved into this layout (see `docs/contributing/ARCHITECTURE.md`).
+- **Forbidden:** inline styles, arbitrary values outside the tokens (e.g. `#3b82f6`, `w-[137px]`), and new UI libraries without approval.
+- Before building a screen, list the existing components it will use and the ones that are missing.
+- Accessibility: everything operable by keyboard, with visible focus, correct roles and labels. Do not remove what Radix provides.
+- The UI runs on **WebView2 (Windows)** and **WebKitGTK (Linux)**. Avoid `backdrop-filter`, blurs, large shadows and heavy animations. Flag any modern CSS feature so it can be checked on both platforms.
+
+## Testing
+
+Tests are part of the change, not a follow-up. A PR without tests for new behavior is incomplete.
+
+- **Bugs:** write a failing test that reproduces the bug first, then fix it.
+- **Test behavior, not implementation.** Assert on outputs, side effects and what the user sees; do not assert on private functions, internal state or call order unless that is the contract.
+- **Determinism:** no network, no real Microsoft account, no dependency on the machine's clock, timezone, locale or file system layout. Use temporary directories, fake clocks and local test servers (`crates/licht-core/src/test_http.rs`).
+- **Fixtures:** reuse the real Mojang/loader JSONs in `crates/licht-core/tests/fixtures` and the feature `fixtures/` folders. Only add third-party material whose redistribution is allowed, and document its source.
+- Cover the unhappy paths: invalid input, corrupted or partial downloads, SHA1 mismatch, cancellation, missing files and permission errors.
+- Test names describe the behavior (`rejects_a_file_with_a_wrong_sha1`, `"shows an error when the install fails"`).
+
+### Rust
+
+- Unit tests in `#[cfg(test)]` modules next to the code; cross-module flows in `crates/licht-core/tests`.
+- Every public function of `licht-core` with logic has tests, including its error variants.
+- `src-tauri` stays thin enough that it does not need logic tests; if a command needs one, the logic belongs in the core.
+
+### Frontend
+
+- Vitest + Testing Library. Query by role, label and text as a user would (`getByRole`, `getByLabelText`), drive interactions through events, and avoid test IDs unless there is no accessible alternative.
+- Mock at the boundary (`src/api` or `@tauri-apps/*`), never the component under test or its children.
+- Every component has at least one render test and one test per meaningful interaction or state (loading, empty, error, success).
+- Pure functions and hooks get direct unit tests.
+- End-to-end tests (`e2e/`, WebdriverIO) cover critical flows that do not need the network or an account.
+
+## Quality gate (required before opening a PR)
+
+- `pnpm check` must pass (or `pnpm check:web` / `pnpm check:rust` when only one side changed):
+  - Rust: `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`.
+  - Frontend: `pnpm lint`, `pnpm typecheck`, `pnpm test`.
+- For build or packaging changes, also run the relevant build from `docs/contributing/DEVELOPMENT.md`.
+- Never weaken, skip or delete a test to get green. If a check fails and you cannot fix it, say so in the PR.
+
+## Pull requests
+
+- Short title in Conventional Commits style.
+- Description: what changed, why, how to test (commands actually run and their results), decisions made, and points that need review.
+- Self-review the diff before opening it: scope, naming, tests, no leftovers.
 
 ## Domain rules
 
 - Game data **always** comes from Mojang's servers. Never redistribute Minecraft files.
-- Verify the **SHA1** of everything that is downloaded.
-- No tokens/secrets in the repository or in the logs. Tokens stay in the **OS keyring**.
-- Paths and separators must work on Windows and Linux (use `std::path` and the `directories` crate; never concatenate strings).
-- The project is **not official**: keep the notice "not affiliated with Mojang Studios or Microsoft" in the README. Do not use "Minecraft" or "Mojang" in the project, package, or binary name, and do not use official logos or art.
+- Verify the **SHA1** (or the hash the source provides) of everything downloaded.
+- No tokens or secrets in the repository or in logs. Tokens live in the **OS keyring**.
+- Paths must work on Windows and Linux: use `std::path` and the `directories` crate; never build paths by concatenating strings.
+- Changes to external requests, local storage or data handling must be reflected in `PRIVACY.md`.
+- The project is **not official**: keep the "not affiliated with Mojang Studios or Microsoft" notice in the README. Do not use "Minecraft" or "Mojang" in the project, package or binary name, and do not use official logos or art.
 
 ## Releases
 
-- For anything about releases, versions or codenames, read `docs/contributing/RELEASING.md`.
+- For releases, versions or codenames, read `docs/contributing/RELEASING.md`.
 
-## Efficiency (token budget)
+## Agent efficiency
 
 ### Reading
 
-- Locate with `rg`/`grep` first; read only the needed line ranges, not whole files.
-- Never read in full: `target/`, `node_modules/`, `dist/`, `Cargo.lock`, `pnpm-lock.yaml`, `src/routeTree.gen.ts` and other generated files (e.g. `src-tauri/gen/`, `src-tauri/icons/`), `tests/fixtures/*`. For fixtures use `jq`, `head` or `rg` to extract only the fields you need.
-- In `docs/ROADMAP.md`, read only "Open items" and the current item/phase.
-- Read other `docs/**/*.md` only when the current task touches that topic. Do not re-read files already in context unless they changed.
-- Keep exploration scoped to the current item. Use targeted searches to fill missing context; ask when a decision or requirement remains unclear.
+- Locate with `rg` first; read only the line ranges you need.
+- Never read in full: `target/`, `node_modules/`, `dist/`, `coverage/`, lockfiles, `src/routeTree.gen.ts`, `src/lib/generated/`, `src-tauri/gen/`, `src-tauri/icons/`, and fixtures. For fixtures use `jq`, `head` or `rg` to extract only the fields you need.
+- In `docs/ROADMAP.md`, read only "Open items" and the current item. Read other `docs/**` only when the task touches that topic.
 
 ### Commands
 
-- While iterating use the cheapest check: `cargo check -q`, `cargo test -q -p licht-core <filter>`, `pnpm vitest run <file>`. Run the full suite (fmt, clippy, tests, lint, typecheck) only before the PR.
-- Prefer supported quiet or summary options. If output needs filtering, use shell-compatible commands and preserve the original command's exit code. On failure, show the relevant error with enough context to diagnose it.
-- Do not rerun the same command without a relevant change or new evidence that justifies it, such as a suspected transient failure.
+- While iterating, use the cheapest check: `cargo check -q`, `cargo test -q -p licht-core <filter>`, `pnpm vitest run <file>`. Run the full gate before the PR.
+- Preserve the exit code when filtering output, and show enough of a failure to diagnose it.
+- Do not rerun a command without a relevant change or a suspected transient failure.
 
 ### Responses
 
-- Short and direct. Do not recap what I already know or repeat the approved plan.
-- Show only diffs or changed snippets, never whole files back.
-- Plans as short bullets: files, approach, 🛑 decisions. PR descriptions concise; "Rust concepts used" is mandatory but cover only what is new in that PR.
-
-### Session
-
-- One task per session, whether a roadmap item or explicitly requested maintenance. When done, suggest ending the session.
-- If the context is getting large, suggest compacting before continuing.
+- Short and direct. Show diffs or changed snippets, not whole files.
+- Plans as short bullets: files, approach, tests, 🛑 decisions.
+- One task per session; suggest compacting when the context gets large.
