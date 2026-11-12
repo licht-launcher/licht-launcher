@@ -7,19 +7,15 @@ import {
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { LoaderBadge } from "@/features/discover/components/loader-badge";
 import { SOURCE_LABELS } from "@/features/discover/lib/discover-search";
-import {
-  CATEGORY_BY_VALUE,
-  LOADER_LABELS,
-} from "@/features/discover/lib/filter-options";
+import { CATEGORY_BY_VALUE } from "@/features/discover/lib/filter-options";
 import {
   formatDownloads,
   formatTimeAgo,
   formatUpdatedAt,
 } from "@/features/discover/lib/format";
-import { PlatformIcon } from "@/features/new-instance/assets/platform-icons";
 import type { ModpackListItem } from "@/lib/generated/ModpackListItem";
-import { cn } from "@/lib/utils";
 
 import { modpackRowStyles } from "./modpack-row.styles";
 
@@ -73,20 +69,7 @@ export function ModpackRow({
         {(modpack.loaders.length > 0 || categories.length > 0) && (
           <span className={modpackRowStyles.tags}>
             {modpack.loaders.map((loader) => (
-              <Badge
-                key={loader}
-                data-loader={loader}
-                className={cn(
-                  modpackRowStyles.loader,
-                  modpackRowStyles.loaderTones[loader],
-                )}
-              >
-                <PlatformIcon
-                  platform={loader}
-                  className={modpackRowStyles.loaderIcon}
-                />
-                {LOADER_LABELS.get(loader)}
-              </Badge>
+              <LoaderBadge key={loader} loader={loader} />
             ))}
             {categories.map((category) => (
               <Badge key={category.value}>

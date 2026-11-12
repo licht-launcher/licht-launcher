@@ -34,7 +34,7 @@ function mockModpack(details: () => Promise<unknown>) {
 describe("Modpack page", () => {
   setupInstancesPageTests();
 
-  it("shows the pack's details, gallery and description", async () => {
+  it("shows the pack's header, description and sidebar", async () => {
     mockModpack(() => Promise.resolve(modpackDetails()));
     await renderAt("/discover/modrinth/1KVo5zza");
 
@@ -46,22 +46,53 @@ describe("Modpack page", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("by robotkoer")).toBeInTheDocument();
     expect(screen.getByText("19.2M downloads")).toBeInTheDocument();
-    expect(screen.getByText("Updated Nov 1, 2026")).toBeInTheDocument();
+    expect(screen.getByText("5.1K followers")).toBeInTheDocument();
+    expect(screen.getByText(/^Updated /, { selector: "time" })).toHaveAttribute(
+      "title",
+      "Nov 1, 2026",
+    );
     const categories = screen.getByRole("list", { name: "Categories" });
     expect(within(categories).getAllByRole("listitem")).toHaveLength(2);
-    const gallery = screen.getByRole("region", { name: "Gallery" });
-    expect(gallery.querySelector("img")).toHaveAttribute(
-      "src",
-      "https://cdn.modrinth.com/data/1KVo5zza/images/title.webp",
-    );
-    const description = screen.getByRole("region", { name: "Description" });
     expect(
-      within(description).getByRole("heading", { name: "Features" }),
+      within(screen.getByRole("tabpanel")).getByRole("heading", {
+        name: "Features",
+      }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("complementary", { name: "About this modpack" }),
+    ).toHaveTextContent("Compatibility");
     expect(invoke).toHaveBeenCalledWith("get_modpack", {
       source: "modrinth",
       projectId: "1KVo5zza",
     });
+  });
+
+  it("counts versions on their tab and shows the gallery on its own", async () => {
+    mockModpack(() => Promise.resolve(modpackDetails()));
+    await renderAt("/discover/modrinth/1KVo5zza");
+
+    expect(
+      await screen.findByRole("tab", { name: "Versions 2" }),
+    ).toBeInTheDocument();
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Gallery" }));
+
+    const gallery = await screen.findByRole("list", { name: "Gallery" });
+    expect(
+      within(gallery).getByRole("img", { name: "Title screen" }),
+    ).toHaveAttribute(
+      "src",
+      "https://cdn.modrinth.com/data/1KVo5zza/images/title.webp",
+    );
+  });
+
+  it("has no gallery tab when the pack has no images", async () => {
+    mockModpack(() => Promise.resolve(modpackDetails({ gallery: [] })));
+    await renderAt("/discover/modrinth/1KVo5zza");
+
+    await screen.findByRole("tab", { name: "Description" });
+    expect(
+      screen.queryByRole("tab", { name: "Gallery" }),
+    ).not.toBeInTheDocument();
   });
 
   it("opens the project page in the system browser", async () => {
@@ -115,8 +146,13 @@ describe("Modpack page", () => {
       to: "/discover/$source/$projectId",
       params: { source: "modrinth", projectId: "1KVo5zza" },
     });
+    fireEvent.click(await screen.findByRole("button", { name: "Install" }));
     fireEvent.change(
-      await screen.findByRole("textbox", { name: "Instance Name" }),
+      within(
+        await screen.findByRole("dialog", {
+          name: "Install Fabulously Optimized",
+        }),
+      ).getByRole("textbox", { name: "Instance Name" }),
       { target: { value: "My pack" } },
     );
 
@@ -127,9 +163,13 @@ describe("Modpack page", () => {
     });
 
     await screen.findByRole("heading", { level: 1, name: "Other Pack" });
-    expect(screen.getByRole("textbox", { name: "Instance Name" })).toHaveValue(
-      "",
-    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Install" }));
+    expect(
+      within(
+        await screen.findByRole("dialog", { name: "Install Other Pack" }),
+      ).getByRole("textbox", { name: "Instance Name" }),
+    ).toHaveValue("");
   });
 
   it("explains when the pack cannot be loaded", async () => {

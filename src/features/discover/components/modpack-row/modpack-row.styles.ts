@@ -9,15 +9,6 @@ export const modpackRowStyles = {
   author: "shrink-0 truncate text-xs text-muted-foreground",
   description: "line-clamp-2 text-sm text-muted-foreground",
   tags: "flex min-w-0 flex-wrap items-center gap-1 pt-0.5",
-  loader: "font-semibold",
-  loaderIcon: "size-3",
-  /** One theme accent per loader, so they read apart at a glance. */
-  loaderTones: {
-    fabric: "bg-accent-cool/15 text-accent-cool",
-    forge: "bg-accent-rose/15 text-accent-rose",
-    neoforge: "bg-accent-orange/15 text-accent-orange",
-    quilt: "bg-accent-violet/15 text-accent-violet",
-  },
   meta: "flex shrink-0 flex-col items-end gap-1.5 pt-0.5 text-xs text-muted-foreground",
   stat: "flex items-center justify-end gap-1.5 tabular-nums [&_svg]:size-3.5",
   srOnly: "sr-only",
