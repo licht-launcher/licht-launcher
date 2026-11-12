@@ -163,6 +163,18 @@ describe("AppContextMenu", () => {
     );
   });
 
+  it("omits the update check when Flatpak manages updates", async () => {
+    vi.mocked(updater.getUpdateCheckStatus).mockReturnValue(
+      "managed-externally",
+    );
+    const { target } = await renderApp();
+    await openMenu(target);
+    expect(screen.getByRole("menuitem", { name: "Settings" })).toBeVisible();
+    expect(
+      screen.queryByRole("menuitem", { name: /updates/ }),
+    ).not.toBeInTheDocument();
+  });
+
   it("reflects an in-progress update check and prevents another request", async () => {
     const { target } = await renderApp();
     vi.mocked(updater.getUpdateCheckStatus).mockReturnValue("checking");

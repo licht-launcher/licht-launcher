@@ -148,6 +148,9 @@ describe("UpdaterSection", () => {
     expect(
       section.getByRole("button", { name: "Check for updates" }),
     ).toBeDisabled();
+    await waitFor(() =>
+      expect(getUpdateCheckStatus()).toBe("managed-externally"),
+    );
   });
 
   it("requests a native manual check and reports the completed result", async () => {
