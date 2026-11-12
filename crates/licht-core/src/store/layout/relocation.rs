@@ -320,39 +320,13 @@ fn remove_verified(
         }
         fs::remove_dir(source)?;
     } else if metadata.is_file() {
-        let legacy_profile = source
-            .file_name()
-            .is_some_and(|name| name == "instance.json")
-            && source.parent().and_then(Path::parent) == Some(mappings[1].source.as_path());
-        let matches = if legacy_profile {
-            let mut value: serde_json::Value =
-                serde_json::from_slice(&fs::read(source)?).map_err(CoreError::Instance)?;
-            if let Some(path) = value.get("javaPath").and_then(serde_json::Value::as_str) {
-                value["javaPath"] = serde_json::Value::String(
-                    relocate(Path::new(path), mappings)
-                        .to_string_lossy()
-                        .into_owned(),
-                );
-            }
-            value
-                == serde_json::from_slice::<serde_json::Value>(&fs::read(destination)?)
-                    .map_err(CoreError::Instance)?
-        } else {
-            files::digest(source, reporter)? == files::digest(destination, reporter)?
-        };
-        if !matches {
+        if !files::is_verified_copy(source, destination, &mappings[1].source, mappings, reporter)? {
             return Err(std::io::Error::other(
                 "content changed during directory move; preserving source",
             )
             .into());
         }
-        #[cfg(windows)]
-        if metadata.permissions().readonly() {
-            // Inherit the destination directory's writable flag only for source cleanup.
-            let parent = destination.parent().ok_or(CoreError::CachePath)?;
-            fs::set_permissions(source, fs::metadata(parent)?.permissions())?;
-        }
-        fs::remove_file(source)?;
+        files::remove_copied_source(source, destination, &metadata)?;
     } else {
         return Err(CoreError::CachePath);
     }
