@@ -5,6 +5,7 @@ use super::db::{self, Database};
 use super::settings;
 use crate::{CoreError, Result, SharedCache};
 
+mod cleanup;
 mod database;
 mod files;
 mod installation;
@@ -57,14 +58,18 @@ async fn initialize_at_with_progress(
         migration::migrate(legacy, home, reporter).await?;
     }
     let database = Database::open(home).await?;
-    if let Err(error) = prepare_profile(&database, reporter).await {
+    if let Err(error) = prepare_profile(&database, legacy, reporter).await {
         database.close().await;
         return Err(error);
     }
     Ok(database)
 }
 
-async fn prepare_profile(database: &Database, reporter: &StartupReporter) -> Result<()> {
+async fn prepare_profile(
+    database: &Database,
+    legacy: Option<&SharedCache>,
+    reporter: &StartupReporter,
+) -> Result<()> {
     // Older profiles keep every setting in settings.json until one save moves them.
     // The content move checkpoint lives in the same row, so it must exist first.
     if !database.cache().root().join("settings.json").exists()
@@ -73,6 +78,13 @@ async fn prepare_profile(database: &Database, reporter: &StartupReporter) -> Res
         settings::store_settings(database, &settings::load_settings(database).await?).await?;
     }
     relocation::apply(database, reporter).await?;
+    if let Some(legacy) = legacy
+        && cleanup::pending(legacy, database.cache())
+        && let Err(error) = cleanup::remove_legacy(legacy, database, reporter).await
+    {
+        // The launcher already uses the migrated copy, so a later startup retries this.
+        tracing::warn!(error = %error, "Could not remove the migrated legacy profile");
+    }
     let game = settings::game_cache(database).await?;
     tokio::fs::create_dir_all(game.root()).await?;
     tokio::fs::create_dir_all(game.cache_dir()?).await?;

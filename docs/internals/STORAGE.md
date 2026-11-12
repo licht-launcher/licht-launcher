@@ -29,6 +29,22 @@ Linux:
 LICHT_DATA_DIR=/absolute/path/to/test-profile /path/to/licht
 ```
 
+## Legacy profile migration
+
+Version 0.2.3 and earlier kept the profile in the platform project directory
+(`%APPDATA%\Licht\Licht Launcher\data` on Windows). When the new profile has no
+`licht.db` and the legacy profile exists, startup copies and SHA1-verifies its
+game files, instances, and content metadata, remaps stored paths, and publishes
+`licht.db` last. A custom game directory from the legacy settings moves from
+`<chosen>/Licht Launcher` to `<chosen>/Licht Launcher/data`.
+
+After the profile is ready, startup removes the legacy copy and shows this step
+on the startup screen. Only files whose copy still matches are removed, then
+`licht.sqlite`, its WAL files, and `settings.json`, then the folders this leaves
+empty, up to `%APPDATA%\Licht`. Files that changed since the copy or were never
+copied stay in place. A cleanup error is logged and does not stop the launcher;
+the legacy `settings.json` or `licht.sqlite` remains, so the next startup retries.
+
 ## Settings storage
 
 `settings.json` holds only what the launcher reads before the database opens:

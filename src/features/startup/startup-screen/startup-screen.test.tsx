@@ -110,6 +110,21 @@ describe("StartupScreen", () => {
     );
   });
 
+  it("shows the removal of the migrated legacy profile", async () => {
+    getProgress.mockResolvedValue(
+      startupProgress({
+        phase: "cleaningLegacyData",
+        processedFiles: 4,
+        processedBytes: 2097152,
+      }),
+    );
+    view();
+    expect(
+      await screen.findByText("Removing old launcher files…"),
+    ).toBeVisible();
+    expect(screen.getByText("4 files verified · 2.0 MB")).toBeVisible();
+  });
+
   it("uses download byte totals and shows the update version", async () => {
     getProgress.mockResolvedValue(
       startupProgress({
