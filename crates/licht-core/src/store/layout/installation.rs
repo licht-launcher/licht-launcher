@@ -73,7 +73,7 @@ pub(super) async fn migrate(
     Ok(())
 }
 
-async fn migrate_icons(
+pub(super) async fn migrate_icons(
     connection: &mut sqlx::SqliteConnection,
     instances: &Path,
     reporter: &StartupReporter,
