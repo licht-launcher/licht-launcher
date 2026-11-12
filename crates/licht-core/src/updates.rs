@@ -23,6 +23,8 @@ pub enum AppUpdatePhase {
     Ready,
     Installing,
     Failed,
+    /// Another package manager (Flatpak) owns updates for this installation.
+    ExternallyManaged,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
@@ -49,6 +51,19 @@ impl AppUpdateState {
             error: None,
         }
     }
+}
+
+/// Flatpak creates this file inside every sandbox.
+const FLATPAK_INFO_FILE: &str = "/.flatpak-info";
+
+/// Inside a Flatpak sandbox the bundled binary cannot replace itself; Flatpak
+/// installs new versions instead.
+pub fn app_updates_managed_externally() -> bool {
+    flatpak_sandbox(Path::new(FLATPAK_INFO_FILE))
+}
+
+fn flatpak_sandbox(info_file: &Path) -> bool {
+    info_file.is_file()
 }
 
 pub fn app_update_can_check(phase: AppUpdatePhase) -> bool {
@@ -355,8 +370,30 @@ mod tests {
             AppUpdatePhase::Verifying,
             AppUpdatePhase::Ready,
             AppUpdatePhase::Installing,
+            AppUpdatePhase::ExternallyManaged,
         ] {
             assert!(!app_update_can_check(phase));
         }
+    }
+
+    #[test]
+    fn detects_a_flatpak_sandbox_from_its_info_file() {
+        let directory =
+            std::env::temp_dir().join(format!("licht-flatpak-info-{}", std::process::id()));
+        std::fs::create_dir_all(&directory).expect("directory");
+        let info_file = directory.join(".flatpak-info");
+        assert!(!flatpak_sandbox(&info_file));
+        std::fs::write(&info_file, "[Application]\nname=app.licht.launcher\n").expect("info");
+        assert!(flatpak_sandbox(&info_file));
+        std::fs::remove_dir_all(directory).expect("cleanup");
+    }
+
+    #[test]
+    fn a_directory_at_the_flatpak_info_path_is_not_a_sandbox() {
+        let directory =
+            std::env::temp_dir().join(format!("licht-flatpak-dir-{}", std::process::id()));
+        std::fs::create_dir_all(&directory).expect("directory");
+        assert!(!flatpak_sandbox(&directory));
+        std::fs::remove_dir_all(directory).expect("cleanup");
     }
 }

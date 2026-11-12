@@ -37,17 +37,16 @@ export function AppContextMenu({ children }: { children: ReactElement }) {
   const canGoBack = router.history.canGoBack();
   const canGoForward =
     router.history.location.state.__TSR_index < router.history.length - 1;
-  const [checking, setChecking] = useState(
-    () => getUpdateCheckStatus() === "checking",
-  );
+  const [updateStatus, setUpdateStatus] = useState(getUpdateCheckStatus);
+  const checking = updateStatus === "checking";
   useEffect(() => {
-    const updateStatus = () => {
-      setChecking(getUpdateCheckStatus() === "checking");
+    const refresh = () => {
+      setUpdateStatus(getUpdateCheckStatus());
     };
-    window.addEventListener(UPDATE_CHECK_STATUS_EVENT, updateStatus);
-    updateStatus();
+    window.addEventListener(UPDATE_CHECK_STATUS_EVENT, refresh);
+    refresh();
     return () => {
-      window.removeEventListener(UPDATE_CHECK_STATUS_EVENT, updateStatus);
+      window.removeEventListener(UPDATE_CHECK_STATUS_EVENT, refresh);
     };
   }, []);
 
@@ -98,20 +97,22 @@ export function AppContextMenu({ children }: { children: ReactElement }) {
             <SettingsIcon aria-hidden />
             Settings
           </ContextMenuItem>
-          <ContextMenuItem
-            disabled={checking}
-            onSelect={() => {
-              window.dispatchEvent(new Event(MANUAL_UPDATE_CHECK_EVENT));
-            }}
-          >
-            <RefreshCwIcon
-              aria-hidden
-              className={
-                checking ? appContextMenuStyles.checkingIcon : undefined
-              }
-            />
-            {checking ? "Checking for updates…" : "Check for updates"}
-          </ContextMenuItem>
+          {updateStatus === "managed-externally" ? null : (
+            <ContextMenuItem
+              disabled={checking}
+              onSelect={() => {
+                window.dispatchEvent(new Event(MANUAL_UPDATE_CHECK_EVENT));
+              }}
+            >
+              <RefreshCwIcon
+                aria-hidden
+                className={
+                  checking ? appContextMenuStyles.checkingIcon : undefined
+                }
+              />
+              {checking ? "Checking for updates…" : "Check for updates"}
+            </ContextMenuItem>
+          )}
         </ContextMenuGroup>
         <ContextMenuSeparator />
         <ContextMenuItem

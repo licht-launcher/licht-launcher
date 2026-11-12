@@ -33,8 +33,12 @@ pub struct Runtime {
 
 impl Runtime {
     pub fn new() -> Arc<Self> {
+        let mut initial = AppUpdateState::new(false);
+        if licht_core::app_updates_managed_externally() {
+            initial.phase = AppUpdatePhase::ExternallyManaged;
+        }
         Arc::new(Self {
-            state: Mutex::new((AppUpdateState::new(false), Instant::now())),
+            state: Mutex::new((initial, Instant::now())),
             operation: Arc::new(AsyncMutex::new(())),
             available: AsyncMutex::new(None),
             automatic: watch::channel(false).0,
@@ -383,6 +387,9 @@ pub fn start(
 ) -> anyhow::Result<()> {
     let runtime = Arc::clone(app.state::<Arc<Runtime>>().inner());
     runtime.preferences_changed(&app, automatic)?;
+    if runtime.snapshot()?.phase == AppUpdatePhase::ExternallyManaged {
+        return Ok(());
+    }
     let initial_operation = runtime.reserve()?;
     let mut workers = startup
         .workers
@@ -447,6 +454,16 @@ fn require_main(window: &WebviewWindow) -> Result<(), String> {
     Ok(())
 }
 
+fn require_self_managed(runtime: &Runtime) -> Result<(), String> {
+    let state = runtime
+        .snapshot()
+        .map_err(|_| "Could not read application update state".to_string())?;
+    if state.phase == AppUpdatePhase::ExternallyManaged {
+        return Err("Updates for this installation are managed by Flatpak.".to_string());
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub fn get_app_update_state(
     window: WebviewWindow,
@@ -466,6 +483,7 @@ pub async fn check_app_update(
     startup: State<'_, Arc<StartupRuntime>>,
 ) -> Result<(), String> {
     require_main(&window)?;
+    require_self_managed(&runtime)?;
     let runtime = Arc::clone(runtime.inner());
     let startup = Arc::clone(startup.inner());
     let operation = runtime.reserve().map_err(|error| error.to_string())?;
@@ -488,6 +506,7 @@ pub async fn download_app_update(
     runtime: State<'_, Arc<Runtime>>,
 ) -> Result<(), String> {
     require_main(&window)?;
+    require_self_managed(&runtime)?;
     let runtime = Arc::clone(runtime.inner());
     let operation = runtime.reserve().map_err(|error| error.to_string())?;
     tauri::async_runtime::spawn(async move {
@@ -507,6 +526,7 @@ pub async fn install_app_update(
     downloads: State<'_, Arc<licht_core::DownloadManager>>,
 ) -> Result<(), String> {
     require_main(&window)?;
+    require_self_managed(&runtime)?;
     let _operation = runtime.reserve().map_err(|error| error.to_string())?;
     let mut verified = false;
     let result = async {
