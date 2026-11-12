@@ -34,15 +34,26 @@ From 0.8 on, the list continues (to be defined together with the project owner).
 | -------- | -------- | -------------- |
 | Windows  | `-windows-x64-setup.exe` (NSIS, current user) | Yes |
 | Windows  | `-windows-x64.msi` (WiX, all users) | Yes, through the MSI |
-| Windows  | `-windows-x64-portable.exe` | No |
+| Windows  | `-windows-x64-portable.exe` | No, new versions are downloaded by hand |
 | Linux    | `-linux-x64.AppImage` | Yes |
 | Linux    | `-linux-x64.deb` | Yes, through the .deb (asks for the admin password) |
 | Linux    | `-linux-x64.flatpak` | No, disabled inside the sandbox |
 
 The AppImage is the portable Linux download; the raw Linux binary is not published.
 
-MSI versions must be numeric (`major.minor.patch`); WiX rejects pre-release
-suffixes such as `0.4.0-beta`.
+MSI versions must be numeric (`major.minor.patch`, major and minor up to 255,
+patch up to 65535); WiX rejects pre-release suffixes such as `0.4.0-beta`. The
+release workflow checks this before the quality checks run.
+
+### Windows portable build
+
+The bundler writes the installer type (NSIS, MSI, AppImage, .deb) only into the
+copy of the executable it packages, and the updater installs new versions through
+that type. The portable executable is `target/release/licht.exe`, which has no
+type; without one the updater would fall back to the NSIS entry and install a
+second launcher. A release build without an installer type therefore reports
+updates as unavailable (Settings points to GitHub Releases). Development builds
+keep the updater.
 
 ### Flatpak
 
@@ -58,6 +69,10 @@ GNOME runtime, which provides WebKitGTK 4.1. The release workflow:
 Inside the sandbox the launcher detects `/.flatpak-info` and reports updates as
 managed by Flatpak instead of downloading packages itself. Users install a newer
 bundle with `flatpak install --user <file>.flatpak`.
+
+By default Flatpak redirects the app's data directory to `~/.var/app/app.licht.launcher`, so
+an installation from the `.deb` or AppImage keeps its own data and instances; the
+Flatpak starts empty.
 
 ## Updates
 
