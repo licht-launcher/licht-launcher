@@ -56,10 +56,20 @@ export function useModpackSearch(
   });
 }
 
+/**
+ * A pack page's data changes rarely, and its version list can take up to 20
+ * CurseForge requests, so it stays fresh and is not reloaded on window focus.
+ */
+const PACK_QUERY_OPTIONS = {
+  staleTime: SEARCH_STALE_TIME_MS,
+  refetchOnWindowFocus: false,
+} as const;
+
 export function useModpack(source: ModpackSource, projectId: string) {
   return useQuery({
     queryKey: ["modpacks", "details", source, projectId],
     queryFn: () => getModpack(source, projectId),
+    ...PACK_QUERY_OPTIONS,
   });
 }
 
@@ -67,5 +77,6 @@ export function useModpackVersions(source: ModpackSource, projectId: string) {
   return useQuery({
     queryKey: ["modpacks", "versions", source, projectId],
     queryFn: () => listModpackVersions(source, projectId),
+    ...PACK_QUERY_OPTIONS,
   });
 }

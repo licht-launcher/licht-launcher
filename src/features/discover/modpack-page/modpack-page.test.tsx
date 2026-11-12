@@ -1,6 +1,14 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { focusManager } from "@tanstack/react-query";
+import {
+  act,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
+import { mockListLayout } from "@/features/discover/fixtures/list-layout";
 import {
   modpackDetails,
   modpackSearchPage,
@@ -119,6 +127,45 @@ describe("Modpack page", () => {
     await waitFor(() =>
       expect(router.state.location.pathname).toBe("/discover"),
     );
+  });
+
+  it("goes back to the store list with the search it came from", async () => {
+    mockListLayout();
+    mockModpack(() => Promise.resolve(modpackDetails()));
+    const { router } = await renderAt("/discover?q=atm&sort=updated");
+
+    fireEvent.click(
+      await screen.findByRole("link", { name: /All the Mods 9/ }),
+    );
+    fireEvent.click(await screen.findByRole("link", { name: "Discover" }));
+
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe("/discover"),
+    );
+    expect(router.state.location.search).toEqual({
+      q: "atm",
+      sort: "updated",
+    });
+  });
+
+  it("does not reload the pack or its versions when the window regains focus", async () => {
+    mockModpack(() => Promise.resolve(modpackDetails()));
+    await renderAt("/discover/modrinth/1KVo5zza");
+    await screen.findByRole("tab", { name: /Versions 2/ });
+    const calls = () =>
+      invoke.mock.calls.filter(
+        ([command]) =>
+          command === "get_modpack" || command === "list_modpack_versions",
+      ).length;
+    const before = calls();
+
+    act(() => {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(calls()).toBe(before);
   });
 
   it("starts a fresh install form when moving to another pack", async () => {
