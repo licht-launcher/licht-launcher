@@ -6,6 +6,13 @@
 *.tsbuildinfo
 /e2e/logs/
 
+# Flatpak build inputs and outputs
+/flatpak/licht-launcher.deb
+/flatpak/shared-modules/
+/flatpak-build/
+/flatpak-repo/
+/.flatpak-builder/
+
 # Environment Variables
 .env*
 !.env.example

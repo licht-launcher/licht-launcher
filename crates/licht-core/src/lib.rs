@@ -25,7 +25,7 @@ mod updates;
 
 pub use updates::{
     APP_UPDATE_INTERVAL_SECONDS, AppUpdateCache, AppUpdatePackage, AppUpdatePhase, AppUpdateState,
-    app_update_can_check,
+    app_update_can_check, app_updates_managed_externally,
 };
 
 pub(crate) use game::install;

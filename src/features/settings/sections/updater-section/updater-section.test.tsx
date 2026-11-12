@@ -136,6 +136,23 @@ describe("UpdaterSection", () => {
     expect(check).not.toHaveBeenCalled();
   });
 
+  it("points to Flatpak and offers no update actions when Flatpak manages updates", async () => {
+    state = appUpdateState({ phase: "externallyManaged" });
+    const { section } = await view();
+    expect(section.getByRole("status")).toHaveTextContent(
+      "Updates for this installation are managed by Flatpak.",
+    );
+    expect(
+      section.getByRole("switch", { name: "Automatic updates" }),
+    ).toBeDisabled();
+    expect(
+      section.getByRole("button", { name: "Check for updates" }),
+    ).toBeDisabled();
+    await waitFor(() =>
+      expect(getUpdateCheckStatus()).toBe("managed-externally"),
+    );
+  });
+
   it("requests a native manual check and reports the completed result", async () => {
     check.mockImplementationOnce(async () => {
       emit({ phase: "checking" });
