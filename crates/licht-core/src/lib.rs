@@ -68,8 +68,8 @@ pub use download::{
 pub use error::CoreError;
 pub use external_url::external_https_url;
 pub use install::{
-    ASSET_OBJECT_BASE, GameInstall, InstallArgs, InstallPlan, install_game, install_game_version,
-    install_version, parse_install_args,
+    ASSET_OBJECT_BASE, CacheCheck, GameInstall, InstallArgs, InstallPlan, install_game,
+    install_game_version, install_version, parse_install_args,
 };
 pub use instance::content::{
     InstanceContentEntry, InstanceContentKind, InstanceContentUpdate, list_instance_content,

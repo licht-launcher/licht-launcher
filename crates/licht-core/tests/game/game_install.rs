@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use licht_core::{
-    Arch, CoreError, GameInstall, LaunchEnvironment, OsName, SharedCache, install_game,
+    Arch, CacheCheck, CoreError, GameInstall, LaunchEnvironment, OsName, SharedCache, install_game,
     parse_install_args,
 };
 use sha1::{Digest, Sha1};
@@ -60,6 +60,7 @@ async fn a_local_version_is_written_and_installed() {
             asset_base: &base,
             java: Some(&java),
         },
+        CacheCheck::Reuse,
         progress,
     )
     .await
@@ -88,6 +89,7 @@ async fn a_local_version_is_written_and_installed() {
             asset_base: &base,
             java: Some(&java),
         },
+        CacheCheck::Reuse,
         mpsc::channel(8).0,
     )
     .await

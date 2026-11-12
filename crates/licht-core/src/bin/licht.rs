@@ -3,12 +3,12 @@ use std::io::{IsTerminal, Write};
 use std::time::{Duration, Instant};
 
 use licht_core::{
-    ASSET_OBJECT_BASE, Arch, CoreError, GameInstall, LaunchEnvironment, OsName, OutputStream,
-    SharedCache, configured_java, fetch_version_manifest, game_cache, global_launch, install_game,
-    installed_java, load_instance, load_settings, log_codec, offline_account, parse_install_args,
-    parse_launch_args, parse_version, parse_versions_args, prepare_offline_launch,
-    probe_java_major, required_java_major, resolved_java_path, resolved_launch, run_game,
-    version_lines,
+    ASSET_OBJECT_BASE, Arch, CacheCheck, CoreError, GameInstall, LaunchEnvironment, OsName,
+    OutputStream, SharedCache, configured_java, fetch_version_manifest, game_cache, global_launch,
+    install_game, installed_java, load_instance, load_settings, log_codec, offline_account,
+    parse_install_args, parse_launch_args, parse_version, parse_versions_args,
+    prepare_offline_launch, probe_java_major, required_java_major, resolved_java_path,
+    resolved_launch, run_game, version_lines,
 };
 use tokio::sync::mpsc;
 
@@ -98,6 +98,7 @@ async fn install(args: &[String]) -> licht_core::Result<()> {
                 asset_base: ASSET_OBJECT_BASE,
                 java: java.as_deref(),
             },
+            CacheCheck::Reuse,
             progress,
         )
         .await

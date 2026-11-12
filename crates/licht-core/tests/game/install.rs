@@ -4,9 +4,9 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use licht_core::{
-    Arch, Artifact, AssetIndex, AssetIndexFile, AssetObject, CoreError, Download, DownloadProgress,
-    GameArguments, InstallPlan, LaunchEnvironment, Library, LibraryDownloads, OsName, OsRule, Rule,
-    RuleAction, SharedCache, Version, VersionDownloads, install_version,
+    Arch, Artifact, AssetIndex, AssetIndexFile, AssetObject, CacheCheck, CoreError, Download,
+    DownloadProgress, GameArguments, InstallPlan, LaunchEnvironment, Library, LibraryDownloads,
+    OsName, OsRule, Rule, RuleAction, SharedCache, Version, VersionDownloads, install_version,
 };
 use sha1::{Digest, Sha1};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -93,6 +93,121 @@ async fn installing_twice_downloads_only_the_first_time() {
         std::fs::read(cache.version_jar("1.21.11").unwrap()).unwrap(),
         CLIENT
     );
+
+    let _ = std::fs::remove_dir_all(directory);
+}
+
+#[tokio::test]
+async fn a_same_sized_file_stays_on_install_and_is_replaced_on_repair() {
+    let directory = temporary_directory("same-size");
+    let cache = SharedCache::at(&directory);
+    let server = serve().await;
+    let asset_hash = sha1_hex(ASSET);
+    let index_json = index_json(&asset_hash);
+    let version = version(&server.base, &sha1_hex(index_json.as_bytes()));
+    let assets = assets(&asset_hash);
+    let environment = environment();
+    install(
+        &cache,
+        &server,
+        &version,
+        &index_json,
+        &assets,
+        &environment,
+    )
+    .await
+    .expect("install");
+    let requests_after_install = server.requests.load(Ordering::SeqCst);
+    let replacement = b"client-bad";
+    assert_eq!(replacement.len(), CLIENT.len());
+    let jar = cache.version_jar("1.21.11").unwrap();
+    std::fs::write(&jar, replacement).unwrap();
+
+    install(
+        &cache,
+        &server,
+        &version,
+        &index_json,
+        &assets,
+        &environment,
+    )
+    .await
+    .expect("reuse");
+    assert_eq!(
+        server.requests.load(Ordering::SeqCst),
+        requests_after_install
+    );
+    assert_eq!(std::fs::read(&jar).unwrap(), replacement);
+
+    install_with(
+        &cache,
+        &server,
+        &version,
+        &index_json,
+        &assets,
+        &environment,
+        CacheCheck::Verify,
+    )
+    .await
+    .expect("repair");
+    assert!(server.requests.load(Ordering::SeqCst) > requests_after_install);
+    assert_eq!(std::fs::read(&jar).unwrap(), CLIENT);
+
+    let _ = std::fs::remove_dir_all(directory);
+}
+
+#[tokio::test]
+async fn an_existing_file_with_no_published_size_is_replaced_when_its_contents_differ() {
+    let directory = temporary_directory("zero-size");
+    let cache = SharedCache::at(&directory);
+    let server = serve().await;
+    let asset_hash = sha1_hex(ASSET);
+    let index_json = index_json(&asset_hash);
+    let mut version = version(&server.base, &sha1_hex(index_json.as_bytes()));
+    version.downloads.client.size = 0;
+    let assets = assets(&asset_hash);
+    let environment = environment();
+    install(
+        &cache,
+        &server,
+        &version,
+        &index_json,
+        &assets,
+        &environment,
+    )
+    .await
+    .expect("install");
+    let requests_after_install = server.requests.load(Ordering::SeqCst);
+    let jar = cache.version_jar("1.21.11").unwrap();
+
+    install(
+        &cache,
+        &server,
+        &version,
+        &index_json,
+        &assets,
+        &environment,
+    )
+    .await
+    .expect("matching file");
+    assert_eq!(
+        server.requests.load(Ordering::SeqCst),
+        requests_after_install
+    );
+
+    std::fs::write(&jar, b"different").unwrap();
+    install(
+        &cache,
+        &server,
+        &version,
+        &index_json,
+        &assets,
+        &environment,
+    )
+    .await
+    .expect("replaced");
+    assert!(server.requests.load(Ordering::SeqCst) > requests_after_install);
+    assert_eq!(std::fs::read(&jar).unwrap(), CLIENT);
 
     let _ = std::fs::remove_dir_all(directory);
 }
@@ -360,6 +475,27 @@ async fn install(
     assets: &AssetIndexFile,
     environment: &LaunchEnvironment,
 ) -> licht_core::Result<()> {
+    install_with(
+        cache,
+        server,
+        version,
+        index_json,
+        assets,
+        environment,
+        CacheCheck::Reuse,
+    )
+    .await
+}
+
+async fn install_with(
+    cache: &SharedCache,
+    server: &Server,
+    version: &Version,
+    index_json: &str,
+    assets: &AssetIndexFile,
+    environment: &LaunchEnvironment,
+    check: CacheCheck,
+) -> licht_core::Result<()> {
     let (progress, mut incoming) = mpsc::channel::<DownloadProgress>(8);
     let settings = licht_core::Database::open(cache).await?;
     let result = install_version(
@@ -374,6 +510,7 @@ async fn install(
             environment,
             asset_base: &server.base,
         },
+        check,
         progress,
     )
     .await;

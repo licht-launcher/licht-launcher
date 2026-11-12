@@ -1,5 +1,5 @@
 use licht_core::{
-    CoreError, DownloadProgress, SharedCache, VersionSummary, install_game_version,
+    CacheCheck, CoreError, DownloadProgress, SharedCache, VersionSummary, install_game_version,
     is_version_ready, list_version_summaries,
 };
 use tauri::{AppHandle, State};
@@ -79,7 +79,16 @@ async fn install_one(
     let id = version_id.to_string();
     let environment = host_environment()?;
     let installing = tauri::async_runtime::spawn(async move {
-        install_game_version(&client, &cache, &settings, &id, &environment, progress).await
+        install_game_version(
+            &client,
+            &cache,
+            &settings,
+            &id,
+            &environment,
+            CacheCheck::Reuse,
+            progress,
+        )
+        .await
     });
 
     let mut throttle = ProgressThrottle::new();

@@ -93,6 +93,7 @@ async fn an_installed_version_launches_offline_with_its_client_jar() {
             environment: &environment,
             asset_base: &base,
         },
+        licht_core::CacheCheck::Reuse,
         progress,
     )
     .await
