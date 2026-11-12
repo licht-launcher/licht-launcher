@@ -45,6 +45,12 @@ jobs:
           if (process.env.GITHUB_REF_NAME !== `v${APP_VERSION}`) {
             throw new Error("Release tag does not match the application version");
           }
+          // WiX (MSI) needs a numeric major.minor.patch, with major and minor up to 255
+          // and patch up to 65535; fail here instead of after the quality checks.
+          const msiVersion = APP_VERSION.match(/^(\d+)\.(\d+)\.(\d+)$/);
+          if (!msiVersion || Number(msiVersion[1]) > 255 || Number(msiVersion[2]) > 255 || Number(msiVersion[3]) > 65535) {
+            throw new Error(`MSI needs a numeric version (major.minor.patch); got ${APP_VERSION}`);
+          }
           appendFileSync(process.env.GITHUB_OUTPUT, [
             `version=${APP_VERSION}`,
             `codename=${APP_CODENAME}`,
@@ -128,6 +134,8 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path release-assets | Out-Null
+          # The bundler patches the installer type only into the copies it packages;
+          # this executable keeps none, so it reports updates as unavailable.
           Copy-Item "target/release/licht.exe" `
             "release-assets/$env:RELEASE_PREFIX-windows-x64-portable.exe"
           $nsis = Get-ChildItem "target/release/bundle/nsis/*.exe" -ErrorAction SilentlyContinue
