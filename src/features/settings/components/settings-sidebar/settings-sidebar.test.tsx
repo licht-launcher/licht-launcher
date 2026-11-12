@@ -130,7 +130,7 @@ describe("SettingsSidebar", () => {
       "sr-only",
     );
     expect(screen.queryByText("Licht Launcher")).not.toBeInTheDocument();
-    expect(screen.queryByText("0.3.0 · Rose")).not.toBeInTheDocument();
+    expect(screen.queryByText("0.3.1 · Rose")).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "GitHub repository" }),
     ).not.toBeInTheDocument();

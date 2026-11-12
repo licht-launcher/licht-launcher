@@ -332,6 +332,9 @@ jobs:
           body: |
             **Licht Launcher ${{ needs.metadata.outputs.version }}** (codename **${{ needs.metadata.outputs.codename }}**).
 
+            > [!WARNING]
+            > **Early Release.** Licht Launcher is in active development, so features and compatibility are still being refined and you may encounter bugs. Please report problems on the [issue tracker](${{ github.server_url }}/${{ github.repository }}/issues).
+
             Unofficial project — not affiliated with Mojang Studios or Microsoft.
 
             ### Downloads

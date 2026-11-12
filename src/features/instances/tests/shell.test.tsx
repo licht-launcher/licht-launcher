@@ -25,7 +25,7 @@ describe("Launcher shell", () => {
     fireEvent.click(
       within(
         screen.getByRole("contentinfo", { name: "Download status" }),
-      ).getByRole("button", { name: "Early Release 0.3.0 · Rose" }),
+      ).getByRole("button", { name: "Early Release 0.3.1 · Rose" }),
     );
     const settings = await screen.findByRole("dialog", { name: "Settings" });
     expect(
