@@ -141,7 +141,7 @@ async fn migration_preserves_files_settings_committed_wal_and_job_paths() {
         .expect("migrated world"),
         b"world"
     );
-    assert_eq!(fs::read(&artifact).expect("original preserved"), b"library");
+    assert!(!artifact.exists(), "the verified legacy copy is removed");
     let migrated = crate::settings::load_settings_at(&home)
         .await
         .expect("migrated settings");
@@ -271,7 +271,11 @@ async fn migration_preserves_custom_game_directory_and_remaps_its_instance_root(
         .expect("save"),
         b"save"
     );
-    assert!(old_instance.join("save.dat").is_file());
+    assert!(
+        !old_instance.exists(),
+        "the verified old instance is removed"
+    );
+    assert!(!old_game.root().join("versions").exists());
 }
 
 #[tokio::test]
@@ -310,10 +314,7 @@ async fn migration_retries_after_a_late_settings_conflict_without_rewriting_orig
     initialize_at(&legacy, &home)
         .await
         .expect("retry migration");
-    assert_eq!(
-        fs::read(&profile).expect("original still preserved"),
-        original
-    );
+    assert!(!profile.exists(), "the verified legacy profile is removed");
     assert!(db::db_path(&home).is_file());
 }
 
@@ -518,6 +519,155 @@ async fn startup_progress_can_stop_migration_before_publishing_and_retry() {
     assert!(db::db_path(&home).exists());
 }
 
+/// Writes the settings file a 0.2.3 profile kept every setting in.
+async fn write_legacy_settings(legacy: &SharedCache) {
+    let settings = crate::settings::load_settings_at(legacy)
+        .await
+        .expect("defaults");
+    fs::create_dir_all(legacy.root()).expect("legacy directory");
+    fs::write(
+        legacy.root().join("settings.json"),
+        serde_json::to_vec(&settings).expect("settings JSON"),
+    )
+    .expect("legacy settings");
+}
+
+#[tokio::test]
+async fn migration_removes_the_verified_legacy_profile_and_its_empty_folders() {
+    let (legacy, home) = fixture("legacy-cleanup");
+    write_legacy_settings(&legacy).await;
+    legacy_database(&legacy)
+        .await
+        .close()
+        .await
+        .expect("close legacy database");
+    // Creating the schema with the current code leaves a lock that 0.2.3 never wrote.
+    fs::remove_dir_all(legacy.root().join("cache")).expect("schema lock");
+    fs::create_dir_all(legacy.root().join("runtime")).expect("runtime");
+    let java = legacy.root().join("runtime").join("java.exe");
+    fs::write(&java, b"java").expect("java");
+    fs::create_dir_all(legacy.root().join("content-metadata")).expect("metadata");
+    fs::write(legacy.root().join("content-metadata/mod.json"), b"{}").expect("metadata file");
+    let instance = legacy.instance_dir("Survival").expect("instance");
+    fs::create_dir_all(instance.join("saves")).expect("saves");
+    fs::write(instance.join("saves").join("level.dat"), b"world").expect("world");
+    fs::write(
+        instance.join("instance.json"),
+        serde_json::to_vec(&serde_json::json!({"javaPath": java})).expect("profile"),
+    )
+    .expect("profile file");
+
+    initialize_at(&legacy, &home).await.expect("migrate");
+
+    let game = crate::settings::testing::game_cache_at(&home)
+        .await
+        .expect("game");
+    assert_eq!(
+        fs::read(game.root().join("runtime/java.exe")).expect("java"),
+        b"java"
+    );
+    assert_eq!(
+        fs::read(home.root().join("cache/content-metadata/mod.json")).expect("metadata"),
+        b"{}"
+    );
+    assert_eq!(
+        fs::read(
+            game.instance_dir("Survival")
+                .expect("instance")
+                .join("saves/level.dat")
+        )
+        .expect("world"),
+        b"world"
+    );
+    let licht = legacy
+        .root()
+        .parent()
+        .and_then(Path::parent)
+        .expect("legacy Licht folder");
+    assert!(!licht.exists(), "the emptied legacy folders are removed");
+    assert!(
+        licht.parent().expect("fixture root").is_dir(),
+        "cleanup stops at the legacy Licht folder"
+    );
+}
+
+#[tokio::test]
+async fn startup_cleans_an_already_migrated_profile_and_keeps_what_differs() {
+    let (legacy, home) = fixture("legacy-cleanup-later");
+    initialize_at(&legacy, &home).await.expect("new profile");
+    // A profile migrated before cleanup existed still holds its legacy copy.
+    write_legacy_settings(&legacy).await;
+    for (cache, world) in [(&legacy, b"old world"), (&home, b"new world")] {
+        let game = if cache == &home {
+            SharedCache::at(home.root().join("data"))
+        } else {
+            cache.clone()
+        };
+        fs::create_dir_all(game.root().join("versions")).expect("versions");
+        fs::write(game.root().join("versions/same.json"), b"same").expect("version");
+        let saves = game
+            .instance_dir("Survival")
+            .expect("instance")
+            .join("saves");
+        fs::create_dir_all(&saves).expect("saves");
+        fs::write(saves.join("level.dat"), world).expect("world");
+    }
+    fs::create_dir_all(legacy.root().join("logs")).expect("logs");
+    fs::write(legacy.root().join("logs/latest.log"), b"log").expect("log");
+
+    initialize_at(&legacy, &home).await.expect("startup");
+
+    assert!(!legacy.root().join("versions").exists());
+    assert!(!legacy.root().join("settings.json").exists());
+    assert_eq!(
+        fs::read(
+            legacy
+                .instance_dir("Survival")
+                .expect("instance")
+                .join("saves/level.dat")
+        )
+        .expect("changed world kept"),
+        b"old world"
+    );
+    assert_eq!(
+        fs::read(legacy.root().join("logs/latest.log")).expect("unmigrated file kept"),
+        b"log"
+    );
+    assert_eq!(
+        fs::read(home.root().join("data/versions/same.json")).expect("new copy"),
+        b"same"
+    );
+}
+
+#[tokio::test]
+async fn a_stopped_legacy_cleanup_keeps_the_profile_and_retries_on_the_next_startup() {
+    let (legacy, home) = fixture("legacy-cleanup-retry");
+    write_legacy_settings(&legacy).await;
+    fs::create_dir_all(legacy.root().join("versions")).expect("versions");
+    fs::write(legacy.root().join("versions/fixture.json"), b"fixture").expect("fixture");
+    let stopped = std::sync::atomic::AtomicBool::new(false);
+    let reporter = StartupReporter::new(move |progress| {
+        if progress.phase == StartupPhase::CleaningLegacyData
+            && !stopped.swap(true, std::sync::atomic::Ordering::SeqCst)
+        {
+            return Err(std::io::Error::other("stopped").into());
+        }
+        Ok(())
+    });
+
+    initialize_at_with_progress(Some(&legacy), &home, &reporter)
+        .await
+        .expect("startup continues")
+        .close()
+        .await;
+
+    assert!(db::db_path(&home).is_file());
+    assert!(legacy.root().join("settings.json").is_file());
+    assert!(legacy.root().join("versions/fixture.json").is_file());
+    initialize_at(&legacy, &home).await.expect("retry");
+    assert!(!legacy.root().exists());
+}
+
 #[tokio::test]
 async fn startup_migration_previews_use_temporary_fixtures_for_success_and_conflict() {
     let snapshots = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
@@ -535,6 +685,13 @@ async fn startup_migration_previews_use_temporary_fixtures_for_success_and_confl
             .expect("snapshots")
             .iter()
             .any(|snapshot| snapshot.phase == StartupPhase::MigratingInstances)
+    );
+    assert!(
+        snapshots
+            .lock()
+            .expect("snapshots")
+            .iter()
+            .any(|snapshot| snapshot.phase == StartupPhase::CleaningLegacyData)
     );
     assert!(
         crate::run_startup_migration_preview(true, StartupReporter::default())

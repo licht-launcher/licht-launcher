@@ -19,6 +19,7 @@ pub enum StartupPhase {
     MigratingData,
     MigratingInstances,
     MigratingSettings,
+    CleaningLegacyData,
     RestoringCache,
     StartingServices,
     Ready,

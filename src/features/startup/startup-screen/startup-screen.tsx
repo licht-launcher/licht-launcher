@@ -20,6 +20,7 @@ const labels: Record<StartupPhase, string> = {
   migratingData: "Migrating shared game files…",
   migratingInstances: "Migrating instances…",
   migratingSettings: "Migrating settings…",
+  cleaningLegacyData: "Removing old launcher files…",
   restoringCache: "Preparing icons and installation files…",
   startingServices: "Starting launcher services…",
   ready: "Ready",
