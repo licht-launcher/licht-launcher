@@ -28,6 +28,16 @@ use crate::settings::GlobalLaunch;
 use crate::{CoreError, Result, SharedCache};
 use std::path::Path;
 
+/// Removes a v0.2.x index file after its rows were stored. A file that is
+/// already gone was removed by another run that stored the same rows, so the
+/// import stands.
+pub(crate) fn remove_legacy_index(path: &Path) -> std::io::Result<()> {
+    match std::fs::remove_file(path) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        removed => removed,
+    }
+}
+
 pub async fn list_modpack_versions(
     client: &Client,
     source: ModpackSource,
@@ -197,4 +207,22 @@ pub(crate) async fn restore_instance_icon(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_legacy_index_already_removed_by_another_run_counts_as_removed() {
+        let directory =
+            std::env::temp_dir().join(format!("licht-legacy-index-remove-{}", std::process::id()));
+        std::fs::create_dir_all(&directory).expect("directory");
+        let file = directory.join(MODPACK_INDEX_FILE);
+        std::fs::write(&file, "{}").expect("index");
+        remove_legacy_index(&file).expect("removed");
+        assert!(!file.exists());
+        remove_legacy_index(&file).expect("already gone");
+        std::fs::remove_dir_all(directory).expect("cleanup");
+    }
 }

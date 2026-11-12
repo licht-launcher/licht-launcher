@@ -123,7 +123,7 @@ async fn import_legacy_index(
     database
         .replace_curseforge_files(instances, folder, files)
         .await?;
-    if let Err(error) = fs::remove_file(&path) {
+    if let Err(error) = crate::modpacks::remove_legacy_index(&path) {
         // The job fails either way; a failed undo leaves the rows, which still win over the file.
         if let Err(undo) = database
             .replace_curseforge_files(instances, folder, Vec::new())
