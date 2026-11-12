@@ -26,9 +26,9 @@
 > **Early Release** — Licht Launcher is in active development. Features and compatibility are still being refined, and you may encounter bugs. Your feedback helps shape the launcher.
 
 <p align="center">
-  <strong>Download 0.2.3 · Iris</strong><br>
-  <a href="https://github.com/licht-launcher/licht-launcher/releases/download/v0.2.3/Licht-Launcher-0.2.3-Iris-windows-x64-setup.exe"><img src="https://img.shields.io/badge/Windows_x64-Download-blue?style=for-the-badge" alt="Download Licht Launcher 0.2.3 for Windows x64"></a>
-  <a href="https://github.com/licht-launcher/licht-launcher/releases/download/v0.2.3/Licht-Launcher-0.2.3-Iris-linux-x64.AppImage"><img src="https://img.shields.io/badge/Linux_x64-Download_AppImage-orange?style=for-the-badge" alt="Download Licht Launcher 0.2.3 for Linux x64 (AppImage)"></a>
+  <strong>Download 0.3.0 · Rose</strong><br>
+  <a href="https://github.com/licht-launcher/licht-launcher/releases/download/v0.3.0/Licht-Launcher-0.3.0-Rose-windows-x64-setup.exe"><img src="https://img.shields.io/badge/Windows_x64-Download-blue?style=for-the-badge" alt="Download Licht Launcher 0.3.0 for Windows x64"></a>
+  <a href="https://github.com/licht-launcher/licht-launcher/releases/download/v0.3.0/Licht-Launcher-0.3.0-Rose-linux-x64.AppImage"><img src="https://img.shields.io/badge/Linux_x64-Download_AppImage-orange?style=for-the-badge" alt="Download Licht Launcher 0.3.0 for Linux x64 (AppImage)"></a>
 </p>
 
 ![Licht Launcher screenshot](.github/screenshot.png)
@@ -49,13 +49,13 @@ Licht is for players who want vanilla and modded Minecraft organized in a clean,
 
 ## Download
 
-The buttons above download **0.2.3 · Iris** directly. You can also choose a package below or find the latest version and release notes on [GitHub Releases](https://github.com/licht-launcher/licht-launcher/releases/latest).
+The buttons above download **0.3.0 · Rose** directly. You can also choose a package below or find the latest version and release notes on [GitHub Releases](https://github.com/licht-launcher/licht-launcher/releases/latest).
 
 | Your system | Choose |
 | --- | --- |
-| Windows (64-bit) | [Download the `.exe` installer](https://github.com/licht-launcher/licht-launcher/releases/download/v0.2.3/Licht-Launcher-0.2.3-Iris-windows-x64-setup.exe) |
-| Linux (64-bit) | [Download the `.AppImage`](https://github.com/licht-launcher/licht-launcher/releases/download/v0.2.3/Licht-Launcher-0.2.3-Iris-linux-x64.AppImage) |
-| Debian, Ubuntu, and compatible Linux distributions | [Download the `.deb` package](https://github.com/licht-launcher/licht-launcher/releases/download/v0.2.3/Licht-Launcher-0.2.3-Iris-linux-x64.deb) |
+| Windows (64-bit) | [Download the `.exe` installer](https://github.com/licht-launcher/licht-launcher/releases/download/v0.3.0/Licht-Launcher-0.3.0-Rose-windows-x64-setup.exe) |
+| Linux (64-bit) | [Download the `.AppImage`](https://github.com/licht-launcher/licht-launcher/releases/download/v0.3.0/Licht-Launcher-0.3.0-Rose-linux-x64.AppImage) |
+| Debian, Ubuntu, and compatible Linux distributions | [Download the `.deb` package](https://github.com/licht-launcher/licht-launcher/releases/download/v0.3.0/Licht-Launcher-0.3.0-Rose-linux-x64.deb) |
 
 A portable Windows build is also available on GitHub Releases. It does not update itself; download new versions from the same page.
 
