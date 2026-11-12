@@ -1,6 +1,5 @@
 # Repackages the .deb produced by `pnpm tauri build --bundles deb`.
-# The release workflow copies it to flatpak/licht-launcher.deb and checks out
-# flathub/shared-modules at a pinned commit into flatpak/shared-modules.
+# The release workflow copies it to flatpak/licht-launcher.deb.
 id: app.licht.launcher
 runtime: org.gnome.Platform
 runtime-version: "51"
@@ -16,13 +15,11 @@ finish-args:
   - --device=dri
   # Keeps custom application directories and Java paths picked in settings usable.
   - --filesystem=home
-  # System tray icon.
-  - --talk-name=org.kde.StatusNotifierWatcher
+  # The running process owns this session name; a second launch calls it and exits.
+  - --own-name=app.licht.launcher.SingleInstance
+  - --talk-name=app.licht.launcher.SingleInstance
 
 modules:
-  # The tray icon loads libayatana-appindicator at runtime.
-  - shared-modules/libayatana-appindicator/libayatana-appindicator-gtk3.json
-
   - name: licht-launcher
     buildsystem: simple
     sources:

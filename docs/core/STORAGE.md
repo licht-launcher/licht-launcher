@@ -32,7 +32,7 @@ LICHT_DATA_DIR=/absolute/path/to/test-profile /path/to/licht
 ## Settings storage
 
 `settings.json` holds only what the launcher reads before the database opens:
-theme, language, hardware acceleration, tray and window behavior, and automatic
+theme, language, hardware acceleration, window behavior, and automatic
 updates. Every other setting is a single row in the `settings` table of
 `licht.db`. That row also records the chosen application directory, the content
 root currently in use, and any move in progress. An older `settings.json` that

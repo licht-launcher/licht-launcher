@@ -61,7 +61,6 @@ pub struct Settings {
     pub automatic_updates: bool,
     pub language: LauncherLanguage,
     pub hardware_acceleration: bool,
-    pub minimize_to_tray: bool,
     pub minimize_on_game_start: bool,
     pub restore_on_game_exit: bool,
 }
@@ -138,8 +137,6 @@ struct StoredSettings {
     language: LauncherLanguage,
     #[serde(default = "default_true")]
     hardware_acceleration: bool,
-    #[serde(default = "default_true")]
-    minimize_to_tray: bool,
     #[serde(default)]
     minimize_on_game_start: bool,
     #[serde(default)]
@@ -334,7 +331,6 @@ pub(super) fn validated(
         automatic_updates: settings.automatic_updates,
         language: settings.language,
         hardware_acceleration: settings.hardware_acceleration,
-        minimize_to_tray: settings.minimize_to_tray,
         minimize_on_game_start: settings.minimize_on_game_start,
         restore_on_game_exit: settings.restore_on_game_exit,
     })
@@ -384,7 +380,6 @@ fn from_stored(cache: &SharedCache, stored: StoredSettings, total: u32) -> Resul
                 .unwrap_or(stored.check_for_updates && stored.install_updates_on_restart),
             language: stored.language,
             hardware_acceleration: stored.hardware_acceleration,
-            minimize_to_tray: stored.minimize_to_tray,
             minimize_on_game_start: stored.minimize_on_game_start,
             restore_on_game_exit: stored.restore_on_game_exit,
         },
@@ -404,7 +399,6 @@ pub struct StartupPreferences {
     pub theme: LauncherTheme,
     pub language: LauncherLanguage,
     pub hardware_acceleration: bool,
-    pub minimize_to_tray: bool,
     pub minimize_on_game_start: bool,
     pub restore_on_game_exit: bool,
     pub automatic_updates: bool,
@@ -416,7 +410,6 @@ impl From<&Settings> for StartupPreferences {
             theme: settings.theme,
             language: settings.language,
             hardware_acceleration: settings.hardware_acceleration,
-            minimize_to_tray: settings.minimize_to_tray,
             minimize_on_game_start: settings.minimize_on_game_start,
             restore_on_game_exit: settings.restore_on_game_exit,
             automatic_updates: settings.automatic_updates,
@@ -544,7 +537,6 @@ fn load_file_settings(cache: &SharedCache, total: u32) -> Result<Settings> {
                 automatic_updates: Some(true),
                 language: LauncherLanguage::English,
                 hardware_acceleration: true,
-                minimize_to_tray: true,
                 minimize_on_game_start: false,
                 restore_on_game_exit: false,
             },

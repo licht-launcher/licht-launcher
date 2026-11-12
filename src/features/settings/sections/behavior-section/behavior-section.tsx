@@ -11,12 +11,6 @@ const preferences = [
     description: "Use the GPU to render the launcher. Requires a restart.",
   },
   {
-    field: "minimizeToTray",
-    label: "Minimize to tray on close",
-    description:
-      "Keep the launcher running in the system tray when closing its window.",
-  },
-  {
     field: "minimizeOnGameStart",
     label: "Minimize launcher when Minecraft starts",
     description: "Minimize the launcher after the game starts successfully.",

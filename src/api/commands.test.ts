@@ -571,7 +571,6 @@ describe("launcher commands", () => {
       automaticUpdates: true,
       language: "en" as const,
       hardwareAcceleration: true,
-      minimizeToTray: false,
       minimizeOnGameStart: false,
       restoreOnGameExit: false,
     };

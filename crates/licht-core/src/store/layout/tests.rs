@@ -344,7 +344,6 @@ async fn migration_retries_after_its_settings_file_was_published_without_the_dat
                 "theme",
                 "language",
                 "hardwareAcceleration",
-                "minimizeToTray",
                 "minimizeOnGameStart",
                 "restoreOnGameExit",
                 "automaticUpdates",
