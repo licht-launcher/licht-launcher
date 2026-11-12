@@ -109,6 +109,35 @@ export function toggleCategory(
   );
 }
 
+/** Categories CurseForge has no modpack category for (see docs/integrations/CURSEFORGE.md). */
+const CURSEFORGE_MISSING_CATEGORIES: readonly ModpackCategory[] = [
+  "optimization",
+];
+
+/** Whether a search limited to `source` can narrow by `category`. */
+export function categorySearchable(
+  category: ModpackCategory,
+  source: ModpackSource | null,
+): boolean {
+  return (
+    source !== "curseforge" || !CURSEFORGE_MISSING_CATEGORIES.includes(category)
+  );
+}
+
+/** `filters` limited to `source`, without categories that source cannot search. */
+export function withSource(
+  filters: ModpackSearchFilters,
+  source: ModpackSource | null,
+): ModpackSearchFilters {
+  return {
+    ...filters,
+    source,
+    categories: filters.categories.filter((category) =>
+      categorySearchable(category, source),
+    ),
+  };
+}
+
 export function parseModpackSource(value: string): ModpackSource | null {
   return pick(value, MODPACK_SOURCES) ?? null;
 }

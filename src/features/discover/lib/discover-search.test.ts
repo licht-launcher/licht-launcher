@@ -7,6 +7,7 @@ import {
   parseModpackSource,
   searchFilters,
   toggleCategory,
+  withSource,
 } from "./discover-search";
 
 const EMPTY = {
@@ -115,6 +116,36 @@ describe("toggleCategory", () => {
     expect(toggleCategory(["magic", "technology"], "magic")).toEqual([
       "technology",
     ]);
+  });
+});
+
+describe("withSource", () => {
+  it("keeps every category for any source or Modrinth", () => {
+    const filters = {
+      ...DEFAULT_SEARCH_FILTERS,
+      categories: ["magic" as const, "optimization" as const],
+    };
+    expect(withSource(filters, null).categories).toEqual([
+      "magic",
+      "optimization",
+    ]);
+    expect(withSource(filters, "modrinth")).toEqual({
+      ...filters,
+      source: "modrinth",
+    });
+  });
+
+  it("drops categories CurseForge cannot search", () => {
+    expect(
+      withSource(
+        { ...DEFAULT_SEARCH_FILTERS, categories: ["magic", "optimization"] },
+        "curseforge",
+      ),
+    ).toEqual({
+      ...DEFAULT_SEARCH_FILTERS,
+      source: "curseforge",
+      categories: ["magic"],
+    });
   });
 });
 

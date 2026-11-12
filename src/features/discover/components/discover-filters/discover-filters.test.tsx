@@ -118,6 +118,32 @@ describe("DiscoverFilters", () => {
     });
   });
 
+  it("disables categories CurseForge lacks in a CurseForge-only search", () => {
+    renderFilters({ ...DEFAULT_SEARCH_FILTERS, source: "curseforge" });
+
+    expect(screen.getByRole("button", { name: "Optimization" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Optimization" }),
+    ).toHaveAttribute("title", "CurseForge has no Optimization category");
+    expect(screen.getByRole("button", { name: "Magic" })).toBeEnabled();
+  });
+
+  it("drops categories CurseForge lacks when picking CurseForge", async () => {
+    const onChange = renderFilters({
+      ...DEFAULT_SEARCH_FILTERS,
+      categories: ["magic", "optimization"],
+    });
+
+    fireEvent.click(screen.getByRole("combobox", { name: "Source" }));
+    fireEvent.click(await screen.findByRole("option", { name: "CurseForge" }));
+
+    expect(onChange).toHaveBeenCalledExactlyOnceWith({
+      ...DEFAULT_SEARCH_FILTERS,
+      source: "curseforge",
+      categories: ["magic"],
+    });
+  });
+
   it("picks a loader", async () => {
     const onChange = renderFilters();
 

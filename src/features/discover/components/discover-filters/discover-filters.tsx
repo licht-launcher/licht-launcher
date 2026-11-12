@@ -19,9 +19,11 @@ import {
 } from "@/components/ui/select";
 import { CATEGORY_TONES } from "@/features/discover/components/category-badge/category-badge.styles";
 import {
+  categorySearchable,
   parseModpackSource,
   SOURCE_LABELS,
   toggleCategory,
+  withSource,
 } from "@/features/discover/lib/discover-search";
 import {
   CATEGORY_OPTIONS,
@@ -79,7 +81,7 @@ export function DiscoverFilters({
                 <Select
                   value={filters.source ?? ANY}
                   onValueChange={(value) =>
-                    update({ source: parseModpackSource(value) })
+                    onChange(withSource(filters, parseModpackSource(value)))
                   }
                 >
                   <SelectTrigger
@@ -161,6 +163,10 @@ export function DiscoverFilters({
               >
                 {CATEGORY_OPTIONS.map((option) => {
                   const pressed = filters.categories.includes(option.value);
+                  const searchable = categorySearchable(
+                    option.value,
+                    filters.source,
+                  );
                   return (
                     <li key={option.value}>
                       <Button
@@ -168,6 +174,12 @@ export function DiscoverFilters({
                         variant="ghost"
                         size="sm"
                         aria-pressed={pressed}
+                        disabled={!searchable}
+                        title={
+                          searchable
+                            ? undefined
+                            : `${SOURCE_LABELS.curseforge} has no ${option.label} category`
+                        }
                         className={cn(
                           discoverFiltersStyles.category,
                           pressed && CATEGORY_TONES[option.value],
