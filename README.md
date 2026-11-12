@@ -57,7 +57,7 @@ The buttons above download **0.2.3 · Iris** directly. You can also choose a pac
 | Linux (64-bit) | [Download the `.AppImage`](https://github.com/licht-launcher/licht-launcher/releases/download/v0.2.3/Licht-Launcher-0.2.3-Iris-linux-x64.AppImage) |
 | Debian, Ubuntu, and compatible Linux distributions | [Download the `.deb` package](https://github.com/licht-launcher/licht-launcher/releases/download/v0.2.3/Licht-Launcher-0.2.3-Iris-linux-x64.deb) |
 
-Portable downloads are also available for Windows and Linux.
+A portable Windows build is also available on GitHub Releases. It does not update itself; download new versions from the same page.
 
 ### Get started
 
@@ -86,7 +86,8 @@ Read the [Terms of Use](TERMS.md) and [Privacy Policy](PRIVACY.md) for informati
 
 - **Windows:** close the launcher and remove it through Windows Settings > Apps.
 - **Linux `.deb`:** remove the package through your system's package manager.
-- **AppImage or portable:** close the launcher and remove the executable and any shortcuts you created.
+- **Linux Flatpak:** run `flatpak uninstall app.licht.launcher`. By default its data lives in `~/.var/app/app.licht.launcher`, separate from a `.deb` or AppImage installation.
+- **AppImage or Windows portable:** close the launcher and remove the executable and any shortcuts you created.
 
 Uninstalling may leave your profiles, worlds, and saved accounts on the computer. See [how to remove local data](PRIVACY.md#retention-and-deletion) if you want to remove those too.
 

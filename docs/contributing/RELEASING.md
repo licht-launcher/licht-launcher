@@ -28,11 +28,61 @@ From 0.8 on, the list continues (to be defined together with the project owner).
 - Releases are produced by CI from a tag (see [Roadmap](../ROADMAP.md), item 10.3).
 - Keep the notice "not affiliated with Mojang Studios or Microsoft" in the README and in the release notes.
 
+## Release artifacts
+
+| Platform | Artifact | In-app updates |
+| -------- | -------- | -------------- |
+| Windows  | `-windows-x64-setup.exe` (NSIS, current user) | Yes |
+| Windows  | `-windows-x64.msi` (WiX, all users) | Yes, through the MSI |
+| Windows  | `-windows-x64-portable.exe` | No, new versions are downloaded by hand |
+| Linux    | `-linux-x64.AppImage` | Yes |
+| Linux    | `-linux-x64.deb` | Yes, through the .deb (asks for the admin password) |
+| Linux    | `-linux-x64.flatpak` | No, disabled inside the sandbox |
+
+The AppImage is the portable Linux download; the raw Linux binary is not published.
+
+MSI versions must be numeric (`major.minor.patch`, major and minor up to 255,
+patch up to 65535); WiX rejects pre-release suffixes such as `0.4.0-beta`. The
+release workflow checks this before the quality checks run.
+
+### Windows portable build
+
+The bundler writes the installer type (NSIS, MSI, AppImage, .deb) only into the
+copy of the executable it packages, and the updater installs new versions through
+that type. The portable executable is `target/release/licht.exe`, which has no
+type; without one the updater would fall back to the NSIS entry and install a
+second launcher. A release build without an installer type therefore reports
+updates as unavailable (Settings points to GitHub Releases). Development builds
+keep the updater.
+
+### Flatpak
+
+`flatpak/app.licht.launcher.yml` repackages the `.deb` from the Linux build on the
+GNOME runtime, which provides WebKitGTK 4.1. The release workflow:
+
+1. copies the `.deb` to `flatpak/licht-launcher.deb`;
+2. checks out [flathub/shared-modules](https://github.com/flathub/shared-modules)
+   at the commit pinned in `SHARED_MODULES_COMMIT` into `flatpak/shared-modules`
+   (it provides `libayatana-appindicator` for the tray icon);
+3. runs `flatpak-builder` and `flatpak build-bundle` to produce the `.flatpak` file.
+
+Inside the sandbox the launcher detects `/.flatpak-info` and reports updates as
+managed by Flatpak instead of downloading packages itself. Users install a newer
+bundle with `flatpak install --user <file>.flatpak`.
+
+By default Flatpak redirects the app's data directory to `~/.var/app/app.licht.launcher`, so
+an installation from the `.deb` or AppImage keeps its own data and instances; the
+Flatpak starts empty.
+
 ## Updates
 
 Licht uses the Tauri v2 updater with GitHub Releases. Release notes belong in each
-GitHub Release. The workflow publishes signed Windows NSIS and Linux AppImage
-update artifacts, plus the manifest read by the updater:
+GitHub Release. The workflow publishes signed Windows NSIS, Windows MSI, Linux
+AppImage and Linux .deb update artifacts, plus the manifest read by the updater.
+The manifest lists `windows-x86_64-msi` and `linux-x86_64-deb` entries next to the
+generic `windows-x86_64` (NSIS) and `linux-x86_64` (AppImage) ones; the updater
+picks the entry matching how the launcher was installed. The .deb update runs
+`dpkg -i` through `pkexec` (or a graphical/terminal `sudo` fallback):
 
 ```text
 https://github.com/licht-launcher/licht-launcher/releases/latest/download/latest.json

@@ -25,6 +25,9 @@ const labels: Record<AppUpdatePhase, string> = {
   ready: "Ready to update",
   installing: "Installing update…",
   failed: "Update failed. Try again.",
+  externallyManaged: "Updates for this installation are managed by Flatpak.",
+  portable:
+    "This portable build does not update itself. Download new versions from GitHub Releases.",
 };
 
 export function UpdaterSection({
@@ -41,6 +44,8 @@ export function UpdaterSection({
     ["checking", "downloading", "verifying", "installing"].includes(
       state?.phase ?? "",
     );
+  const selfUpdateOff =
+    state?.phase === "externallyManaged" || state?.phase === "portable";
   const error = state?.error ?? (query.error ? messageOf(query.error) : null);
   const action =
     state?.phase === "ready"
@@ -79,6 +84,7 @@ export function UpdaterSection({
           id="automatic-updates"
           className={updaterSectionStyles.control}
           aria-describedby="automatic-updates-hint"
+          disabled={selfUpdateOff}
           checked={draft.automaticUpdates}
           onCheckedChange={(automaticUpdates) => onChange({ automaticUpdates })}
         />
@@ -110,7 +116,7 @@ export function UpdaterSection({
           type="button"
           variant={state?.phase === "ready" ? "default" : "outline"}
           size="default"
-          disabled={busy}
+          disabled={busy || selfUpdateOff}
           onClick={() => window.dispatchEvent(new Event(action.event))}
         >
           {action.label === "Restart to update" && (

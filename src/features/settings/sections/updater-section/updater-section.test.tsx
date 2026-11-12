@@ -136,6 +136,40 @@ describe("UpdaterSection", () => {
     expect(check).not.toHaveBeenCalled();
   });
 
+  it("points to Flatpak and offers no update actions when Flatpak manages updates", async () => {
+    state = appUpdateState({ phase: "externallyManaged" });
+    const { section } = await view();
+    expect(section.getByRole("status")).toHaveTextContent(
+      "Updates for this installation are managed by Flatpak.",
+    );
+    expect(
+      section.getByRole("switch", { name: "Automatic updates" }),
+    ).toBeDisabled();
+    expect(
+      section.getByRole("button", { name: "Check for updates" }),
+    ).toBeDisabled();
+    await waitFor(() =>
+      expect(getUpdateCheckStatus()).toBe("managed-externally"),
+    );
+  });
+
+  it("points to GitHub Releases and offers no update actions in a portable build", async () => {
+    state = appUpdateState({ phase: "portable" });
+    const { section } = await view();
+    expect(section.getByRole("status")).toHaveTextContent(
+      "This portable build does not update itself. Download new versions from GitHub Releases.",
+    );
+    expect(
+      section.getByRole("switch", { name: "Automatic updates" }),
+    ).toBeDisabled();
+    expect(
+      section.getByRole("button", { name: "Check for updates" }),
+    ).toBeDisabled();
+    await waitFor(() =>
+      expect(getUpdateCheckStatus()).toBe("managed-externally"),
+    );
+  });
+
   it("requests a native manual check and reports the completed result", async () => {
     check.mockImplementationOnce(async () => {
       emit({ phase: "checking" });
