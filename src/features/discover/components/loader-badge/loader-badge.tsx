@@ -14,21 +14,15 @@ import { loaderBadgeStyles } from "./loader-badge.styles";
  */
 export function LoaderBadge({
   loader,
-  className,
   children,
 }: {
   loader: ModpackLoader;
-  className?: string;
   children?: ReactNode;
 }) {
   return (
     <Badge
       data-loader={loader}
-      className={cn(
-        loaderBadgeStyles.root,
-        loaderBadgeStyles.tones[loader],
-        className,
-      )}
+      className={cn(loaderBadgeStyles.root, loaderBadgeStyles.tones[loader])}
     >
       <PlatformIcon platform={loader} className={loaderBadgeStyles.icon} />
       {LOADER_LABELS.get(loader)}

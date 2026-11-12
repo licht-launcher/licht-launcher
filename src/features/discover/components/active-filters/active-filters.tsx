@@ -21,7 +21,6 @@ type ActiveFilter = {
 };
 
 function activeFilters(filters: ModpackSearchFilters): ActiveFilter[] {
-  const chip = activeFiltersStyles.chip;
   const remove = (
     <XIcon aria-hidden className={activeFiltersStyles.removeIcon} />
   );
@@ -32,7 +31,7 @@ function activeFilters(filters: ModpackSearchFilters): ActiveFilter[] {
       key: "source",
       label,
       badge: (
-        <Badge className={chip}>
+        <Badge>
           {label}
           {remove}
         </Badge>
@@ -46,7 +45,7 @@ function activeFilters(filters: ModpackSearchFilters): ActiveFilter[] {
       key: "gameVersion",
       label,
       badge: (
-        <Badge className={chip}>
+        <Badge>
           {label}
           {remove}
         </Badge>
@@ -58,11 +57,7 @@ function activeFilters(filters: ModpackSearchFilters): ActiveFilter[] {
     active.push({
       key: "loader",
       label: LOADER_LABELS.get(filters.loader) ?? filters.loader,
-      badge: (
-        <LoaderBadge loader={filters.loader} className={chip}>
-          {remove}
-        </LoaderBadge>
-      ),
+      badge: <LoaderBadge loader={filters.loader}>{remove}</LoaderBadge>,
       clear: { loader: null },
     });
   }
@@ -70,11 +65,7 @@ function activeFilters(filters: ModpackSearchFilters): ActiveFilter[] {
     active.push({
       key: `category-${category}`,
       label: CATEGORY_BY_VALUE.get(category)?.label ?? category,
-      badge: (
-        <CategoryBadge category={category} className={chip}>
-          {remove}
-        </CategoryBadge>
-      ),
+      badge: <CategoryBadge category={category}>{remove}</CategoryBadge>,
       clear: {
         categories: filters.categories.filter((other) => other !== category),
       },
