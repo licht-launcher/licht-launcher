@@ -22,6 +22,8 @@ function renderNavigation(onOpenSettings: (section: SectionId) => void) {
       <LauncherNavigation
         libraryActive
         onOpenLibrary={() => {}}
+        discoverActive={false}
+        onOpenDiscover={() => {}}
         onOpenSettings={onOpenSettings}
       />
     ),

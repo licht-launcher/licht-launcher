@@ -1,3 +1,4 @@
+export { Badge } from "@/components/ui/badge";
 export { Button, buttonVariants } from "@/components/ui/button";
 export { Card } from "@/components/ui/card";
 export { Combobox } from "@/components/ui/combobox";
