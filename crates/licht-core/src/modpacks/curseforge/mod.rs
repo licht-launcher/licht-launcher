@@ -60,10 +60,10 @@ pub(super) async fn search_curseforge(
     if !api::fits_search_window(index, page_size) {
         return Ok(api::past_search_window());
     }
-    let category_id = match filters.category {
-        None => None,
-        Some(category) => match category_id(client, &key, category).await? {
-            Some(id) => Some(id),
+    let mut category_ids = Vec::with_capacity(filters.categories.len());
+    for &category in &filters.categories {
+        match category_id(client, &key, category).await? {
+            Some(id) => category_ids.push(id),
             None => {
                 tracing::warn!(
                     ?category,
@@ -74,9 +74,9 @@ pub(super) async fn search_curseforge(
                     total: 0,
                 });
             }
-        },
-    };
-    let url = search_url(query, index, page_size, filters, category_id)?;
+        }
+    }
+    let url = search_url(query, index, page_size, filters, &category_ids)?;
     let body = api::get_api(client, &key, url.as_str(), "curseforge_search").await?;
     api::parse_search(&body)
 }
@@ -100,7 +100,7 @@ fn search_url(
     index: u64,
     page_size: u32,
     filters: &ModpackSearchFilters,
-    category_id: Option<u64>,
+    category_ids: &[u64],
 ) -> Result<Url> {
     let mut url = Url::parse(SEARCH_URL).map_err(|_| CoreError::ModpackMeta {
         detail: "curseforge_search_url".into(),
@@ -117,8 +117,10 @@ fn search_url(
         if let Some(loader) = filters.loader {
             pairs.append_pair("modLoaderType", api::mod_loader_type(loader));
         }
-        if let Some(id) = category_id {
-            pairs.append_pair("categoryId", &id.to_string());
+        if !category_ids.is_empty() {
+            // CurseForge returns only packs that have every listed category.
+            let ids: Vec<String> = category_ids.iter().map(u64::to_string).collect();
+            pairs.append_pair("categoryIds", &format!("[{}]", ids.join(",")));
         }
         pairs.append_pair("index", &index.to_string());
         pairs.append_pair("pageSize", &page_size.to_string());
@@ -305,7 +307,7 @@ mod tests {
 
     #[test]
     fn search_url_pages_with_index_and_page_size() {
-        let url = search_url("atm", 20, 10, &ModpackSearchFilters::default(), None).expect("url");
+        let url = search_url("atm", 20, 10, &ModpackSearchFilters::default(), &[]).expect("url");
         let pairs: Vec<(String, String)> = url.query_pairs().into_owned().collect();
         assert!(pairs.contains(&("index".into(), "20".into())));
         assert!(pairs.contains(&("pageSize".into(), "10".into())));
@@ -317,27 +319,32 @@ mod tests {
         let filters = ModpackSearchFilters {
             game_version: Some("1.20.1".into()),
             loader: Some(crate::modpacks::types::ModpackLoader::Fabric),
-            category: Some(ModpackCategory::Technology),
+            categories: vec![ModpackCategory::Technology, ModpackCategory::Magic],
             source: None,
             sort: crate::modpacks::types::ModpackSort::Updated,
         };
-        let url = search_url("", 0, 10, &filters, Some(4472)).expect("url");
+        let url = search_url("", 0, 10, &filters, &[4472, 4473]).expect("url");
         let pairs: Vec<(String, String)> = url.query_pairs().into_owned().collect();
         assert!(pairs.contains(&("sortField".into(), "3".into())));
         assert!(pairs.contains(&("gameVersion".into(), "1.20.1".into())));
         assert!(pairs.contains(&("modLoaderType".into(), "4".into())));
-        assert!(pairs.contains(&("categoryId".into(), "4472".into())));
+        assert!(pairs.contains(&("categoryIds".into(), "[4472,4473]".into())));
     }
 
     #[test]
     fn sorting_by_downloads_uses_total_downloads_without_extra_filters() {
-        let url = search_url("", 0, 10, &ModpackSearchFilters::default(), None).expect("url");
+        let url = search_url("", 0, 10, &ModpackSearchFilters::default(), &[]).expect("url");
         let keys: Vec<String> = url.query_pairs().map(|(key, _)| key.into_owned()).collect();
         assert!(
             url.query_pairs()
                 .any(|(key, value)| key == "sortField" && value == "6")
         );
-        for absent in ["gameVersion", "modLoaderType", "categoryId", "searchFilter"] {
+        for absent in [
+            "gameVersion",
+            "modLoaderType",
+            "categoryIds",
+            "searchFilter",
+        ] {
             assert!(!keys.iter().any(|key| key == absent), "{absent}");
         }
     }

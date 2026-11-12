@@ -10,6 +10,7 @@ import { useCallback } from "react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
+import { ActiveFilters } from "@/features/discover/components/active-filters";
 import { DiscoverFilters } from "@/features/discover/components/discover-filters";
 import { DiscoverSort } from "@/features/discover/components/discover-sort";
 import { ModpackList } from "@/features/discover/components/modpack-list";
@@ -78,6 +79,7 @@ export function DiscoverPage({
           <div className={discoverPageStyles.search}>
             <Input
               type="search"
+              size="sm"
               aria-label="Search modpacks"
               placeholder="Search modpacks"
               startIcon={<SearchIcon />}
@@ -98,6 +100,10 @@ export function DiscoverPage({
           aria-busy={search.isFetching}
           className={discoverPageStyles.results}
         >
+          <ActiveFilters
+            filters={effectiveFilters}
+            onChange={onFiltersChange}
+          />
           {search.isPending ? (
             <div className={discoverPageStyles.loading}>
               <Spinner />

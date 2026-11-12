@@ -6,13 +6,14 @@ import {
   parseDiscoverSearch,
   parseModpackSource,
   searchFilters,
+  toggleCategory,
 } from "./discover-search";
 
 const EMPTY = {
   q: undefined,
   version: undefined,
   loader: undefined,
-  category: undefined,
+  categories: undefined,
   source: undefined,
   sort: undefined,
 };
@@ -34,7 +35,7 @@ describe("parseDiscoverSearch", () => {
       parseDiscoverSearch({
         version: " 1.20.1 ",
         loader: "neoforge",
-        category: "kitchenSink",
+        categories: ["quests", "kitchenSink", "quests", "pvp"],
         source: "curseforge",
         sort: "updated",
       }),
@@ -42,7 +43,8 @@ describe("parseDiscoverSearch", () => {
       ...EMPTY,
       version: "1.20.1",
       loader: "neoforge",
-      category: "kitchenSink",
+      // Known categories only, once each, in the sidebar's order.
+      categories: ["kitchenSink", "quests"],
       source: "curseforge",
       sort: "updated",
     });
@@ -53,12 +55,13 @@ describe("parseDiscoverSearch", () => {
       parseDiscoverSearch({
         version: "  ",
         loader: "rift",
-        category: "pvp",
+        categories: ["pvp"],
         source: "ftb",
         sort: "downloads",
       }),
     ).toEqual(EMPTY);
     expect(parseDiscoverSearch({ sort: "name" })).toEqual(EMPTY);
+    expect(parseDiscoverSearch({ categories: "magic" })).toEqual(EMPTY);
   });
 });
 
@@ -68,21 +71,21 @@ describe("searchFilters and filterParams", () => {
       q: "x",
       version: "1.20.1",
       loader: "fabric",
-      category: "magic",
+      categories: ["magic", "quests"],
       source: "modrinth",
       sort: "relevance",
     });
     expect(filters).toEqual({
       gameVersion: "1.20.1",
       loader: "fabric",
-      category: "magic",
+      categories: ["magic", "quests"],
       source: "modrinth",
       sort: "relevance",
     });
     expect(filterParams(filters)).toEqual({
       version: "1.20.1",
       loader: "fabric",
-      category: "magic",
+      categories: ["magic", "quests"],
       source: "modrinth",
       sort: "relevance",
     });
@@ -93,10 +96,25 @@ describe("searchFilters and filterParams", () => {
     expect(filterParams(DEFAULT_SEARCH_FILTERS)).toEqual({
       version: undefined,
       loader: undefined,
-      category: undefined,
+      categories: undefined,
       source: undefined,
       sort: undefined,
     });
+  });
+});
+
+describe("toggleCategory", () => {
+  it("adds a category in the sidebar's order", () => {
+    expect(toggleCategory(["technology"], "magic")).toEqual([
+      "magic",
+      "technology",
+    ]);
+  });
+
+  it("removes a chosen category", () => {
+    expect(toggleCategory(["magic", "technology"], "magic")).toEqual([
+      "technology",
+    ]);
   });
 });
 

@@ -13,7 +13,7 @@ import type { ModpackSource } from "@/lib/generated/ModpackSource";
 export const DEFAULT_SEARCH_FILTERS: ModpackSearchFilters = {
   gameVersion: null,
   loader: null,
-  category: null,
+  categories: [],
   source: null,
   sort: "downloads",
 };
@@ -23,7 +23,7 @@ export type DiscoverSearch = {
   q?: string;
   version?: string;
   loader?: ModpackLoader;
-  category?: ModpackCategory;
+  categories?: ModpackCategory[];
   source?: ModpackSource;
   sort?: ModpackSort;
 };
@@ -35,6 +35,16 @@ function pick<T extends string>(
   allowed: readonly T[],
 ): T | undefined {
   return allowed.find((option) => option === value);
+}
+
+/** The allowed values `value` lists, in `allowed` order and without repeats. */
+function pickAll<T extends string>(
+  value: unknown,
+  allowed: readonly T[],
+): T[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const picked = allowed.filter((option) => value.includes(option));
+  return picked.length === 0 ? undefined : picked;
 }
 
 function values<T extends string>(options: readonly { value: T }[]): T[] {
@@ -53,7 +63,7 @@ export function parseDiscoverSearch(
     q: q === "" ? undefined : q,
     version: version === "" ? undefined : version,
     loader: pick(search.loader, values(LOADER_OPTIONS)),
-    category: pick(search.category, values(CATEGORY_OPTIONS)),
+    categories: pickAll(search.categories, values(CATEGORY_OPTIONS)),
     source: pick(search.source, MODPACK_SOURCES),
     sort: sort === DEFAULT_SEARCH_FILTERS.sort ? undefined : sort,
   };
@@ -64,7 +74,7 @@ export function searchFilters(search: DiscoverSearch): ModpackSearchFilters {
   return {
     gameVersion: search.version ?? null,
     loader: search.loader ?? null,
-    category: search.category ?? null,
+    categories: search.categories ?? [],
     source: search.source ?? null,
     sort: search.sort ?? DEFAULT_SEARCH_FILTERS.sort,
   };
@@ -77,11 +87,26 @@ export function filterParams(
   return {
     version: filters.gameVersion ?? undefined,
     loader: filters.loader ?? undefined,
-    category: filters.category ?? undefined,
+    categories:
+      filters.categories.length === 0 ? undefined : [...filters.categories],
     source: filters.source ?? undefined,
     sort:
       filters.sort === DEFAULT_SEARCH_FILTERS.sort ? undefined : filters.sort,
   };
+}
+
+/**
+ * Adds `category` to the chosen ones, or removes it when already chosen. The
+ * result keeps the sidebar's order so equal choices make equal searches.
+ */
+export function toggleCategory(
+  categories: readonly ModpackCategory[],
+  category: ModpackCategory,
+): ModpackCategory[] {
+  const chosen = categories.includes(category);
+  return values(CATEGORY_OPTIONS).filter((option) =>
+    option === category ? !chosen : categories.includes(option),
+  );
 }
 
 export function parseModpackSource(value: string): ModpackSource | null {

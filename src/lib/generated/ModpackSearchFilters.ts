@@ -11,7 +11,11 @@ export type ModpackSearchFilters = {
 /**
  * A Minecraft version id such as `1.20.1`.
  */
-gameVersion: string | null, loader: ModpackLoader | null, category: ModpackCategory | null, 
+gameVersion: string | null, loader: ModpackLoader | null, 
+/**
+ * A pack must have every one of these; empty means any category.
+ */
+categories: Array<ModpackCategory>, 
 /**
  * Search only this source; `None` searches both.
  */

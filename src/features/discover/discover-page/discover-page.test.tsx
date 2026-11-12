@@ -22,6 +22,8 @@ import {
 } from "@/features/instances/tests/support/render-instances";
 
 const BOTH_SOURCES = ["modrinth", "curseforge"];
+/** `categories=["magic"]` as the router writes it into the URL. */
+const MAGIC = encodeURIComponent(JSON.stringify(["magic"]));
 
 /** Answers `modpack_sources` (both by default), then defers to `implement`. */
 function mockDiscover(
@@ -173,7 +175,7 @@ describe("Discover page", () => {
   it("searches with the filters in the URL", async () => {
     mockSearch(() => Promise.resolve(modpackSearchPage()));
     await renderAt(
-      "/discover?q=atm&loader=fabric&category=magic&source=curseforge&sort=updated",
+      `/discover?q=atm&loader=fabric&categories=${MAGIC}&source=curseforge&sort=updated`,
     );
 
     expect(
@@ -188,7 +190,7 @@ describe("Discover page", () => {
           filters: {
             gameVersion: null,
             loader: "fabric",
-            category: "magic",
+            categories: ["magic"],
             source: "curseforge",
             sort: "updated",
           },
@@ -205,11 +207,19 @@ describe("Discover page", () => {
       name: "Filters",
     });
     fireEvent.click(within(filters).getByRole("button", { name: "Quests" }));
+    await waitFor(() =>
+      expect(router.state.location.search).toEqual({
+        q: "atm",
+        categories: ["quests"],
+      }),
+    );
+    // A second category narrows to packs that have both.
+    fireEvent.click(within(filters).getByRole("button", { name: "Magic" }));
 
     await waitFor(() =>
       expect(router.state.location.search).toEqual({
         q: "atm",
-        category: "quests",
+        categories: ["magic", "quests"],
       }),
     );
     await waitFor(() =>
@@ -218,7 +228,10 @@ describe("Discover page", () => {
         {
           query: "atm",
           page: 1,
-          filters: { ...DEFAULT_SEARCH_FILTERS, category: "quests" },
+          filters: {
+            ...DEFAULT_SEARCH_FILTERS,
+            categories: ["magic", "quests"],
+          },
         },
       ]),
     );
@@ -226,7 +239,7 @@ describe("Discover page", () => {
 
   it("sorts from the control next to the search box", async () => {
     mockSearch(() => Promise.resolve(modpackSearchPage()));
-    const { router } = await renderAt("/discover?q=atm&category=magic");
+    const { router } = await renderAt(`/discover?q=atm&categories=${MAGIC}`);
 
     fireEvent.click(await screen.findByRole("combobox", { name: "Sort by" }));
     fireEvent.click(
@@ -236,7 +249,7 @@ describe("Discover page", () => {
     await waitFor(() =>
       expect(router.state.location.search).toEqual({
         q: "atm",
-        category: "magic",
+        categories: ["magic"],
         sort: "updated",
       }),
     );
@@ -333,10 +346,10 @@ describe("Discover page", () => {
       if (command !== "search_modpacks") return undefined;
       const filters =
         args !== null && typeof args === "object" && "filters" in args
-          ? (args.filters as { category: string | null })
-          : { category: null };
+          ? (args.filters as { categories: string[] })
+          : { categories: [] };
       // The filtered search never answers, so it stays loading.
-      return filters.category === null
+      return filters.categories.length === 0
         ? Promise.resolve(modpackSearchPage({ pageCount: 1 }))
         : new Promise(() => {});
     });

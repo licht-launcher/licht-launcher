@@ -1,13 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import {
-  BlocksIcon,
-  ChevronDownIcon,
-  GlobeIcon,
-  LayoutGridIcon,
-  type LucideIcon,
-  TagIcon,
-  XIcon,
-} from "lucide-react";
+import { ChevronDownIcon } from "lucide-react";
 import { type ReactNode, useId } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -25,9 +17,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { CATEGORY_TONES } from "@/features/discover/components/category-badge/category-badge.styles";
 import {
   parseModpackSource,
   SOURCE_LABELS,
+  toggleCategory,
 } from "@/features/discover/lib/discover-search";
 import {
   CATEGORY_OPTIONS,
@@ -38,6 +32,7 @@ import { createVersionChoices } from "@/features/instances/model/create-versions
 import { PlatformIcon } from "@/features/new-instance/assets/platform-icons";
 import type { ModpackSearchFilters } from "@/lib/generated/ModpackSearchFilters";
 import type { ModpackSource } from "@/lib/generated/ModpackSource";
+import { cn } from "@/lib/utils";
 
 import { discoverFiltersStyles } from "./discover-filters.styles";
 
@@ -70,12 +65,6 @@ export function DiscoverFilters({
       label: version.id,
     })),
   ];
-  const narrowed =
-    filters.gameVersion !== null ||
-    filters.loader !== null ||
-    filters.category !== null ||
-    filters.source !== null;
-
   function update(patch: Partial<ModpackSearchFilters>) {
     onChange({ ...filters, ...patch });
   }
@@ -85,7 +74,7 @@ export function DiscoverFilters({
       <ScrollArea className={discoverFiltersStyles.scrollArea}>
         <div className={discoverFiltersStyles.content}>
           {sources.length > 1 && (
-            <FilterGroup title="Source" icon={GlobeIcon}>
+            <FilterGroup title="Source">
               {(labelId) => (
                 <Select
                   value={filters.source ?? ANY}
@@ -112,7 +101,7 @@ export function DiscoverFilters({
               )}
             </FilterGroup>
           )}
-          <FilterGroup title="Game version" icon={TagIcon}>
+          <FilterGroup title="Game version">
             {() => (
               <Combobox
                 aria-label="Game version"
@@ -134,7 +123,7 @@ export function DiscoverFilters({
               />
             )}
           </FilterGroup>
-          <FilterGroup title="Loader" icon={BlocksIcon}>
+          <FilterGroup title="Loader">
             {(labelId) => (
               <Select
                 value={filters.loader ?? ANY}
@@ -164,14 +153,14 @@ export function DiscoverFilters({
               </Select>
             )}
           </FilterGroup>
-          <FilterGroup title="Category" icon={LayoutGridIcon}>
+          <FilterGroup title="Category">
             {(labelId) => (
               <ul
                 aria-labelledby={labelId}
                 className={discoverFiltersStyles.categories}
               >
                 {CATEGORY_OPTIONS.map((option) => {
-                  const pressed = filters.category === option.value;
+                  const pressed = filters.categories.includes(option.value);
                   return (
                     <li key={option.value}>
                       <Button
@@ -179,9 +168,17 @@ export function DiscoverFilters({
                         variant="ghost"
                         size="sm"
                         aria-pressed={pressed}
-                        className={discoverFiltersStyles.category}
+                        className={cn(
+                          discoverFiltersStyles.category,
+                          pressed && CATEGORY_TONES[option.value],
+                        )}
                         onClick={() =>
-                          update({ category: pressed ? null : option.value })
+                          update({
+                            categories: toggleCategory(
+                              filters.categories,
+                              option.value,
+                            ),
+                          })
                         }
                       >
                         <option.icon aria-hidden />
@@ -193,25 +190,6 @@ export function DiscoverFilters({
               </ul>
             )}
           </FilterGroup>
-          {narrowed && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className={discoverFiltersStyles.clear}
-              onClick={() =>
-                update({
-                  gameVersion: null,
-                  loader: null,
-                  category: null,
-                  source: null,
-                })
-              }
-            >
-              <XIcon aria-hidden />
-              Clear filters
-            </Button>
-          )}
         </div>
       </ScrollArea>
     </aside>
@@ -220,11 +198,9 @@ export function DiscoverFilters({
 
 function FilterGroup({
   title,
-  icon: Icon,
   children,
 }: {
   title: string;
-  icon: LucideIcon;
   children: (labelId: string) => ReactNode;
 }) {
   const labelId = useId();
@@ -236,12 +212,11 @@ function FilterGroup({
       >
         <h2 id={labelId}>
           <CollapsibleTrigger className={discoverFiltersStyles.heading}>
-            <Icon aria-hidden className={discoverFiltersStyles.headingIcon} />
-            {title}
             <ChevronDownIcon
               aria-hidden
               className={discoverFiltersStyles.chevron}
             />
+            {title}
           </CollapsibleTrigger>
         </h2>
         <CollapsibleContent className={discoverFiltersStyles.groupContent}>

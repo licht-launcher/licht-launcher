@@ -127,10 +127,13 @@ fn searches_modrinth(filters: &ModpackSearchFilters) -> bool {
 }
 
 /// CurseForge sits out when another source was picked or it has no match for
-/// the chosen category.
+/// one of the chosen categories.
 fn searches_curseforge(filters: &ModpackSearchFilters) -> bool {
     filters.source != Some(ModpackSource::Modrinth)
-        && filters.category.is_none_or(curseforge::serves_category)
+        && filters
+            .categories
+            .iter()
+            .all(|category| curseforge::serves_category(*category))
 }
 
 fn merge_search_pages(page: u32, sources: Vec<SourcePage>, sort: ModpackSort) -> ModpackSearchPage {
@@ -325,17 +328,17 @@ mod tests {
 
     #[test]
     fn a_category_curseforge_lacks_leaves_it_out() {
-        let optimization = ModpackSearchFilters {
-            category: Some(ModpackCategory::Optimization),
+        let with_optimization = ModpackSearchFilters {
+            categories: vec![ModpackCategory::Magic, ModpackCategory::Optimization],
             ..ModpackSearchFilters::default()
         };
-        assert!(searches_modrinth(&optimization) && !searches_curseforge(&optimization));
+        assert!(searches_modrinth(&with_optimization) && !searches_curseforge(&with_optimization));
 
-        let magic = ModpackSearchFilters {
-            category: Some(ModpackCategory::Magic),
+        let magic_and_tech = ModpackSearchFilters {
+            categories: vec![ModpackCategory::Magic, ModpackCategory::Technology],
             ..ModpackSearchFilters::default()
         };
-        assert!(searches_curseforge(&magic));
+        assert!(searches_curseforge(&magic_and_tech));
     }
 
     fn page_of(name: &str) -> SourcePage {

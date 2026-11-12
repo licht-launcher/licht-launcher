@@ -153,8 +153,8 @@ fn search_facets(filters: &ModpackSearchFilters) -> Value {
     if let Some(loader) = filters.loader {
         facets.push(vec![format!("categories:{}", loader_slug(loader))]);
     }
-    if let Some(category) = filters.category {
-        facets.push(vec![format!("categories:{}", category_slug(category))]);
+    for category in &filters.categories {
+        facets.push(vec![format!("categories:{}", category_slug(*category))]);
     }
     serde_json::json!(facets)
 }
@@ -559,16 +559,17 @@ mod tests {
         let filters = ModpackSearchFilters {
             game_version: Some(" 1.20.1 ".into()),
             loader: Some(ModpackLoader::Neoforge),
-            category: Some(ModpackCategory::KitchenSink),
+            categories: vec![ModpackCategory::KitchenSink, ModpackCategory::Quests],
             source: None,
             sort: ModpackSort::Updated,
         };
         let url = search_url("", 0, 10, &filters).expect("url");
         assert_eq!(query_value(&url, "index").as_deref(), Some("updated"));
+        // One facet list per category, so a pack must have all of them.
         assert_eq!(
             query_value(&url, "facets").as_deref(),
             Some(
-                r#"[["project_type:modpack"],["versions:1.20.1"],["categories:neoforge"],["categories:kitchen-sink"]]"#
+                r#"[["project_type:modpack"],["versions:1.20.1"],["categories:neoforge"],["categories:kitchen-sink"],["categories:quests"]]"#
             )
         );
     }

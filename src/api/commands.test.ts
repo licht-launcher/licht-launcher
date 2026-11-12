@@ -76,6 +76,7 @@ import { appUpdateState } from "@/features/updater/fixtures/state";
 import type { DownloadJobSnapshot } from "@/lib/generated/DownloadJobSnapshot";
 import type { InstanceContentEntry } from "@/lib/generated/InstanceContentEntry";
 import type { InstanceContentUpdate } from "@/lib/generated/InstanceContentUpdate";
+import type { ModpackSearchFilters } from "@/lib/generated/ModpackSearchFilters";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
@@ -258,13 +259,13 @@ describe("launcher commands", () => {
       name: "Cobblemon",
       path: "C:\\packs\\cobble.mrpack",
     });
-    const filters = {
+    const filters: ModpackSearchFilters = {
       gameVersion: "1.20.1",
       loader: "fabric",
-      category: "magic",
+      categories: ["magic"],
       source: null,
       sort: "updated",
-    } as const;
+    };
     await searchModpacks("cobble", 2, filters);
     expect(invoke).toHaveBeenCalledWith("search_modpacks", {
       query: "cobble",

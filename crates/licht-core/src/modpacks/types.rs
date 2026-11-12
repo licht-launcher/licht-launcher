@@ -210,7 +210,8 @@ pub struct ModpackSearchFilters {
     /// A Minecraft version id such as `1.20.1`.
     pub game_version: Option<String>,
     pub loader: Option<ModpackLoader>,
-    pub category: Option<ModpackCategory>,
+    /// A pack must have every one of these; empty means any category.
+    pub categories: Vec<ModpackCategory>,
     /// Search only this source; `None` searches both.
     pub source: Option<ModpackSource>,
     pub sort: ModpackSort,

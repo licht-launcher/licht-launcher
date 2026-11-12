@@ -83,29 +83,39 @@ describe("DiscoverFilters", () => {
     );
   });
 
-  it("toggles a single category", () => {
-    const onChange = renderFilters();
+  it("adds a category to the ones already chosen", () => {
+    const onChange = renderFilters({
+      ...DEFAULT_SEARCH_FILTERS,
+      categories: ["technology"],
+    });
     const categories = screen.getByRole("list", { name: "Category" });
 
     fireEvent.click(within(categories).getByRole("button", { name: "Magic" }));
 
     expect(onChange).toHaveBeenCalledExactlyOnceWith({
       ...DEFAULT_SEARCH_FILTERS,
-      category: "magic",
+      categories: ["magic", "technology"],
     });
   });
 
-  it("clears a category when it is pressed again", () => {
+  it("removes a category when it is pressed again", () => {
     const onChange = renderFilters({
       ...DEFAULT_SEARCH_FILTERS,
-      category: "magic",
+      categories: ["magic", "quests"],
     });
     const magic = screen.getByRole("button", { name: "Magic" });
     expect(magic).toHaveAttribute("aria-pressed", "true");
+    // A chosen category takes its own color.
+    expect(magic.className).not.toBe(
+      screen.getByRole("button", { name: "Quests" }).className,
+    );
 
     fireEvent.click(magic);
 
-    expect(onChange).toHaveBeenCalledExactlyOnceWith(DEFAULT_SEARCH_FILTERS);
+    expect(onChange).toHaveBeenCalledExactlyOnceWith({
+      ...DEFAULT_SEARCH_FILTERS,
+      categories: ["quests"],
+    });
   });
 
   it("picks a loader", async () => {
@@ -148,31 +158,6 @@ describe("DiscoverFilters", () => {
     expect(onChange).toHaveBeenCalledExactlyOnceWith({
       ...DEFAULT_SEARCH_FILTERS,
       gameVersion: "1.20.1",
-    });
-  });
-
-  it("hides Clear filters while nothing narrows the search", () => {
-    renderFilters({ ...DEFAULT_SEARCH_FILTERS, sort: "updated" });
-
-    expect(
-      screen.queryByRole("button", { name: "Clear filters" }),
-    ).not.toBeInTheDocument();
-  });
-
-  it("clears every filter but keeps the sort order", () => {
-    const onChange = renderFilters({
-      gameVersion: "1.20.1",
-      loader: "fabric",
-      category: "quests",
-      source: "modrinth",
-      sort: "relevance",
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
-
-    expect(onChange).toHaveBeenCalledExactlyOnceWith({
-      ...DEFAULT_SEARCH_FILTERS,
-      sort: "relevance",
     });
   });
 });
