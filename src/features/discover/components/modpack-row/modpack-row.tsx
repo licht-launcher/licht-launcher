@@ -1,15 +1,7 @@
 import { Link } from "@tanstack/react-router";
-import {
-  CalendarClockIcon,
-  DownloadIcon,
-  PackageIcon,
-  StoreIcon,
-} from "lucide-react";
+import { CalendarClockIcon, DownloadIcon, PackageIcon } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { LoaderBadge } from "@/features/discover/components/loader-badge";
-import { SOURCE_LABELS } from "@/features/discover/lib/discover-search";
-import { CATEGORY_BY_VALUE } from "@/features/discover/lib/filter-options";
+import { CategoryBadge } from "@/features/discover/components/category-badge";
 import {
   formatDownloads,
   formatTimeAgo,
@@ -34,9 +26,7 @@ export function ModpackRow({
   now: number;
 }) {
   const updated = formatTimeAgo(modpack.updatedAt, now);
-  const categories = modpack.categories
-    .slice(0, MAX_ROW_CATEGORIES)
-    .flatMap((value) => CATEGORY_BY_VALUE.get(value) ?? []);
+  const categories = modpack.categories.slice(0, MAX_ROW_CATEGORIES);
 
   return (
     <Link
@@ -67,26 +57,17 @@ export function ModpackRow({
           {modpack.description}
         </span>
         <span className={modpackRowStyles.footer}>
-          {(modpack.loaders.length > 0 || categories.length > 0) && (
+          {categories.length > 0 && (
             <span className={modpackRowStyles.tags}>
-              {modpack.loaders.map((loader) => (
-                <LoaderBadge key={loader} loader={loader} />
-              ))}
               {categories.map((category) => (
-                <Badge key={category.value}>
-                  <category.icon aria-hidden />
-                  {category.label}
-                </Badge>
+                <CategoryBadge key={category} category={category} />
               ))}
             </span>
           )}
           <span className={modpackRowStyles.meta}>
             <span className={modpackRowStyles.stat}>
               <DownloadIcon aria-hidden />
-              <span>
-                {formatDownloads(modpack.downloads)}
-                <span className={modpackRowStyles.srOnly}> downloads</span>
-              </span>
+              {formatDownloads(modpack.downloads)} Downloads
             </span>
             {updated && (
               <span className={modpackRowStyles.stat}>
@@ -99,11 +80,6 @@ export function ModpackRow({
                 </time>
               </span>
             )}
-            {/* The same pack can be listed by both stores; this tells them apart. */}
-            <span className={modpackRowStyles.stat}>
-              <StoreIcon aria-hidden />
-              {SOURCE_LABELS[modpack.source]}
-            </span>
           </span>
         </span>
       </span>

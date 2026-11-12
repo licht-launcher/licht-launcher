@@ -15,6 +15,15 @@ describe("Input", () => {
     expect(screen.getByRole("textbox", { name: "Nome" })).toHaveValue("Lilie");
   });
 
+  it("renders a small field when asked", () => {
+    render(<Input aria-label="Search" size="sm" startIcon={<UserRound />} />);
+
+    expect(screen.getByRole("textbox", { name: "Search" })).toHaveAttribute(
+      "data-size",
+      "sm",
+    );
+  });
+
   it("renders a start icon without blocking typing", () => {
     render(
       <Input

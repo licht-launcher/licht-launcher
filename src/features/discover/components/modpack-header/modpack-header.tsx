@@ -7,10 +7,9 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CategoryBadge } from "@/features/discover/components/category-badge";
 import { SOURCE_LABELS } from "@/features/discover/lib/discover-search";
-import { CATEGORY_BY_VALUE } from "@/features/discover/lib/filter-options";
 import {
   formatDownloads,
   formatTimeAgo,
@@ -33,9 +32,6 @@ export function ModpackHeader({
   const updated = formatTimeAgo(modpack.updatedAt, now);
   const sourceLabel = SOURCE_LABELS[modpack.source];
   const projectUrl = modpack.projectUrl;
-  const categories = modpack.categories.flatMap(
-    (value) => CATEGORY_BY_VALUE.get(value) ?? [],
-  );
 
   return (
     <header className={modpackHeaderStyles.root}>
@@ -60,6 +56,15 @@ export function ModpackHeader({
           )}
         </div>
         <p className={modpackHeaderStyles.summary}>{modpack.summary}</p>
+        {modpack.categories.length > 0 && (
+          <ul aria-label="Categories" className={modpackHeaderStyles.tags}>
+            {modpack.categories.map((category) => (
+              <li key={category}>
+                <CategoryBadge category={category} />
+              </li>
+            ))}
+          </ul>
+        )}
         <div className={modpackHeaderStyles.stats}>
           <span className={modpackHeaderStyles.stat}>
             <DownloadIcon aria-hidden />
@@ -83,18 +88,6 @@ export function ModpackHeader({
             </span>
           )}
         </div>
-        {categories.length > 0 && (
-          <ul aria-label="Categories" className={modpackHeaderStyles.tags}>
-            {categories.map((category) => (
-              <li key={category.value}>
-                <Badge>
-                  <category.icon aria-hidden />
-                  {category.label}
-                </Badge>
-              </li>
-            ))}
-          </ul>
-        )}
       </div>
       <div className={modpackHeaderStyles.actions}>
         <Button type="button" onClick={onInstall}>

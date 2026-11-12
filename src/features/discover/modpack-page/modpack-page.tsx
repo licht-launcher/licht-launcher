@@ -42,7 +42,7 @@ export function ModpackPage({
   return (
     <div className={modpackPageStyles.root}>
       <div className={modpackPageStyles.toolbar}>
-        <Button asChild variant="ghost" size="sm">
+        <Button asChild variant="outline" size="sm">
           <Link to="/discover">
             <ArrowLeftIcon aria-hidden />
             Discover

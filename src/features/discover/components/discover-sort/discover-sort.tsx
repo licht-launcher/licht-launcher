@@ -27,6 +27,7 @@ export function DiscoverSort({
       }}
     >
       <SelectTrigger
+        size="sm"
         aria-label="Sort by"
         className={discoverSortStyles.trigger}
       >

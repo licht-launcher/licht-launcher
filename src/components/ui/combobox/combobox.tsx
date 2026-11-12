@@ -124,11 +124,8 @@ export function Combobox({
             autoComplete="off"
             disabled={disabled}
             placeholder={placeholder}
-            data-size={size}
-            className={cn(
-              comboboxStyles.input,
-              size === "sm" && comboboxStyles.inputSm,
-            )}
+            size={size}
+            className={comboboxStyles.input}
             value={open && query !== null ? query : (selected?.label ?? "")}
             onFocus={openList}
             onClick={openList}
