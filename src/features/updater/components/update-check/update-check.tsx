@@ -61,7 +61,8 @@ function legacyStatus(phase: AppUpdatePhase | undefined): UpdateCheckStatus {
   if (phase === "ready") return "available";
   if (phase === "upToDate") return "up-to-date";
   if (phase === "failed") return "failed";
-  if (phase === "externallyManaged") return "managed-externally";
+  if (phase === "externallyManaged" || phase === "portable")
+    return "managed-externally";
   return "not-checked";
 }
 
