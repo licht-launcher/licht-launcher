@@ -162,6 +162,11 @@ export function searchModpacks(
   return invoke("search_modpacks", { query, page, filters });
 }
 
+/** Sources this build can search (CurseForge only when a key is configured). */
+export function listModpackSources(): Promise<ModpackSource[]> {
+  return invoke("modpack_sources");
+}
+
 export function getModpack(
   source: ModpackSource,
   projectId: string,

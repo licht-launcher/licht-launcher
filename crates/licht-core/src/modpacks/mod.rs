@@ -13,7 +13,7 @@ mod types;
 pub(crate) mod workspace;
 
 pub use curseforge::{CURSEFORGE_API_KEY_ENV, CURSEFORGE_INDEX_FILE, install_curseforge_files};
-pub use discovery::{get_modpack, search_modpacks};
+pub use discovery::{available_modpack_sources, get_modpack, search_modpacks};
 pub use mrpack::{
     MODPACK_INDEX_FILE, apply_mrpack_loader, install_mrpack_files, mrpack_download_tasks,
 };
@@ -29,15 +29,21 @@ use crate::settings::GlobalLaunch;
 use crate::{CoreError, Result, SharedCache};
 use std::path::Path;
 
+/// Every version of a pack, newest first (undated versions last).
 pub async fn list_modpack_versions(
     client: &Client,
     source: ModpackSource,
     project_id: &str,
 ) -> Result<Vec<ModpackVersionItem>> {
-    match source {
-        ModpackSource::Modrinth => modrinth::list_modrinth_versions(client, project_id).await,
-        ModpackSource::Curseforge => curseforge::list_curseforge_versions(client, project_id).await,
-    }
+    let mut versions = match source {
+        ModpackSource::Modrinth => modrinth::list_modrinth_versions(client, project_id).await?,
+        ModpackSource::Curseforge => {
+            curseforge::list_curseforge_versions(client, project_id).await?
+        }
+    };
+    // RFC 3339 UTC timestamps compare correctly as text; `None` sorts last here.
+    versions.sort_by(|a, b| b.published_at.cmp(&a.published_at));
+    Ok(versions)
 }
 
 #[allow(clippy::too_many_arguments)]

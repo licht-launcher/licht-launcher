@@ -17,6 +17,7 @@ import { ModpackDescription } from "@/features/discover/components/modpack-descr
 import { ModpackInstallPanel } from "@/features/discover/components/modpack-install-panel";
 import { useModpack } from "@/features/discover/hooks/use-modpacks";
 import { SOURCE_LABELS } from "@/features/discover/lib/discover-search";
+import { CATEGORY_BY_VALUE } from "@/features/discover/lib/filter-options";
 import {
   formatDownloads,
   formatUpdatedAt,
@@ -72,11 +73,11 @@ export function ModpackPage({
                     Gallery
                   </h2>
                   <ul className={modpackPageStyles.gallery}>
-                    {modpack.data.gallery.map((url) => (
-                      <li key={url}>
+                    {modpack.data.gallery.map((image) => (
+                      <li key={image.url}>
                         <img
-                          src={url}
-                          alt=""
+                          src={image.url}
+                          alt={image.title ?? ""}
                           loading="lazy"
                           className={modpackPageStyles.galleryImage}
                         />
@@ -144,7 +145,9 @@ function ModpackHeader({ modpack }: { modpack: ModpackDetails }) {
           <ul aria-label="Categories" className={modpackPageStyles.categories}>
             {modpack.categories.map((category) => (
               <li key={category}>
-                <Badge>{category}</Badge>
+                <Badge>
+                  {CATEGORY_BY_VALUE.get(category)?.label ?? category}
+                </Badge>
               </li>
             ))}
           </ul>

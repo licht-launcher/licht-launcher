@@ -15,7 +15,6 @@ export {
   DialogTrigger,
 } from "@/components/ui/dialog";
 export { Input } from "@/components/ui/input";
-export { Pagination } from "@/components/ui/pagination";
 export {
   Popover,
   PopoverAnchor,
