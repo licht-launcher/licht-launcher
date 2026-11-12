@@ -67,6 +67,7 @@ fn the_committed_bindings_match_ts_rs() {
     licht_core::LoaderBuild::export_all(&config).expect("loader build");
     licht_core::ModpackSearchPage::export_all(&config).expect("modpack search page");
     licht_core::ModpackDetails::export_all(&config).expect("modpack details");
+    licht_core::ModpackSearchFilters::export_all(&config).expect("modpack search filters");
     licht_core::ModpackVersionItem::export_all(&config).expect("modpack version item");
 
     let expected = generated_dir();

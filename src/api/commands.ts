@@ -25,6 +25,7 @@ import type { JavaPaths } from "@/lib/generated/JavaPaths";
 import type { JavaStatus } from "@/lib/generated/JavaStatus";
 import type { LoaderBuild } from "@/lib/generated/LoaderBuild";
 import type { ModpackDetails } from "@/lib/generated/ModpackDetails";
+import type { ModpackSearchFilters } from "@/lib/generated/ModpackSearchFilters";
 import type { ModpackSearchPage } from "@/lib/generated/ModpackSearchPage";
 import type { ModpackSource } from "@/lib/generated/ModpackSource";
 import type { ModpackVersionItem } from "@/lib/generated/ModpackVersionItem";
@@ -156,8 +157,14 @@ export function createInstanceWithPlatform(input: {
 export function searchModpacks(
   query: string,
   page: number,
+  filters: ModpackSearchFilters,
 ): Promise<ModpackSearchPage> {
-  return invoke("search_modpacks", { query, page });
+  return invoke("search_modpacks", { query, page, filters });
+}
+
+/** Sources this build can search (CurseForge only when a key is configured). */
+export function listModpackSources(): Promise<ModpackSource[]> {
+  return invoke("modpack_sources");
 }
 
 export function getModpack(

@@ -5,11 +5,18 @@ mod cdn;
 mod install;
 pub(crate) mod storage;
 
+use futures_util::{StreamExt, TryStreamExt, stream};
 use reqwest::Client;
 use serde_json::Value;
 use url::Url;
 
-use crate::modpacks::types::{ModpackDetails, ModpackVersionItem, SourcePage};
+use std::collections::HashMap;
+
+use tokio::sync::OnceCell;
+
+use crate::modpacks::types::{
+    ModpackCategory, ModpackDetails, ModpackSearchFilters, ModpackVersionItem, SourcePage,
+};
 use crate::{CoreError, Result};
 
 pub(crate) use install::import_curseforge_into;
@@ -18,6 +25,7 @@ pub use install::install_curseforge_files;
 const SEARCH_URL: &str = "https://api.curseforge.com/v1/mods/search";
 const MOD_URL: &str = "https://api.curseforge.com/v1/mods";
 const FILES_URL: &str = "https://api.curseforge.com/v1/mods/files";
+const CATEGORIES_URL: &str = "https://api.curseforge.com/v1/categories";
 const GAME_ID: &str = "432";
 const CLASS_ID: &str = "4471";
 
@@ -33,22 +41,67 @@ pub fn curseforge_api_key() -> Result<String> {
     }
 }
 
+/// Modpack category ids by slug, loaded once per run (they rarely change).
+static MODPACK_CATEGORIES: OnceCell<HashMap<String, u64>> = OnceCell::const_new();
+
+/// Whether a CurseForge search can honor this category filter.
+pub(super) fn serves_category(category: ModpackCategory) -> bool {
+    api::category_slug(category).is_some()
+}
+
 pub(super) async fn search_curseforge(
     client: &Client,
     query: &str,
     index: u64,
     page_size: u32,
+    filters: &ModpackSearchFilters,
 ) -> Result<SourcePage> {
     let key = curseforge_api_key()?;
     if !api::fits_search_window(index, page_size) {
         return Ok(api::past_search_window());
     }
-    let url = search_url(query, index, page_size)?;
+    let category_id = match filters.category {
+        None => None,
+        Some(category) => match category_id(client, &key, category).await? {
+            Some(id) => Some(id),
+            None => {
+                tracing::warn!(
+                    ?category,
+                    "CurseForge has no matching modpack category; leaving it out of this search"
+                );
+                return Ok(SourcePage {
+                    items: Vec::new(),
+                    total: 0,
+                });
+            }
+        },
+    };
+    let url = search_url(query, index, page_size, filters, category_id)?;
     let body = api::get_api(client, &key, url.as_str(), "curseforge_search").await?;
     api::parse_search(&body)
 }
 
-fn search_url(query: &str, index: u64, page_size: u32) -> Result<Url> {
+async fn category_id(client: &Client, key: &str, category: ModpackCategory) -> Result<Option<u64>> {
+    let Some(slug) = api::category_slug(category) else {
+        return Ok(None);
+    };
+    let ids = MODPACK_CATEGORIES
+        .get_or_try_init(|| async {
+            let url = format!("{CATEGORIES_URL}?gameId={GAME_ID}&classId={CLASS_ID}");
+            let body = api::get_api(client, key, &url, "curseforge_categories").await?;
+            api::parse_categories(&body)
+        })
+        .await?;
+    Ok(ids.get(slug).copied())
+}
+
+fn search_url(
+    query: &str,
+    index: u64,
+    page_size: u32,
+    filters: &ModpackSearchFilters,
+    category_id: Option<u64>,
+) -> Result<Url> {
     let mut url = Url::parse(SEARCH_URL).map_err(|_| CoreError::ModpackMeta {
         detail: "curseforge_search_url".into(),
     })?;
@@ -56,8 +109,17 @@ fn search_url(query: &str, index: u64, page_size: u32) -> Result<Url> {
         let mut pairs = url.query_pairs_mut();
         pairs.append_pair("gameId", GAME_ID);
         pairs.append_pair("classId", CLASS_ID);
-        pairs.append_pair("sortField", "2");
+        pairs.append_pair("sortField", api::sort_field(filters.sort));
         pairs.append_pair("sortOrder", "desc");
+        if let Some(version) = filters.game_version() {
+            pairs.append_pair("gameVersion", version);
+        }
+        if let Some(loader) = filters.loader {
+            pairs.append_pair("modLoaderType", api::mod_loader_type(loader));
+        }
+        if let Some(id) = category_id {
+            pairs.append_pair("categoryId", &id.to_string());
+        }
         pairs.append_pair("index", &index.to_string());
         pairs.append_pair("pageSize", &page_size.to_string());
         if !query.trim().is_empty() {
@@ -69,9 +131,7 @@ fn search_url(query: &str, index: u64, page_size: u32) -> Result<Url> {
 
 pub(super) async fn get_curseforge_mod(client: &Client, mod_id: &str) -> Result<ModpackDetails> {
     let key = curseforge_api_key()?;
-    let mod_id = mod_id.parse::<u64>().map_err(|_| CoreError::ModpackMeta {
-        detail: "invalid modpack identifier".into(),
-    })?;
+    let mod_id = parse_mod_id(mod_id)?;
     let mod_url = format!("{MOD_URL}/{mod_id}");
     let description_url = format!("{MOD_URL}/{mod_id}/description");
     let (project, description) = tokio::join!(
@@ -81,30 +141,60 @@ pub(super) async fn get_curseforge_mod(client: &Client, mod_id: &str) -> Result<
     api::parse_mod(&project?, &description?)
 }
 
-pub async fn list_curseforge_versions(
+/// Files fetched per request; CurseForge's maximum page size.
+const FILES_PAGE_SIZE: u64 = 50;
+/// At most this many file pages (1,000 files) per pack, to bound requests.
+const MAX_FILE_PAGES: u64 = 20;
+
+/// File pages requested at once after the first one.
+const FILE_PAGE_CONCURRENCY: usize = 4;
+
+/// Every file of a pack. The first page carries the total, so the other pages
+/// are then fetched a few at a time instead of one after another.
+pub(super) async fn list_curseforge_versions(
     client: &Client,
     mod_id: &str,
 ) -> Result<Vec<ModpackVersionItem>> {
     let key = curseforge_api_key()?;
-    let mut url =
-        Url::parse(&format!("{MOD_URL}/{mod_id}/files")).map_err(|_| CoreError::ModpackMeta {
-            detail: "curseforge_files_url".into(),
-        })?;
-    url.query_pairs_mut().append_pair("pageSize", "20");
-    let response = client
-        .get(url)
-        .header("x-api-key", &key)
-        .header("Accept", "application/json")
-        .send()
-        .await?;
-    let status = response.status().as_u16();
-    let body = response.text().await?;
-    if !(200..300).contains(&status) {
-        return Err(CoreError::ModpackMeta {
-            detail: format!("curseforge_files_http_{status}"),
-        });
+    let key = key.as_str();
+    let mod_id = parse_mod_id(mod_id)?;
+    let fetch_page = move |index: u64| async move {
+        let url = format!("{MOD_URL}/{mod_id}/files?index={index}&pageSize={FILES_PAGE_SIZE}");
+        let body = api::get_api(client, key, &url, "curseforge_files").await?;
+        api::parse_versions(&body)
+    };
+    let first = fetch_page(0).await?;
+    if first.total > MAX_FILE_PAGES * FILES_PAGE_SIZE {
+        tracing::warn!(
+            mod_id,
+            total = first.total,
+            "CurseForge pack has more files than Licht lists"
+        );
     }
-    api::parse_versions(&body)
+    let others: Vec<api::FilesPage> = stream::iter(remaining_file_indexes(first.total))
+        .map(fetch_page)
+        .buffered(FILE_PAGE_CONCURRENCY)
+        .try_collect()
+        .await?;
+    let mut versions = first.items;
+    for page in others {
+        versions.extend(page.items);
+    }
+    Ok(versions)
+}
+
+/// Start indexes of the file pages after the first, up to `MAX_FILE_PAGES`.
+fn remaining_file_indexes(total: u64) -> Vec<u64> {
+    (1..MAX_FILE_PAGES)
+        .map(|page| page * FILES_PAGE_SIZE)
+        .take_while(|index| *index < total)
+        .collect()
+}
+
+fn parse_mod_id(mod_id: &str) -> Result<u64> {
+    mod_id.parse::<u64>().map_err(|_| CoreError::ModpackMeta {
+        detail: "invalid modpack identifier".into(),
+    })
 }
 
 pub(super) async fn download_curseforge_pack_to(
@@ -195,12 +285,61 @@ mod tests {
     use super::*;
 
     #[test]
+    fn the_first_files_page_says_which_others_to_fetch() {
+        assert_eq!(remaining_file_indexes(148), vec![50, 100]);
+        assert_eq!(remaining_file_indexes(50), Vec::<u64>::new());
+        assert_eq!(remaining_file_indexes(51), vec![50]);
+        // No total in the reply: the first page is all there is.
+        assert_eq!(remaining_file_indexes(0), Vec::<u64>::new());
+    }
+
+    #[test]
+    fn file_pages_stop_at_the_cap() {
+        let indexes = remaining_file_indexes(5_000);
+        assert_eq!(
+            u64::try_from(indexes.len()).expect("len"),
+            MAX_FILE_PAGES - 1
+        );
+        assert_eq!(indexes.last(), Some(&950));
+    }
+
+    #[test]
     fn search_url_pages_with_index_and_page_size() {
-        let url = search_url("atm", 20, 10).expect("url");
+        let url = search_url("atm", 20, 10, &ModpackSearchFilters::default(), None).expect("url");
         let pairs: Vec<(String, String)> = url.query_pairs().into_owned().collect();
         assert!(pairs.contains(&("index".into(), "20".into())));
         assert!(pairs.contains(&("pageSize".into(), "10".into())));
         assert!(pairs.contains(&("searchFilter".into(), "atm".into())));
+    }
+
+    #[test]
+    fn filters_become_curseforge_search_parameters() {
+        let filters = ModpackSearchFilters {
+            game_version: Some("1.20.1".into()),
+            loader: Some(crate::modpacks::types::ModpackLoader::Fabric),
+            category: Some(ModpackCategory::Technology),
+            source: None,
+            sort: crate::modpacks::types::ModpackSort::Updated,
+        };
+        let url = search_url("", 0, 10, &filters, Some(4472)).expect("url");
+        let pairs: Vec<(String, String)> = url.query_pairs().into_owned().collect();
+        assert!(pairs.contains(&("sortField".into(), "3".into())));
+        assert!(pairs.contains(&("gameVersion".into(), "1.20.1".into())));
+        assert!(pairs.contains(&("modLoaderType".into(), "4".into())));
+        assert!(pairs.contains(&("categoryId".into(), "4472".into())));
+    }
+
+    #[test]
+    fn sorting_by_downloads_uses_total_downloads_without_extra_filters() {
+        let url = search_url("", 0, 10, &ModpackSearchFilters::default(), None).expect("url");
+        let keys: Vec<String> = url.query_pairs().map(|(key, _)| key.into_owned()).collect();
+        assert!(
+            url.query_pairs()
+                .any(|(key, value)| key == "sortField" && value == "6")
+        );
+        for absent in ["gameVersion", "modLoaderType", "categoryId", "searchFilter"] {
+            assert!(!keys.iter().any(|key| key == absent), "{absent}");
+        }
     }
 
     #[test]

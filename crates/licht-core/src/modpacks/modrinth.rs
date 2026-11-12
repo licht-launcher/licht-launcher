@@ -5,7 +5,9 @@ use url::Url;
 
 use crate::modpacks::description::markdown_to_safe_html;
 use crate::modpacks::types::{
-    ModpackDetails, ModpackListItem, ModpackSource, ModpackVersionItem, SourcePage,
+    ModpackCategory, ModpackDetails, ModpackImage, ModpackLicense, ModpackLinks, ModpackListItem,
+    ModpackLoader, ModpackSearchFilters, ModpackSort, ModpackSource, ModpackVersionItem,
+    ModpackVersionType, SourcePage, https_only, push_unique,
 };
 use crate::{CoreError, Result};
 
@@ -31,6 +33,11 @@ struct SearchHit {
     icon_url: Option<String>,
     #[serde(default)]
     author: String,
+    #[serde(default)]
+    date_modified: Option<String>,
+    /// Modrinth lists loaders among the categories.
+    #[serde(default)]
+    categories: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -49,14 +56,63 @@ struct ProjectResponse {
     #[serde(default)]
     categories: Vec<String>,
     #[serde(default)]
+    additional_categories: Vec<String>,
+    #[serde(default)]
+    loaders: Vec<String>,
+    #[serde(default)]
+    game_versions: Vec<String>,
+    #[serde(default)]
+    followers: Option<u64>,
+    #[serde(default)]
+    license: Option<ProjectLicense>,
+    #[serde(default)]
+    published: Option<String>,
+    #[serde(default)]
     updated: Option<String>,
+    #[serde(default)]
+    source_url: Option<String>,
+    #[serde(default)]
+    issues_url: Option<String>,
+    #[serde(default)]
+    wiki_url: Option<String>,
+    #[serde(default)]
+    discord_url: Option<String>,
     #[serde(default)]
     gallery: Vec<GalleryImage>,
 }
 
 #[derive(Debug, Deserialize)]
+struct ProjectLicense {
+    #[serde(default)]
+    id: String,
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    url: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
 struct GalleryImage {
     url: String,
+    #[serde(default)]
+    title: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct VersionEntry {
+    id: String,
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    game_versions: Vec<String>,
+    #[serde(default)]
+    loaders: Vec<String>,
+    #[serde(default)]
+    version_type: Option<String>,
+    #[serde(default)]
+    date_published: Option<String>,
+    #[serde(default)]
+    downloads: u64,
 }
 
 pub(super) async fn search_modrinth(
@@ -64,12 +120,14 @@ pub(super) async fn search_modrinth(
     query: &str,
     offset: u64,
     limit: u32,
+    filters: &ModpackSearchFilters,
 ) -> Result<SourcePage> {
-    let body = fetch_text(client, search_url(query, offset, limit)?, "modrinth_search").await?;
+    let url = search_url(query, offset, limit, filters)?;
+    let body = fetch_text(client, url, "modrinth_search").await?;
     parse_search(&body)
 }
 
-fn search_url(query: &str, offset: u64, limit: u32) -> Result<Url> {
+fn search_url(query: &str, offset: u64, limit: u32, filters: &ModpackSearchFilters) -> Result<Url> {
     let mut url = Url::parse(SEARCH_URL).map_err(|_| CoreError::ModpackMeta {
         detail: "modrinth_search_url".into(),
     })?;
@@ -77,8 +135,8 @@ fn search_url(query: &str, offset: u64, limit: u32) -> Result<Url> {
         let mut pairs = url.query_pairs_mut();
         pairs.append_pair("limit", &limit.to_string());
         pairs.append_pair("offset", &offset.to_string());
-        pairs.append_pair("index", "downloads");
-        pairs.append_pair("facets", r#"[["project_type:modpack"]]"#);
+        pairs.append_pair("index", sort_index(filters.sort));
+        pairs.append_pair("facets", &search_facets(filters).to_string());
         if !query.trim().is_empty() {
             pairs.append_pair("query", query.trim());
         }
@@ -86,19 +144,93 @@ fn search_url(query: &str, offset: u64, limit: u32) -> Result<Url> {
     Ok(url)
 }
 
+/// Facets are ANDed between the inner lists; loaders are categories on Modrinth.
+fn search_facets(filters: &ModpackSearchFilters) -> Value {
+    let mut facets = vec![vec!["project_type:modpack".to_string()]];
+    if let Some(version) = filters.game_version() {
+        facets.push(vec![format!("versions:{version}")]);
+    }
+    if let Some(loader) = filters.loader {
+        facets.push(vec![format!("categories:{}", loader_slug(loader))]);
+    }
+    if let Some(category) = filters.category {
+        facets.push(vec![format!("categories:{}", category_slug(category))]);
+    }
+    serde_json::json!(facets)
+}
+
+fn sort_index(sort: ModpackSort) -> &'static str {
+    match sort {
+        ModpackSort::Downloads => "downloads",
+        ModpackSort::Updated => "updated",
+        ModpackSort::Relevance => "relevance",
+    }
+}
+
+fn loader_slug(loader: ModpackLoader) -> &'static str {
+    match loader {
+        ModpackLoader::Fabric => "fabric",
+        ModpackLoader::Forge => "forge",
+        ModpackLoader::Neoforge => "neoforge",
+        ModpackLoader::Quilt => "quilt",
+    }
+}
+
+fn loader_from_slug(slug: &str) -> Option<ModpackLoader> {
+    ModpackLoader::ALL
+        .into_iter()
+        .find(|loader| loader_slug(*loader) == slug)
+}
+
+fn category_from_slug(slug: &str) -> Option<ModpackCategory> {
+    ModpackCategory::ALL
+        .into_iter()
+        .find(|category| category_slug(*category) == slug)
+}
+
+/// Modrinth's modpack categories (`GET /v2/tag/category`); the shared list mirrors them.
+fn category_slug(category: ModpackCategory) -> &'static str {
+    match category {
+        ModpackCategory::Adventure => "adventure",
+        ModpackCategory::Challenging => "challenging",
+        ModpackCategory::Combat => "combat",
+        ModpackCategory::KitchenSink => "kitchen-sink",
+        ModpackCategory::Lightweight => "lightweight",
+        ModpackCategory::Magic => "magic",
+        ModpackCategory::Multiplayer => "multiplayer",
+        ModpackCategory::Optimization => "optimization",
+        ModpackCategory::Quests => "quests",
+        ModpackCategory::Technology => "technology",
+    }
+}
+
 pub(super) fn parse_search(body: &str) -> Result<SourcePage> {
     let parsed: SearchResponse = serde_json::from_str(body).map_err(CoreError::LoaderJson)?;
     let items = parsed
         .hits
         .into_iter()
-        .map(|hit| ModpackListItem {
-            id: hit.project_id,
-            source: ModpackSource::Modrinth,
-            name: hit.title,
-            description: hit.description,
-            downloads: hit.downloads,
-            icon_url: hit.icon_url,
-            author: hit.author,
+        .map(|hit| {
+            let mut loaders = Vec::new();
+            let mut categories = Vec::new();
+            for slug in &hit.categories {
+                if let Some(loader) = loader_from_slug(slug) {
+                    push_unique(&mut loaders, loader);
+                } else if let Some(category) = category_from_slug(slug) {
+                    push_unique(&mut categories, category);
+                }
+            }
+            ModpackListItem {
+                id: hit.project_id,
+                source: ModpackSource::Modrinth,
+                name: hit.title,
+                description: hit.description,
+                downloads: hit.downloads,
+                icon_url: hit.icon_url,
+                author: hit.author,
+                updated_at: hit.date_modified,
+                loaders,
+                categories,
+            }
         })
         .collect();
     Ok(SourcePage {
@@ -161,6 +293,25 @@ pub(super) fn parse_project(body: &str, author: String) -> Result<ModpackDetails
             detail: "modrinth_project_not_modpack".into(),
         });
     }
+    let mut categories = Vec::new();
+    for slug in project
+        .categories
+        .iter()
+        .chain(&project.additional_categories)
+    {
+        if let Some(category) = category_from_slug(slug) {
+            push_unique(&mut categories, category);
+        }
+    }
+    let mut loaders = Vec::new();
+    for slug in &project.loaders {
+        if let Some(loader) = loader_from_slug(slug) {
+            push_unique(&mut loaders, loader);
+        }
+    }
+    // Modrinth lists game versions oldest first.
+    let mut game_versions = project.game_versions;
+    game_versions.reverse();
     Ok(ModpackDetails {
         id: project.id,
         source: ModpackSource::Modrinth,
@@ -168,16 +319,38 @@ pub(super) fn parse_project(body: &str, author: String) -> Result<ModpackDetails
         summary: project.description,
         author,
         downloads: project.downloads,
+        followers: project.followers,
         icon_url: project.icon_url,
-        categories: project.categories,
+        categories,
+        loaders,
+        game_versions,
+        license: project.license.map(|license| ModpackLicense {
+            // Custom licenses have an id such as `LicenseRef-…` and no name.
+            name: if license.name.is_empty() {
+                license.id
+            } else {
+                license.name
+            },
+            url: https_only(license.url),
+        }),
+        published_at: project.published,
         updated_at: project.updated,
         gallery: project
             .gallery
             .into_iter()
-            .map(|image| image.url)
-            .filter(|url| url.starts_with("https://"))
+            .filter(|image| image.url.starts_with("https://"))
+            .map(|image| ModpackImage {
+                url: image.url,
+                title: image.title.filter(|title| !title.is_empty()),
+            })
             .collect(),
         project_url: Some(format!("https://modrinth.com/modpack/{}", project.slug)),
+        links: ModpackLinks {
+            source: https_only(project.source_url),
+            issues: https_only(project.issues_url),
+            wiki: https_only(project.wiki_url),
+            discord: https_only(project.discord_url),
+        },
         description_html: markdown_to_safe_html(&project.body),
     })
 }
@@ -198,63 +371,44 @@ async fn fetch_text(client: &Client, url: Url, label: &str) -> Result<String> {
     Ok(body)
 }
 
-pub async fn list_modrinth_versions(
+pub(super) async fn list_modrinth_versions(
     client: &Client,
     project_id: &str,
 ) -> Result<Vec<ModpackVersionItem>> {
-    let url = format!("{PROJECT_URL}/{project_id}/version");
-    let response = client
-        .get(&url)
-        .header("User-Agent", USER_AGENT)
-        .send()
-        .await?;
-    let status = response.status().as_u16();
-    let body = response.text().await?;
-    if !(200..300).contains(&status) {
-        return Err(CoreError::ModpackMeta {
-            detail: format!("modrinth_versions_http_{status}"),
-        });
-    }
+    let mut url = project_endpoint(project_id)?;
+    url.path_segments_mut()
+        .map_err(|_| CoreError::ModpackMeta {
+            detail: "modrinth_project_id".into(),
+        })?
+        .push("version");
+    let body = fetch_text(client, url, "modrinth_versions").await?;
     parse_versions(&body)
 }
 
-pub fn parse_versions(body: &str) -> Result<Vec<ModpackVersionItem>> {
-    let parsed: Vec<Value> = serde_json::from_str(body).map_err(CoreError::LoaderJson)?;
-    Ok(parsed
+pub(super) fn parse_versions(body: &str) -> Result<Vec<ModpackVersionItem>> {
+    let entries: Vec<VersionEntry> = serde_json::from_str(body).map_err(CoreError::LoaderJson)?;
+    Ok(entries
         .into_iter()
-        .filter_map(|entry| {
-            let id = entry.get("id")?.as_str()?.to_string();
-            let name = entry
-                .get("name")
-                .and_then(Value::as_str)
-                .unwrap_or(&id)
-                .to_string();
-            let game_versions = entry
-                .get("game_versions")
-                .and_then(Value::as_array)
-                .map(|items| {
-                    items
-                        .iter()
-                        .filter_map(|item| item.as_str().map(str::to_string))
-                        .collect()
-                })
-                .unwrap_or_default();
-            let loaders = entry
-                .get("loaders")
-                .and_then(Value::as_array)
-                .map(|items| {
-                    items
-                        .iter()
-                        .filter_map(|item| item.as_str().map(str::to_string))
-                        .collect()
-                })
-                .unwrap_or_default();
-            Some(ModpackVersionItem {
-                id,
-                name,
-                game_versions,
+        .map(|entry| {
+            let mut loaders = Vec::new();
+            for slug in &entry.loaders {
+                if let Some(loader) = loader_from_slug(slug) {
+                    push_unique(&mut loaders, loader);
+                }
+            }
+            ModpackVersionItem {
+                name: entry.name.unwrap_or_else(|| entry.id.clone()),
+                id: entry.id,
+                game_versions: entry.game_versions,
                 loaders,
-            })
+                version_type: match entry.version_type.as_deref() {
+                    Some("beta") => ModpackVersionType::Beta,
+                    Some("alpha") => ModpackVersionType::Alpha,
+                    _ => ModpackVersionType::Release,
+                },
+                published_at: entry.date_published,
+                downloads: entry.downloads,
+            }
         })
         .collect())
 }
@@ -376,11 +530,100 @@ mod tests {
 
     #[test]
     fn search_url_pages_with_offset_and_limit() {
-        let url = search_url(" cobble ", 30, 10).expect("url");
+        let url = search_url(" cobble ", 30, 10, &ModpackSearchFilters::default()).expect("url");
         let pairs: Vec<(String, String)> = url.query_pairs().into_owned().collect();
         assert!(pairs.contains(&("limit".into(), "10".into())));
         assert!(pairs.contains(&("offset".into(), "30".into())));
         assert!(pairs.contains(&("query".into(), "cobble".into())));
+    }
+
+    fn query_value(url: &Url, key: &str) -> Option<String> {
+        url.query_pairs()
+            .find(|(name, _)| name == key)
+            .map(|(_, value)| value.into_owned())
+    }
+
+    #[test]
+    fn without_filters_searches_every_modpack_by_downloads() {
+        let url = search_url("", 0, 10, &ModpackSearchFilters::default()).expect("url");
+        assert_eq!(query_value(&url, "index").as_deref(), Some("downloads"));
+        assert_eq!(
+            query_value(&url, "facets").as_deref(),
+            Some(r#"[["project_type:modpack"]]"#)
+        );
+        assert_eq!(query_value(&url, "query"), None);
+    }
+
+    #[test]
+    fn filters_become_anded_facets_and_the_sort_index() {
+        let filters = ModpackSearchFilters {
+            game_version: Some(" 1.20.1 ".into()),
+            loader: Some(ModpackLoader::Neoforge),
+            category: Some(ModpackCategory::KitchenSink),
+            source: None,
+            sort: ModpackSort::Updated,
+        };
+        let url = search_url("", 0, 10, &filters).expect("url");
+        assert_eq!(query_value(&url, "index").as_deref(), Some("updated"));
+        assert_eq!(
+            query_value(&url, "facets").as_deref(),
+            Some(
+                r#"[["project_type:modpack"],["versions:1.20.1"],["categories:neoforge"],["categories:kitchen-sink"]]"#
+            )
+        );
+    }
+
+    #[test]
+    fn a_blank_game_version_is_ignored() {
+        let filters = ModpackSearchFilters {
+            game_version: Some("  ".into()),
+            sort: ModpackSort::Relevance,
+            ..ModpackSearchFilters::default()
+        };
+        let url = search_url("", 0, 10, &filters).expect("url");
+        assert_eq!(query_value(&url, "index").as_deref(), Some("relevance"));
+        assert_eq!(
+            query_value(&url, "facets").as_deref(),
+            Some(r#"[["project_type:modpack"]]"#)
+        );
+    }
+
+    #[test]
+    fn splits_loaders_from_shared_categories() {
+        let page = parse_search(
+            r#"{"hits":[{"project_id":"A","title":"A","description":"","categories":["fabric","lightweight","quilt","fabric","utility","optimization"]}],"total_hits":1}"#,
+        )
+        .expect("ok");
+        assert_eq!(
+            page.items[0].loaders,
+            vec![ModpackLoader::Fabric, ModpackLoader::Quilt]
+        );
+        assert_eq!(
+            page.items[0].categories,
+            vec![ModpackCategory::Lightweight, ModpackCategory::Optimization]
+        );
+    }
+
+    #[test]
+    fn every_loader_and_category_has_a_distinct_slug() {
+        let mut slugs: Vec<&str> = ModpackLoader::ALL.into_iter().map(loader_slug).collect();
+        slugs.extend(ModpackCategory::ALL.into_iter().map(category_slug));
+        let count = slugs.len();
+        slugs.sort_unstable();
+        slugs.dedup();
+        assert_eq!(slugs.len(), count);
+    }
+
+    #[test]
+    fn reads_the_last_update_of_each_hit() {
+        let page = parse_search(
+            r#"{"hits":[{"project_id":"A","title":"A","description":"","date_modified":"2026-11-01T10:43:19.109719Z"}],"total_hits":1}"#,
+        )
+        .expect("ok");
+        assert_eq!(
+            page.items[0].updated_at.as_deref(),
+            Some("2026-11-01T10:43:19.109719Z")
+        );
     }
 
     #[test]
@@ -415,6 +658,15 @@ mod tests {
           "downloads":42,
           "icon_url":"https://cdn.modrinth.com/icon.webp",
           "categories":["optimization"],
+          "additional_categories":["lightweight","optimization"],
+          "loaders":["fabric","datapack"],
+          "game_versions":["1.20.1","1.21.1"],
+          "followers":5070,
+          "license":{"id":"LicenseRef-Custom","name":"","url":"http://insecure.example/license"},
+          "published":"2022-02-10T06:28:19.045034Z",
+          "source_url":"https://github.com/example/pack",
+          "issues_url":"http://insecure.example/issues",
+          "discord_url":"https://discord.gg/example",
           "updated":"2026-11-01T10:43:19.109719Z",
           "gallery":[
             {"url":"https://cdn.modrinth.com/a.webp","featured":false,"ordering":1},
@@ -424,14 +676,68 @@ mod tests {
         let details = parse_project(body, "robotkoer".into()).expect("ok");
         assert_eq!(details.name, "Fabulously Optimized");
         assert_eq!(details.author, "robotkoer");
-        assert_eq!(details.categories, vec!["optimization"]);
-        assert_eq!(details.gallery, vec!["https://cdn.modrinth.com/a.webp"]);
+        assert_eq!(
+            details.categories,
+            vec![ModpackCategory::Optimization, ModpackCategory::Lightweight]
+        );
+        assert_eq!(details.loaders, vec![ModpackLoader::Fabric]);
+        assert_eq!(details.game_versions, vec!["1.21.1", "1.20.1"]);
+        assert_eq!(details.followers, Some(5070));
+        assert_eq!(
+            details.license,
+            Some(ModpackLicense {
+                name: "LicenseRef-Custom".into(),
+                url: None
+            })
+        );
+        assert_eq!(
+            details.published_at.as_deref(),
+            Some("2022-02-10T06:28:19.045034Z")
+        );
+        assert_eq!(
+            details.links,
+            ModpackLinks {
+                source: Some("https://github.com/example/pack".into()),
+                issues: None,
+                wiki: None,
+                discord: Some("https://discord.gg/example".into()),
+            }
+        );
+        assert_eq!(
+            details.gallery,
+            vec![ModpackImage {
+                url: "https://cdn.modrinth.com/a.webp".into(),
+                title: None
+            }]
+        );
         assert_eq!(
             details.project_url.as_deref(),
             Some("https://modrinth.com/modpack/fabulously-optimized")
         );
         assert!(details.description_html.contains("<strong>Hi</strong>"));
         assert!(!details.description_html.contains("script"));
+    }
+
+    #[test]
+    fn parses_versions_with_type_date_and_downloads() {
+        let versions = parse_versions(
+            r#"[
+              {"id":"v2","name":"2.0.0-beta","game_versions":["1.21.1"],"loaders":["neoforge","minecraft"],
+               "version_type":"beta","date_published":"2026-11-01T10:43:19Z","downloads":160447},
+              {"id":"v1","game_versions":["1.20.1"],"loaders":["fabric"],"version_type":"release"}
+            ]"#,
+        )
+        .expect("ok");
+        assert_eq!(versions[0].name, "2.0.0-beta");
+        assert_eq!(versions[0].loaders, vec![ModpackLoader::Neoforge]);
+        assert_eq!(versions[0].version_type, ModpackVersionType::Beta);
+        assert_eq!(
+            versions[0].published_at.as_deref(),
+            Some("2026-11-01T10:43:19Z")
+        );
+        assert_eq!(versions[0].downloads, 160447);
+        assert_eq!(versions[1].name, "v1");
+        assert_eq!(versions[1].version_type, ModpackVersionType::Release);
     }
 
     #[test]

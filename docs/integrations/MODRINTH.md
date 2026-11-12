@@ -8,14 +8,22 @@ these public API requests. [CurseForge](CURSEFORGE.md) is a separate integration
 
 - The client uses `https://api.modrinth.com/v2` and identifies Licht through a
   `User-Agent` containing the project name and repository URL.
-- Search filters to `project_type:modpack`, sorts by downloads, and pages with
-  `offset`/`limit` (10 results per page, merged with CurseForge's page of the same
-  number and sorted by downloads; `total_hits` sets the page count). Version lists
-  expose game versions and loader names.
+- Search filters to `project_type:modpack` and pages with `offset`/`limit` (10
+  results per page, merged with CurseForge's page of the same number; `total_hits`
+  sets the page count). Optional filters become ANDed facets: `versions:<game
+  version>`, `categories:<loader>` (loaders are categories on Modrinth) and
+  `categories:<category>` from Licht's shared category list, which mirrors
+  Modrinth's modpack categories. The sort maps to `index=downloads|updated|relevance`.
+  Version lists come from `GET /v2/project/{id}/version` (the id percent-encoded
+  as one path segment) and expose game versions, loaders, the release channel
+  (`version_type`), the publish date and downloads, newest first.
 - Pack details come from `GET /v2/project/{id}`; the id is percent-encoded as a
   single path segment and the project must be a `modpack`. The author name comes
   from a search filtered by `project_id`, because organization-owned projects
-  have no owner in their member list. Only HTTPS gallery images are kept.
+  have no owner in their member list. Details also carry followers, the license,
+  publish and update dates, supported game versions (newest first), loaders,
+  shared categories (including `additional_categories`) and the source, issues,
+  wiki and Discord links. Only HTTPS gallery images and links are kept.
 - The Markdown `body` is rendered with `pulldown-cmark` and sanitized with
   `ammonia` before it reaches the UI: scripts, frames, styles and event handlers
   are removed, and links and images must be absolute HTTPS URLs.

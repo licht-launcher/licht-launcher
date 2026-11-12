@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::Value;
@@ -5,7 +7,9 @@ use serde_json::Value;
 use super::{CLASS_ID, FILES_URL, MOD_URL};
 use crate::modpacks::description::sanitize_html;
 use crate::modpacks::types::{
-    ModpackDetails, ModpackListItem, ModpackSource, ModpackVersionItem, SourcePage,
+    ModpackCategory, ModpackDetails, ModpackImage, ModpackLinks, ModpackListItem, ModpackLoader,
+    ModpackSort, ModpackSource, ModpackVersionItem, ModpackVersionType, SourcePage, https_only,
+    push_unique,
 };
 use crate::{CoreError, Result};
 
@@ -32,6 +36,17 @@ struct Pagination {
 }
 
 #[derive(Debug, Deserialize)]
+struct CategoriesResponse {
+    data: Vec<CategoryEntry>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CategoryEntry {
+    id: u64,
+    slug: String,
+}
+
+#[derive(Debug, Deserialize)]
 struct ModResponse {
     data: ModDetails,
 }
@@ -52,21 +67,27 @@ struct ModDetails {
     #[serde(default)]
     categories: Vec<Category>,
     #[serde(default)]
+    date_created: Option<String>,
+    #[serde(default)]
     date_modified: Option<String>,
     #[serde(default)]
     screenshots: Vec<Screenshot>,
     #[serde(default)]
     links: Option<Links>,
+    #[serde(default)]
+    latest_files_indexes: Vec<FileIndex>,
 }
 
 #[derive(Debug, Deserialize)]
 struct Category {
-    name: String,
+    slug: String,
 }
 
 #[derive(Debug, Deserialize)]
 struct Screenshot {
     url: String,
+    #[serde(default)]
+    title: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -74,6 +95,44 @@ struct Screenshot {
 struct Links {
     #[serde(default)]
     website_url: Option<String>,
+    #[serde(default)]
+    wiki_url: Option<String>,
+    #[serde(default)]
+    issues_url: Option<String>,
+    #[serde(default)]
+    source_url: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct FilesResponse {
+    data: Vec<FileEntry>,
+    #[serde(default)]
+    pagination: Option<Pagination>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct FileEntry {
+    id: u64,
+    #[serde(default)]
+    display_name: String,
+    #[serde(default)]
+    file_name: String,
+    #[serde(default)]
+    release_type: Option<u64>,
+    #[serde(default)]
+    file_date: Option<String>,
+    #[serde(default)]
+    download_count: u64,
+    /// Game versions and loader names together, e.g. `["1.21.1", "NeoForge"]`.
+    #[serde(default)]
+    game_versions: Vec<String>,
+}
+
+/// One page of `GET /v1/mods/{id}/files`, with the total file count.
+pub(super) struct FilesPage {
+    pub(super) items: Vec<ModpackVersionItem>,
+    pub(super) total: u64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -92,6 +151,26 @@ struct ModHit {
     logo: Option<Logo>,
     #[serde(default)]
     authors: Vec<Author>,
+    #[serde(default)]
+    date_modified: Option<String>,
+    #[serde(default)]
+    categories: Vec<HitCategory>,
+    #[serde(default)]
+    latest_files_indexes: Vec<FileIndex>,
+}
+
+#[derive(Debug, Deserialize)]
+struct HitCategory {
+    slug: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct FileIndex {
+    #[serde(default)]
+    game_version: Option<String>,
+    #[serde(default)]
+    mod_loader: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -135,21 +214,107 @@ pub(super) fn parse_search(body: &str) -> Result<SourcePage> {
     let items = parsed
         .data
         .into_iter()
-        .map(|hit| ModpackListItem {
-            id: hit.id.to_string(),
-            source: ModpackSource::Curseforge,
-            name: hit.name,
-            description: hit.summary,
-            downloads: hit.download_count,
-            icon_url: hit.logo.and_then(|logo| logo.url),
-            author: hit
-                .authors
-                .first()
-                .map(|author| author.name.clone())
-                .unwrap_or_default(),
+        .map(|hit| {
+            let mut loaders = Vec::new();
+            for index in &hit.latest_files_indexes {
+                if let Some(loader) = index.mod_loader.and_then(loader_from_type) {
+                    push_unique(&mut loaders, loader);
+                }
+            }
+            let mut categories = Vec::new();
+            for category in &hit.categories {
+                if let Some(shared) = shared_category(&category.slug) {
+                    push_unique(&mut categories, shared);
+                }
+            }
+            ModpackListItem {
+                id: hit.id.to_string(),
+                source: ModpackSource::Curseforge,
+                name: hit.name,
+                description: hit.summary,
+                downloads: hit.download_count,
+                icon_url: hit.logo.and_then(|logo| logo.url),
+                author: hit
+                    .authors
+                    .first()
+                    .map(|author| author.name.clone())
+                    .unwrap_or_default(),
+                updated_at: hit.date_modified,
+                loaders,
+                categories,
+            }
         })
         .collect();
     Ok(SourcePage { items, total })
+}
+
+/// Category ids by slug, from `GET /v1/categories?classId=4471`.
+pub(super) fn parse_categories(body: &str) -> Result<HashMap<String, u64>> {
+    let parsed: CategoriesResponse = serde_json::from_str(body).map_err(CoreError::LoaderJson)?;
+    Ok(parsed
+        .data
+        .into_iter()
+        .map(|category| (category.slug, category.id))
+        .collect())
+}
+
+/// CurseForge's modpack category for each shared category; `None` when it has no match.
+pub(super) fn category_slug(category: ModpackCategory) -> Option<&'static str> {
+    match category {
+        ModpackCategory::Adventure => Some("adventure-and-rpg"),
+        ModpackCategory::Challenging => Some("hardcore"),
+        ModpackCategory::Combat => Some("combat-pvp"),
+        ModpackCategory::KitchenSink => Some("extra-large"),
+        ModpackCategory::Lightweight => Some("small-light"),
+        ModpackCategory::Magic => Some("magic"),
+        ModpackCategory::Multiplayer => Some("multiplayer"),
+        ModpackCategory::Optimization => None,
+        ModpackCategory::Quests => Some("quests"),
+        ModpackCategory::Technology => Some("tech"),
+    }
+}
+
+fn loader_from_type(id: u64) -> Option<ModpackLoader> {
+    ModpackLoader::ALL
+        .into_iter()
+        .find(|loader| mod_loader_type(*loader) == id.to_string())
+}
+
+/// Loader names CurseForge mixes into a file's `gameVersions`.
+fn loader_from_name(name: &str) -> Option<ModpackLoader> {
+    match name.to_ascii_lowercase().as_str() {
+        "fabric" => Some(ModpackLoader::Fabric),
+        "forge" => Some(ModpackLoader::Forge),
+        "neoforge" => Some(ModpackLoader::Neoforge),
+        "quilt" => Some(ModpackLoader::Quilt),
+        _ => None,
+    }
+}
+
+fn shared_category(slug: &str) -> Option<ModpackCategory> {
+    ModpackCategory::ALL
+        .into_iter()
+        .find(|shared| category_slug(*shared) == Some(slug))
+}
+
+/// `ModLoaderType` values from the CurseForge API reference.
+pub(super) fn mod_loader_type(loader: ModpackLoader) -> &'static str {
+    match loader {
+        ModpackLoader::Forge => "1",
+        ModpackLoader::Fabric => "4",
+        ModpackLoader::Quilt => "5",
+        ModpackLoader::Neoforge => "6",
+    }
+}
+
+/// `ModsSearchSortField` values. CurseForge has no text relevance sort, so
+/// relevance uses its popularity ranking.
+pub(super) fn sort_field(sort: ModpackSort) -> &'static str {
+    match sort {
+        ModpackSort::Downloads => "6",
+        ModpackSort::Updated => "3",
+        ModpackSort::Relevance => "2",
+    }
 }
 
 pub(super) fn fits_search_window(index: u64, page_size: u32) -> bool {
@@ -179,6 +344,28 @@ pub(super) fn parse_mod(mod_body: &str, description_body: &str) -> Result<Modpac
             detail: "curseforge_mod_not_modpack".into(),
         });
     }
+    let mut loaders = Vec::new();
+    let mut game_versions = Vec::new();
+    for index in &project.latest_files_indexes {
+        if let Some(loader) = index.mod_loader.and_then(loader_from_type) {
+            push_unique(&mut loaders, loader);
+        }
+        if let Some(version) = &index.game_version {
+            push_unique(&mut game_versions, version.clone());
+        }
+    }
+    let mut categories = Vec::new();
+    for category in &project.categories {
+        if let Some(shared) = shared_category(&category.slug) {
+            push_unique(&mut categories, shared);
+        }
+    }
+    let links = project.links.unwrap_or(Links {
+        website_url: None,
+        wiki_url: None,
+        issues_url: None,
+        source_url: None,
+    });
     Ok(ModpackDetails {
         id: project.id.to_string(),
         source: ModpackSource::Curseforge,
@@ -190,78 +377,74 @@ pub(super) fn parse_mod(mod_body: &str, description_body: &str) -> Result<Modpac
             .map(|author| author.name.clone())
             .unwrap_or_default(),
         downloads: project.download_count,
+        followers: None,
         icon_url: project.logo.and_then(|logo| logo.url),
-        categories: project
-            .categories
-            .into_iter()
-            .map(|category| category.name)
-            .collect(),
+        categories,
+        loaders,
+        game_versions,
+        license: None,
+        published_at: project.date_created,
         updated_at: project.date_modified,
         gallery: project
             .screenshots
             .into_iter()
-            .map(|screenshot| screenshot.url)
-            .filter(|url| url.starts_with("https://"))
+            .filter(|screenshot| screenshot.url.starts_with("https://"))
+            .map(|screenshot| ModpackImage {
+                url: screenshot.url,
+                title: screenshot.title.filter(|title| !title.is_empty()),
+            })
             .collect(),
-        project_url: project
-            .links
-            .and_then(|links| links.website_url)
-            .filter(|url| url.starts_with("https://")),
+        project_url: https_only(links.website_url),
+        links: ModpackLinks {
+            source: https_only(links.source_url),
+            issues: https_only(links.issues_url),
+            wiki: https_only(links.wiki_url),
+            discord: None,
+        },
         description_html: sanitize_html(&description.data),
     })
 }
 
-pub(super) fn parse_versions(body: &str) -> Result<Vec<ModpackVersionItem>> {
-    let parsed: Value = serde_json::from_str(body).map_err(CoreError::LoaderJson)?;
-    let files = parsed
-        .get("data")
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
-    Ok(files
+/// One page of a pack's files; `releaseType` 1/2/3 is release/beta/alpha.
+pub(super) fn parse_versions(body: &str) -> Result<FilesPage> {
+    let parsed: FilesResponse = serde_json::from_str(body).map_err(CoreError::LoaderJson)?;
+    let total = parsed
+        .pagination
+        .map(|pagination| pagination.total_count)
+        .unwrap_or(0);
+    let items = parsed
+        .data
         .into_iter()
-        .filter_map(|file| {
-            let id = file.get("id")?.as_u64()?.to_string();
-            let name = file
-                .get("displayName")
-                .and_then(Value::as_str)
-                .or_else(|| file.get("fileName").and_then(Value::as_str))?
-                .to_string();
-            let game_versions = file
-                .get("gameVersions")
-                .and_then(Value::as_array)
-                .map(|items| {
-                    items
-                        .iter()
-                        .filter_map(|item| item.as_str().map(str::to_string))
-                        .filter(|item| item.chars().next().is_some_and(|ch| ch.is_ascii_digit()))
-                        .collect()
-                })
-                .unwrap_or_default();
-            let loaders = file
-                .get("gameVersions")
-                .and_then(Value::as_array)
-                .map(|items| {
-                    items
-                        .iter()
-                        .filter_map(|item| item.as_str().map(str::to_string))
-                        .filter(|item| {
-                            matches!(
-                                item.to_ascii_lowercase().as_str(),
-                                "fabric" | "forge" | "quilt" | "neoforge"
-                            )
-                        })
-                        .collect()
-                })
-                .unwrap_or_default();
-            Some(ModpackVersionItem {
-                id,
-                name,
+        .map(|file| {
+            let mut loaders = Vec::new();
+            let mut game_versions = Vec::new();
+            for entry in &file.game_versions {
+                if let Some(loader) = loader_from_name(entry) {
+                    push_unique(&mut loaders, loader);
+                } else if entry.starts_with(|ch: char| ch.is_ascii_digit()) {
+                    push_unique(&mut game_versions, entry.clone());
+                }
+            }
+            ModpackVersionItem {
+                id: file.id.to_string(),
+                name: if file.display_name.is_empty() {
+                    file.file_name
+                } else {
+                    file.display_name
+                },
                 game_versions,
                 loaders,
-            })
+                version_type: match file.release_type {
+                    Some(2) => ModpackVersionType::Beta,
+                    Some(3) => ModpackVersionType::Alpha,
+                    _ => ModpackVersionType::Release,
+                },
+                published_at: file.file_date,
+                downloads: file.download_count,
+            }
         })
-        .collect())
+        .collect();
+    Ok(FilesPage { items, total })
 }
 
 /// Looks up the given file ids and the mods that own them, in API batches.
@@ -328,11 +511,19 @@ pub(super) async fn get_api(client: &Client, key: &str, url: &str, label: &str) 
     let status = response.status().as_u16();
     let body = response.text().await?;
     if !(200..300).contains(&status) {
-        return Err(CoreError::ModpackMeta {
-            detail: format!("{label}_http_{status}"),
-        });
+        return Err(status_error(status, label));
     }
     Ok(body)
+}
+
+/// CurseForge answers 401/403 when the `x-api-key` header is not a valid key.
+pub(super) fn status_error(status: u16, label: &str) -> CoreError {
+    match status {
+        401 | 403 => CoreError::CurseforgeKeyRejected,
+        _ => CoreError::ModpackMeta {
+            detail: format!("{label}_http_{status}"),
+        },
+    }
 }
 
 async fn post_api(client: &Client, key: &str, url: &str, body: Value) -> Result<Value> {
@@ -346,9 +537,7 @@ async fn post_api(client: &Client, key: &str, url: &str, body: Value) -> Result<
     let status = response.status().as_u16();
     let text = response.text().await?;
     if !(200..300).contains(&status) {
-        return Err(CoreError::ModpackMeta {
-            detail: format!("curseforge_api_http_{status}"),
-        });
+        return Err(status_error(status, "curseforge_api"));
     }
     serde_json::from_str(&text).map_err(CoreError::LoaderJson)
 }
@@ -512,6 +701,74 @@ mod tests {
     }
 
     #[test]
+    fn reads_the_last_update_of_each_hit() {
+        let page = parse_search(
+            r#"{"data":[{"id":1,"name":"A","summary":"","downloadCount":1,"dateModified":"2026-11-08T00:51:06.56Z"}]}"#,
+        )
+        .expect("ok");
+        assert_eq!(
+            page.items[0].updated_at.as_deref(),
+            Some("2026-11-08T00:51:06.56Z")
+        );
+    }
+
+    #[test]
+    fn reads_loaders_and_shared_categories_of_each_hit() {
+        let page = parse_search(
+            r#"{"data":[{"id":1,"name":"A","summary":"","downloadCount":1,
+              "categories":[{"slug":"extra-large"},{"slug":"exploration"},{"slug":"tech"}],
+              "latestFilesIndexes":[{"gameVersion":"1.21.1","modLoader":6},{"gameVersion":"1.20.1"},{"gameVersion":"1.20.1","modLoader":6},{"gameVersion":"1.12.2","modLoader":1},{"gameVersion":"1.7.10","modLoader":2}]}]}"#,
+        )
+        .expect("ok");
+        assert_eq!(
+            page.items[0].loaders,
+            vec![ModpackLoader::Neoforge, ModpackLoader::Forge]
+        );
+        assert_eq!(
+            page.items[0].categories,
+            vec![ModpackCategory::KitchenSink, ModpackCategory::Technology]
+        );
+    }
+
+    #[test]
+    fn maps_category_slugs_to_ids() {
+        let ids = parse_categories(
+            r#"{"data":[{"id":4472,"slug":"tech","name":"Tech","classId":4471},{"id":4473,"slug":"magic","name":"Magic","classId":4471}]}"#,
+        )
+        .expect("ok");
+        assert_eq!(ids.get("tech"), Some(&4472));
+        assert_eq!(ids.get("magic"), Some(&4473));
+    }
+
+    #[test]
+    fn every_shared_category_but_optimization_has_a_curseforge_match() {
+        assert_eq!(category_slug(ModpackCategory::Technology), Some("tech"));
+        assert_eq!(
+            category_slug(ModpackCategory::KitchenSink),
+            Some("extra-large")
+        );
+        assert_eq!(category_slug(ModpackCategory::Optimization), None);
+    }
+
+    #[test]
+    fn a_rejected_key_is_its_own_error() {
+        for status in [401, 403] {
+            assert!(matches!(
+                status_error(status, "curseforge_search"),
+                CoreError::CurseforgeKeyRejected
+            ));
+        }
+    }
+
+    #[test]
+    fn other_failures_keep_the_request_label() {
+        match status_error(500, "curseforge_search") {
+            CoreError::ModpackMeta { detail } => assert_eq!(detail, "curseforge_search_http_500"),
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
     fn caps_the_total_at_the_search_window() {
         let page = parse_search(r#"{"data":[],"pagination":{"totalCount":250000}}"#).expect("ok");
         assert_eq!(page.total, 10_000);
@@ -537,24 +794,77 @@ mod tests {
             "classId":4471,
             "logo":{"url":"https://media.forgecdn.net/logo.png"},
             "authors":[{"name":"ATMTeam"}],
-            "categories":[{"name":"Kitchen Sink"}],
+            "categories":[{"name":"Kitchen Sink","slug":"extra-large"},{"name":"Exploration","slug":"exploration"}],
+            "dateCreated":"2024-06-25T09:47:22.51Z",
             "dateModified":"2026-10-01T00:00:00Z",
-            "screenshots":[{"url":"https://media.forgecdn.net/s.png"}],
-            "links":{"websiteUrl":"https://www.curseforge.com/minecraft/modpacks/all-the-mods-9"}
+            "screenshots":[{"url":"https://media.forgecdn.net/s.png","title":"Spawn"},{"url":"http://insecure.example/x.png"}],
+            "latestFilesIndexes":[{"gameVersion":"1.21.1","modLoader":6},{"gameVersion":"1.20.1"},{"gameVersion":"1.21.1","modLoader":6}],
+            "links":{"websiteUrl":"https://www.curseforge.com/minecraft/modpacks/all-the-mods-9","wikiUrl":"","issuesUrl":"https://github.com/AllTheMods/ATM-10/issues/","sourceUrl":"http://insecure.example/src"}
           }
         }"#;
         let description = r#"{"data":"<p>Hello</p><img src=\"x\" onerror=\"alert(1)\">"}"#;
         let details = parse_mod(project, description).expect("ok");
         assert_eq!(details.id, "381671");
         assert_eq!(details.author, "ATMTeam");
-        assert_eq!(details.categories, vec!["Kitchen Sink"]);
-        assert_eq!(details.gallery, vec!["https://media.forgecdn.net/s.png"]);
+        assert_eq!(details.categories, vec![ModpackCategory::KitchenSink]);
+        assert_eq!(details.loaders, vec![ModpackLoader::Neoforge]);
+        assert_eq!(details.game_versions, vec!["1.21.1", "1.20.1"]);
+        assert_eq!(details.followers, None);
+        assert_eq!(details.license, None);
+        assert_eq!(
+            details.published_at.as_deref(),
+            Some("2024-06-25T09:47:22.51Z")
+        );
+        assert_eq!(
+            details.gallery,
+            vec![ModpackImage {
+                url: "https://media.forgecdn.net/s.png".into(),
+                title: Some("Spawn".into())
+            }]
+        );
+        assert_eq!(
+            details.links,
+            ModpackLinks {
+                source: None,
+                issues: Some("https://github.com/AllTheMods/ATM-10/issues/".into()),
+                wiki: None,
+                discord: None,
+            }
+        );
         assert_eq!(
             details.project_url.as_deref(),
             Some("https://www.curseforge.com/minecraft/modpacks/all-the-mods-9")
         );
         assert!(details.description_html.contains("<p>Hello</p>"));
         assert!(!details.description_html.contains("onerror"));
+    }
+
+    #[test]
+    fn parses_a_files_page_with_type_date_and_downloads() {
+        let page = parse_versions(
+            r#"{"data":[
+              {"id":9431424,"displayName":"All the Mods 10-8.5","fileName":"atm10.zip","releaseType":1,
+               "fileDate":"2026-11-04T07:16:05.953Z","downloadCount":72327,"gameVersions":["1.21.1","NeoForge"]},
+              {"id":2,"displayName":"","fileName":"beta.zip","releaseType":2,"gameVersions":["Forge","1.20.1","Client"]},
+              {"id":3,"displayName":"Alpha","releaseType":3,"gameVersions":[]}
+            ],"pagination":{"index":0,"pageSize":50,"resultCount":3,"totalCount":148}}"#,
+        )
+        .expect("ok");
+        assert_eq!(page.total, 148);
+        let first = &page.items[0];
+        assert_eq!(first.id, "9431424");
+        assert_eq!(first.game_versions, vec!["1.21.1"]);
+        assert_eq!(first.loaders, vec![ModpackLoader::Neoforge]);
+        assert_eq!(first.version_type, ModpackVersionType::Release);
+        assert_eq!(
+            first.published_at.as_deref(),
+            Some("2026-11-04T07:16:05.953Z")
+        );
+        assert_eq!(first.downloads, 72327);
+        assert_eq!(page.items[1].name, "beta.zip");
+        assert_eq!(page.items[1].loaders, vec![ModpackLoader::Forge]);
+        assert_eq!(page.items[1].version_type, ModpackVersionType::Beta);
+        assert_eq!(page.items[2].version_type, ModpackVersionType::Alpha);
     }
 
     #[test]

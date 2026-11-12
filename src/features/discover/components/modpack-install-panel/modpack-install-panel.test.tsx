@@ -46,7 +46,7 @@ describe("ModpackInstallPanel", () => {
 
     expect(
       await within(panel).findByRole("combobox", { name: "Version" }),
-    ).toHaveTextContent("7.0.0 (1.21.10 · fabric)");
+    ).toHaveTextContent("7.0.0 (1.21.10 · Fabric)");
     expect(
       within(panel).getByRole("textbox", { name: "Instance Name" }),
     ).toHaveAttribute("placeholder", "Fabulously Optimized");
@@ -67,6 +67,36 @@ describe("ModpackInstallPanel", () => {
       }),
     );
     expect(router.state.location.pathname).toBe("/");
+  });
+
+  it("selects the newest release rather than a newer beta", async () => {
+    const [release, older] = modpackVersions();
+    mockInstall(() =>
+      Promise.resolve([
+        {
+          ...older,
+          id: "v8-beta",
+          name: "8.0.0-beta",
+          versionType: "beta",
+        },
+        release,
+        older,
+      ]),
+    );
+    await renderAt("/discover/modrinth/1KVo5zza");
+    const panel = await findInstallPanel();
+
+    expect(
+      await within(panel).findByRole("combobox", { name: "Version" }),
+    ).toHaveTextContent("7.0.0 (1.21.10 · Fabric)");
+    fireEvent.click(within(panel).getByRole("button", { name: "Install" }));
+
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith(
+        "create_instance_from_modpack",
+        expect.objectContaining({ versionId: "v7" }),
+      ),
+    );
   });
 
   it("uses a typed name as given", async () => {

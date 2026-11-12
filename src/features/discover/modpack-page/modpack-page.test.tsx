@@ -20,7 +20,10 @@ function mockModpack(details: () => Promise<unknown>) {
       return Promise.resolve(modpackVersions());
     }
     if (command === "open_external_url") return Promise.resolve();
-    // Going back to the store list searches as soon as the list renders.
+    // Going back to the store list asks for the sources, then searches.
+    if (command === "modpack_sources") {
+      return Promise.resolve(["modrinth", "curseforge"]);
+    }
     if (command === "search_modpacks") {
       return Promise.resolve(modpackSearchPage());
     }

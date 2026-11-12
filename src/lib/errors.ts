@@ -37,7 +37,9 @@ const FRIENDLY: Record<string, string> = {
   "version manifest is unavailable":
     "Could not load the version list. Check your connection and try again.",
   "LICHT_CURSEFORGE_API_KEY is missing or empty":
-    "CurseForge needs LICHT_CURSEFORGE_API_KEY. Modrinth packs still work.",
+    "CurseForge isn't available right now. Modrinth packs still work.",
+  "CurseForge rejected the API key":
+    "CurseForge isn't available right now. Modrinth packs still work.",
   "curseforge download host is not allowed":
     "A CurseForge file URL is not on an allowed download host.",
   "curseforge pack disallows third-party distribution":
