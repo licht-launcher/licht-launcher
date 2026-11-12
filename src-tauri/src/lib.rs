@@ -31,16 +31,7 @@ pub fn run() -> anyhow::Result<()> {
             (true, licht_core::LauncherTheme::Dark)
         });
 
-    let builder = tauri::Builder::default();
-    // The second process exits before `run`, so this has to be the first plugin.
-    // End-to-end builds skip it: WebdriverIO must start even if a user instance is open.
-    #[cfg(not(feature = "e2e"))]
-    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-        if let Err(error) = desktop::restore(app) {
-            tracing::error!(%error, "Could not reopen the running launcher");
-        }
-    }));
-    let builder = builder
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())

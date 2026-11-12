@@ -15,9 +15,6 @@ finish-args:
   - --device=dri
   # Keeps custom application directories and Java paths picked in settings usable.
   - --filesystem=home
-  # The running process owns this session name; a second launch calls it and exits.
-  - --own-name=app.licht.launcher.SingleInstance
-  - --talk-name=app.licht.launcher.SingleInstance
 
 modules:
   - name: licht-launcher
