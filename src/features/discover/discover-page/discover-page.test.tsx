@@ -105,6 +105,39 @@ describe("Discover page", () => {
     ]);
   });
 
+  it("returns from a pack page to the last search through the navigation", async () => {
+    mockDiscover((command) => {
+      if (command === "search_modpacks") {
+        return Promise.resolve(modpackSearchPage());
+      }
+      return new Promise(() => {});
+    });
+    const { router } = await renderAt(`/discover?q=atm&categories=${MAGIC}`);
+
+    fireEvent.click(
+      await screen.findByRole("link", { name: /All the Mods 9/ }),
+    );
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe(
+        "/discover/curseforge/381671",
+      ),
+    );
+    const navigation = screen.getByRole("navigation", {
+      name: "Main navigation",
+    });
+    fireEvent.click(
+      within(navigation).getByRole("button", { name: "Discover" }),
+    );
+
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe("/discover"),
+    );
+    expect(router.state.location.search).toEqual({
+      q: "atm",
+      categories: ["magic"],
+    });
+  });
+
   it("searches once typing pauses", async () => {
     mockSearch(() => Promise.resolve(modpackSearchPage({ pageCount: 1 })));
     const { router } = await renderAt("/discover");

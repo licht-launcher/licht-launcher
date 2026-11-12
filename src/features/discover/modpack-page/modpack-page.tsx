@@ -23,6 +23,7 @@ import {
   useModpack,
   useModpackVersions,
 } from "@/features/discover/hooks/use-modpacks";
+import { lastDiscoverSearch } from "@/features/discover/lib/last-search";
 import { friendlyError, messageOf } from "@/lib/errors";
 import type { ModpackDetails } from "@/lib/generated/ModpackDetails";
 import type { ModpackSource } from "@/lib/generated/ModpackSource";
@@ -43,7 +44,7 @@ export function ModpackPage({
     <div className={modpackPageStyles.root}>
       <div className={modpackPageStyles.toolbar}>
         <Button asChild variant="outline" size="sm">
-          <Link to="/discover">
+          <Link to="/discover" search={lastDiscoverSearch()}>
             <ArrowLeftIcon aria-hidden />
             Discover
           </Link>

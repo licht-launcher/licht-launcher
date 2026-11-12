@@ -12,6 +12,7 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
+import { lastDiscoverSearch } from "@/features/discover/lib/last-search";
 import { DownloadsPopover } from "@/features/downloads/components/downloads-popover";
 import { STORAGE_LOADING_PREVIEW_EVENT } from "@/features/downloads/hooks/use-storage-loading-preview";
 import { HomeSidebar } from "@/features/instances/components/home-sidebar";
@@ -118,7 +119,8 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
     navigate,
   ]);
   const dialogs = useInstanceDialogs();
-  const discoverActive = pathname.startsWith("/discover");
+  const discoverActive =
+    pathname === "/discover" || pathname.startsWith("/discover/");
   useEffect(() => {
     if (!import.meta.env.DEV) return;
     const preview = () => {
@@ -277,7 +279,7 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
             onOpenDiscover={() => {
               dialogs.setSettingsOpen(false);
               if (pathname === "/discover") return;
-              void navigate({ to: "/discover" });
+              void navigate({ to: "/discover", search: lastDiscoverSearch() });
             }}
             onOpenSettings={dialogs.openGlobalSettings}
           />

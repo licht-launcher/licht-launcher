@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useEffect } from "react";
 
 import { PageTransition } from "@/components/ui/page-transition";
 import { DiscoverPage } from "@/features/discover/discover-page";
@@ -7,6 +8,7 @@ import {
   parseDiscoverSearch,
   searchFilters,
 } from "@/features/discover/lib/discover-search";
+import { rememberDiscoverSearch } from "@/features/discover/lib/last-search";
 
 export const Route = createFileRoute("/_app/discover/")({
   validateSearch: parseDiscoverSearch,
@@ -16,6 +18,9 @@ export const Route = createFileRoute("/_app/discover/")({
 function DiscoverRoute() {
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
+  useEffect(() => {
+    rememberDiscoverSearch(search);
+  }, [search]);
   return (
     <PageTransition>
       <DiscoverPage
