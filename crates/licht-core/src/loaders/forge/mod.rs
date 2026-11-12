@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::Mutex;
 
+use crate::game::install::CacheCheck;
 use crate::hashes::file_matches_sha1;
 use crate::{
     CoreError, DownloadChecksum, DownloadComponent, DownloadPhase, DownloadProgress,
@@ -302,7 +303,7 @@ pub(crate) async fn install_forge_like_with_context(
     let _guard = context
         .metadata(async { Ok(INSTALL_LOCK.lock().await) })
         .await?;
-    if installation_ready(cache, &id) {
+    if installation_launchable(cache, &id) {
         return Ok(id);
     }
     cache.create()?;
@@ -314,6 +315,7 @@ pub(crate) async fn install_forge_like_with_context(
     Ok(id)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn prepare(
     client: &Client,
     cache: &SharedCache,
@@ -321,6 +323,7 @@ pub(crate) async fn prepare(
     id: &str,
     java: &Path,
     environment: &LaunchEnvironment,
+    check: CacheCheck,
     progress: impl Into<InstallationContext>,
 ) -> Result<Option<Vec<PathBuf>>> {
     let progress = progress.into();
@@ -331,7 +334,11 @@ pub(crate) async fn prepare(
         ForgeFamily::Forge => DownloadComponent::Forge,
         ForgeFamily::NeoForge => DownloadComponent::NeoForge,
     });
-    if installation_ready(cache, id) {
+    let satisfied = match check {
+        CacheCheck::Reuse => installation_launchable(cache, id),
+        CacheCheck::Verify => installation_ready(cache, id),
+    };
+    if satisfied {
         return Ok(None);
     }
     progress.stage(DownloadPhase::Preparing).await?;

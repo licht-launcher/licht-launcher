@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use crate::hashes::{file_matches_sha1, sha1_hex};
@@ -9,6 +10,18 @@ use crate::{
 };
 
 pub const ASSET_OBJECT_BASE: &str = "https://resources.download.minecraft.net";
+
+/// Whether a file already in the cache is reused or hashed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CacheCheck {
+    Reuse,
+    Verify,
+}
+
+struct InstallPass {
+    check: CacheCheck,
+    accepted: HashSet<PathBuf>,
+}
 
 pub struct InstallPlan<'a> {
     pub version_id: &'a str,
@@ -24,26 +37,57 @@ pub async fn install_version(
     cache: &SharedCache,
     settings: &crate::Database,
     plan: InstallPlan<'_>,
+    check: CacheCheck,
+    progress: impl Into<InstallationContext>,
+) -> Result<()> {
+    let mut pass = InstallPass {
+        check,
+        accepted: HashSet::new(),
+    };
+    install_version_with(client, cache, settings, plan, &mut pass, progress).await
+}
+
+async fn install_version_with(
+    client: &reqwest::Client,
+    cache: &SharedCache,
+    settings: &crate::Database,
+    plan: InstallPlan<'_>,
+    pass: &mut InstallPass,
     progress: impl Into<InstallationContext>,
 ) -> Result<()> {
     let progress = progress.into();
     cache.create()?;
     write_asset_index(cache, plan.version, plan.asset_index_json)?;
 
-    let mut pending = Vec::new();
     let tasks = download_tasks(cache, &plan)?;
-    let mut verification =
-        crate::transfer::verification::VerificationProgress::start(&progress, tasks.len()).await?;
+    let mut checking = Vec::new();
+    let mut seen = HashSet::new();
     for task in tasks {
-        let matches = file_matches_sha1(&task.destination, &task.sha1)?;
-        verification.checked().await?;
-        if matches {
+        let key = accepted_key(&task.destination)?;
+        if pass.accepted.contains(&key) || !seen.insert(key.clone()) {
             continue;
         }
-        if let Some(parent) = task.destination.parent() {
-            std::fs::create_dir_all(parent)?;
+        checking.push((task, key));
+    }
+
+    let mut pending = Vec::new();
+    if !checking.is_empty() {
+        let mut verification =
+            crate::transfer::verification::VerificationProgress::start(&progress, checking.len())
+                .await?;
+        for (task, key) in checking {
+            let matches =
+                cached_file_matches(&task.destination, &task.sha1, task.size, pass.check)?;
+            verification.checked().await?;
+            if matches {
+                pass.accepted.insert(key);
+                continue;
+            }
+            if let Some(parent) = task.destination.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            pending.push(task);
         }
-        pending.push(task);
     }
 
     progress
@@ -52,7 +96,11 @@ pub async fn install_version(
             &pending,
             crate::settings::download_options(cache, settings).await?,
         )
-        .await
+        .await?;
+    for task in &pending {
+        pass.accepted.insert(accepted_key(&task.destination)?);
+    }
+    Ok(())
 }
 
 pub struct GameInstall<'a> {
@@ -112,6 +160,22 @@ pub async fn install_game(
     cache: &SharedCache,
     settings: &crate::Database,
     request: GameInstall<'_>,
+    check: CacheCheck,
+    progress: impl Into<InstallationContext>,
+) -> Result<PathBuf> {
+    let mut pass = InstallPass {
+        check,
+        accepted: HashSet::new(),
+    };
+    install_game_with(client, cache, settings, request, &mut pass, progress).await
+}
+
+async fn install_game_with(
+    client: &reqwest::Client,
+    cache: &SharedCache,
+    settings: &crate::Database,
+    request: GameInstall<'_>,
+    pass: &mut InstallPass,
     progress: impl Into<InstallationContext>,
 ) -> Result<PathBuf> {
     let progress = progress.into().component(DownloadComponent::Minecraft);
@@ -137,7 +201,7 @@ pub async fn install_game(
         .metadata(read_text(client, &version.asset_index.url))
         .await?;
     let assets = parse_asset_index(&index_json)?;
-    install_version(
+    install_version_with(
         client,
         cache,
         settings,
@@ -149,6 +213,7 @@ pub async fn install_game(
             environment: request.environment,
             asset_base: request.asset_base,
         },
+        pass,
         progress.clone(),
     )
     .await?;
@@ -176,9 +241,14 @@ pub async fn install_game_version(
     settings: &crate::Database,
     id: &str,
     environment: &LaunchEnvironment,
+    check: CacheCheck,
     progress: impl Into<InstallationContext>,
 ) -> Result<PathBuf> {
     let progress = progress.into();
+    let mut pass = InstallPass {
+        check,
+        accepted: HashSet::new(),
+    };
     install_requested(
         client,
         cache,
@@ -186,11 +256,13 @@ pub async fn install_game_version(
         id,
         environment,
         progress,
+        &mut pass,
         Vec::new(),
     )
     .await
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn install_requested(
     client: &reqwest::Client,
     cache: &SharedCache,
@@ -198,6 +270,7 @@ async fn install_requested(
     id: &str,
     environment: &LaunchEnvironment,
     progress: InstallationContext,
+    pass: &mut InstallPass,
     mut chain: Vec<String>,
 ) -> Result<PathBuf> {
     cache.version_json(id)?;
@@ -215,10 +288,12 @@ async fn install_requested(
             &parent,
             environment,
             progress.clone(),
+            pass,
             chain,
         ))
         .await?;
-        return install_local_version(client, cache, settings, id, environment, progress).await;
+        return install_local_version(client, cache, settings, id, environment, progress, pass)
+            .await;
     }
     progress.stage(DownloadPhase::Preparing).await?;
     let manifest = progress
@@ -228,7 +303,7 @@ async fn install_requested(
     if let Ok(manifest) = &manifest
         && let Some(entry) = manifest.versions.iter().find(|entry| entry.id == id)
     {
-        return install_game(
+        return install_game_with(
             client,
             cache,
             settings,
@@ -240,12 +315,14 @@ async fn install_requested(
                 asset_base: ASSET_OBJECT_BASE,
                 java: None,
             },
+            pass,
             progress,
         )
         .await;
     }
     if crate::local_version_exists(cache, id) {
-        return install_local_version(client, cache, settings, id, environment, progress).await;
+        return install_local_version(client, cache, settings, id, environment, progress, pass)
+            .await;
     }
     match manifest {
         Err(error) => Err(error),
@@ -260,6 +337,7 @@ async fn install_local_version(
     id: &str,
     environment: &LaunchEnvironment,
     progress: InstallationContext,
+    pass: &mut InstallPass,
 ) -> Result<PathBuf> {
     let component = if id.starts_with("fabric-loader") {
         DownloadComponent::Fabric
@@ -318,11 +396,13 @@ async fn install_local_version(
         id,
         &java,
         environment,
+        pass.check,
         progress.clone(),
     )
     .await?;
     let version = parse_version(&crate::load_resolved_version_json(&cache, id)?)?;
     let index_path = cache.asset_index(&version.asset_index.id)?;
+    // Reuse trusts the sizes in this index, so the index itself stays hashed.
     let index_json = if file_matches_sha1(&index_path, &version.asset_index.sha1)? {
         std::fs::read_to_string(index_path)?
     } else {
@@ -331,7 +411,7 @@ async fn install_local_version(
             .await?
     };
     let assets = parse_asset_index(&index_json)?;
-    install_version(
+    install_version_with(
         client,
         &cache,
         settings,
@@ -343,6 +423,7 @@ async fn install_local_version(
             environment,
             asset_base: ASSET_OBJECT_BASE,
         },
+        pass,
         progress,
     )
     .await?;
@@ -350,6 +431,29 @@ async fn install_local_version(
         crate::loaders::forge::complete(&cache, id, &files)?;
     }
     Ok(java)
+}
+
+fn accepted_key(path: &Path) -> Result<PathBuf> {
+    // The parent and loader passes can spell the same file with different prefixes.
+    Ok(std::path::absolute(path)?)
+}
+
+fn cached_file_matches(path: &Path, sha1: &str, size: u64, check: CacheCheck) -> Result<bool> {
+    match check {
+        CacheCheck::Verify => file_matches_sha1(path, sha1),
+        // A published size of zero is not a length.
+        CacheCheck::Reuse if size == 0 => file_matches_sha1(path, sha1),
+        CacheCheck::Reuse => file_has_size(path, size),
+    }
+}
+
+fn file_has_size(path: &Path, size: u64) -> Result<bool> {
+    match std::fs::metadata(path) {
+        Ok(metadata) if metadata.is_file() && metadata.len() == size => Ok(true),
+        Ok(_) => Ok(false),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error.into()),
+    }
 }
 
 fn installation_cache(cache: &SharedCache) -> Result<SharedCache> {

@@ -1,9 +1,10 @@
 use futures_util::future::BoxFuture;
 
 use crate::{
-    CoreError, DownloadJobOperation, InstallationContext, InstancePreparationState, InstanceSource,
-    Result, complete_instance_preparation, configure_instance_version, install_curseforge_files,
-    install_game_version, install_mrpack_files, instance_entry, load_instance,
+    CacheCheck, CoreError, DownloadJobOperation, InstallationContext, InstancePreparationState,
+    InstanceSource, Result, complete_instance_preparation, configure_instance_version,
+    install_curseforge_files, install_game_version, install_mrpack_files, instance_entry,
+    load_instance,
 };
 
 use super::jobs::model::DownloadCheckpoint;
@@ -97,12 +98,17 @@ pub(crate) fn execute(
             .await?
             || !runtime.game.version_json(version)?.is_file()
         {
+            let check = match job.operation {
+                DownloadJobOperation::Repair => CacheCheck::Verify,
+                DownloadJobOperation::Install => CacheCheck::Reuse,
+            };
             install_game_version(
                 &runtime.client,
                 &runtime.game,
                 &runtime.settings,
                 version,
                 &runtime.environment,
+                check,
                 context.clone(),
             )
             .await?;

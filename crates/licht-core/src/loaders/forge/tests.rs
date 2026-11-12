@@ -585,3 +585,129 @@ async fn processor_failure_is_reported_and_server_processors_are_not_run() {
     drop(installer);
     fs::remove_dir_all(root).expect("cleanup");
 }
+
+fn loader_environment() -> crate::LaunchEnvironment {
+    crate::LaunchEnvironment {
+        os: OsName::Windows,
+        arch: crate::Arch::X86_64,
+        os_version: String::new(),
+        features: BTreeMap::new(),
+    }
+}
+
+#[tokio::test]
+async fn reuse_keeps_a_loader_library_when_the_receipt_files_exist() {
+    let (cache, _) = launch_fixture();
+    let library = cache
+        .library("demo/library/1/library-1.jar")
+        .expect("library");
+    let changed = b"changed library";
+    fs::write(&library, changed).expect("tamper");
+    assert!(!super::installation_ready(&cache, "forge-fixture"));
+    assert!(super::installation_launchable(&cache, "forge-fixture"));
+    let settings = crate::Database::open(&cache).await.expect("database");
+    let kept = super::prepare(
+        &offline_client(),
+        &cache,
+        &settings,
+        "forge-fixture",
+        Path::new("java"),
+        &loader_environment(),
+        crate::CacheCheck::Reuse,
+        crate::InstallationContext::default(),
+    )
+    .await
+    .expect("reuse");
+    assert!(kept.is_none());
+    assert_eq!(fs::read(&library).expect("library"), changed);
+    settings.close().await;
+    fs::remove_dir_all(cache.root()).expect("cleanup");
+}
+
+#[tokio::test]
+async fn repair_does_not_accept_a_loader_library_whose_bytes_changed() {
+    let (cache, _) = launch_fixture();
+    let library = cache
+        .library("demo/library/1/library-1.jar")
+        .expect("library");
+    let changed = b"changed library";
+    fs::write(&library, changed).expect("tamper");
+    let settings = crate::Database::open(&cache).await.expect("database");
+    assert!(
+        super::prepare(
+            &offline_client(),
+            &cache,
+            &settings,
+            "forge-fixture",
+            Path::new("java"),
+            &loader_environment(),
+            crate::CacheCheck::Verify,
+            crate::InstallationContext::default(),
+        )
+        .await
+        .is_err()
+    );
+    assert_eq!(fs::read(&library).expect("library"), changed);
+    settings.close().await;
+    fs::remove_dir_all(cache.root()).expect("cleanup");
+}
+
+#[tokio::test]
+async fn reuse_does_not_skip_a_loader_whose_library_is_missing() {
+    let (cache, _) = launch_fixture();
+    let library = cache
+        .library("demo/library/1/library-1.jar")
+        .expect("library");
+    fs::remove_file(&library).expect("remove library");
+    let settings = crate::Database::open(&cache).await.expect("database");
+    assert!(
+        super::prepare(
+            &offline_client(),
+            &cache,
+            &settings,
+            "forge-fixture",
+            Path::new("java"),
+            &loader_environment(),
+            crate::CacheCheck::Reuse,
+            crate::InstallationContext::default(),
+        )
+        .await
+        .is_err()
+    );
+    settings.close().await;
+    fs::remove_dir_all(cache.root()).expect("cleanup");
+}
+
+#[tokio::test]
+async fn an_existing_loader_profile_is_reused_without_checking_library_bytes() {
+    let root = directory();
+    let cache = SharedCache::at(&root);
+    let id = "forge-50.0.1";
+    let profile = cache.version_json(id).expect("profile");
+    fs::create_dir_all(profile.parent().expect("parent")).expect("mkdir");
+    fs::write(&profile, b"{}").expect("profile");
+    fs::write(cache.version_jar(id).expect("client"), b"client").expect("client");
+    let library = cache
+        .library("demo/library/1/library-1.jar")
+        .expect("library");
+    fs::create_dir_all(library.parent().expect("parent")).expect("mkdir");
+    fs::write(&library, b"library").expect("library");
+    receipt::record(&cache, id, std::slice::from_ref(&library)).expect("receipt");
+    let changed = b"changed library";
+    fs::write(&library, changed).expect("tamper");
+
+    let reused = super::install_forge_like_with_context(
+        &offline_client(),
+        &cache,
+        super::ForgeFamily::Forge,
+        "1.20.6",
+        crate::LoaderChannel::Stable,
+        Some("50.0.1"),
+        &crate::InstallationContext::default(),
+    )
+    .await
+    .expect("existing loader");
+    assert_eq!(reused, id);
+    assert_eq!(fs::read(&library).expect("library"), changed);
+    fs::remove_dir_all(root).expect("cleanup");
+}
