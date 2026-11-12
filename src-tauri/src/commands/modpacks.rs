@@ -23,6 +23,12 @@ pub async fn search_modpacks(
         .map_err(failure)
 }
 
+/// Modpack sources this build can search; the UI only offers these.
+#[tauri::command]
+pub fn modpack_sources() -> Vec<ModpackSource> {
+    licht_core::available_modpack_sources()
+}
+
 #[tauri::command]
 pub async fn get_modpack(source: String, project_id: String) -> Result<ModpackDetails, String> {
     let source =

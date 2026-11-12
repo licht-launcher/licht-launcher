@@ -10,7 +10,6 @@ import {
 
 const EMPTY = {
   q: undefined,
-  page: undefined,
   version: undefined,
   loader: undefined,
   category: undefined,
@@ -19,18 +18,15 @@ const EMPTY = {
 };
 
 describe("parseDiscoverSearch", () => {
-  it("keeps a trimmed query and a page after the first", () => {
-    expect(parseDiscoverSearch({ q: "  cobble ", page: 3 })).toEqual({
+  it("keeps a trimmed query", () => {
+    expect(parseDiscoverSearch({ q: "  cobble " })).toEqual({
       ...EMPTY,
       q: "cobble",
-      page: 3,
     });
   });
 
-  it("drops empty queries and unusable pages", () => {
-    for (const page of [1, 0, -2, 1.5, "x", undefined]) {
-      expect(parseDiscoverSearch({ q: "  ", page })).toEqual(EMPTY);
-    }
+  it("drops empty queries and the page of old paginated links", () => {
+    expect(parseDiscoverSearch({ q: "  ", page: 3 })).toEqual(EMPTY);
   });
 
   it("keeps known filter values", () => {
@@ -70,7 +66,6 @@ describe("searchFilters and filterParams", () => {
   it("turn URL state into search filters and back", () => {
     const filters = searchFilters({
       q: "x",
-      page: 2,
       version: "1.20.1",
       loader: "fabric",
       category: "magic",

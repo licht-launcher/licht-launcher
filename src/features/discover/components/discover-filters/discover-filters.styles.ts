@@ -8,6 +8,7 @@ export const discoverFiltersStyles = {
   headingIcon: "size-3.5",
   trigger:
     "w-full *:data-[slot=select-value]:flex-1 *:data-[slot=select-value]:text-left",
+  loaderIcon: "size-4",
   categories: "flex flex-col gap-0.5",
   category:
     "w-full justify-start text-muted-foreground aria-pressed:bg-muted aria-pressed:text-foreground",

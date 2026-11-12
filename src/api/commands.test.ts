@@ -42,6 +42,7 @@ import {
   listInstances,
   listLoaderBuilds,
   listMicrosoftAccounts,
+  listModpackSources,
   listModpackVersions,
   listRunningGames,
   listVersions,
@@ -270,6 +271,9 @@ describe("launcher commands", () => {
       page: 2,
       filters,
     });
+    vi.mocked(invoke).mockResolvedValueOnce(["modrinth"]);
+    await expect(listModpackSources()).resolves.toEqual(["modrinth"]);
+    expect(invoke).toHaveBeenCalledWith("modpack_sources");
     await getModpack("curseforge", "381671");
     expect(invoke).toHaveBeenCalledWith("get_modpack", {
       source: "curseforge",

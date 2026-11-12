@@ -20,23 +20,10 @@ function DiscoverRoute() {
     <PageTransition>
       <DiscoverPage
         query={search.q ?? ""}
-        page={search.page ?? 1}
         filters={searchFilters(search)}
         onSearch={(query) =>
           void navigate({
-            search: (current) => ({
-              ...current,
-              q: query || undefined,
-              page: undefined,
-            }),
-          })
-        }
-        onPageChange={(next) =>
-          void navigate({
-            search: (current) => ({
-              ...current,
-              page: next > 1 ? next : undefined,
-            }),
+            search: (current) => ({ ...current, q: query || undefined }),
           })
         }
         onFiltersChange={(filters) =>
