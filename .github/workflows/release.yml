@@ -181,6 +181,12 @@ jobs:
             "release-assets/${RELEASE_PREFIX}-linux-x64.AppImage.sig"
           cp "${debs[0]}" \
             "release-assets/${RELEASE_PREFIX}-linux-x64.deb"
+          if [ ! -f "${debs[0]}.sig" ]; then
+            echo "deb updater signature not found" >&2
+            exit 1
+          fi
+          cp "${debs[0]}.sig" \
+            "release-assets/${RELEASE_PREFIX}-linux-x64.deb.sig"
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -272,8 +278,9 @@ jobs:
           windows_signature="$(cat "release-assets/${RELEASE_PREFIX}-windows-x64-setup.exe.sig")"
           windows_msi_signature="$(cat "release-assets/${RELEASE_PREFIX}-windows-x64.msi.sig")"
           linux_signature="$(cat "release-assets/${RELEASE_PREFIX}-linux-x64.AppImage.sig")"
-          # The updater looks up "{os}-{arch}-{installer}" before "{os}-{arch}", so MSI
-          # installs update through the MSI instead of creating a second NSIS install.
+          linux_deb_signature="$(cat "release-assets/${RELEASE_PREFIX}-linux-x64.deb.sig")"
+          # The updater looks up "{os}-{arch}-{installer}" before "{os}-{arch}", so MSI and
+          # .deb installs update through their own package instead of NSIS or the AppImage.
           jq -n \
             --arg version "$RELEASE_VERSION" \
             --arg prefix "$RELEASE_PREFIX" \
@@ -281,6 +288,7 @@ jobs:
             --arg windows_signature "$windows_signature" \
             --arg windows_msi_signature "$windows_msi_signature" \
             --arg linux_signature "$linux_signature" \
+            --arg linux_deb_signature "$linux_deb_signature" \
             '{
               version: $version,
               notes: "See the GitHub release notes for this version.",
@@ -297,6 +305,10 @@ jobs:
                 "linux-x86_64": {
                   signature: $linux_signature,
                   url: ($release_url + "/" + $prefix + "-linux-x64.AppImage")
+                },
+                "linux-x86_64-deb": {
+                  signature: $linux_deb_signature,
+                  url: ($release_url + "/" + $prefix + "-linux-x64.deb")
                 }
               }
             }' > release-assets/latest.json

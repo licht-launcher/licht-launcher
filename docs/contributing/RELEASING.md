@@ -36,7 +36,7 @@ From 0.8 on, the list continues (to be defined together with the project owner).
 | Windows  | `-windows-x64.msi` (WiX, all users) | Yes, through the MSI |
 | Windows  | `-windows-x64-portable.exe` | No |
 | Linux    | `-linux-x64.AppImage` | Yes |
-| Linux    | `-linux-x64.deb` | Not supported (no `linux-x86_64-deb` manifest entry) |
+| Linux    | `-linux-x64.deb` | Yes, through the .deb (asks for the admin password) |
 | Linux    | `-linux-x64.flatpak` | No, disabled inside the sandbox |
 
 The AppImage is the portable Linux download; the raw Linux binary is not published.
@@ -62,8 +62,12 @@ bundle with `flatpak install --user <file>.flatpak`.
 ## Updates
 
 Licht uses the Tauri v2 updater with GitHub Releases. Release notes belong in each
-GitHub Release. The workflow publishes signed Windows NSIS, Windows MSI and Linux
-AppImage update artifacts, plus the manifest read by the updater:
+GitHub Release. The workflow publishes signed Windows NSIS, Windows MSI, Linux
+AppImage and Linux .deb update artifacts, plus the manifest read by the updater.
+The manifest lists `windows-x86_64-msi` and `linux-x86_64-deb` entries next to the
+generic `windows-x86_64` (NSIS) and `linux-x86_64` (AppImage) ones; the updater
+picks the entry matching how the launcher was installed. The .deb update runs
+`dpkg -i` through `pkexec` (or a graphical/terminal `sudo` fallback):
 
 ```text
 https://github.com/licht-launcher/licht-launcher/releases/latest/download/latest.json
