@@ -49,7 +49,9 @@ export function ModpackSidebar({ modpack }: { modpack: ModpackDetails }) {
             <SidebarList label="Minecraft versions">
               {modpack.gameVersions.map((version) => (
                 <li key={version}>
-                  <Badge>{version}</Badge>
+                  <Badge className={modpackSidebarStyles.versionBadge}>
+                    {version}
+                  </Badge>
                 </li>
               ))}
             </SidebarList>

@@ -4,6 +4,7 @@ export const modpackSidebarStyles = {
   group: "flex min-w-0 flex-col gap-1.5",
   term: "text-xs text-muted-foreground",
   tags: "flex flex-wrap gap-1",
+  versionBadge: "border-border",
   links: "-mx-2 flex flex-col",
   link: "w-full justify-start",
   creator:

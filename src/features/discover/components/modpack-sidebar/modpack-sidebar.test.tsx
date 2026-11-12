@@ -18,6 +18,9 @@ describe("ModpackSidebar", () => {
     const versions = screen.getByRole("list", { name: "Minecraft versions" });
     expect(within(versions).getAllByRole("listitem")).toHaveLength(2);
     expect(versions).toHaveTextContent("1.21.10");
+    expect(within(versions).getByText("1.21.10").className).toContain(
+      "border-border",
+    );
     const loaders = screen.getByRole("list", { name: "Loaders" });
     expect(within(loaders).getByText("Fabric")).toHaveAttribute(
       "data-loader",
