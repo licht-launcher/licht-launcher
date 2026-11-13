@@ -24,9 +24,9 @@ type Option<T extends string> = { value: T; label: string };
 export const SORT_OPTIONS: readonly (Option<ModpackSort> & {
   icon: LucideIcon;
 })[] = [
+  { value: "relevance", label: "Relevance", icon: TextSearchIcon },
   { value: "downloads", label: "Downloads", icon: DownloadIcon },
   { value: "updated", label: "Recently updated", icon: CalendarClockIcon },
-  { value: "relevance", label: "Relevance", icon: TextSearchIcon },
 ];
 
 export const LOADER_OPTIONS: readonly Option<ModpackLoader>[] = [

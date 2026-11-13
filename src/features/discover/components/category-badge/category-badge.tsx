@@ -7,8 +7,8 @@ import type { ModpackCategory } from "@/lib/generated/ModpackCategory";
 import { categoryBadgeStyles } from "./category-badge.styles";
 
 /**
- * A category's icon and name, in that category's own color. `children` go
- * after the name (such as a remove icon).
+ * A category's icon and name, with a plain border. `children` go after the
+ * name (such as a remove icon).
  */
 export function CategoryBadge({
   category,
@@ -20,10 +20,7 @@ export function CategoryBadge({
   const option = CATEGORY_BY_VALUE.get(category);
   if (!option) return null;
   return (
-    <Badge
-      data-category={category}
-      className={categoryBadgeStyles.tones[category]}
-    >
+    <Badge data-category={category} className={categoryBadgeStyles.root}>
       <option.icon aria-hidden />
       {option.label}
       {children}

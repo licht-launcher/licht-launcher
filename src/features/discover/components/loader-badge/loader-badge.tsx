@@ -9,8 +9,8 @@ import { cn } from "@/lib/utils";
 import { loaderBadgeStyles } from "./loader-badge.styles";
 
 /**
- * A loader's official logo and name, in that loader's own color. `children`
- * go after the name (such as a remove icon).
+ * A loader's logo and name, in that loader's own color. `children` go after
+ * the name (such as a remove icon).
  */
 export function LoaderBadge({
   loader,

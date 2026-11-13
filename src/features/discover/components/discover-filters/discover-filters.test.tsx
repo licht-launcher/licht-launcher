@@ -50,9 +50,13 @@ describe("DiscoverFilters", () => {
     expect(screen.getByRole("combobox", { name: "Source" })).toHaveTextContent(
       "Any source",
     );
-    expect(screen.getByRole("combobox", { name: "Loader" })).toHaveTextContent(
-      "Any loader",
-    );
+    const loaders = screen.getByRole("list", { name: "Loader" });
+    for (const name of ["Fabric", "Forge", "NeoForge", "Quilt"]) {
+      expect(within(loaders).getByRole("button", { name })).toHaveAttribute(
+        "aria-pressed",
+        "false",
+      );
+    }
   });
 
   it("leaves out the Source filter when only Modrinth can be searched", () => {
@@ -73,14 +77,12 @@ describe("DiscoverFilters", () => {
 
     expect(toggle).toHaveAttribute("aria-expanded", "false");
     expect(
-      screen.queryByRole("combobox", { name: "Loader" }),
+      screen.queryByRole("list", { name: "Loader" }),
     ).not.toBeInTheDocument();
 
     fireEvent.click(toggle);
 
-    expect(screen.getByRole("combobox", { name: "Loader" })).toHaveTextContent(
-      "Any loader",
-    );
+    expect(screen.getByRole("list", { name: "Loader" })).toBeInTheDocument();
   });
 
   it("adds a category to the ones already chosen", () => {
@@ -105,10 +107,12 @@ describe("DiscoverFilters", () => {
     });
     const magic = screen.getByRole("button", { name: "Magic" });
     expect(magic).toHaveAttribute("aria-pressed", "true");
-    // A chosen category takes its own color.
-    expect(magic.className).not.toBe(
+    // Chosen categories share the neutral background and a border.
+    expect(magic.className).toBe(
       screen.getByRole("button", { name: "Quests" }).className,
     );
+    expect(magic.className).toContain("aria-pressed:border-border");
+    expect(magic.className).toContain("aria-pressed:bg-secondary");
 
     fireEvent.click(magic);
 
@@ -144,16 +148,46 @@ describe("DiscoverFilters", () => {
     });
   });
 
-  it("picks a loader", async () => {
+  it("picks a loader", () => {
     const onChange = renderFilters();
 
-    fireEvent.click(screen.getByRole("combobox", { name: "Loader" }));
-    fireEvent.click(await screen.findByRole("option", { name: "NeoForge" }));
+    fireEvent.click(screen.getByRole("button", { name: "NeoForge" }));
 
     expect(onChange).toHaveBeenCalledExactlyOnceWith({
       ...DEFAULT_SEARCH_FILTERS,
-      loader: "neoforge",
+      loaders: ["neoforge"],
     });
+  });
+
+  it("adds a loader to the ones already chosen", () => {
+    const onChange = renderFilters({
+      ...DEFAULT_SEARCH_FILTERS,
+      loaders: ["fabric"],
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Quilt" }));
+
+    expect(onChange).toHaveBeenCalledExactlyOnceWith({
+      ...DEFAULT_SEARCH_FILTERS,
+      loaders: ["fabric", "quilt"],
+    });
+  });
+
+  it("clears a loader when it is pressed again", () => {
+    const onChange = renderFilters({
+      ...DEFAULT_SEARCH_FILTERS,
+      loaders: ["neoforge"],
+    });
+    const neoforge = screen.getByRole("button", { name: "NeoForge" });
+    expect(neoforge).toHaveAttribute("aria-pressed", "true");
+    expect(neoforge.className).toContain("border-accent-orange/25");
+    expect(neoforge.className).not.toBe(
+      screen.getByRole("button", { name: "Fabric" }).className,
+    );
+
+    fireEvent.click(neoforge);
+
+    expect(onChange).toHaveBeenCalledExactlyOnceWith(DEFAULT_SEARCH_FILTERS);
   });
 
   it("offers only release game versions", async () => {

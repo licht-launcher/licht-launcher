@@ -48,7 +48,7 @@ describe("ModpackRow", () => {
     expect(within(link).queryByText(/^by /)).not.toBeInTheDocument();
   });
 
-  it("shows up to three colored categories and when it was updated", async () => {
+  it("shows up to three categories and when it was updated", async () => {
     renderRow(modpackListItem({ loaders: ["fabric", "neoforge"] }));
 
     const link = await screen.findByRole("link", {

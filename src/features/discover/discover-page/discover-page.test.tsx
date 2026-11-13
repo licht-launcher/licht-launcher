@@ -208,7 +208,7 @@ describe("Discover page", () => {
   it("searches with the filters in the URL", async () => {
     mockSearch(() => Promise.resolve(modpackSearchPage()));
     await renderAt(
-      `/discover?q=atm&loader=fabric&categories=${MAGIC}&source=curseforge&sort=updated`,
+      `/discover?q=atm&loaders=${encodeURIComponent(JSON.stringify(["fabric"]))}&categories=${MAGIC}&source=curseforge&sort=updated`,
     );
 
     expect(
@@ -222,7 +222,7 @@ describe("Discover page", () => {
           page: 1,
           filters: {
             gameVersion: null,
-            loader: "fabric",
+            loaders: ["fabric"],
             categories: ["magic"],
             source: "curseforge",
             sort: "updated",
@@ -295,7 +295,9 @@ describe("Discover page", () => {
 
   it("keeps the filters when the search text changes", async () => {
     mockSearch(() => Promise.resolve(modpackSearchPage()));
-    const { router } = await renderAt("/discover?loader=quilt");
+    const { router } = await renderAt(
+      `/discover?loaders=${encodeURIComponent(JSON.stringify(["quilt"]))}`,
+    );
 
     fireEvent.change(
       await screen.findByRole("searchbox", { name: "Search modpacks" }),
@@ -305,7 +307,7 @@ describe("Discover page", () => {
     await waitFor(() =>
       expect(router.state.location.search).toEqual({
         q: "sky",
-        loader: "quilt",
+        loaders: ["quilt"],
       }),
     );
   });

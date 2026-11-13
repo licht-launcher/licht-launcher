@@ -13,7 +13,7 @@ describe("CategoryBadge", () => {
     expect(container.querySelector("svg")).not.toBeNull();
   });
 
-  it("gives each category its own color", () => {
+  it("uses the same border for every category", () => {
     render(
       <>
         <CategoryBadge category="magic" />
@@ -21,8 +21,8 @@ describe("CategoryBadge", () => {
       </>,
     );
 
-    expect(screen.getByText("Magic").className).not.toBe(
-      screen.getByText("Technology").className,
-    );
+    const magic = screen.getByText("Magic");
+    expect(magic.className).toContain("border-border");
+    expect(screen.getByText("Technology").className).toBe(magic.className);
   });
 });

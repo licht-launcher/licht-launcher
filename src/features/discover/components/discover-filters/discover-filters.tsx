@@ -17,12 +17,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CATEGORY_TONES } from "@/features/discover/components/category-badge/category-badge.styles";
+import { LOADER_TONES } from "@/features/discover/components/loader-badge/loader-badge.styles";
 import {
   categorySearchable,
   parseModpackSource,
   SOURCE_LABELS,
   toggleCategory,
+  toggleLoader,
   withSource,
 } from "@/features/discover/lib/discover-search";
 import {
@@ -40,13 +41,6 @@ import { discoverFiltersStyles } from "./discover-filters.styles";
 
 /** Select value for "no narrowing"; Radix Select does not allow an empty value. */
 const ANY = "any";
-
-function optionValue<T extends string>(
-  options: readonly { value: T }[],
-  value: string,
-): T | null {
-  return options.find((option) => option.value === value)?.value ?? null;
-}
 
 /** Discover's left sidebar: filters that narrow the search. */
 export function DiscoverFilters({
@@ -127,32 +121,42 @@ export function DiscoverFilters({
           </FilterGroup>
           <FilterGroup title="Loader">
             {(labelId) => (
-              <Select
-                value={filters.loader ?? ANY}
-                onValueChange={(value) =>
-                  update({ loader: optionValue(LOADER_OPTIONS, value) })
-                }
+              <ul
+                aria-labelledby={labelId}
+                className={discoverFiltersStyles.loaders}
               >
-                <SelectTrigger
-                  size="sm"
-                  aria-labelledby={labelId}
-                  className={discoverFiltersStyles.trigger}
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ANY}>Any loader</SelectItem>
-                  {LOADER_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      <PlatformIcon
-                        platform={option.value}
-                        className={discoverFiltersStyles.loaderIcon}
-                      />
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                {LOADER_OPTIONS.map((option) => {
+                  const pressed = filters.loaders.includes(option.value);
+                  return (
+                    <li key={option.value}>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        aria-pressed={pressed}
+                        className={cn(
+                          discoverFiltersStyles.loader,
+                          pressed && LOADER_TONES[option.value],
+                        )}
+                        onClick={() =>
+                          update({
+                            loaders: toggleLoader(
+                              filters.loaders,
+                              option.value,
+                            ),
+                          })
+                        }
+                      >
+                        <PlatformIcon
+                          platform={option.value}
+                          className={discoverFiltersStyles.loaderIcon}
+                        />
+                        {option.label}
+                      </Button>
+                    </li>
+                  );
+                })}
+              </ul>
             )}
           </FilterGroup>
           <FilterGroup title="Category">
@@ -180,10 +184,7 @@ export function DiscoverFilters({
                             ? undefined
                             : `${SOURCE_LABELS.curseforge} has no ${option.label} category`
                         }
-                        className={cn(
-                          discoverFiltersStyles.category,
-                          pressed && CATEGORY_TONES[option.value],
-                        )}
+                        className={discoverFiltersStyles.category}
                         onClick={() =>
                           update({
                             categories: toggleCategory(

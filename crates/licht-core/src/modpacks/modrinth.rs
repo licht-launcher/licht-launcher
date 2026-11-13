@@ -144,14 +144,21 @@ fn search_url(query: &str, offset: u64, limit: u32, filters: &ModpackSearchFilte
     Ok(url)
 }
 
-/// Facets are ANDed between the inner lists; loaders are categories on Modrinth.
+/// Facets are ANDed between the inner lists. Loaders share one list, so a pack
+/// may use any of them; loaders are categories on Modrinth.
 fn search_facets(filters: &ModpackSearchFilters) -> Value {
     let mut facets = vec![vec!["project_type:modpack".to_string()]];
     if let Some(version) = filters.game_version() {
         facets.push(vec![format!("versions:{version}")]);
     }
-    if let Some(loader) = filters.loader {
-        facets.push(vec![format!("categories:{}", loader_slug(loader))]);
+    if !filters.loaders.is_empty() {
+        facets.push(
+            filters
+                .loaders
+                .iter()
+                .map(|loader| format!("categories:{}", loader_slug(*loader)))
+                .collect(),
+        );
     }
     for category in &filters.categories {
         facets.push(vec![format!("categories:{}", category_slug(*category))]);
@@ -558,7 +565,7 @@ mod tests {
     fn filters_become_anded_facets_and_the_sort_index() {
         let filters = ModpackSearchFilters {
             game_version: Some(" 1.20.1 ".into()),
-            loader: Some(ModpackLoader::Neoforge),
+            loaders: vec![ModpackLoader::Neoforge],
             categories: vec![ModpackCategory::KitchenSink, ModpackCategory::Quests],
             source: None,
             sort: ModpackSort::Updated,
@@ -571,6 +578,19 @@ mod tests {
             Some(
                 r#"[["project_type:modpack"],["versions:1.20.1"],["categories:neoforge"],["categories:kitchen-sink"],["categories:quests"]]"#
             )
+        );
+    }
+
+    #[test]
+    fn several_loaders_share_one_facet_group() {
+        let filters = ModpackSearchFilters {
+            loaders: vec![ModpackLoader::Fabric, ModpackLoader::Quilt],
+            ..ModpackSearchFilters::default()
+        };
+        let url = search_url("", 0, 10, &filters).expect("url");
+        assert_eq!(
+            query_value(&url, "facets").as_deref(),
+            Some(r#"[["project_type:modpack"],["categories:fabric","categories:quilt"]]"#)
         );
     }
 

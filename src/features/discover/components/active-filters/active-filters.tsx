@@ -45,7 +45,7 @@ function activeFilters(filters: ModpackSearchFilters): ActiveFilter[] {
       key: "gameVersion",
       label,
       badge: (
-        <Badge>
+        <Badge className={activeFiltersStyles.version}>
           {label}
           {remove}
         </Badge>
@@ -53,12 +53,14 @@ function activeFilters(filters: ModpackSearchFilters): ActiveFilter[] {
       clear: { gameVersion: null },
     });
   }
-  if (filters.loader !== null) {
+  for (const loader of filters.loaders) {
     active.push({
-      key: "loader",
-      label: LOADER_LABELS.get(filters.loader) ?? filters.loader,
-      badge: <LoaderBadge loader={filters.loader}>{remove}</LoaderBadge>,
-      clear: { loader: null },
+      key: `loader-${loader}`,
+      label: LOADER_LABELS.get(loader) ?? loader,
+      badge: <LoaderBadge loader={loader}>{remove}</LoaderBadge>,
+      clear: {
+        loaders: filters.loaders.filter((other) => other !== loader),
+      },
     });
   }
   for (const category of filters.categories) {
@@ -88,7 +90,7 @@ export function ActiveFilters({
   return (
     <ul aria-label="Active filters" className={activeFiltersStyles.root}>
       {active.map((filter) => (
-        <li key={filter.key}>
+        <li key={filter.key} className={activeFiltersStyles.item}>
           <button
             type="button"
             aria-label={`Remove ${filter.label} filter`}

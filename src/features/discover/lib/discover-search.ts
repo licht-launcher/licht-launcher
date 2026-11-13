@@ -9,20 +9,20 @@ import type { ModpackSearchFilters } from "@/lib/generated/ModpackSearchFilters"
 import type { ModpackSort } from "@/lib/generated/ModpackSort";
 import type { ModpackSource } from "@/lib/generated/ModpackSource";
 
-/** No narrowing: every source, sorted by downloads. */
+/** No narrowing: every source, sorted by relevance. */
 export const DEFAULT_SEARCH_FILTERS: ModpackSearchFilters = {
   gameVersion: null,
-  loader: null,
+  loaders: [],
   categories: [],
   source: null,
-  sort: "downloads",
+  sort: "relevance",
 };
 
 /** Discover's URL state; defaults are left out so links stay short. */
 export type DiscoverSearch = {
   q?: string;
   version?: string;
-  loader?: ModpackLoader;
+  loaders?: ModpackLoader[];
   categories?: ModpackCategory[];
   source?: ModpackSource;
   sort?: ModpackSort;
@@ -62,7 +62,7 @@ export function parseDiscoverSearch(
   return {
     q: q === "" ? undefined : q,
     version: version === "" ? undefined : version,
-    loader: pick(search.loader, values(LOADER_OPTIONS)),
+    loaders: chosenLoaders(search),
     categories: pickAll(search.categories, values(CATEGORY_OPTIONS)),
     source: pick(search.source, MODPACK_SOURCES),
     sort: sort === DEFAULT_SEARCH_FILTERS.sort ? undefined : sort,
@@ -73,7 +73,7 @@ export function parseDiscoverSearch(
 export function searchFilters(search: DiscoverSearch): ModpackSearchFilters {
   return {
     gameVersion: search.version ?? null,
-    loader: search.loader ?? null,
+    loaders: search.loaders ?? [],
     categories: search.categories ?? [],
     source: search.source ?? null,
     sort: search.sort ?? DEFAULT_SEARCH_FILTERS.sort,
@@ -86,13 +86,37 @@ export function filterParams(
 ): Omit<DiscoverSearch, "q"> {
   return {
     version: filters.gameVersion ?? undefined,
-    loader: filters.loader ?? undefined,
+    loaders: filters.loaders.length === 0 ? undefined : [...filters.loaders],
     categories:
       filters.categories.length === 0 ? undefined : [...filters.categories],
     source: filters.source ?? undefined,
     sort:
       filters.sort === DEFAULT_SEARCH_FILTERS.sort ? undefined : filters.sort,
   };
+}
+
+/** The loaders in `search`, in sidebar order. A lone `loader` is an old link. */
+function chosenLoaders(
+  search: Record<string, unknown>,
+): ModpackLoader[] | undefined {
+  const listed = pickAll(search.loaders, values(LOADER_OPTIONS));
+  if (listed) return listed;
+  const loader = pick(search.loader, values(LOADER_OPTIONS));
+  return loader === undefined ? undefined : [loader];
+}
+
+/**
+ * Adds `loader` to the chosen ones, or removes it when already chosen. The
+ * result keeps the sidebar's order so equal choices make equal searches.
+ */
+export function toggleLoader(
+  loaders: readonly ModpackLoader[],
+  loader: ModpackLoader,
+): ModpackLoader[] {
+  const chosen = loaders.includes(loader);
+  return values(LOADER_OPTIONS).filter((option) =>
+    option === loader ? !chosen : loaders.includes(option),
+  );
 }
 
 /**

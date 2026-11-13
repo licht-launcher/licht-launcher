@@ -261,7 +261,7 @@ describe("launcher commands", () => {
     });
     const filters: ModpackSearchFilters = {
       gameVersion: "1.20.1",
-      loader: "fabric",
+      loaders: ["fabric"],
       categories: ["magic"],
       source: null,
       sort: "updated",
