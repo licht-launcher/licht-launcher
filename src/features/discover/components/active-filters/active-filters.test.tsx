@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { ActiveFilters } from "@/features/discover/components/active-filters";
 import { DEFAULT_SEARCH_FILTERS } from "@/features/discover/lib/discover-search";
+import type { ModpackSearchFilters } from "@/lib/generated/ModpackSearchFilters";
 
 describe("ActiveFilters", () => {
   it("shows nothing while no filter narrows the search", () => {
@@ -54,11 +55,11 @@ describe("ActiveFilters", () => {
 
   it("removes only the pressed filter and keeps the sort order", () => {
     const onChange = vi.fn();
-    const filters = {
+    const filters: ModpackSearchFilters = {
       ...DEFAULT_SEARCH_FILTERS,
-      sort: "relevance" as const,
+      sort: "relevance",
       loaders: ["fabric"],
-      categories: ["magic" as const, "quests" as const],
+      categories: ["magic", "quests"],
     };
     render(<ActiveFilters filters={filters} onChange={onChange} />);
 
