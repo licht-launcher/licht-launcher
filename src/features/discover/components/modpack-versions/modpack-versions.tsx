@@ -35,10 +35,13 @@ const TYPE_LABELS: Record<ModpackVersionType, string> = {
 export function ModpackVersions({
   source,
   projectId,
+  installing = false,
   onInstall,
 }: {
   source: ModpackSource;
   projectId: string;
+  /** The library list or an install is still in progress. */
+  installing?: boolean;
   onInstall: (versionId: string) => void;
 }) {
   const versions = useModpackVersions(source, projectId);
@@ -68,14 +71,22 @@ export function ModpackVersions({
       />
     );
   }
-  return <VersionTable versions={versions.data} onInstall={onInstall} />;
+  return (
+    <VersionTable
+      versions={versions.data}
+      installing={installing}
+      onInstall={onInstall}
+    />
+  );
 }
 
 function VersionTable({
   versions,
+  installing,
   onInstall,
 }: {
   versions: readonly ModpackVersionItem[];
+  installing: boolean;
   onInstall: (versionId: string) => void;
 }) {
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -185,6 +196,7 @@ function VersionTable({
                     variant="outline"
                     size="sm"
                     aria-label={`Install ${version.name}`}
+                    disabled={installing}
                     onClick={() => onInstall(version.id)}
                   >
                     <DownloadIcon aria-hidden />

@@ -20,7 +20,7 @@ function version(
 }
 
 describe("defaultVersionId", () => {
-  it("picks the newest release over newer betas and alphas", () => {
+  it("picks the newest version even when it is a beta or alpha", () => {
     expect(
       defaultVersionId([
         version("v9-alpha", "alpha"),
@@ -28,7 +28,7 @@ describe("defaultVersionId", () => {
         version("v7", "release"),
         version("v6", "release"),
       ]),
-    ).toBe("v7");
+    ).toBe("v9-alpha");
   });
 
   it("falls back to the newest version when there is no release", () => {

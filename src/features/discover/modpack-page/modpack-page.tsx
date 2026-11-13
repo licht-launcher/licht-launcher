@@ -5,6 +5,7 @@ import {
   TriangleAlertIcon,
 } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 
 import { EmptyState } from "@/components/ui/empty-state";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -13,13 +14,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ModpackDescription } from "@/features/discover/components/modpack-description";
 import { ModpackGallery } from "@/features/discover/components/modpack-gallery";
 import { ModpackHeader } from "@/features/discover/components/modpack-header";
-import { ModpackInstallDialog } from "@/features/discover/components/modpack-install-dialog";
+import { ModpackReinstallDialog } from "@/features/discover/components/modpack-reinstall-dialog";
 import { ModpackSidebar } from "@/features/discover/components/modpack-sidebar";
 import { ModpackVersions } from "@/features/discover/components/modpack-versions";
+import { useInstallModpack } from "@/features/discover/hooks/use-install-modpack";
 import {
   useModpack,
   useModpackVersions,
 } from "@/features/discover/hooks/use-modpacks";
+import { defaultVersionId } from "@/features/discover/lib/default-version";
+import { hasInstalledModpack } from "@/features/discover/lib/installed-modpack";
+import { useInstanceList } from "@/features/new-instance/hooks/use-instance-names";
+import { uniqueName } from "@/features/new-instance/model/create-state";
 import { friendlyError, messageOf } from "@/lib/errors";
 import type { ModpackDetails } from "@/lib/generated/ModpackDetails";
 import type { ModpackSource } from "@/lib/generated/ModpackSource";
@@ -56,20 +62,72 @@ export function ModpackPage({
 }
 
 function ModpackContent({ modpack }: { modpack: ModpackDetails }) {
-  const [install, setInstall] = useState<{
-    open: boolean;
-    versionId: string | null;
-  }>({ open: false, versionId: null });
   const versions = useModpackVersions(modpack.source, modpack.id);
+  const instanceList = useInstanceList();
+  const instances = instanceList.data ?? [];
+  const install = useInstallModpack(modpack);
   const hasGallery = modpack.gallery.length > 0;
+  const latestVersionId = defaultVersionId(versions.data ?? []);
+  const [confirmVersionId, setConfirmVersionId] = useState<string | null>(null);
+  const takenNames = instances.map((instance) => instance.name);
+  const alreadyInstalled = hasInstalledModpack(
+    instances,
+    modpack.source,
+    modpack.id,
+  );
 
-  function openInstall(versionId: string | null) {
-    setInstall({ open: true, versionId });
+  function installVersion(versionId: string) {
+    if (install.isPending) {
+      return;
+    }
+    install.mutate({
+      name: uniqueName(modpack.name, takenNames),
+      versionId,
+    });
+  }
+
+  function requestInstall(versionId: string) {
+    if (install.isPending || instanceList.isPending) {
+      return;
+    }
+    if (alreadyInstalled) {
+      setConfirmVersionId(versionId);
+      return;
+    }
+    installVersion(versionId);
+  }
+
+  function confirmInstall() {
+    if (confirmVersionId === null) {
+      return;
+    }
+    const versionId = confirmVersionId;
+    setConfirmVersionId(null);
+    installVersion(versionId);
+  }
+
+  function installLatest() {
+    if (versions.isError) {
+      toast.error(friendlyError(messageOf(versions.error)));
+      return;
+    }
+    if (latestVersionId === null) {
+      toast.error("This pack has no versions to install.");
+      return;
+    }
+    requestInstall(latestVersionId);
   }
 
   return (
     <>
-      <ModpackHeader modpack={modpack} onInstall={() => openInstall(null)} />
+      <ModpackHeader
+        modpack={modpack}
+        disabled={
+          versions.isPending || instanceList.isPending || install.isPending
+        }
+        pending={install.isPending}
+        onInstall={installLatest}
+      />
       <div className={modpackPageStyles.layout}>
         <Tabs defaultValue="description" className={modpackPageStyles.tabs}>
           <TabsList variant="sliding" className={modpackPageStyles.tabsList}>
@@ -133,7 +191,8 @@ function ModpackContent({ modpack }: { modpack: ModpackDetails }) {
             <ModpackVersions
               source={modpack.source}
               projectId={modpack.id}
-              onInstall={openInstall}
+              installing={instanceList.isPending || install.isPending}
+              onInstall={requestInstall}
             />
           </TabsContent>
         </Tabs>
@@ -146,11 +205,15 @@ function ModpackContent({ modpack }: { modpack: ModpackDetails }) {
           </ScrollArea>
         </aside>
       </div>
-      <ModpackInstallDialog
-        modpack={modpack}
-        open={install.open}
-        versionId={install.versionId}
-        onOpenChange={(open) => setInstall((current) => ({ ...current, open }))}
+      <ModpackReinstallDialog
+        open={confirmVersionId !== null}
+        pending={install.isPending}
+        onOpenChange={(open) => {
+          if (!open) {
+            setConfirmVersionId(null);
+          }
+        }}
+        onConfirm={confirmInstall}
       />
     </>
   );
