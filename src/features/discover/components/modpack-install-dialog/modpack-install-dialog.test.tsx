@@ -148,6 +148,33 @@ describe("ModpackInstallDialog", () => {
     );
   });
 
+  it("shortens a very long version name in the picker", async () => {
+    const [release] = modpackVersions();
+    mockInstall(() =>
+      Promise.resolve([
+        {
+          ...release,
+          name: "Fresh & Smooth 26.3 RELEASE - BIG Player Animation Update too!",
+          gameVersions: ["26.3"],
+          loaders: ["fabric"],
+        },
+      ]),
+    );
+    await renderAt("/discover/modrinth/1KVo5zza");
+    const dialog = await openInstallDialog();
+    const version = await within(dialog).findByRole("combobox", {
+      name: "Version",
+    });
+
+    expect(version).toHaveTextContent(
+      "Fresh & Smooth 26.3 RELEASE... (26.3 · Fabric)",
+    );
+    expect(version).toHaveAttribute(
+      "title",
+      "Fresh & Smooth 26.3 RELEASE - BIG Player Animation Update too! (26.3 · Fabric)",
+    );
+  });
+
   it("cannot install a pack without versions", async () => {
     mockInstall(() => Promise.resolve([]));
     await renderAt("/discover/modrinth/1KVo5zza");

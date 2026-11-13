@@ -22,15 +22,32 @@ import { Spinner } from "@/components/ui/spinner";
 import { useInstallModpack } from "@/features/discover/hooks/use-install-modpack";
 import { useModpackVersions } from "@/features/discover/hooks/use-modpacks";
 import { defaultVersionId } from "@/features/discover/lib/default-version";
-import { formatVersionLabel } from "@/features/discover/lib/format";
+import {
+  displayVersionLabel,
+  formatVersionLabel,
+} from "@/features/discover/lib/format";
 import { FormSection } from "@/features/new-instance/components/form-section";
 import { NameField } from "@/features/new-instance/components/name-field";
 import { useInstanceNames } from "@/features/new-instance/hooks/use-instance-names";
 import { uniqueName } from "@/features/new-instance/model/create-state";
 import { friendlyError, messageOf } from "@/lib/errors";
 import type { ModpackDetails } from "@/lib/generated/ModpackDetails";
+import type { ModpackVersionItem } from "@/lib/generated/ModpackVersionItem";
 
 import { modpackInstallDialogStyles } from "./modpack-install-dialog.styles";
+
+function selectedVersionTitle(
+  versions: readonly ModpackVersionItem[],
+  versionId: string | null,
+): string | undefined {
+  const selected = versions.find((version) => version.id === versionId);
+  if (selected === undefined) {
+    return undefined;
+  }
+  const text = displayVersionLabel(selected);
+  const full = formatVersionLabel(selected);
+  return text === full ? undefined : full;
+}
 
 /**
  * Picks a pack version and a name, then creates the instance. Opens on
@@ -111,15 +128,24 @@ export function ModpackInstallDialog({
                 <SelectTrigger
                   aria-label="Version"
                   className={modpackInstallDialogStyles.select}
+                  title={selectedVersionTitle(versions.data, versionId)}
                 >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {versions.data.map((version) => (
-                    <SelectItem key={version.id} value={version.id}>
-                      {formatVersionLabel(version)}
-                    </SelectItem>
-                  ))}
+                  {versions.data.map((version) => {
+                    const text = displayVersionLabel(version);
+                    const full = formatVersionLabel(version);
+                    return (
+                      <SelectItem
+                        key={version.id}
+                        title={text === full ? undefined : full}
+                        value={version.id}
+                      >
+                        {text}
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             )}

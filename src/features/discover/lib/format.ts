@@ -33,15 +33,60 @@ export function formatUpdatedAt(timestamp: string | null): string | null {
   return Number.isNaN(date.getTime()) ? null : dateFormat.format(date);
 }
 
-/** Version picker label, e.g. `7.0.0 (1.21.10 · Fabric)`. */
-export function formatVersionLabel(version: ModpackVersionItem): string {
+/** Fits the install select; longer names end in `...` and keep the suffix. */
+const VERSION_LABEL_LIMIT = 48;
+
+function versionDetails(version: ModpackVersionItem): string {
   const loaders = version.loaders.map(
     (loader) => LOADER_LABELS.get(loader) ?? loader,
   );
-  const details = [version.gameVersions.join(", "), loaders.join(", ")]
+  return [version.gameVersions.join(", "), loaders.join(", ")]
     .filter((part) => part !== "")
     .join(" · ");
+}
+
+/** Version picker label, e.g. `7.0.0 (1.21.10 · Fabric)`. */
+export function formatVersionLabel(version: ModpackVersionItem): string {
+  const details = versionDetails(version);
   return details === "" ? version.name : `${version.name} (${details})`;
+}
+
+function clip(value: string, limit: number): string {
+  let head = value.slice(0, limit).trimEnd();
+  // A cut that lands on "RELEASE -" would read as "RELEASE -...".
+  while (head.endsWith("-") || head.endsWith(",") || head.endsWith("·")) {
+    head = head.slice(0, -1).trimEnd();
+  }
+  return head;
+}
+
+function withEllipsis(value: string, limit: number): string {
+  if (value.length <= limit) {
+    return value;
+  }
+  return `${clip(value, Math.max(0, limit - 3))}...`;
+}
+
+/**
+ * Label shown in the install select. A long version name is cut with `...`
+ * and the game version and loader stay visible when they fit.
+ */
+export function displayVersionLabel(version: ModpackVersionItem): string {
+  const details = versionDetails(version);
+  const suffix = details === "" ? "" : ` (${details})`;
+  const full = `${version.name}${suffix}`;
+  if (full.length <= VERSION_LABEL_LIMIT) {
+    return full;
+  }
+  const nameLimit = VERSION_LABEL_LIMIT - suffix.length - 3;
+  if (nameLimit < 1) {
+    return withEllipsis(full, VERSION_LABEL_LIMIT);
+  }
+  const head = clip(version.name, nameLimit);
+  if (head === "") {
+    return withEllipsis(full, VERSION_LABEL_LIMIT);
+  }
+  return `${head}...${suffix}`;
 }
 
 /**
