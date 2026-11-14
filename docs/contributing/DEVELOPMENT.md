@@ -38,19 +38,22 @@ tests. Never commit credentials, API keys, signing keys, or account captures.
 
 ## CLI
 
-The `licht` CLI lists Mojang's manifest, installs a version, and launches a
-cached version with an offline name:
+The `licht-cli` lists Mojang's manifest, installs a version, lists saved
+instances, and launches a cached version or instance with an offline name:
 
 ```sh
 cargo run -p licht-cli -- versions
 cargo run -p licht-cli -- install --version 1.20.1
+cargo run -p licht-cli -- instances list
 cargo run -p licht-cli -- launch --version 1.20.1 --username Player
+cargo run -p licht-cli -- launch --instance Survival --username Player
 ```
 
-`launch` does not download. `install` does. `--game-dir` replaces the instance
-root, `--cache` replaces the data directory, and `--java` selects another Java
-executable. See the [runtime](../internals/RUNTIME.md),
-[storage](../internals/STORAGE.md), and
+`launch` does not download. `install` does. `--instance` accepts a folder or a
+unique display name and cannot be combined with `--version` or `--game-dir`.
+`--game-dir` replaces the instance root for `--version` launches, `--cache`
+replaces the data directory, and `--java` selects another Java executable. See
+the [runtime](../internals/RUNTIME.md), [storage](../internals/STORAGE.md), and
 [compatibility](../internals/COMPATIBILITY.md) documentation for details.
 
 ## Implementation and testing
