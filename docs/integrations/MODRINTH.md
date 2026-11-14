@@ -11,7 +11,8 @@ these public API requests. [CurseForge](CURSEFORGE.md) is a separate integration
 - Search filters to `project_type:modpack` and pages with `offset`/`limit` (10
   results per page, merged with CurseForge's page of the same number; `total_hits`
   sets the page count). Optional filters become ANDed facets: `versions:<game
-  version>`, `categories:<loader>` (loaders are categories on Modrinth) and
+  version>`, one `categories:<loader>` group (loaders are categories on Modrinth;
+  several loaders are alternatives in that one group) and
   one `categories:<category>` facet per chosen category (so a pack must have
   all of them) from Licht's shared category list, which mirrors
   Modrinth's modpack categories. The sort maps to `index=downloads|updated|relevance`.

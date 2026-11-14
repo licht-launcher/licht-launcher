@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { ActiveFilters } from "@/features/discover/components/active-filters";
 import { DEFAULT_SEARCH_FILTERS } from "@/features/discover/lib/discover-search";
+import type { ModpackSearchFilters } from "@/lib/generated/ModpackSearchFilters";
 
 describe("ActiveFilters", () => {
   it("shows nothing while no filter narrows the search", () => {
@@ -25,7 +26,7 @@ describe("ActiveFilters", () => {
           ...DEFAULT_SEARCH_FILTERS,
           source: "curseforge",
           gameVersion: "1.20.1",
-          loader: "neoforge",
+          loaders: ["neoforge"],
           categories: ["kitchenSink", "magic"],
         }}
         onChange={vi.fn()}
@@ -38,7 +39,7 @@ describe("ActiveFilters", () => {
         .getAllByRole("button")
         .map((button) => button.textContent),
     ).toEqual(["CurseForge", "1.20.1", "NeoForge", "Kitchen sink", "Magic"]);
-    // Loader and categories keep their own colors.
+    // The loader keeps its own color.
     expect(within(list).getByText("Kitchen sink")).toHaveAttribute(
       "data-category",
       "kitchenSink",
@@ -47,15 +48,18 @@ describe("ActiveFilters", () => {
       "data-loader",
       "neoforge",
     );
+    expect(within(list).getByText("1.20.1").className).toContain(
+      "border-border",
+    );
   });
 
   it("removes only the pressed filter and keeps the sort order", () => {
     const onChange = vi.fn();
-    const filters = {
+    const filters: ModpackSearchFilters = {
       ...DEFAULT_SEARCH_FILTERS,
-      sort: "relevance" as const,
-      loader: "fabric" as const,
-      categories: ["magic" as const, "quests" as const],
+      sort: "relevance",
+      loaders: ["fabric"],
+      categories: ["magic", "quests"],
     };
     render(<ActiveFilters filters={filters} onChange={onChange} />);
 

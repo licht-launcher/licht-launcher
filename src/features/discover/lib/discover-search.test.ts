@@ -7,13 +7,14 @@ import {
   parseModpackSource,
   searchFilters,
   toggleCategory,
+  toggleLoader,
   withSource,
 } from "./discover-search";
 
 const EMPTY = {
   q: undefined,
   version: undefined,
-  loader: undefined,
+  loaders: undefined,
   categories: undefined,
   source: undefined,
   sort: undefined,
@@ -35,7 +36,7 @@ describe("parseDiscoverSearch", () => {
     expect(
       parseDiscoverSearch({
         version: " 1.20.1 ",
-        loader: "neoforge",
+        loaders: ["neoforge", "fabric", "rift"],
         categories: ["quests", "kitchenSink", "quests", "pvp"],
         source: "curseforge",
         sort: "updated",
@@ -43,7 +44,7 @@ describe("parseDiscoverSearch", () => {
     ).toEqual({
       ...EMPTY,
       version: "1.20.1",
-      loader: "neoforge",
+      loaders: ["fabric", "neoforge"],
       // Known categories only, once each, in the sidebar's order.
       categories: ["kitchenSink", "quests"],
       source: "curseforge",
@@ -56,9 +57,10 @@ describe("parseDiscoverSearch", () => {
       parseDiscoverSearch({
         version: "  ",
         loader: "rift",
+        loaders: ["rift"],
         categories: ["pvp"],
         source: "ftb",
-        sort: "downloads",
+        sort: "relevance",
       }),
     ).toEqual(EMPTY);
     expect(parseDiscoverSearch({ sort: "name" })).toEqual(EMPTY);
@@ -71,24 +73,24 @@ describe("searchFilters and filterParams", () => {
     const filters = searchFilters({
       q: "x",
       version: "1.20.1",
-      loader: "fabric",
+      loaders: ["fabric"],
       categories: ["magic", "quests"],
       source: "modrinth",
-      sort: "relevance",
+      sort: "downloads",
     });
     expect(filters).toEqual({
       gameVersion: "1.20.1",
-      loader: "fabric",
+      loaders: ["fabric"],
       categories: ["magic", "quests"],
       source: "modrinth",
-      sort: "relevance",
+      sort: "downloads",
     });
     expect(filterParams(filters)).toEqual({
       version: "1.20.1",
-      loader: "fabric",
+      loaders: ["fabric"],
       categories: ["magic", "quests"],
       source: "modrinth",
-      sort: "relevance",
+      sort: "downloads",
     });
   });
 
@@ -96,10 +98,29 @@ describe("searchFilters and filterParams", () => {
     expect(searchFilters({})).toEqual(DEFAULT_SEARCH_FILTERS);
     expect(filterParams(DEFAULT_SEARCH_FILTERS)).toEqual({
       version: undefined,
-      loader: undefined,
+      loaders: undefined,
       categories: undefined,
       source: undefined,
       sort: undefined,
+    });
+  });
+});
+
+describe("toggleLoader", () => {
+  it("adds a loader in the sidebar's order", () => {
+    expect(toggleLoader(["quilt"], "fabric")).toEqual(["fabric", "quilt"]);
+  });
+
+  it("removes a chosen loader", () => {
+    expect(toggleLoader(["fabric", "quilt"], "fabric")).toEqual(["quilt"]);
+  });
+});
+
+describe("parseDiscoverSearch legacy loader", () => {
+  it("reads a single loader from an older link", () => {
+    expect(parseDiscoverSearch({ loader: "quilt" })).toEqual({
+      ...EMPTY,
+      loaders: ["quilt"],
     });
   });
 });

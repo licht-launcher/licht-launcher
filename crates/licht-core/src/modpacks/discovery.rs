@@ -165,7 +165,7 @@ fn merge_search_pages(page: u32, sources: Vec<SourcePage>, sort: ModpackSort) ->
     }
 }
 
-fn interleave(lists: Vec<Vec<ModpackListItem>>) -> Vec<ModpackListItem> {
+pub(in crate::modpacks) fn interleave(lists: Vec<Vec<ModpackListItem>>) -> Vec<ModpackListItem> {
     let mut iterators: Vec<_> = lists.into_iter().map(Vec::into_iter).collect();
     let mut items = Vec::new();
     loop {

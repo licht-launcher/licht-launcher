@@ -209,7 +209,8 @@ pub enum ModpackSort {
 pub struct ModpackSearchFilters {
     /// A Minecraft version id such as `1.20.1`.
     pub game_version: Option<String>,
-    pub loader: Option<ModpackLoader>,
+    /// A pack matches when it supports any of these; empty means any loader.
+    pub loaders: Vec<ModpackLoader>,
     /// A pack must have every one of these; empty means any category.
     pub categories: Vec<ModpackCategory>,
     /// Search only this source; `None` searches both.

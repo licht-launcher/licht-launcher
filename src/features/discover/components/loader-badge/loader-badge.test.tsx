@@ -23,8 +23,11 @@ describe("LoaderBadge", () => {
       </>,
     );
 
-    expect(screen.getByText("Fabric").className).not.toBe(
-      screen.getByText("Forge").className,
+    expect(screen.getByText("Fabric").className).toContain(
+      "border-accent-cool/25",
+    );
+    expect(screen.getByText("Forge").className).toContain(
+      "border-accent-rose/25",
     );
   });
 });

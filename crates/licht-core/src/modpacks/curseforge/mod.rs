@@ -10,12 +10,13 @@ use reqwest::Client;
 use serde_json::Value;
 use url::Url;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use tokio::sync::OnceCell;
 
 use crate::modpacks::types::{
-    ModpackCategory, ModpackDetails, ModpackSearchFilters, ModpackVersionItem, SourcePage,
+    ModpackCategory, ModpackDetails, ModpackListItem, ModpackLoader, ModpackSearchFilters,
+    ModpackSort, ModpackVersionItem, SourcePage,
 };
 use crate::{CoreError, Result};
 
@@ -76,9 +77,48 @@ pub(super) async fn search_curseforge(
             }
         }
     }
-    let url = search_url(query, index, page_size, filters, &category_ids)?;
-    let body = api::get_api(client, &key, url.as_str(), "curseforge_search").await?;
-    api::parse_search(&body)
+    // The search endpoint takes one modLoaderType, so each loader is its own request.
+    let selections: Vec<Option<ModpackLoader>> = if filters.loaders.is_empty() {
+        vec![None]
+    } else {
+        filters.loaders.iter().copied().map(Some).collect()
+    };
+    let pages = futures_util::future::try_join_all(selections.into_iter().map(|loader| {
+        let category_ids = category_ids.clone();
+        let key = key.clone();
+        async move {
+            let url = search_url(query, index, page_size, filters, &category_ids, loader)?;
+            let body = api::get_api(client, &key, url.as_str(), "curseforge_search").await?;
+            api::parse_search(&body)
+        }
+    }))
+    .await?;
+    Ok(merge_loader_pages(pages, filters.sort))
+}
+
+fn merge_loader_pages(mut pages: Vec<SourcePage>, sort: ModpackSort) -> SourcePage {
+    if pages.len() <= 1 {
+        return pages.pop().unwrap_or(SourcePage {
+            items: Vec::new(),
+            total: 0,
+        });
+    }
+    // A pack that matches two loaders is counted in both totals.
+    let total = pages.iter().map(|page| page.total).sum();
+    let lists: Vec<Vec<ModpackListItem>> = pages.into_iter().map(|page| page.items).collect();
+    // Downloads and updated are ordered again when the sources are merged.
+    // Relevance is not, so the loader pages have to take turns here.
+    let ordered = if sort == ModpackSort::Relevance {
+        super::discovery::interleave(lists)
+    } else {
+        lists.into_iter().flatten().collect()
+    };
+    let mut seen = HashSet::new();
+    let items = ordered
+        .into_iter()
+        .filter(|item| seen.insert(item.id.clone()))
+        .collect();
+    SourcePage { items, total }
 }
 
 async fn category_id(client: &Client, key: &str, category: ModpackCategory) -> Result<Option<u64>> {
@@ -101,6 +141,7 @@ fn search_url(
     page_size: u32,
     filters: &ModpackSearchFilters,
     category_ids: &[u64],
+    loader: Option<ModpackLoader>,
 ) -> Result<Url> {
     let mut url = Url::parse(SEARCH_URL).map_err(|_| CoreError::ModpackMeta {
         detail: "curseforge_search_url".into(),
@@ -114,7 +155,7 @@ fn search_url(
         if let Some(version) = filters.game_version() {
             pairs.append_pair("gameVersion", version);
         }
-        if let Some(loader) = filters.loader {
+        if let Some(loader) = loader {
             pairs.append_pair("modLoaderType", api::mod_loader_type(loader));
         }
         if !category_ids.is_empty() {
@@ -307,7 +348,8 @@ mod tests {
 
     #[test]
     fn search_url_pages_with_index_and_page_size() {
-        let url = search_url("atm", 20, 10, &ModpackSearchFilters::default(), &[]).expect("url");
+        let url =
+            search_url("atm", 20, 10, &ModpackSearchFilters::default(), &[], None).expect("url");
         let pairs: Vec<(String, String)> = url.query_pairs().into_owned().collect();
         assert!(pairs.contains(&("index".into(), "20".into())));
         assert!(pairs.contains(&("pageSize".into(), "10".into())));
@@ -318,12 +360,20 @@ mod tests {
     fn filters_become_curseforge_search_parameters() {
         let filters = ModpackSearchFilters {
             game_version: Some("1.20.1".into()),
-            loader: Some(crate::modpacks::types::ModpackLoader::Fabric),
+            loaders: vec![crate::modpacks::types::ModpackLoader::Fabric],
             categories: vec![ModpackCategory::Technology, ModpackCategory::Magic],
             source: None,
             sort: crate::modpacks::types::ModpackSort::Updated,
         };
-        let url = search_url("", 0, 10, &filters, &[4472, 4473]).expect("url");
+        let url = search_url(
+            "",
+            0,
+            10,
+            &filters,
+            &[4472, 4473],
+            Some(crate::modpacks::types::ModpackLoader::Fabric),
+        )
+        .expect("url");
         let pairs: Vec<(String, String)> = url.query_pairs().into_owned().collect();
         assert!(pairs.contains(&("sortField".into(), "3".into())));
         assert!(pairs.contains(&("gameVersion".into(), "1.20.1".into())));
@@ -333,7 +383,7 @@ mod tests {
 
     #[test]
     fn sorting_by_downloads_uses_total_downloads_without_extra_filters() {
-        let url = search_url("", 0, 10, &ModpackSearchFilters::default(), &[]).expect("url");
+        let url = search_url("", 0, 10, &ModpackSearchFilters::default(), &[], None).expect("url");
         let keys: Vec<String> = url.query_pairs().map(|(key, _)| key.into_owned()).collect();
         assert!(
             url.query_pairs()
@@ -346,6 +396,60 @@ mod tests {
             "searchFilter",
         ] {
             assert!(!keys.iter().any(|key| key == absent), "{absent}");
+        }
+    }
+
+    #[test]
+    fn merged_loader_pages_keep_one_copy_of_a_pack_and_sum_the_totals() {
+        let merged = merge_loader_pages(
+            vec![
+                SourcePage {
+                    items: vec![list_item("a", 10), list_item("b", 30)],
+                    total: 2,
+                },
+                SourcePage {
+                    items: vec![list_item("b", 30), list_item("c", 5)],
+                    total: 4,
+                },
+            ],
+            ModpackSort::Downloads,
+        );
+        assert_eq!(merged.total, 6);
+        let ids: Vec<&str> = merged.items.iter().map(|item| item.id.as_str()).collect();
+        assert_eq!(ids, ["a", "b", "c"]);
+    }
+
+    #[test]
+    fn merged_loader_pages_take_turns_when_sorted_by_relevance() {
+        let merged = merge_loader_pages(
+            vec![
+                SourcePage {
+                    items: vec![list_item("a", 1), list_item("c", 1)],
+                    total: 2,
+                },
+                SourcePage {
+                    items: vec![list_item("b", 1)],
+                    total: 1,
+                },
+            ],
+            ModpackSort::Relevance,
+        );
+        let ids: Vec<&str> = merged.items.iter().map(|item| item.id.as_str()).collect();
+        assert_eq!(ids, ["a", "b", "c"]);
+    }
+
+    fn list_item(id: &str, downloads: u64) -> crate::modpacks::types::ModpackListItem {
+        crate::modpacks::types::ModpackListItem {
+            id: id.into(),
+            source: crate::modpacks::types::ModpackSource::Curseforge,
+            name: id.into(),
+            description: String::new(),
+            downloads,
+            icon_url: None,
+            author: String::new(),
+            updated_at: None,
+            loaders: Vec::new(),
+            categories: Vec::new(),
         }
     }
 
