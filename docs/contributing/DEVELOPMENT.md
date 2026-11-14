@@ -42,9 +42,9 @@ The `licht` CLI lists Mojang's manifest, installs a version, and launches a
 cached version with an offline name:
 
 ```sh
-cargo run -p licht-core --features cli --bin licht -- versions
-cargo run -p licht-core --features cli --bin licht -- install --version 1.20.1
-cargo run -p licht-core --features cli --bin licht -- launch --version 1.20.1 --username Player
+cargo run -p licht-cli -- versions
+cargo run -p licht-cli -- install --version 1.20.1
+cargo run -p licht-cli -- launch --version 1.20.1 --username Player
 ```
 
 `launch` does not download. `install` does. `--game-dir` replaces the instance

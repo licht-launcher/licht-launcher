@@ -98,8 +98,6 @@ pub enum CoreError {
     GameCommand,
     #[error("offline username is empty")]
     OfflineName,
-    #[error("command arguments are incomplete")]
-    LaunchArgs,
     #[error("version was not found")]
     VersionMissing,
     #[error("version manifest is unavailable")]

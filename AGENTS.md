@@ -25,7 +25,8 @@ suggestions: code that breaks them does not get merged.
 
 ## Architecture
 
-- `crates/licht-core`: all domain logic (manifests, downloads, rules, Java, launch, instances, auth, loaders, modpacks). **No Tauri dependency.** Testable on its own; it also builds the `licht` CLI.
+- `crates/licht-core`: all domain logic (manifests, downloads, rules, Java, launch, instances, auth, loaders, modpacks). **No Tauri dependency.** Testable on its own.
+- `crates/licht-cli`: command-line parsing, terminal output and orchestration. Delegates domain behavior to `licht-core`.
 - `src-tauri`: thin adapter. Only `#[tauri::command]` handlers, events and app wiring that delegate to `licht-core`. **No business rules.**
 - `src/`: UI only, no Minecraft logic.
   - `src/routes`: route files that mount feature screens.

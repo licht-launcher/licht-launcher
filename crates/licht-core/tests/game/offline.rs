@@ -5,7 +5,7 @@ use std::sync::Arc;
 use licht_core::{
     Arch, Artifact, AssetIndex, AssetIndexFile, AssetObject, CoreError, Download, DownloadProgress,
     GameArguments, GlobalLaunch, InstallPlan, LaunchEnvironment, Library, LibraryDownloads, OsName,
-    SharedCache, Version, VersionDownloads, install_version, offline_account, parse_launch_args,
+    SharedCache, Version, VersionDownloads, install_version, offline_account,
     prepare_offline_launch,
 };
 use sha1::{Digest, Sha1};
@@ -36,30 +36,6 @@ fn steve_has_the_offline_uuid() {
     assert_eq!(offline_account("Steve").expect("again").uuid, steve.uuid);
     assert_ne!(offline_account("Alex").expect("Alex").uuid, steve.uuid);
     assert!(matches!(offline_account(""), Err(CoreError::OfflineName)));
-}
-
-#[test]
-fn a_missing_launch_flag_fails_before_any_process() {
-    let error = parse_launch_args(&[
-        "launch".to_string(),
-        "--version".to_string(),
-        "demo".to_string(),
-    ])
-    .expect_err("username is required");
-    assert!(matches!(error, CoreError::LaunchArgs));
-}
-
-#[test]
-fn launch_without_a_game_dir_uses_the_default_instance() {
-    let args = parse_launch_args(&[
-        "launch".to_string(),
-        "--version".to_string(),
-        "1.20.1".to_string(),
-        "--username".to_string(),
-        "Mateus".to_string(),
-    ])
-    .expect("game dir is optional");
-    assert!(args.game_directory.is_none());
 }
 
 #[tokio::test]

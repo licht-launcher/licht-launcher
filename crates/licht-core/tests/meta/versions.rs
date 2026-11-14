@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 
 use licht_core::{
-    Arch, CoreError, LaunchEnvironment, OsName, SharedCache, installed_java, parse_launch_args,
-    parse_version, parse_version_manifest, parse_versions_args, version_lines,
+    Arch, CoreError, LaunchEnvironment, OsName, SharedCache, installed_java, parse_version,
+    parse_version_manifest, version_lines,
 };
 
 #[test]
@@ -16,32 +16,6 @@ fn the_saved_manifest_names_its_latest_release() {
             .any(|line| line == &format!("{} release", manifest.latest.release))
     );
     assert!(lines.iter().any(|line| line.ends_with(" snapshot")));
-}
-
-#[test]
-fn versions_rejects_an_unknown_flag() {
-    let error = parse_versions_args(&[
-        "versions".to_string(),
-        "--nope".to_string(),
-        "x".to_string(),
-    ])
-    .expect_err("unknown flag");
-    assert!(matches!(error, CoreError::LaunchArgs));
-}
-
-#[test]
-fn launch_can_omit_java() {
-    let args = parse_launch_args(&[
-        "launch".to_string(),
-        "--version".to_string(),
-        "26.3".to_string(),
-        "--username".to_string(),
-        "Mateus".to_string(),
-        "--game-dir".to_string(),
-        "game".to_string(),
-    ])
-    .expect("game dir is enough");
-    assert!(args.java.is_none());
 }
 
 #[test]

@@ -10,13 +10,14 @@ Linux, built with Tauri v2, React, TypeScript, Vite, and a Rust Cargo workspace.
 | Location | Responsibility | Boundary |
 | --- | --- | --- |
 | `crates/licht-core` | Manifests, downloads, Java, game execution, instances, authentication, loaders, and modpacks | Standalone Rust library without Tauri dependencies |
+| `crates/licht-cli` | Command-line parsing, terminal output, and orchestration | Delegates domain behavior to `licht-core` |
 | `src-tauri` | Startup, logging configuration, typed commands, and events | Delegates domain behavior to the core |
 | `src` | Screens, UI state, and calls to the Tauri adapter | No Minecraft domain logic |
 
-The workspace contains the `licht-core` library and the `licht-launcher`
-application. The core also builds the `licht` CLI. Both application and CLI call
-the same core services. Core modules include `meta`, `transfer`, `game`,
-`instance`, `runtime`, `store`, `auth`, `loaders`, and `modpacks`.
+The workspace contains the `licht-core` library, the `licht-cli` command-line
+application, and the `licht-launcher` desktop application. Both applications call
+the same core services. Core modules include `meta`, `transfer`, `game`, `instance`,
+`runtime`, `store`, `auth`, `loaders`, and `modpacks`.
 
 ## Communication
 
