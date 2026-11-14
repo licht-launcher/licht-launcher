@@ -7,7 +7,7 @@ mod progress;
 use clap::Parser;
 
 use cli::Cli;
-use commands::{Command, InstancesCommand, install, instances_list, launch, versions};
+use commands::{Command, InstancesCommand, install, instances_list, launch, repair, versions};
 use error::report;
 
 fn main() {
@@ -38,6 +38,7 @@ async fn run(cli: Cli) -> licht_core::Result<i32> {
             Ok(0)
         }
         Command::Instances(InstancesCommand::List(args)) => instances_list(args).await,
+        Command::Repair(args) => repair(args).await,
     }
 }
 

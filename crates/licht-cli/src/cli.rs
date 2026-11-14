@@ -112,6 +112,25 @@ mod tests {
     }
 
     #[test]
+    fn parses_repair() {
+        let cli = Cli::try_parse_from([
+            "licht-cli",
+            "repair",
+            "--instance",
+            "Survival",
+            "--cache",
+            "cache",
+        ])
+        .expect("valid repair");
+
+        let Command::Repair(args) = cli.command else {
+            panic!("repair command expected");
+        };
+        assert_eq!(args.instance, "Survival");
+        assert_eq!(args.cache.as_deref(), Some(std::path::Path::new("cache")));
+    }
+
+    #[test]
     fn launch_rejects_version_and_instance_together() {
         let error = Cli::try_parse_from([
             "licht-cli",
