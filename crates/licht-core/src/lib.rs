@@ -68,8 +68,8 @@ pub use download::{
 pub use error::CoreError;
 pub use external_url::external_https_url;
 pub use install::{
-    ASSET_OBJECT_BASE, CacheCheck, GameInstall, InstallArgs, InstallPlan, install_game,
-    install_game_version, install_version, parse_install_args,
+    ASSET_OBJECT_BASE, CacheCheck, GameInstall, InstallPlan, install_game, install_game_version,
+    install_version,
 };
 pub use instance::content::{
     InstanceContentEntry, InstanceContentKind, InstanceContentUpdate, list_instance_content,
@@ -105,10 +105,7 @@ pub use modpacks::{
     list_modpack_versions, mrpack_download_tasks, search_modpacks,
 };
 pub use natives::{NativeLibrary, create_natives_directory, extract_natives, native_libraries};
-pub use offline::{
-    LaunchArgs, OfflineAccount, OfflineLaunch, offline_account, parse_launch_args,
-    prepare_offline_launch,
-};
+pub use offline::{OfflineAccount, OfflineLaunch, offline_account, prepare_offline_launch};
 pub use run::{GameExit, GameLine, GameLogEvent, LogCodec, OutputStream, log_codec, run_game};
 pub use runtime::{
     ADOPTIUM_API, JavaDetections, JavaPaths, JavaStatus, browse_start_directory,
@@ -154,10 +151,10 @@ pub use version::{
 };
 pub use version_manifest::{
     LatestVersions, MANIFEST_REQUEST_TIMEOUT, ManifestVersion, VERSION_MANIFEST_LEGACY_URL,
-    VERSION_MANIFEST_URL, VersionManifest, VersionSummary, VersionType, VersionsArgs,
-    fetch_version_manifest, is_version_ready, list_installed_version_summaries,
-    list_version_summaries, parse_version_manifest, parse_versions_args, version_lines,
-    version_manifest_cache_path, version_summaries, version_type_name,
+    VERSION_MANIFEST_URL, VersionManifest, VersionSummary, VersionType, fetch_version_manifest,
+    is_version_ready, list_installed_version_summaries, list_version_summaries,
+    parse_version_manifest, version_lines, version_manifest_cache_path, version_summaries,
+    version_type_name,
 };
 pub use version_resolve::{load_resolved_version_json, local_inherits_from, local_version_exists};
 

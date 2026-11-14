@@ -1,21 +1,91 @@
 use std::collections::BTreeMap;
 use std::io::{IsTerminal, Write};
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
+use clap::{Args, Parser, Subcommand};
 use licht_core::{
     ASSET_OBJECT_BASE, Arch, CacheCheck, CoreError, GameInstall, LaunchEnvironment, OsName,
     OutputStream, SharedCache, configured_java, fetch_version_manifest, game_cache, global_launch,
     install_game, installed_java, load_instance, load_settings, log_codec, offline_account,
-    parse_install_args, parse_launch_args, parse_version, parse_versions_args,
-    prepare_offline_launch, probe_java_major, required_java_major, resolved_java_path,
-    resolved_launch, run_game, version_lines,
+    parse_version, prepare_offline_launch, probe_java_major, required_java_major,
+    resolved_java_path, resolved_launch, run_game, version_lines,
 };
 use tokio::sync::mpsc;
 
+#[derive(Debug, Parser)]
+#[command(about = "Install and launch game versions", version)]
+struct Cli {
+    #[command(subcommand)]
+    command: Command,
+}
+
+#[derive(Debug, Subcommand)]
+enum Command {
+    /// List versions available in the official manifest.
+    Versions(VersionsArgs),
+    /// Install a version and its required Java runtime.
+    Install(InstallArgs),
+    /// Launch an installed version with an offline username.
+    Launch(LaunchArgs),
+}
+
+#[derive(Debug, Args)]
+struct VersionsArgs {
+    /// Use a custom cache directory.
+    #[arg(long, value_name = "PATH")]
+    cache: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+struct InstallArgs {
+    /// Version to install.
+    #[arg(
+        long = "version",
+        value_name = "ID",
+        value_parser = clap::builder::NonEmptyStringValueParser::new()
+    )]
+    version_id: String,
+    /// Use a custom cache directory.
+    #[arg(long, value_name = "PATH")]
+    cache: Option<PathBuf>,
+    /// Use a custom Java executable.
+    #[arg(long, value_name = "PATH")]
+    java: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+struct LaunchArgs {
+    /// Installed version to launch.
+    #[arg(
+        long = "version",
+        value_name = "ID",
+        value_parser = clap::builder::NonEmptyStringValueParser::new()
+    )]
+    version_id: String,
+    /// Offline username for the game session.
+    #[arg(
+        long,
+        value_name = "NAME",
+        value_parser = clap::builder::NonEmptyStringValueParser::new()
+    )]
+    username: String,
+    /// Use a custom Java executable.
+    #[arg(long, value_name = "PATH")]
+    java: Option<PathBuf>,
+    /// Replace the default instance directory.
+    #[arg(long = "game-dir", value_name = "PATH")]
+    game_directory: Option<PathBuf>,
+    /// Use a custom cache directory.
+    #[arg(long, value_name = "PATH")]
+    cache: Option<PathBuf>,
+}
+
 fn main() {
     licht_core::load_env_files();
+    let cli = Cli::parse();
     let code = match runtime() {
-        Ok(runtime) => match runtime.block_on(run()) {
+        Ok(runtime) => match runtime.block_on(run(cli)) {
             Ok(code) => code,
             Err(error) => {
                 report(&error);
@@ -30,16 +100,14 @@ fn main() {
     std::process::exit(code);
 }
 
-async fn run() -> licht_core::Result<i32> {
-    let args: Vec<String> = std::env::args().skip(1).collect();
-    match args.first().map(String::as_str) {
-        Some("launch") => launch(&args).await,
-        Some("versions") => versions(&args).await,
-        Some("install") => {
-            install(&args).await?;
+async fn run(cli: Cli) -> licht_core::Result<i32> {
+    match cli.command {
+        Command::Launch(args) => launch(args).await,
+        Command::Versions(args) => versions(args).await,
+        Command::Install(args) => {
+            install(args).await?;
             Ok(0)
         }
-        _ => Err(CoreError::LaunchArgs),
     }
 }
 
@@ -59,8 +127,7 @@ fn runtime() -> licht_core::Result<tokio::runtime::Runtime> {
         .build()?)
 }
 
-async fn install(args: &[String]) -> licht_core::Result<()> {
-    let args = parse_install_args(args)?;
+async fn install(args: InstallArgs) -> licht_core::Result<()> {
     let settings_home = licht_core::initialize_launcher().await?;
     let cache = match &args.cache {
         Some(root) => SharedCache::at(root),
@@ -80,10 +147,10 @@ async fn install(args: &[String]) -> licht_core::Result<()> {
     };
 
     let (progress, mut incoming) = mpsc::channel(4096);
-    let version_id = args.version_id.clone();
+    let version_id = args.version_id;
     let version_url = entry.url.clone();
     let version_sha1 = entry.sha1.clone();
-    let java = args.java.clone();
+    let java = args.java;
     let environment = host_environment()?;
     let installing = tokio::spawn(async move {
         install_game(
@@ -139,8 +206,7 @@ async fn install(args: &[String]) -> licht_core::Result<()> {
     Ok(())
 }
 
-async fn versions(args: &[String]) -> licht_core::Result<i32> {
-    let args = parse_versions_args(args)?;
+async fn versions(args: VersionsArgs) -> licht_core::Result<i32> {
     let cache = match &args.cache {
         Some(root) => SharedCache::at(root),
         None => game_cache(&licht_core::initialize_launcher().await?).await?,
@@ -156,8 +222,7 @@ async fn versions(args: &[String]) -> licht_core::Result<i32> {
     Ok(0)
 }
 
-async fn launch(args: &[String]) -> licht_core::Result<i32> {
-    let args = parse_launch_args(args)?;
+async fn launch(args: LaunchArgs) -> licht_core::Result<i32> {
     let pool = licht_core::initialize_launcher().await?;
     let cache = match &args.cache {
         Some(root) => SharedCache::at(root),
@@ -322,7 +387,111 @@ fn host_environment() -> licht_core::Result<LaunchEnvironment> {
 
 #[cfg(test)]
 mod tests {
-    use super::progress_line;
+    use clap::{CommandFactory, Parser, error::ErrorKind};
+
+    use super::{Cli, Command, progress_line};
+
+    #[test]
+    fn parses_versions_options() {
+        let cli = Cli::try_parse_from(["licht-cli", "versions", "--cache", "cache"])
+            .expect("valid versions arguments");
+
+        let Command::Versions(args) = cli.command else {
+            panic!("versions command expected");
+        };
+        assert_eq!(args.cache.as_deref(), Some(std::path::Path::new("cache")));
+    }
+
+    #[test]
+    fn parses_install_options() {
+        let cli = Cli::try_parse_from([
+            "licht-cli",
+            "install",
+            "--version",
+            "1.20.1",
+            "--java",
+            "java",
+        ])
+        .expect("valid install arguments");
+
+        let Command::Install(args) = cli.command else {
+            panic!("install command expected");
+        };
+        assert_eq!(args.version_id, "1.20.1");
+        assert_eq!(args.java.as_deref(), Some(std::path::Path::new("java")));
+    }
+
+    #[test]
+    fn parses_launch_options() {
+        let cli = Cli::try_parse_from([
+            "licht-cli",
+            "launch",
+            "--version",
+            "1.20.1",
+            "--username",
+            "Player",
+            "--game-dir",
+            "instance",
+        ])
+        .expect("valid launch arguments");
+
+        let Command::Launch(args) = cli.command else {
+            panic!("launch command expected");
+        };
+        assert_eq!(args.version_id, "1.20.1");
+        assert_eq!(args.username, "Player");
+        assert_eq!(
+            args.game_directory.as_deref(),
+            Some(std::path::Path::new("instance"))
+        );
+    }
+
+    #[test]
+    fn install_requires_a_version() {
+        let error = Cli::try_parse_from(["licht-cli", "install"]).expect_err("version is required");
+
+        assert_eq!(error.kind(), ErrorKind::MissingRequiredArgument);
+        assert!(error.to_string().contains("--version <ID>"));
+    }
+
+    #[test]
+    fn install_rejects_an_empty_version() {
+        let error = Cli::try_parse_from(["licht-cli", "install", "--version", ""])
+            .expect_err("version cannot be empty");
+
+        assert_eq!(error.kind(), ErrorKind::InvalidValue);
+    }
+
+    #[test]
+    fn versions_rejects_an_unknown_flag() {
+        let error =
+            Cli::try_parse_from(["licht-cli", "versions", "--nope"]).expect_err("unknown flag");
+
+        assert_eq!(error.kind(), ErrorKind::UnknownArgument);
+        assert!(error.to_string().contains("--nope"));
+    }
+
+    #[test]
+    fn help_is_available() {
+        let error = Cli::try_parse_from(["licht-cli", "--help"]).expect_err("help exits parsing");
+
+        assert_eq!(error.kind(), ErrorKind::DisplayHelp);
+        assert!(error.to_string().contains("Usage: licht-cli <COMMAND>"));
+    }
+
+    #[test]
+    fn version_is_available() {
+        let error =
+            Cli::try_parse_from(["licht-cli", "--version"]).expect_err("version exits parsing");
+
+        assert_eq!(error.kind(), ErrorKind::DisplayVersion);
+        assert!(error.to_string().contains(env!("CARGO_PKG_VERSION")));
+    }
+
+    #[test]
+    fn command_definition_is_valid() {
+        Cli::command().debug_assert();
+    }
 
     #[test]
     fn an_empty_download_draws_an_empty_bar() {

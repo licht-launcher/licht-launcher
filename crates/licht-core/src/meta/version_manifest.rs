@@ -256,33 +256,6 @@ pub fn version_lines(manifest: &VersionManifest) -> Vec<String> {
         .collect()
 }
 
-#[derive(Debug)]
-pub struct VersionsArgs {
-    pub cache: Option<PathBuf>,
-}
-
-pub fn parse_versions_args(args: &[String]) -> Result<VersionsArgs> {
-    if args.first().map(String::as_str) != Some("versions") {
-        return Err(CoreError::LaunchArgs);
-    }
-
-    let mut cache = None;
-    let mut rest = args[1..].iter();
-    while let Some(flag) = rest.next() {
-        let Some(value) = rest.next() else {
-            return Err(CoreError::LaunchArgs);
-        };
-        if value.starts_with("--") {
-            return Err(CoreError::LaunchArgs);
-        }
-        match flag.as_str() {
-            "--cache" => cache = Some(PathBuf::from(value)),
-            _ => return Err(CoreError::LaunchArgs),
-        }
-    }
-    Ok(VersionsArgs { cache })
-}
-
 pub fn parse_version_manifest(json: &str) -> Result<VersionManifest> {
     Ok(serde_json::from_str(json)?)
 }

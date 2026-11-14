@@ -112,47 +112,6 @@ pub struct GameInstall<'a> {
     pub java: Option<&'a Path>,
 }
 
-#[derive(Debug)]
-pub struct InstallArgs {
-    pub version_id: String,
-    pub cache: Option<PathBuf>,
-    pub java: Option<PathBuf>,
-}
-
-pub fn parse_install_args(args: &[String]) -> Result<InstallArgs> {
-    if args.first().map(String::as_str) != Some("install") {
-        return Err(CoreError::LaunchArgs);
-    }
-
-    let mut version_id = None;
-    let mut cache = None;
-    let mut java = None;
-    let mut rest = args[1..].iter();
-    while let Some(flag) = rest.next() {
-        let Some(value) = rest.next() else {
-            return Err(CoreError::LaunchArgs);
-        };
-        if value.starts_with("--") {
-            return Err(CoreError::LaunchArgs);
-        }
-        match flag.as_str() {
-            "--version" => version_id = Some(value.clone()),
-            "--cache" => cache = Some(PathBuf::from(value)),
-            "--java" => java = Some(PathBuf::from(value)),
-            _ => return Err(CoreError::LaunchArgs),
-        }
-    }
-
-    let Some(version_id) = version_id.filter(|id| !id.is_empty()) else {
-        return Err(CoreError::LaunchArgs);
-    };
-    Ok(InstallArgs {
-        version_id,
-        cache,
-        java,
-    })
-}
-
 /// Downloads one version from the URLs in `request` and installs Eclipse Temurin.
 /// A custom `java` skips that download.
 pub async fn install_game(

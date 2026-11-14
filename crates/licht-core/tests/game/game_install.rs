@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use licht_core::{
     Arch, CacheCheck, CoreError, GameInstall, LaunchEnvironment, OsName, SharedCache, install_game,
-    parse_install_args,
 };
 use sha1::{Digest, Sha1};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -13,12 +12,6 @@ use tokio::sync::{Mutex, mpsc};
 const CLIENT: &[u8] = b"client-jar";
 const LIBRARY: &[u8] = b"library-jar";
 const ASSET: &[u8] = b"asset-bytes";
-
-#[test]
-fn install_without_a_version_fails_before_any_download() {
-    let error = parse_install_args(&["install".to_string()]).expect_err("version is required");
-    assert!(matches!(error, CoreError::LaunchArgs));
-}
 
 #[tokio::test]
 async fn a_local_version_is_written_and_installed() {

@@ -33,63 +33,6 @@ pub fn offline_account(username: &str) -> Result<OfflineAccount> {
     })
 }
 
-#[derive(Debug)]
-pub struct LaunchArgs {
-    pub version_id: String,
-    pub username: String,
-    pub java: Option<PathBuf>,
-    /// Replaces the default `instances/<version>` root when set.
-    pub game_directory: Option<PathBuf>,
-    pub cache: Option<PathBuf>,
-}
-
-pub fn parse_launch_args(args: &[String]) -> Result<LaunchArgs> {
-    if args.first().map(String::as_str) != Some("launch") {
-        return Err(CoreError::LaunchArgs);
-    }
-
-    let mut version_id = None;
-    let mut username = None;
-    let mut java = None;
-    let mut game_directory = None;
-    let mut cache = None;
-    let mut rest = args[1..].iter();
-    while let Some(flag) = rest.next() {
-        let Some(value) = rest.next() else {
-            return Err(CoreError::LaunchArgs);
-        };
-        if value.starts_with("--") {
-            return Err(CoreError::LaunchArgs);
-        }
-        match flag.as_str() {
-            "--version" => version_id = Some(value.clone()),
-            "--username" => username = Some(value.clone()),
-            "--java" => java = Some(PathBuf::from(value)),
-            "--game-dir" => game_directory = Some(PathBuf::from(value)),
-            "--cache" => cache = Some(PathBuf::from(value)),
-            _ => return Err(CoreError::LaunchArgs),
-        }
-    }
-
-    let Some(version_id) = version_id.filter(|id| !id.is_empty()) else {
-        return Err(CoreError::LaunchArgs);
-    };
-    let Some(username) = username else {
-        return Err(CoreError::LaunchArgs);
-    };
-    if username.is_empty() {
-        return Err(CoreError::OfflineName);
-    }
-
-    Ok(LaunchArgs {
-        version_id,
-        username,
-        java,
-        game_directory,
-        cache,
-    })
-}
-
 pub struct OfflineLaunch {
     pub command: Vec<String>,
     /// Set as `APPDATA` for the process. Present when the version uses LaunchWrapper.
