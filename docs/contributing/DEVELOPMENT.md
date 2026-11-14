@@ -52,12 +52,11 @@ cargo run -p licht-cli -- launch --instance Survival --username Player
 
 `launch` does not download. `install` does. `--instance` accepts a folder or a
 unique display name and cannot be combined with `--version` or `--game-dir`.
-`instances list` prints a boxed `FOLDER` / `NAME` / `VERSION` table with column
-separators and terminal colors, tab-separated rows when stdout is not a TTY, and
-JSON objects with `--json`. `--game-dir` replaces
-the instance root for `--version` launches, `--cache` replaces the data
-directory, and `--java` selects another Java executable. See the
-[runtime](../internals/RUNTIME.md), [storage](../internals/STORAGE.md), and
+`instances list` prints an aligned `FOLDER` / `NAME` / `VERSION` table in a
+terminal, tab-separated rows when stdout is not a TTY, and JSON with `--json`.
+`--game-dir` replaces the instance root for `--version` launches, `--cache`
+replaces the data directory, and `--java` selects another Java executable. See
+the [runtime](../internals/RUNTIME.md), [storage](../internals/STORAGE.md), and
 [compatibility](../internals/COMPATIBILITY.md) documentation for details.
 
 ## Implementation and testing
