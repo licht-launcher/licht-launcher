@@ -8,6 +8,7 @@ import {
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { CategoryBadge } from "@/features/discover/components/category-badge";
 import { SOURCE_LABELS } from "@/features/discover/lib/discover-search";
 import {
@@ -24,9 +25,13 @@ import { modpackHeaderStyles } from "./modpack-header.styles";
 export function ModpackHeader({
   modpack,
   onInstall,
+  disabled = false,
+  pending = false,
 }: {
   modpack: ModpackDetails;
   onInstall: () => void;
+  disabled?: boolean;
+  pending?: boolean;
 }) {
   const [now] = useState(() => Date.now());
   const updated = formatTimeAgo(modpack.updatedAt, now);
@@ -90,8 +95,12 @@ export function ModpackHeader({
         </div>
       </div>
       <div className={modpackHeaderStyles.actions}>
-        <Button type="button" onClick={onInstall}>
-          <DownloadIcon aria-hidden />
+        <Button
+          type="button"
+          onClick={onInstall}
+          disabled={disabled || pending}
+        >
+          {pending ? <Spinner /> : <DownloadIcon aria-hidden />}
           Install
         </Button>
         {projectUrl && (

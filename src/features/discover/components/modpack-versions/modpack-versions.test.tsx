@@ -14,7 +14,7 @@ const { listModpackVersions } = vi.hoisted(() => ({
 
 vi.mock("@/api/commands", () => ({ listModpackVersions }));
 
-function renderVersions(onInstall = vi.fn()) {
+function renderVersions(onInstall = vi.fn(), installing = false) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -23,6 +23,7 @@ function renderVersions(onInstall = vi.fn()) {
       <ModpackVersions
         source="modrinth"
         projectId="1KVo5zza"
+        installing={installing}
         onInstall={onInstall}
       />
     </QueryClientProvider>,
@@ -66,6 +67,18 @@ describe("ModpackVersions", () => {
     );
 
     expect(onInstall).toHaveBeenCalledWith("v6");
+  });
+
+  it("does not install a row while an install is already running", async () => {
+    mockListLayout();
+    listModpackVersions.mockResolvedValue(modpackVersions());
+    const onInstall = renderVersions(vi.fn(), true);
+
+    const button = await screen.findByRole("button", { name: "Install 6.4.0" });
+    expect(button).toBeDisabled();
+    fireEvent.click(button);
+
+    expect(onInstall).not.toHaveBeenCalled();
   });
 
   it("says when the pack has no versions", async () => {

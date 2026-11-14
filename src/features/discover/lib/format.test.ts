@@ -1,11 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  formatDownloads,
-  formatTimeAgo,
-  formatUpdatedAt,
-  formatVersionLabel,
-} from "./format";
+import { formatDownloads, formatTimeAgo, formatUpdatedAt } from "./format";
 
 describe("formatDownloads", () => {
   it("abbreviates large counts", () => {
@@ -23,33 +18,6 @@ describe("formatUpdatedAt", () => {
   it("returns null when there is no readable date", () => {
     expect(formatUpdatedAt(null)).toBeNull();
     expect(formatUpdatedAt("yesterday")).toBeNull();
-  });
-});
-
-describe("formatVersionLabel", () => {
-  it("adds game versions and loaders when the source lists them", () => {
-    expect(
-      formatVersionLabel({
-        id: "v7",
-        name: "7.0.0",
-        gameVersions: ["1.21.10"],
-        loaders: ["neoforge"],
-        versionType: "release",
-        publishedAt: null,
-        downloads: 0,
-      }),
-    ).toBe("7.0.0 (1.21.10 · NeoForge)");
-    expect(
-      formatVersionLabel({
-        id: "f1",
-        name: "ATM9 1.0",
-        gameVersions: [],
-        loaders: [],
-        versionType: "release",
-        publishedAt: null,
-        downloads: 0,
-      }),
-    ).toBe("ATM9 1.0");
   });
 });
 

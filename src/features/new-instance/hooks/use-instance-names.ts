@@ -2,12 +2,16 @@ import { useQuery } from "@tanstack/react-query";
 
 import { listInstances } from "@/api/commands";
 
-/** Names already used by instances; shares its cache with the library list. */
-export function useInstanceNames(): string[] {
-  const instances = useQuery({
+/** Library instances; shares its cache with the instance list. */
+export function useInstanceList() {
+  return useQuery({
     queryKey: ["instances"],
     queryFn: listInstances,
     retry: false,
   });
-  return (instances.data ?? []).map((instance) => instance.name);
+}
+
+/** Names already used by instances; shares its cache with the library list. */
+export function useInstanceNames(): string[] {
+  return (useInstanceList().data ?? []).map((instance) => instance.name);
 }
