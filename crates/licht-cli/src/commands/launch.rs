@@ -2,11 +2,11 @@ use std::path::PathBuf;
 
 use clap::Args;
 use licht_core::{
-    CoreError, OutputStream, SharedCache, configured_java, game_cache, global_launch,
-    installed_java, instance_version_for_launch, list_instances, load_instance,
-    load_resolved_version_json, load_settings, log_codec, offline_account, parse_version,
-    prepare_offline_launch, probe_java_major, required_java_major, resolved_java_path,
-    resolved_launch, run_game,
+    CoreError, LaunchEnvironment, OutputStream, SharedCache, configured_java, game_cache,
+    global_launch, installed_java, instance_version_for_launch, is_version_ready, list_instances,
+    load_instance, load_resolved_version_json, load_settings, log_codec, offline_account,
+    parse_version, prepare_offline_launch, probe_java_major, required_java_major,
+    resolved_java_path, resolved_launch, run_game,
 };
 use tokio::sync::mpsc;
 
@@ -96,12 +96,13 @@ pub async fn launch(args: LaunchArgs) -> licht_core::Result<i32> {
             }
         };
 
+        let environment = host_environment()?;
+        require_installed_version(&cache, &version_id, &environment)?;
         let json = match &args.instance {
             Some(_) => load_resolved_version_json(&cache, &version_id)?,
             None => std::fs::read_to_string(cache.version_json(&version_id)?)?,
         };
         let version = parse_version(&json)?;
-        let environment = host_environment()?;
         let required = required_java_major(&version_id, &version);
         let profile_java = profile.as_ref().and_then(resolved_java_path);
         let custom_java = args.java.is_some() || profile_java.is_some();
@@ -166,4 +167,58 @@ pub async fn launch(args: LaunchArgs) -> licht_core::Result<i32> {
         .await
         .map_err(|_| CoreError::Io(std::io::Error::other("launch task failed")))??;
     Ok(exit.code.unwrap_or(1))
+}
+
+fn require_installed_version(
+    cache: &SharedCache,
+    version_id: &str,
+    environment: &LaunchEnvironment,
+) -> licht_core::Result<()> {
+    if is_version_ready(cache, version_id, environment) {
+        return Ok(());
+    }
+    Err(CoreError::Io(std::io::Error::new(
+        std::io::ErrorKind::NotFound,
+        format!(
+            "version `{version_id}` is not installed; run `licht-cli install --version {version_id}` first"
+        ),
+    )))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::require_installed_version;
+    use licht_core::{Arch, LaunchEnvironment, OsName, SharedCache};
+    use std::collections::BTreeMap;
+
+    fn environment() -> LaunchEnvironment {
+        LaunchEnvironment {
+            os: OsName::Windows,
+            arch: Arch::X86_64,
+            os_version: String::new(),
+            features: BTreeMap::new(),
+        }
+    }
+
+    #[test]
+    fn rejects_a_version_that_is_not_installed() {
+        let root = std::env::temp_dir().join(format!(
+            "licht-cli-launch-missing-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).expect("temp cache");
+        let cache = SharedCache::at(&root);
+
+        let error = require_installed_version(&cache, "1.20.1", &environment())
+            .expect_err("missing install");
+        let message = match error {
+            licht_core::CoreError::Io(error) => error.to_string(),
+            other => panic!("expected I/O error, got {other}"),
+        };
+        assert!(message.contains("version `1.20.1` is not installed"));
+        assert!(message.contains("licht-cli install --version 1.20.1"));
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
 }
