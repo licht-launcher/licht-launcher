@@ -181,6 +181,8 @@ describe("DiscoverFilters", () => {
     const neoforge = screen.getByRole("button", { name: "NeoForge" });
     expect(neoforge).toHaveAttribute("aria-pressed", "true");
     expect(neoforge.className).toContain("border-accent-orange/25");
+    expect(neoforge.className).toContain("hover:bg-accent-orange/15");
+    expect(neoforge.className).not.toContain("hover:bg-accent-orange/25");
     expect(neoforge.className).not.toBe(
       screen.getByRole("button", { name: "Fabric" }).className,
     );
