@@ -2,6 +2,7 @@ mod cli;
 mod commands;
 mod error;
 mod host;
+mod logging;
 mod progress;
 
 use clap::Parser;
@@ -13,6 +14,10 @@ use error::report;
 fn main() {
     licht_core::load_env_files();
     let cli = Cli::parse();
+    if let Err(error) = logging::init(cli.verbose) {
+        report(&error);
+        std::process::exit(1);
+    }
     let code = match runtime() {
         Ok(runtime) => match runtime.block_on(run(cli)) {
             Ok(code) => code,

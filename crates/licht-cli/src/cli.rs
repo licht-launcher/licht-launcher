@@ -5,6 +5,9 @@ use crate::commands::Command;
 #[derive(Debug, Parser)]
 #[command(about = "Install and launch game versions", version)]
 pub struct Cli {
+    /// Increase log verbosity (-v = debug, -vv = trace). Ignored when `RUST_LOG` is set.
+    #[arg(short, long, action = clap::ArgAction::Count, global = true)]
+    pub verbose: u8,
     #[command(subcommand)]
     pub command: Command,
 }
@@ -25,6 +28,13 @@ mod tests {
             panic!("versions command expected");
         };
         assert_eq!(args.cache.as_deref(), Some(std::path::Path::new("cache")));
+        assert_eq!(cli.verbose, 0);
+    }
+
+    #[test]
+    fn parses_global_verbose_flags() {
+        let cli = Cli::try_parse_from(["licht-cli", "-vv", "versions"]).expect("verbose versions");
+        assert_eq!(cli.verbose, 2);
     }
 
     #[test]
@@ -183,7 +193,9 @@ mod tests {
         let error = Cli::try_parse_from(["licht-cli", "--help"]).expect_err("help exits parsing");
 
         assert_eq!(error.kind(), ErrorKind::DisplayHelp);
-        assert!(error.to_string().contains("Usage: licht-cli <COMMAND>"));
+        assert!(error.to_string().contains("Usage: licht-cli"));
+        assert!(error.to_string().contains("<COMMAND>"));
+        assert!(error.to_string().contains("--verbose"));
     }
 
     #[test]
