@@ -23,7 +23,6 @@ export const snapshot = {
     automaticUpdates: true,
     language: "en",
     hardwareAcceleration: true,
-    minimizeToTray: true,
     minimizeOnGameStart: false,
     restoreOnGameExit: false,
   },

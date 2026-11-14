@@ -31,10 +31,42 @@ pub struct Runtime {
     automatic: watch::Sender<bool>,
 }
 
+/// Where this installation's updates come from, decided once at startup.
+fn initial_phase(flatpak: bool, release_build: bool, installer_bundled: bool) -> AppUpdatePhase {
+    if flatpak {
+        AppUpdatePhase::ExternallyManaged
+    } else if release_build && !installer_bundled {
+        // The installers patch their bundle type into the binary; the portable
+        // build keeps none, and the updater would otherwise install a copy.
+        AppUpdatePhase::Portable
+    } else {
+        AppUpdatePhase::Idle
+    }
+}
+
+/// Phases where the launcher must not check, download or install updates itself.
+fn self_update_disabled(phase: AppUpdatePhase) -> Option<&'static str> {
+    match phase {
+        AppUpdatePhase::ExternallyManaged => {
+            Some("Updates for this installation are managed by Flatpak.")
+        }
+        AppUpdatePhase::Portable => Some(
+            "This portable build does not update itself. Download new versions from GitHub Releases.",
+        ),
+        _ => None,
+    }
+}
+
 impl Runtime {
     pub fn new() -> Arc<Self> {
+        let mut initial = AppUpdateState::new(false);
+        initial.phase = initial_phase(
+            licht_core::app_updates_managed_externally(),
+            !cfg!(debug_assertions),
+            tauri::utils::platform::bundle_type().is_some(),
+        );
         Arc::new(Self {
-            state: Mutex::new((AppUpdateState::new(false), Instant::now())),
+            state: Mutex::new((initial, Instant::now())),
             operation: Arc::new(AsyncMutex::new(())),
             available: AsyncMutex::new(None),
             automatic: watch::channel(false).0,
@@ -366,6 +398,28 @@ mod tests {
     }
 
     #[test]
+    fn a_release_build_without_a_bundle_type_is_portable() {
+        assert_eq!(initial_phase(false, true, false), AppUpdatePhase::Portable);
+        assert_eq!(initial_phase(false, true, true), AppUpdatePhase::Idle);
+        // Development builds are never bundled and keep the updater usable.
+        assert_eq!(initial_phase(false, false, false), AppUpdatePhase::Idle);
+        assert_eq!(
+            initial_phase(true, true, false),
+            AppUpdatePhase::ExternallyManaged
+        );
+    }
+
+    #[test]
+    fn flatpak_and_portable_builds_refuse_self_updates() {
+        assert!(self_update_disabled(AppUpdatePhase::ExternallyManaged).is_some());
+        assert!(
+            self_update_disabled(AppUpdatePhase::Portable)
+                .is_some_and(|reason| reason.contains("GitHub Releases"))
+        );
+        assert!(self_update_disabled(AppUpdatePhase::Idle).is_none());
+    }
+
+    #[test]
     fn native_update_operations_are_serialized_without_queueing_duplicates() {
         let runtime = Runtime::new();
         let first = runtime.reserve().expect("first operation");
@@ -383,6 +437,9 @@ pub fn start(
 ) -> anyhow::Result<()> {
     let runtime = Arc::clone(app.state::<Arc<Runtime>>().inner());
     runtime.preferences_changed(&app, automatic)?;
+    if self_update_disabled(runtime.snapshot()?.phase).is_some() {
+        return Ok(());
+    }
     let initial_operation = runtime.reserve()?;
     let mut workers = startup
         .workers
@@ -447,6 +504,16 @@ fn require_main(window: &WebviewWindow) -> Result<(), String> {
     Ok(())
 }
 
+fn require_self_managed(runtime: &Runtime) -> Result<(), String> {
+    let state = runtime
+        .snapshot()
+        .map_err(|_| "Could not read application update state".to_string())?;
+    match self_update_disabled(state.phase) {
+        Some(reason) => Err(reason.to_string()),
+        None => Ok(()),
+    }
+}
+
 #[tauri::command]
 pub fn get_app_update_state(
     window: WebviewWindow,
@@ -466,6 +533,7 @@ pub async fn check_app_update(
     startup: State<'_, Arc<StartupRuntime>>,
 ) -> Result<(), String> {
     require_main(&window)?;
+    require_self_managed(&runtime)?;
     let runtime = Arc::clone(runtime.inner());
     let startup = Arc::clone(startup.inner());
     let operation = runtime.reserve().map_err(|error| error.to_string())?;
@@ -488,6 +556,7 @@ pub async fn download_app_update(
     runtime: State<'_, Arc<Runtime>>,
 ) -> Result<(), String> {
     require_main(&window)?;
+    require_self_managed(&runtime)?;
     let runtime = Arc::clone(runtime.inner());
     let operation = runtime.reserve().map_err(|error| error.to_string())?;
     tauri::async_runtime::spawn(async move {
@@ -507,6 +576,7 @@ pub async fn install_app_update(
     downloads: State<'_, Arc<licht_core::DownloadManager>>,
 ) -> Result<(), String> {
     require_main(&window)?;
+    require_self_managed(&runtime)?;
     let _operation = runtime.reserve().map_err(|error| error.to_string())?;
     let mut verified = false;
     let result = async {

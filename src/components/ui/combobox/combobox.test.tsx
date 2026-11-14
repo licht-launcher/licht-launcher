@@ -169,4 +169,20 @@ describe("Combobox", () => {
     fireEvent.focus(input);
     expect(screen.queryAllByRole("option")).toHaveLength(0);
   });
+
+  it("renders a small field when asked", () => {
+    render(
+      <Combobox
+        aria-label="Game version"
+        options={options}
+        value=""
+        size="sm"
+        onValueChange={() => {}}
+      />,
+    );
+
+    expect(
+      screen.getByRole("combobox", { name: "Game version" }),
+    ).toHaveAttribute("data-size", "sm");
+  });
 });

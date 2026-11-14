@@ -24,6 +24,14 @@ pub fn open_feedback(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn open_external_url(app: AppHandle, url: String) -> Result<(), String> {
+    let url = licht_core::external_https_url(&url).map_err(super::failure)?;
+    app.opener()
+        .open_url(url, None::<&str>)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 pub fn custom_title_bar_active(mode: State<'_, TitleBarMode>) -> bool {
     mode.custom
 }

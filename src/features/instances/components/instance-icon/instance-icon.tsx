@@ -1,6 +1,6 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
 
-import grassFallback from "@/assets/instance-grass.svg";
+import grassFallback from "@/assets/instance-grass.svg?no-inline";
 import { cn } from "@/lib/utils";
 
 import { instanceIconStyles } from "./instance-icon.styles";

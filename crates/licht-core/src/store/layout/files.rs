@@ -5,7 +5,56 @@ use std::path::Path;
 use sha1::{Digest, Sha1};
 
 use super::progress::StartupReporter;
+use super::{Relocation, relocate};
 use crate::{CoreError, Result};
+
+/// Whether `destination` holds the copy of `source`. A profile directly under `instances`
+/// is compared after remapping its Java path, because the copy rewrote that path.
+pub(super) fn is_verified_copy(
+    source: &Path,
+    destination: &Path,
+    instances: &Path,
+    mappings: &[Relocation],
+    reporter: &StartupReporter,
+) -> Result<bool> {
+    let profile = source
+        .file_name()
+        .is_some_and(|name| name == "instance.json")
+        && source.parent().and_then(Path::parent) == Some(instances);
+    if !profile {
+        return Ok(digest(source, reporter)? == digest(destination, reporter)?);
+    }
+    let mut value: serde_json::Value =
+        serde_json::from_slice(&fs::read(source)?).map_err(CoreError::Instance)?;
+    if let Some(path) = value.get("javaPath").and_then(serde_json::Value::as_str) {
+        value["javaPath"] = serde_json::Value::String(
+            relocate(Path::new(path), mappings)
+                .to_string_lossy()
+                .into_owned(),
+        );
+    }
+    Ok(value
+        == serde_json::from_slice::<serde_json::Value>(&fs::read(destination)?)
+            .map_err(CoreError::Instance)?)
+}
+
+/// Removes a source file once [`is_verified_copy`] confirmed its copy at `destination`.
+pub(super) fn remove_copied_source(
+    source: &Path,
+    destination: &Path,
+    metadata: &fs::Metadata,
+) -> Result<()> {
+    #[cfg(windows)]
+    if metadata.permissions().readonly() {
+        // Inherit the destination directory's writable flag only for source cleanup.
+        let parent = destination.parent().ok_or(CoreError::CachePath)?;
+        fs::set_permissions(source, fs::metadata(parent)?.permissions())?;
+    }
+    #[cfg(not(windows))]
+    let _ = (destination, metadata);
+    fs::remove_file(source)?;
+    Ok(())
+}
 
 pub(super) fn digest(path: &Path, reporter: &StartupReporter) -> Result<Vec<u8>> {
     let mut file = fs::File::open(path)?;

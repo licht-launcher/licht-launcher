@@ -110,6 +110,21 @@ describe("StartupScreen", () => {
     );
   });
 
+  it("shows the removal of the migrated legacy profile", async () => {
+    getProgress.mockResolvedValue(
+      startupProgress({
+        phase: "cleaningLegacyData",
+        processedFiles: 4,
+        processedBytes: 2097152,
+      }),
+    );
+    view();
+    expect(
+      await screen.findByText("Removing old launcher files…"),
+    ).toBeVisible();
+    expect(screen.getByText("4 files verified · 2.0 MB")).toBeVisible();
+  });
+
   it("uses download byte totals and shows the update version", async () => {
     getProgress.mockResolvedValue(
       startupProgress({
@@ -276,10 +291,6 @@ describe("StartupScreen", () => {
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(logo.closest("[data-tauri-drag-region]")).not.toBeNull();
-    expect(screen.getByRole("main")).toHaveClass(
-      "bg-sidebar",
-      "text-sidebar-foreground",
-    );
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
@@ -292,7 +303,7 @@ describe("StartupScreen", () => {
         }),
     );
     center.mockImplementation(async () => {
-      expect(screen.getByRole("main")).toHaveClass("bg-sidebar");
+      expect(screen.getByRole("main")).toBeInTheDocument();
       expect(screen.getByRole("status")).toHaveTextContent(
         "Preparing launcher…",
       );

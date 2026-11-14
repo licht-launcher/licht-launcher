@@ -57,13 +57,15 @@ Libraries and processor outputs use the shared `libraries/` Maven layout.
 The receipt records SHA1 of the profile, client JAR, downloaded libraries, and
 generated outputs. Outputs without a vendor-declared hash are checked for
 successful production and then recorded with their computed SHA1 for later
-integrity checks. Readiness verifies the receipt's hashes. A vanilla parent JAR
-alone no longer makes a provisional Forge/NeoForge profile ready.
+integrity checks. Install treats a receipt as satisfied when those files exist.
+Repair reads the receipt's hashes. A vanilla parent JAR alone no longer makes
+a provisional Forge/NeoForge profile ready.
 
-A valid receipt skips the processor pipeline. Declared valid processor outputs
-can also be reused during repair. Missing or modified receipt files are repaired
-by running Install/Repair again. Different loader builds can share intermediate
-Minecraft libraries, so loader installation is serialized within the process.
+An existing receipt skips the processor pipeline during Install. Repair runs
+the processors again when a recorded hash does not match. Declared valid
+processor outputs can also be reused while repairing. Missing receipt files are
+installed again. Different loader builds can share intermediate Minecraft
+libraries, so loader installation is serialized within the process.
 
 ### Existing instances and launch
 

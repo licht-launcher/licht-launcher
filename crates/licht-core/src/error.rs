@@ -182,6 +182,10 @@ pub enum CoreError {
     ModpackMeta { detail: String },
     #[error("LICHT_CURSEFORGE_API_KEY is missing or empty")]
     CurseforgeKeyMissing,
+    #[error("CurseForge rejected the API key")]
+    CurseforgeKeyRejected,
+    #[error("only HTTPS links can be opened")]
+    ExternalUrl,
     #[error("curseforge download host is not allowed")]
     CurseforgeDownloadHost,
     #[error("curseforge pack disallows third-party distribution")]
@@ -192,6 +196,14 @@ pub enum CoreError {
     CurseforgeFileMissing { file_id: u64 },
     #[error("modpack archive is invalid")]
     ModpackArchive,
+    #[error(
+        "the instance's licht-curseforge.json from an older Licht version is invalid; reinstall the modpack or delete that file"
+    )]
+    CurseforgeLegacyIndex(#[source] Box<CoreError>),
+    #[error(
+        "the instance's licht-modpack.json from an older Licht version is invalid; reinstall the modpack or delete that file"
+    )]
+    ModrinthLegacyIndex(#[source] Box<CoreError>),
 }
 
 #[cfg(test)]

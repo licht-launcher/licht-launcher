@@ -2,17 +2,24 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Button } from "@/components/ui/button";
+import { lastDiscoverSearch } from "@/features/discover/lib/last-search";
 import { CreateInstanceMenu } from "@/features/new-instance/components/create-instance-menu";
 
 const upload = vi.hoisted(() => ({ mutate: vi.fn(), isPending: false }));
+const navigate = vi.hoisted(() => vi.fn());
 
 vi.mock("@/features/new-instance/hooks/use-upload-instance", () => ({
   useUploadInstance: () => ({ upload }),
 }));
 
+vi.mock("@tanstack/react-router", () => ({
+  useNavigate: () => navigate,
+}));
+
 beforeEach(() => {
   upload.mutate.mockReset();
   upload.isPending = false;
+  navigate.mockReset();
 });
 
 function renderMenu() {
@@ -51,13 +58,17 @@ describe("CreateInstanceMenu", () => {
     ]);
   });
 
-  it("keeps the modpack option disabled until Discover exists", async () => {
+  it("opens Discover from the modpack option", async () => {
     const { trigger, onScratch } = renderMenu();
     await open(trigger);
 
-    const modpack = screen.getByRole("menuitem", { name: "From a modpack" });
-    expect(modpack).toHaveAttribute("aria-disabled", "true");
-    fireEvent.click(modpack);
+    fireEvent.click(screen.getByRole("menuitem", { name: "From a modpack" }));
+
+    expect(navigate).toHaveBeenCalledOnce();
+    expect(navigate).toHaveBeenCalledWith({
+      to: "/discover",
+      search: lastDiscoverSearch(),
+    });
     expect(onScratch).not.toHaveBeenCalled();
     expect(upload.mutate).not.toHaveBeenCalled();
   });

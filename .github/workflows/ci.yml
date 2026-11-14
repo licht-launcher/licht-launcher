@@ -23,8 +23,44 @@ concurrency:
 # only; anything that compiles the Rust code runs on both supported platforms.
 # Check steps run even when an earlier check failed, so one run reports every problem.
 jobs:
+  # Pull requests that only touch documentation skip the check jobs. Every other
+  # event (push to main, manual runs, release calls) always runs them.
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - name: Check out repository
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+
+      # A pull request is checked out as a merge commit whose first parent is the base
+      # branch, so this diff lists exactly the files the pull request changes. A failing
+      # diff fails the job instead of skipping the checks.
+      - name: Detect code changes
+        id: filter
+        run: |
+          code=true
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            files=$(git diff --name-only HEAD^1 HEAD)
+            code=false
+            while IFS= read -r file; do
+              case "$file" in
+                *.md | docs/* | LICENSE) ;;
+                *) code=true; break ;;
+              esac
+            done <<< "$files"
+          fi
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+
   frontend:
     name: Frontend
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -67,7 +103,9 @@ jobs:
           retention-days: 14
 
   rust:
-    name: Rust (${{ matrix.os }})
+    name: Rust
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     # Line tables keep file:line in backtraces but skip full debug info: faster
@@ -140,8 +178,9 @@ jobs:
           retention-days: 14
 
   build:
-    name: Build (${{ matrix.os }})
-    if: ${{ !inputs.skip_tauri_build }}
+    name: Build
+    needs: changes
+    if: ${{ needs.changes.outputs.code == 'true' && !inputs.skip_tauri_build }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     strategy:
@@ -162,3 +201,29 @@ jobs:
 
       - name: Build Tauri application
         run: pnpm tauri build --ci --no-bundle -- --locked
+
+  # The only check branch protection requires. It passes when every job above
+  # succeeded or was skipped, so a new job only has to be added to `needs`.
+  # `always()` keeps it running when a job fails or the run is cancelled; a skipped
+  # required check would count as passing.
+  all-checks:
+    name: All checks passed
+    if: always()
+    needs: [changes, frontend, rust, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Summarize job results
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          {
+            echo "### Job results"
+            echo "| Job | Result |"
+            echo "| --- | --- |"
+            jq -r 'to_entries[] | "| \(.key) | \(.value.result) |"' <<< "$NEEDS"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if ! jq -e 'all(.[]; .result == "success" or .result == "skipped")' <<< "$NEEDS" > /dev/null; then
+            echo "::error::At least one job failed or was cancelled."
+            exit 1
+          fi

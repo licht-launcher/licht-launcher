@@ -28,7 +28,7 @@ describe("General preferences", () => {
     });
   });
 
-  it("offers English as the only language and enables minimize-to-tray by default", async () => {
+  it("offers English as the only language and enables hardware acceleration by default", async () => {
     await renderSettings();
     const language = await screen.findByRole("combobox", { name: "Language" });
     expect(language).toHaveTextContent("English");
@@ -36,9 +36,6 @@ describe("General preferences", () => {
       screen.getByRole("switch", {
         name: "Use hardware acceleration when available",
       }),
-    ).toBeChecked();
-    expect(
-      screen.getByRole("switch", { name: "Minimize to tray on close" }),
     ).toBeChecked();
     expect(
       screen.getByRole("switch", {
@@ -111,19 +108,6 @@ describe("General preferences", () => {
     );
   });
 
-  it("saves minimize-to-tray without requesting a restart", async () => {
-    await renderSettings();
-    fireEvent.click(
-      await screen.findByRole("switch", { name: "Minimize to tray on close" }),
-    );
-    await waitFor(() =>
-      expect(invoke).toHaveBeenCalledWith("save_settings", {
-        settings: expect.objectContaining({ minimizeToTray: false }),
-      }),
-    );
-    expect(screen.queryByText("Restart required")).not.toBeInTheDocument();
-  });
-
   it("shows restore only while minimizing on game start is enabled and saves both choices", async () => {
     await renderSettings();
     const minimize = await screen.findByRole("switch", {
@@ -170,7 +154,6 @@ describe("General preferences", () => {
             settings: {
               ...snapshot.settings,
               hardwareAcceleration: false,
-              minimizeToTray: false,
               minimizeOnGameStart: true,
               restoreOnGameExit: true,
             },
@@ -182,9 +165,6 @@ describe("General preferences", () => {
       await screen.findByRole("switch", {
         name: "Use hardware acceleration when available",
       }),
-    ).not.toBeChecked();
-    expect(
-      screen.getByRole("switch", { name: "Minimize to tray on close" }),
     ).not.toBeChecked();
     expect(
       screen.getByRole("switch", {

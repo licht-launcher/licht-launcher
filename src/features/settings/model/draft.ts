@@ -27,7 +27,6 @@ export type Draft = {
   automaticUpdates: boolean;
   language: Settings["language"];
   hardwareAcceleration: boolean;
-  minimizeToTray: boolean;
   minimizeOnGameStart: boolean;
   restoreOnGameExit: boolean;
 };
@@ -72,7 +71,6 @@ export function fromSnapshot(
     automaticUpdates: settings.automaticUpdates,
     language: settings.language,
     hardwareAcceleration: settings.hardwareAcceleration,
-    minimizeToTray: settings.minimizeToTray,
     minimizeOnGameStart: settings.minimizeOnGameStart,
     restoreOnGameExit: settings.restoreOnGameExit,
   };
@@ -128,7 +126,6 @@ export function toSettings(
     automaticUpdates: draft.automaticUpdates,
     language: draft.language,
     hardwareAcceleration: draft.hardwareAcceleration,
-    minimizeToTray: draft.minimizeToTray,
     minimizeOnGameStart: draft.minimizeOnGameStart,
     restoreOnGameExit: draft.restoreOnGameExit,
   };

@@ -1,6 +1,7 @@
 use sqlx::{Connection, SqliteConnection};
 
 use crate::Result;
+use crate::modpacks::curseforge::storage::StoredCurseforgeFile;
 use crate::modpacks::mrpack::storage::{StoredModpack, StoredModpackFile, StoredModpackHeader};
 
 pub(crate) struct ModpackRepository;
@@ -59,6 +60,40 @@ impl ModpackRepository {
         Ok(())
     }
 
+    pub async fn curseforge_files(
+        connection: &mut SqliteConnection,
+        directory: &str,
+        folder: &str,
+    ) -> Result<Vec<StoredCurseforgeFile>> {
+        Ok(sqlx::query_as("SELECT relative_path, url, sha1, md5, size, project_id, file_id, file_name, name, required FROM curseforge_files WHERE instances_directory = ?1 AND instance_folder = ?2 ORDER BY position")
+            .bind(directory).bind(folder).fetch_all(connection).await?)
+    }
+
+    pub async fn replace_curseforge_files(
+        connection: &mut SqliteConnection,
+        directory: &str,
+        folder: &str,
+        files: &[StoredCurseforgeFile],
+    ) -> Result<()> {
+        let mut transaction = connection.begin_with("BEGIN IMMEDIATE").await?;
+        sqlx::query(
+            "DELETE FROM curseforge_files WHERE instances_directory = ?1 AND instance_folder = ?2",
+        )
+        .bind(directory)
+        .bind(folder)
+        .execute(&mut *transaction)
+        .await?;
+        for (position, file) in files.iter().enumerate() {
+            sqlx::query("INSERT INTO curseforge_files (instances_directory, instance_folder, position, relative_path, url, sha1, md5, size, project_id, file_id, file_name, name, required) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)")
+                .bind(directory).bind(folder).bind(i64::try_from(position).map_err(|_| crate::CoreError::ModpackArchive)?)
+                .bind(&file.relative_path).bind(&file.url).bind(&file.sha1).bind(&file.md5).bind(file.size)
+                .bind(file.project_id).bind(file.file_id).bind(&file.file_name).bind(&file.name).bind(file.required)
+                .execute(&mut *transaction).await?;
+        }
+        transaction.commit().await?;
+        Ok(())
+    }
+
     pub async fn delete(
         connection: &mut SqliteConnection,
         directory: &str,
@@ -66,6 +101,7 @@ impl ModpackRepository {
     ) -> Result<()> {
         // Children are removed explicitly, including on connections without foreign_keys enabled.
         for statement in [
+            "DELETE FROM curseforge_files WHERE instances_directory = ?1 AND instance_folder = ?2",
             "DELETE FROM modpack_files WHERE instances_directory = ?1 AND instance_folder = ?2",
             "DELETE FROM modpack_dependencies WHERE instances_directory = ?1 AND instance_folder = ?2",
             "DELETE FROM modpack_indexes WHERE instances_directory = ?1 AND instance_folder = ?2",
@@ -92,6 +128,8 @@ impl ModpackRepository {
         sqlx::query("INSERT INTO modpack_dependencies SELECT instances_directory, ?3, name, version FROM modpack_dependencies WHERE instances_directory = ?1 AND instance_folder = ?2")
             .bind(directory).bind(source).bind(destination).execute(&mut *transaction).await?;
         sqlx::query("INSERT INTO modpack_files SELECT instances_directory, ?3, position, relative_path, sha1, sha512, url, size FROM modpack_files WHERE instances_directory = ?1 AND instance_folder = ?2")
+            .bind(directory).bind(source).bind(destination).execute(&mut *transaction).await?;
+        sqlx::query("INSERT INTO curseforge_files SELECT instances_directory, ?3, position, relative_path, url, sha1, md5, size, project_id, file_id, file_name, name, required FROM curseforge_files WHERE instances_directory = ?1 AND instance_folder = ?2")
             .bind(directory).bind(source).bind(destination).execute(&mut *transaction).await?;
         transaction.commit().await?;
         Ok(())
@@ -265,6 +303,123 @@ mod tests {
                 .await
                 .expect("files"),
             original.files
+        );
+        connection.close().await.expect("close");
+        std::fs::remove_dir_all(cache.root()).expect("cleanup");
+    }
+    fn curseforge_files() -> Vec<StoredCurseforgeFile> {
+        let file = |path: &str, sha1: Option<String>, md5: Option<String>| StoredCurseforgeFile {
+            relative_path: path.into(),
+            url: format!("https://edge.forgecdn.net/files/1/2/{path}"),
+            sha1,
+            md5,
+            size: 11,
+            project_id: 1,
+            file_id: 2,
+            file_name: path.into(),
+            name: "Fixture".into(),
+            required: path.starts_with("mods/"),
+        };
+        vec![
+            file("mods/a.jar", Some("a".repeat(40)), None),
+            file("resourcepacks/b.zip", None, Some("b".repeat(32))),
+        ]
+    }
+
+    #[tokio::test]
+    async fn curseforge_files_are_isolated_duplicated_and_deleted_with_the_instance() {
+        let cache = fixture();
+        let instances = cache.root().join("instances");
+        let other = cache.root().join("other-instances");
+        let database = crate::Database::open(&cache).await.expect("database");
+        let service = DatabaseService::start(database.clone())
+            .await
+            .expect("service");
+        let client = service.client();
+        let settings = crate::load_settings(&database).await.expect("settings");
+        crate::create_instance(
+            &client,
+            &instances,
+            "First",
+            "1.20.1",
+            &crate::global_launch(&settings),
+        )
+        .await
+        .expect("instance");
+        client
+            .replace_curseforge_files(&instances, "First", curseforge_files())
+            .await
+            .expect("save");
+        assert!(
+            client
+                .curseforge_files(&other, "First")
+                .await
+                .expect("isolated directory")
+                .is_empty()
+        );
+        assert_eq!(
+            client
+                .curseforge_files(&instances, "First")
+                .await
+                .expect("files"),
+            curseforge_files()
+        );
+        crate::duplicate_instance(&client, &instances, "First", "Copy")
+            .await
+            .expect("copy");
+        crate::delete_instance(&client, &instances, "First")
+            .await
+            .expect("delete");
+        assert!(
+            client
+                .curseforge_files(&instances, "First")
+                .await
+                .expect("deleted files")
+                .is_empty()
+        );
+        assert_eq!(
+            client
+                .curseforge_files(&instances, "Copy")
+                .await
+                .expect("copied files"),
+            curseforge_files()
+        );
+        service.shutdown().await.expect("shutdown");
+        std::fs::remove_dir_all(cache.root()).expect("cleanup");
+    }
+
+    #[tokio::test]
+    async fn a_curseforge_file_without_a_hash_rolls_back_the_replacement() {
+        let cache = fixture();
+        let mut connection = crate::store::db::open_migrated(&cache)
+            .await
+            .expect("database");
+        let original = curseforge_files();
+        ModpackRepository::replace_curseforge_files(
+            &mut connection,
+            "instances",
+            "First",
+            &original,
+        )
+        .await
+        .expect("original");
+        let mut invalid = original.clone();
+        invalid[1].md5 = None;
+        assert!(
+            ModpackRepository::replace_curseforge_files(
+                &mut connection,
+                "instances",
+                "First",
+                &invalid
+            )
+            .await
+            .is_err()
+        );
+        assert_eq!(
+            ModpackRepository::curseforge_files(&mut connection, "instances", "First")
+                .await
+                .expect("files"),
+            original
         );
         connection.close().await.expect("close");
         std::fs::remove_dir_all(cache.root()).expect("cleanup");

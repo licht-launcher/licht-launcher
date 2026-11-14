@@ -2359,7 +2359,7 @@ dependencies = [
 
 [[package]]
 name = "licht-core"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "ammonia",
  "base64 0.22.1",
@@ -2395,7 +2395,7 @@ dependencies = [
 
 [[package]]
 name = "licht-launcher"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "anyhow",
  "licht-core",

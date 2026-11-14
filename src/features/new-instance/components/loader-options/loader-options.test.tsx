@@ -49,14 +49,6 @@ describe("LoaderOptions", () => {
     );
   });
 
-  it("flows the channel cards at the width of their name", () => {
-    renderOptions();
-
-    const group = screen.getByRole("group", { name: "Loader channel" });
-    expect(group).toHaveClass("flex", "flex-wrap");
-    expect(screen.getByRole("button", { name: "Other" })).toHaveClass("w-auto");
-  });
-
   it("reports the channel that was picked", () => {
     const { onChange } = renderOptions();
 

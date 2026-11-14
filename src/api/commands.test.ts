@@ -42,10 +42,12 @@ import {
   listInstances,
   listLoaderBuilds,
   listMicrosoftAccounts,
+  listModpackSources,
   listModpackVersions,
   listRunningGames,
   listVersions,
   logoutMicrosoftAccount,
+  openExternalUrl,
   openFeedback,
   openInstanceFolder,
   openRepository,
@@ -74,6 +76,7 @@ import { appUpdateState } from "@/features/updater/fixtures/state";
 import type { DownloadJobSnapshot } from "@/lib/generated/DownloadJobSnapshot";
 import type { InstanceContentEntry } from "@/lib/generated/InstanceContentEntry";
 import type { InstanceContentUpdate } from "@/lib/generated/InstanceContentUpdate";
+import type { ModpackSearchFilters } from "@/lib/generated/ModpackSearchFilters";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
@@ -256,11 +259,22 @@ describe("launcher commands", () => {
       name: "Cobblemon",
       path: "C:\\packs\\cobble.mrpack",
     });
-    await searchModpacks("cobble", 2);
+    const filters: ModpackSearchFilters = {
+      gameVersion: "1.20.1",
+      loader: "fabric",
+      categories: ["magic"],
+      source: null,
+      sort: "updated",
+    };
+    await searchModpacks("cobble", 2, filters);
     expect(invoke).toHaveBeenCalledWith("search_modpacks", {
       query: "cobble",
       page: 2,
+      filters,
     });
+    vi.mocked(invoke).mockResolvedValueOnce(["modrinth"]);
+    await expect(listModpackSources()).resolves.toEqual(["modrinth"]);
+    expect(invoke).toHaveBeenCalledWith("modpack_sources");
     await getModpack("curseforge", "381671");
     expect(invoke).toHaveBeenCalledWith("get_modpack", {
       source: "curseforge",
@@ -463,6 +477,13 @@ describe("launcher commands", () => {
     expect(invoke).toHaveBeenCalledWith("open_feedback");
   });
 
+  it("opens an external link through the native command", async () => {
+    await openExternalUrl("https://modrinth.com/modpack/fo");
+    expect(invoke).toHaveBeenCalledWith("open_external_url", {
+      url: "https://modrinth.com/modpack/fo",
+    });
+  });
+
   it("reads the cached player head through the native command", async () => {
     const path = "C:\\Licht\\cache\\player-heads\\default.png";
     vi.mocked(invoke).mockResolvedValueOnce(path);
@@ -550,7 +571,6 @@ describe("launcher commands", () => {
       automaticUpdates: true,
       language: "en" as const,
       hardwareAcceleration: true,
-      minimizeToTray: false,
       minimizeOnGameStart: false,
       restoreOnGameExit: false,
     };

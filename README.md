@@ -26,9 +26,7 @@
 > **Early Release** — Licht Launcher is in active development. Features and compatibility are still being refined, and you may encounter bugs. Your feedback helps shape the launcher.
 
 <p align="center">
-  <strong>Download 0.2.3 · Iris</strong><br>
-  <a href="https://github.com/licht-launcher/licht-launcher/releases/download/v0.2.3/Licht-Launcher-0.2.3-Iris-windows-x64-setup.exe"><img src="https://img.shields.io/badge/Windows_x64-Download-blue?style=for-the-badge" alt="Download Licht Launcher 0.2.3 for Windows x64"></a>
-  <a href="https://github.com/licht-launcher/licht-launcher/releases/download/v0.2.3/Licht-Launcher-0.2.3-Iris-linux-x64.AppImage"><img src="https://img.shields.io/badge/Linux_x64-Download_AppImage-orange?style=for-the-badge" alt="Download Licht Launcher 0.2.3 for Linux x64 (AppImage)"></a>
+  <a href="https://github.com/licht-launcher/licht-launcher/releases/latest"><img src="https://img.shields.io/badge/Download-latest_release-blue?style=for-the-badge" alt="Download the latest Licht Launcher release"></a>
 </p>
 
 ![Licht Launcher screenshot](.github/screenshot.png)
@@ -49,15 +47,16 @@ Licht is for players who want vanilla and modded Minecraft organized in a clean,
 
 ## Download
 
-The buttons above download **0.2.3 · Iris** directly. You can also choose a package below or find the latest version and release notes on [GitHub Releases](https://github.com/licht-launcher/licht-launcher/releases/latest).
+Get the latest version and its release notes from [GitHub Releases](https://github.com/licht-launcher/licht-launcher/releases/latest). Under **Assets**, choose the file for your system:
 
 | Your system | Choose |
 | --- | --- |
-| Windows (64-bit) | [Download the `.exe` installer](https://github.com/licht-launcher/licht-launcher/releases/download/v0.2.3/Licht-Launcher-0.2.3-Iris-windows-x64-setup.exe) |
-| Linux (64-bit) | [Download the `.AppImage`](https://github.com/licht-launcher/licht-launcher/releases/download/v0.2.3/Licht-Launcher-0.2.3-Iris-linux-x64.AppImage) |
-| Debian, Ubuntu, and compatible Linux distributions | [Download the `.deb` package](https://github.com/licht-launcher/licht-launcher/releases/download/v0.2.3/Licht-Launcher-0.2.3-Iris-linux-x64.deb) |
+| Windows (64-bit) | `-windows-x64-setup.exe` installer for the current user, or `-windows-x64.msi` for all users |
+| Linux (64-bit) | `-linux-x64.AppImage`, which runs without installation |
+| Debian, Ubuntu, and compatible Linux distributions | `-linux-x64.deb` package |
+| Linux with Flatpak | `-linux-x64.flatpak` bundle, installed with `flatpak install --user <file>.flatpak` |
 
-Portable downloads are also available for Windows and Linux.
+The installers and the AppImage update from Settings. The Flatpak bundle updates through new bundles, and the portable Windows build (`-windows-x64-portable.exe`) does not update itself; download new versions from the same page.
 
 ### Get started
 
@@ -86,7 +85,8 @@ Read the [Terms of Use](TERMS.md) and [Privacy Policy](PRIVACY.md) for informati
 
 - **Windows:** close the launcher and remove it through Windows Settings > Apps.
 - **Linux `.deb`:** remove the package through your system's package manager.
-- **AppImage or portable:** close the launcher and remove the executable and any shortcuts you created.
+- **Linux Flatpak:** run `flatpak uninstall app.licht.launcher`. By default its data lives in `~/.var/app/app.licht.launcher`, separate from a `.deb` or AppImage installation.
+- **AppImage or Windows portable:** close the launcher and remove the executable and any shortcuts you created.
 
 Uninstalling may leave your profiles, worlds, and saved accounts on the computer. See [how to remove local data](PRIVACY.md#retention-and-deletion) if you want to remove those too.
 

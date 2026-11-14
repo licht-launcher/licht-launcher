@@ -133,6 +133,12 @@ async fn changing_directory_moves_content_after_restart_and_keeps_the_profile() 
         .execute(&mut connection)
         .await
         .expect("modpack dependency");
+    sqlx::query("INSERT INTO curseforge_files VALUES (?1, ?2, 0, 'mods/a.jar', 'https://edge.forgecdn.net/files/1/2/a.jar', NULL, '5eb63bbbe01eeed093cb22bb8f5acdc3', 11, 1, 2, 'a.jar', 'A', 1)")
+        .bind(instances.to_str().expect("instances path"))
+        .bind(&registered.folder)
+        .execute(&mut connection)
+        .await
+        .expect("CurseForge file");
     use sqlx::Connection;
     connection.close().await.expect("close");
     let mut settings = crate::settings::load_settings_at(&home)
@@ -260,6 +266,15 @@ async fn changing_directory_moves_content_after_restart_and_keeps_the_profile() 
             .expect("modpack scope");
     assert_eq!(
         std::path::PathBuf::from(modpack_directory),
+        target.instances_dir().expect("instances")
+    );
+    let curseforge_directory: String =
+        sqlx::query_scalar("SELECT instances_directory FROM curseforge_files")
+            .fetch_one(&mut connection)
+            .await
+            .expect("CurseForge scope");
+    assert_eq!(
+        std::path::PathBuf::from(curseforge_directory),
         target.instances_dir().expect("instances")
     );
     let foreign_key_errors = sqlx::query("PRAGMA foreign_key_check")

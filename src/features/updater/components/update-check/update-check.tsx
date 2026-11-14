@@ -38,14 +38,16 @@ export type UpdateCheckStatus =
   | "checking"
   | "up-to-date"
   | "available"
-  | "failed";
+  | "failed"
+  | "managed-externally";
 
 export function getUpdateCheckStatus(): UpdateCheckStatus {
   const status = sessionStorage.getItem(STATUS_KEY);
   return status === "checking" ||
     status === "up-to-date" ||
     status === "available" ||
-    status === "failed"
+    status === "failed" ||
+    status === "managed-externally"
     ? status
     : "not-checked";
 }
@@ -59,6 +61,8 @@ function legacyStatus(phase: AppUpdatePhase | undefined): UpdateCheckStatus {
   if (phase === "ready") return "available";
   if (phase === "upToDate") return "up-to-date";
   if (phase === "failed") return "failed";
+  if (phase === "externallyManaged" || phase === "portable")
+    return "managed-externally";
   return "not-checked";
 }
 

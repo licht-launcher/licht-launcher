@@ -1,0 +1,58 @@
+{
+  "dependencies": {
+    "fabric-loader": "0.16.10",
+    "minecraft": "1.20.1"
+  },
+  "files": [
+    {
+      "downloads": [
+        "https://cdn.modrinth.com/data/AANobbMI/versions/fixture/sodium.jar"
+      ],
+      "env": {
+        "client": "required",
+        "server": "required"
+      },
+      "fileSize": 11,
+      "hashes": {
+        "sha1": "2aae6c35c94fcfb415dbe95f408b9ce91ee846ed",
+        "sha512": "309ecc489c12d6eb4cc40f50c902f2b4d0ed77ee511a7c7a9bcd3ca86d4cd86f989dd35bc5ff499670da34255b45b0cfd830e81f605dcf7dc5542e93ae9cd76f"
+      },
+      "path": "mods/sodium.jar"
+    },
+    {
+      "downloads": [
+        "https://cdn.modrinth.com/data/fixture/versions/fixture/shaders.zip"
+      ],
+      "env": {
+        "client": "optional",
+        "server": "unsupported"
+      },
+      "fileSize": 11,
+      "hashes": {
+        "sha1": "2aae6c35c94fcfb415dbe95f408b9ce91ee846ed",
+        "sha512": "309ecc489c12d6eb4cc40f50c902f2b4d0ed77ee511a7c7a9bcd3ca86d4cd86f989dd35bc5ff499670da34255b45b0cfd830e81f605dcf7dc5542e93ae9cd76f"
+      },
+      "path": "shaderpacks/shaders.zip"
+    },
+    {
+      "downloads": [
+        "https://cdn.modrinth.com/data/fixture/versions/fixture/server.jar"
+      ],
+      "env": {
+        "client": "unsupported",
+        "server": "required"
+      },
+      "fileSize": 11,
+      "hashes": {
+        "sha1": "2aae6c35c94fcfb415dbe95f408b9ce91ee846ed",
+        "sha512": "309ecc489c12d6eb4cc40f50c902f2b4d0ed77ee511a7c7a9bcd3ca86d4cd86f989dd35bc5ff499670da34255b45b0cfd830e81f605dcf7dc5542e93ae9cd76f"
+      },
+      "path": "mods/server-only.jar"
+    }
+  ],
+  "formatVersion": 1,
+  "game": "minecraft",
+  "name": "Fixture Pack",
+  "summary": "A synthetic pack",
+  "versionId": "1.0.0"
+}

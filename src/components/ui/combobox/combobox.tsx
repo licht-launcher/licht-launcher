@@ -31,6 +31,7 @@ export function Combobox({
   placeholder,
   emptyText = "No results.",
   disabled = false,
+  size = "default",
   className,
 }: {
   options: ComboboxOption[];
@@ -41,6 +42,8 @@ export function Combobox({
   placeholder?: string;
   emptyText?: string;
   disabled?: boolean;
+  /** `sm` matches the height of a small Select trigger. */
+  size?: "sm" | "default";
   className?: string;
 }) {
   const listId = useId();
@@ -121,6 +124,7 @@ export function Combobox({
             autoComplete="off"
             disabled={disabled}
             placeholder={placeholder}
+            size={size}
             className={comboboxStyles.input}
             value={open && query !== null ? query : (selected?.label ?? "")}
             onFocus={openList}

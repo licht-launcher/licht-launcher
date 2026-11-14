@@ -116,21 +116,14 @@ async fn check_modpack_verification(
                     .expect("stored index");
             }
             crate::ModpackSource::Curseforge => {
-                let index = serde_json::json!({
-                    "source": "curseforge",
-                    "files": [{
-                        "path": "mods/blocked.jar", "fileSize": BODY.len(),
-                        "hashes": {"sha1": SHA1},
-                        "downloads": ["https://mediafilez.forgecdn.net/files/1/2/blocked.jar"],
-                        "projectId": 1, "fileId": 2, "fileName": "blocked.jar",
-                        "name": "Blocked fixture", "required": true
-                    }]
-                });
-                std::fs::write(
-                    directory.join(crate::CURSEFORGE_INDEX_FILE),
-                    serde_json::to_vec(&index).expect("index JSON"),
-                )
-                .expect("CurseForge index");
+                database
+                    .replace_curseforge_files(
+                        &root,
+                        &instance.folder,
+                        vec![curseforge_file("mods/blocked.jar")],
+                    )
+                    .await
+                    .expect("CurseForge index");
             }
         }
         let outcome = finish(manager.prepare(&instance.folder, operation))
@@ -148,6 +141,21 @@ async fn check_modpack_verification(
         );
         assert!(server.requests.is_empty());
         fixture.close().await;
+    }
+}
+
+fn curseforge_file(path: &str) -> crate::modpacks::curseforge::storage::StoredCurseforgeFile {
+    crate::modpacks::curseforge::storage::StoredCurseforgeFile {
+        relative_path: path.to_string(),
+        url: "https://mediafilez.forgecdn.net/files/1/2/blocked.jar".to_string(),
+        sha1: Some(SHA1.to_string()),
+        md5: None,
+        size: i64::try_from(BODY.len()).expect("size"),
+        project_id: 1,
+        file_id: 2,
+        file_name: "blocked.jar".to_string(),
+        name: "Blocked fixture".to_string(),
+        required: true,
     }
 }
 
@@ -371,12 +379,17 @@ async fn explicit_repair_rechecks_game_setup_after_a_pack_failure() {
     std::fs::write(fixture.game.version_jar(VERSION).expect("client"), BODY)
         .expect("cached client");
     let instance = pending(&fixture).await;
-    let directory = fixture
-        .game
-        .instance_dir(&instance.folder)
-        .expect("directory");
-    let index = directory.join(crate::CURSEFORGE_INDEX_FILE);
-    std::fs::write(&index, b"invalid pack metadata").expect("pack failure");
+    let root = fixture.game.instances_dir().expect("instances");
+    // An unsafe stored path fails closed during pack verification.
+    fixture
+        .database()
+        .replace_curseforge_files(
+            &root,
+            &instance.folder,
+            vec![curseforge_file("../escape.jar")],
+        )
+        .await
+        .expect("pack failure");
     let failed = finish(manager.prepare(&instance.folder, DownloadJobOperation::Install))
         .await
         .expect("failed install");
@@ -398,7 +411,11 @@ async fn explicit_repair_rechecks_game_setup_after_a_pack_failure() {
         b"invalid game profile",
     )
     .expect("requires game verification");
-    std::fs::write(&index, br#"{"source":"curseforge","files":[]}"#).expect("fixed pack");
+    fixture
+        .database()
+        .replace_curseforge_files(&root, &instance.folder, Vec::new())
+        .await
+        .expect("fixed pack");
     let repaired = finish(manager.prepare(&instance.folder, DownloadJobOperation::Repair))
         .await
         .expect("repair");
@@ -462,12 +479,16 @@ async fn resuming_finalization_reuses_a_completed_modpack_stage() {
             .expect("pack stage completed")
     );
     std::fs::remove_dir(archive).expect("unblock cleanup");
-    // Reopening an already completed pack stage would try to parse this file.
-    std::fs::write(
-        directory.join(crate::CURSEFORGE_INDEX_FILE),
-        b"completed pack stage",
-    )
-    .expect("guard against repeated verification");
+    // Reopening an already completed pack stage would reject this unsafe stored path.
+    fixture
+        .database()
+        .replace_curseforge_files(
+            &fixture.game.instances_dir().expect("instances"),
+            &instance.folder,
+            vec![curseforge_file("../escape.jar")],
+        )
+        .await
+        .expect("guard against repeated verification");
     manager.resume(&failed.id).await.expect("resume");
     let completed = finish(manager.wait(&failed.id)).await.expect("completion");
     assert_eq!(

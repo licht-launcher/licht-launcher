@@ -29,10 +29,33 @@ Linux:
 LICHT_DATA_DIR=/absolute/path/to/test-profile /path/to/licht
 ```
 
+## Legacy profile migration
+
+Version 0.2.3 and earlier kept the profile in the platform project directory
+(`%APPDATA%\Licht\Licht Launcher\data` on Windows). When the new profile has no
+`licht.db` and the legacy profile exists, startup copies and SHA1-verifies its
+game files, instances, and content metadata, remaps stored paths, and publishes
+`licht.db` last. A custom game directory from the legacy settings moves from
+`<chosen>/Licht Launcher` to `<chosen>/Licht Launcher/data`.
+
+After the profile is ready, startup removes the legacy copy and shows this step
+on the startup screen. Only files whose copy still matches are removed, then
+`licht.sqlite`, its WAL files, and `settings.json`, then the folders this leaves
+empty, up to `%APPDATA%\Licht`. Files that changed since the copy or were never
+copied stay in place. A cleanup error is logged and does not stop the launcher;
+the legacy `settings.json` or `licht.sqlite` remains, so the next startup retries.
+
+Version 0.2.3 described each instance only with the `instance.json` in its
+folder. Once per instances directory, startup registers each folder that has
+that file and no SQLite profile, removes the imported file, and moves its
+`icon.png` into the icon cache. This also recovers instances that 0.3.0 copied
+without registering. Folders that already have a profile keep it, and a profile
+file that cannot be read is logged and left in place.
+
 ## Settings storage
 
 `settings.json` holds only what the launcher reads before the database opens:
-theme, language, hardware acceleration, tray and window behavior, and automatic
+theme, language, hardware acceleration, window behavior, and automatic
 updates. Every other setting is a single row in the `settings` table of
 `licht.db`. That row also records the chosen application directory, the content
 root currently in use, and any move in progress. An older `settings.json` that
@@ -106,7 +129,7 @@ accepted requests, and awaits dispatcher and connection closure. Dropping the
 service owner signals shutdown, but explicit shutdown is needed to await it and
 receive close errors.
 
-The database uses schema version 7 and a five-second busy timeout. Up-to-date
+The database uses schema version 13 and a five-second busy timeout. Up-to-date
 schema checks avoid a writer transaction; migrations recheck the version inside
 their transaction. Standalone persistence functions also use SQLx repositories
 and explicitly close their short-lived connections.
@@ -124,11 +147,34 @@ filesystem cleanup succeeds. Missing registered directories are omitted from the
 list. Duplication copies game files and creates a separate database profile,
 without copying obsolete root profile files or the installation workspace.
 
-New instances never write `instance.json`. Existing profile files are neither
-imported nor removed, and folders without a SQLite profile are not automatically
-registered. The CLI can still launch an unregistered game directory using global
+New instances never write `instance.json`. Apart from the one-time import of
+legacy profiles described above, profile files are neither imported nor
+removed, and folders without a SQLite profile are not automatically registered. The CLI can still launch an unregistered game directory using global
 settings. Legacy game-directory behavior is described in
 [Compatibility](COMPATIBILITY.md#launchwrapper-game-directory).
+
+### Modpack indexes
+
+Resolved pack files are keyed by `(instances_directory, instance_folder)`, like
+instance profiles. Modrinth packs use `modpack_indexes`, `modpack_dependencies` and
+`modpack_files` (SHA1 and SHA512 required). CurseForge packs use `curseforge_files`:
+one ordered row per file with the CDN URL, an optional SHA1 and MD5 (at least one is
+required), size, project and file ids, names and the `required` flag.
+
+Deleting or duplicating an instance deletes or copies both kinds of rows, and a
+content-directory move rewrites their `instances_directory`. Starting a new install
+clears them before the pack is imported again.
+
+Builds up to v0.2.3 kept these lists in the instance folder. The next time the
+pack files are installed or repaired, a leftover `licht-modpack.json` is imported
+into the Modrinth tables and a leftover `licht-curseforge.json` into
+`curseforge_files`, then the file is removed. Stored rows always win: a file is only
+imported when the instance has no rows of either kind, and neither kind of pack may
+write the other's file. A `licht-modpack.json` also waits while a
+`licht-curseforge.json` is present, so the CurseForge import decides that instance.
+A file that another run already removed counts as removed. An invalid file fails the
+job and is kept. If the file cannot
+be removed, the import is undone and the job fails, so rows and file never coexist.
 
 ## Verification
 

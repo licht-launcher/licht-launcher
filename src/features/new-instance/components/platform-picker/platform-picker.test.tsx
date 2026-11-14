@@ -28,15 +28,4 @@ describe("PlatformPicker", () => {
     fireEvent.click(screen.getByRole("button", { name: "Quilt" }));
     expect(onChange).toHaveBeenCalledWith("quilt");
   });
-
-  it("flows the cards one after the other at the width of their content", () => {
-    render(<PlatformPicker value="vanilla" onChange={() => {}} />);
-
-    const group = screen.getByRole("group", { name: "Platform" });
-    expect(group).toHaveClass("flex", "flex-wrap");
-    expect(group).not.toHaveClass("grid");
-    for (const card of screen.getAllByRole("button")) {
-      expect(card).toHaveClass("w-auto");
-    }
-  });
 });

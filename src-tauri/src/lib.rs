@@ -77,6 +77,7 @@ pub fn run() -> anyhow::Result<()> {
             commands::instances::create_instance_with_platform,
             commands::modpacks::search_modpacks,
             commands::modpacks::get_modpack,
+            commands::modpacks::modpack_sources,
             commands::modpacks::list_modpack_versions,
             commands::modpacks::create_instance_from_modpack,
             commands::modpacks::create_instance_from_modpack_file,
@@ -93,6 +94,7 @@ pub fn run() -> anyhow::Result<()> {
             commands::instances::remove_instance_content,
             commands::shell::open_repository,
             commands::shell::open_feedback,
+            commands::shell::open_external_url,
             commands::shell::custom_title_bar_active,
             commands::shell::restart_app,
             commands::shell::quit_app,
@@ -127,17 +129,6 @@ pub fn run() -> anyhow::Result<()> {
         .context("Failed to build Licht Launcher")?;
     let mut closing = false;
     application.run(move |app, event| {
-        if let tauri::RunEvent::WindowEvent {
-            ref label,
-            event: tauri::WindowEvent::CloseRequested { ref api, .. },
-            ..
-        } = event
-            && label == "main"
-            && desktop::hide_on_close(app)
-        {
-            api.prevent_close();
-            return;
-        }
         if let tauri::RunEvent::ExitRequested { ref api, code, .. } = event
             && !runtime
                 .shutdown_complete

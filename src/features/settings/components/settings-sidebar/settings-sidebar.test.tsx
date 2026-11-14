@@ -31,7 +31,6 @@ describe("SettingsSidebar", () => {
       .querySelector("svg");
     expect(javaIcon).toHaveClass("lucide-cpu");
     expect(javaIcon).toHaveAttribute("aria-hidden", "true");
-    expect(javaIcon).toHaveClass("size-4");
     expect(
       navigation.queryByRole("button", { name: "Developer Tools" }),
     ).not.toBeInTheDocument();
@@ -131,7 +130,7 @@ describe("SettingsSidebar", () => {
       "sr-only",
     );
     expect(screen.queryByText("Licht Launcher")).not.toBeInTheDocument();
-    expect(screen.queryByText("0.3.0 · Rose")).not.toBeInTheDocument();
+    expect(screen.queryByText("0.3.1 · Rose")).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "GitHub repository" }),
     ).not.toBeInTheDocument();

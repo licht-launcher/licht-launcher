@@ -12,6 +12,8 @@ import { Route as rootRouteImport } from "./routes/__root";
 import { Route as AppRouteImport } from "./routes/_app";
 import { Route as AppIndexRouteImport } from "./routes/_app/index";
 import { Route as AppDownloadsRouteImport } from "./routes/_app/downloads";
+import { Route as AppDiscoverIndexRouteImport } from "./routes/_app/discover.index";
+import { Route as AppDiscoverSourceProjectIdRouteImport } from "./routes/_app/discover.$source.$projectId";
 
 const AppRoute = AppRouteImport.update({
   id: "/_app",
@@ -27,27 +29,50 @@ const AppDownloadsRoute = AppDownloadsRouteImport.update({
   path: "/downloads",
   getParentRoute: () => AppRoute,
 } as any);
+const AppDiscoverIndexRoute = AppDiscoverIndexRouteImport.update({
+  id: "/discover/",
+  path: "/discover/",
+  getParentRoute: () => AppRoute,
+} as any);
+const AppDiscoverSourceProjectIdRoute =
+  AppDiscoverSourceProjectIdRouteImport.update({
+    id: "/discover/$source/$projectId",
+    path: "/discover/$source/$projectId",
+    getParentRoute: () => AppRoute,
+  } as any);
 
 export interface FileRoutesByFullPath {
   "/": typeof AppIndexRoute;
   "/downloads": typeof AppDownloadsRoute;
+  "/discover/": typeof AppDiscoverIndexRoute;
+  "/discover/$source/$projectId": typeof AppDiscoverSourceProjectIdRoute;
 }
 export interface FileRoutesByTo {
   "/downloads": typeof AppDownloadsRoute;
   "/": typeof AppIndexRoute;
+  "/discover": typeof AppDiscoverIndexRoute;
+  "/discover/$source/$projectId": typeof AppDiscoverSourceProjectIdRoute;
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport;
   "/_app": typeof AppRouteWithChildren;
   "/_app/downloads": typeof AppDownloadsRoute;
   "/_app/": typeof AppIndexRoute;
+  "/_app/discover/": typeof AppDiscoverIndexRoute;
+  "/_app/discover/$source/$projectId": typeof AppDiscoverSourceProjectIdRoute;
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath;
-  fullPaths: "/" | "/downloads";
+  fullPaths: "/" | "/downloads" | "/discover/" | "/discover/$source/$projectId";
   fileRoutesByTo: FileRoutesByTo;
-  to: "/downloads" | "/";
-  id: "__root__" | "/_app" | "/_app/downloads" | "/_app/";
+  to: "/downloads" | "/" | "/discover" | "/discover/$source/$projectId";
+  id:
+    | "__root__"
+    | "/_app"
+    | "/_app/downloads"
+    | "/_app/"
+    | "/_app/discover/"
+    | "/_app/discover/$source/$projectId";
   fileRoutesById: FileRoutesById;
 }
 export interface RootRouteChildren {
@@ -77,17 +102,35 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof AppDownloadsRouteImport;
       parentRoute: typeof AppRoute;
     };
+    "/_app/discover/": {
+      id: "/_app/discover/";
+      path: "/discover";
+      fullPath: "/discover/";
+      preLoaderRoute: typeof AppDiscoverIndexRouteImport;
+      parentRoute: typeof AppRoute;
+    };
+    "/_app/discover/$source/$projectId": {
+      id: "/_app/discover/$source/$projectId";
+      path: "/discover/$source/$projectId";
+      fullPath: "/discover/$source/$projectId";
+      preLoaderRoute: typeof AppDiscoverSourceProjectIdRouteImport;
+      parentRoute: typeof AppRoute;
+    };
   }
 }
 
 interface AppRouteChildren {
   AppDownloadsRoute: typeof AppDownloadsRoute;
   AppIndexRoute: typeof AppIndexRoute;
+  AppDiscoverIndexRoute: typeof AppDiscoverIndexRoute;
+  AppDiscoverSourceProjectIdRoute: typeof AppDiscoverSourceProjectIdRoute;
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppDownloadsRoute: AppDownloadsRoute,
   AppIndexRoute: AppIndexRoute,
+  AppDiscoverIndexRoute: AppDiscoverIndexRoute,
+  AppDiscoverSourceProjectIdRoute: AppDiscoverSourceProjectIdRoute,
 };
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren);

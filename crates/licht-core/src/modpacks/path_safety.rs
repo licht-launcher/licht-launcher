@@ -3,6 +3,17 @@ use std::path::{Path, PathBuf};
 pub(super) use crate::path_component::path_component_allowed;
 use crate::{CoreError, Result};
 
+/// Splits an instance directory into the `(instances_directory, instance_folder)`
+/// key that scopes its rows in SQLite.
+pub(super) fn instance_key(instance_dir: &Path) -> Result<(&Path, &str)> {
+    let instances = instance_dir.parent().ok_or(CoreError::CachePath)?;
+    let folder = instance_dir
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or(CoreError::InstanceName)?;
+    Ok((instances, folder))
+}
+
 /// Joins `relative` onto `instance_dir` after rejecting anything that could
 /// escape it or overwrite launcher files.
 ///

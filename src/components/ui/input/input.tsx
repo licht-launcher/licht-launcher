@@ -3,11 +3,18 @@ import type * as React from "react";
 
 import { inputStyles } from "./input.styles";
 
-type InputProps = React.ComponentProps<"input"> & {
+type InputProps = Omit<React.ComponentProps<"input">, "size"> & {
   startIcon?: React.ReactNode;
+  size?: "sm" | "default";
 };
 
-function Input({ className, type, startIcon, ...props }: InputProps) {
+function Input({
+  className,
+  type,
+  startIcon,
+  size = "default",
+  ...props
+}: InputProps) {
   const inputClassName = cn(
     inputStyles.input,
     startIcon != null ? inputStyles.inputWithIcon : null,
@@ -18,6 +25,7 @@ function Input({ className, type, startIcon, ...props }: InputProps) {
     <input
       type={type}
       data-slot="input"
+      data-size={size}
       className={inputClassName}
       {...props}
     />
