@@ -94,13 +94,21 @@ mod tests {
 
     #[test]
     fn parses_instances_list() {
-        let cli = Cli::try_parse_from(["licht-cli", "instances", "list", "--cache", "cache"])
-            .expect("valid instances list");
+        let cli = Cli::try_parse_from([
+            "licht-cli",
+            "instances",
+            "list",
+            "--cache",
+            "cache",
+            "--json",
+        ])
+        .expect("valid instances list");
 
         let Command::Instances(InstancesCommand::List(args)) = cli.command else {
             panic!("instances list expected");
         };
         assert_eq!(args.cache.as_deref(), Some(std::path::Path::new("cache")));
+        assert!(args.json);
     }
 
     #[test]
