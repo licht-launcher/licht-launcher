@@ -46,6 +46,8 @@ cargo run -p licht-cli -- versions
 cargo run -p licht-cli -- install --version 1.20.1
 cargo run -p licht-cli -- instances list
 cargo run -p licht-cli -- instances list --json
+cargo run -p licht-cli -- java detect
+cargo run -p licht-cli -- java detect --json
 cargo run -p licht-cli -- launch --version 1.20.1 --username Player
 cargo run -p licht-cli -- launch --instance Survival --username Player
 ```

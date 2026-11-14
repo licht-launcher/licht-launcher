@@ -7,7 +7,9 @@ mod progress;
 use clap::Parser;
 
 use cli::Cli;
-use commands::{Command, InstancesCommand, install, instances_list, launch, versions};
+use commands::{
+    Command, InstancesCommand, JavaCommand, install, instances_list, java_detect, launch, versions,
+};
 use error::report;
 
 fn main() {
@@ -38,6 +40,7 @@ async fn run(cli: Cli) -> licht_core::Result<i32> {
             Ok(0)
         }
         Command::Instances(InstancesCommand::List(args)) => instances_list(args).await,
+        Command::Java(JavaCommand::Detect(args)) => java_detect(args).await,
     }
 }
 
