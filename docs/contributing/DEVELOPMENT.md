@@ -46,6 +46,9 @@ cargo run -p licht-cli -- versions
 cargo run -p licht-cli -- install --version 1.20.1
 cargo run -p licht-cli -- instances list
 cargo run -p licht-cli -- instances list --json
+cargo run -p licht-cli -- modpacks search cobblemon --source modrinth
+cargo run -p licht-cli -- modpacks versions --source modrinth --id <project>
+cargo run -p licht-cli -- modpacks install --name Cobblemon --source modrinth --id <project> --version <version>
 cargo run -p licht-cli -- launch --version 1.20.1 --username Player
 cargo run -p licht-cli -- launch --instance Survival --username Player
 ```

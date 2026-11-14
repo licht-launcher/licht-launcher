@@ -14,7 +14,7 @@ mod tests {
     use clap::{CommandFactory, Parser, error::ErrorKind};
 
     use super::Cli;
-    use crate::commands::{Command, InstancesCommand};
+    use crate::commands::{Command, InstancesCommand, ModpacksCommand};
 
     #[test]
     fn parses_versions_options() {
@@ -109,6 +109,49 @@ mod tests {
         };
         assert_eq!(args.cache.as_deref(), Some(std::path::Path::new("cache")));
         assert!(args.json);
+    }
+
+    #[test]
+    fn parses_modpacks_search_and_install() {
+        let search = Cli::try_parse_from([
+            "licht-cli",
+            "modpacks",
+            "search",
+            "cobblemon",
+            "--page",
+            "2",
+            "--source",
+            "modrinth",
+            "--json",
+        ])
+        .expect("valid modpacks search");
+        let Command::Modpacks(ModpacksCommand::Search(args)) = search.command else {
+            panic!("modpacks search expected");
+        };
+        assert_eq!(args.query, "cobblemon");
+        assert_eq!(args.page, 2);
+        assert!(args.json);
+
+        let install = Cli::try_parse_from([
+            "licht-cli",
+            "modpacks",
+            "install",
+            "--name",
+            "Cobblemon",
+            "--source",
+            "modrinth",
+            "--id",
+            "project",
+            "--version",
+            "version",
+        ])
+        .expect("valid modpacks install");
+        let Command::Modpacks(ModpacksCommand::Install(args)) = install.command else {
+            panic!("modpacks install expected");
+        };
+        assert_eq!(args.name, "Cobblemon");
+        assert_eq!(args.project_id, "project");
+        assert_eq!(args.version_id, "version");
     }
 
     #[test]
