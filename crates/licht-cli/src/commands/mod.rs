@@ -4,7 +4,9 @@ mod launch;
 mod versions;
 
 pub use install::{InstallArgs, install};
-pub use instances::{InstancesCommand, instances_list};
+pub use instances::{
+    InstancesCommand, instances_create, instances_delete, instances_list, instances_rename,
+};
 pub use launch::{LaunchArgs, launch};
 pub use versions::{VersionsArgs, versions};
 

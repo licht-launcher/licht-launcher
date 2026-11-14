@@ -2,12 +2,21 @@ use std::io::IsTerminal;
 use std::path::PathBuf;
 
 use clap::{Args, Subcommand};
-use licht_core::{CoreError, InstanceEntry, SharedCache, game_cache, list_instances};
+use licht_core::{
+    CoreError, InstanceEntry, SharedCache, create_instance, delete_instance, game_cache,
+    global_launch, list_instances, load_settings, rename_instance,
+};
 
 #[derive(Debug, Subcommand)]
 pub enum InstancesCommand {
     /// List saved instances.
     List(InstancesListArgs),
+    /// Create a vanilla instance profile (does not download game files).
+    Create(InstancesCreateArgs),
+    /// Rename a saved instance.
+    Rename(InstancesRenameArgs),
+    /// Delete a saved instance and its folder.
+    Delete(InstancesDeleteArgs),
 }
 
 #[derive(Debug, Args)]
@@ -18,6 +27,62 @@ pub struct InstancesListArgs {
     /// Print instances as JSON.
     #[arg(long)]
     pub json: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct InstancesCreateArgs {
+    /// Display name for the new instance.
+    #[arg(
+        long,
+        value_name = "NAME",
+        value_parser = clap::builder::NonEmptyStringValueParser::new()
+    )]
+    pub name: String,
+    /// Game version id to attach to the profile.
+    #[arg(
+        long = "version",
+        value_name = "ID",
+        value_parser = clap::builder::NonEmptyStringValueParser::new()
+    )]
+    pub version_id: String,
+    /// Use a custom cache directory.
+    #[arg(long, value_name = "PATH")]
+    pub cache: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+pub struct InstancesRenameArgs {
+    /// Instance folder or unique display name.
+    #[arg(
+        long = "instance",
+        value_name = "NAME_OR_FOLDER",
+        value_parser = clap::builder::NonEmptyStringValueParser::new()
+    )]
+    pub instance: String,
+    /// New display name.
+    #[arg(
+        long,
+        value_name = "NAME",
+        value_parser = clap::builder::NonEmptyStringValueParser::new()
+    )]
+    pub name: String,
+    /// Use a custom cache directory.
+    #[arg(long, value_name = "PATH")]
+    pub cache: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+pub struct InstancesDeleteArgs {
+    /// Instance folder or unique display name.
+    #[arg(
+        long = "instance",
+        value_name = "NAME_OR_FOLDER",
+        value_parser = clap::builder::NonEmptyStringValueParser::new()
+    )]
+    pub instance: String,
+    /// Use a custom cache directory.
+    #[arg(long, value_name = "PATH")]
+    pub cache: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -56,6 +121,87 @@ pub async fn instances_list(args: InstancesListArgs) -> licht_core::Result<i32> 
     .await;
     database.shutdown().await?;
     result
+}
+
+pub async fn instances_create(args: InstancesCreateArgs) -> licht_core::Result<i32> {
+    let pool = licht_core::initialize_launcher().await?;
+    let cache = match &args.cache {
+        Some(root) => SharedCache::at(root),
+        None => game_cache(&pool).await?,
+    };
+    let settings = load_settings(&pool).await?;
+    let database = licht_core::DatabaseService::start(pool).await?;
+    let result = async {
+        let root = cache.instances_dir()?;
+        let entry = create_instance(
+            &database.client(),
+            &root,
+            &args.name,
+            &args.version_id,
+            &global_launch(&settings),
+        )
+        .await?;
+        println!("{}", instance_summary_line(&entry));
+        Ok(0)
+    }
+    .await;
+    database.shutdown().await?;
+    result
+}
+
+pub async fn instances_rename(args: InstancesRenameArgs) -> licht_core::Result<i32> {
+    let pool = licht_core::initialize_launcher().await?;
+    let cache = match &args.cache {
+        Some(root) => SharedCache::at(root),
+        None => game_cache(&pool).await?,
+    };
+    let database = licht_core::DatabaseService::start(pool).await?;
+    let result = async {
+        let root = cache.instances_dir()?;
+        let entries = list_instances(&database.client(), &root).await?;
+        let refs = instance_refs(&entries);
+        let resolved = resolve_instance(&args.instance, &refs)
+            .map_err(|error| resolve_error(&args.instance, error))?;
+        let entry =
+            rename_instance(&database.client(), &root, &resolved.folder, &args.name).await?;
+        println!("{}", instance_summary_line(&entry));
+        Ok(0)
+    }
+    .await;
+    database.shutdown().await?;
+    result
+}
+
+pub async fn instances_delete(args: InstancesDeleteArgs) -> licht_core::Result<i32> {
+    let pool = licht_core::initialize_launcher().await?;
+    let cache = match &args.cache {
+        Some(root) => SharedCache::at(root),
+        None => game_cache(&pool).await?,
+    };
+    let database = licht_core::DatabaseService::start(pool).await?;
+    let result = async {
+        let root = cache.instances_dir()?;
+        let entries = list_instances(&database.client(), &root).await?;
+        let refs = instance_refs(&entries);
+        let resolved = resolve_instance(&args.instance, &refs)
+            .map_err(|error| resolve_error(&args.instance, error))?;
+        let folder = resolved.folder.clone();
+        delete_instance(&database.client(), &root, &folder).await?;
+        println!("deleted\t{folder}");
+        Ok(0)
+    }
+    .await;
+    database.shutdown().await?;
+    result
+}
+
+fn instance_summary_line(entry: &InstanceEntry) -> String {
+    format!(
+        "{}\t{}\t{}",
+        entry.folder,
+        entry.name,
+        instance_version(entry)
+    )
 }
 
 #[derive(Debug, Clone, Copy)]
