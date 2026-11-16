@@ -149,14 +149,9 @@ mod tests {
         assert_eq!(args.instance, "Survival");
         assert_eq!(args.name, "Hardcore");
 
-        let delete = Cli::try_parse_from([
-            "licht-cli",
-            "instances",
-            "delete",
-            "--instance",
-            "Hardcore",
-        ])
-        .expect("valid instances delete");
+        let delete =
+            Cli::try_parse_from(["licht-cli", "instances", "delete", "--instance", "Hardcore"])
+                .expect("valid instances delete");
         let Command::Instances(InstancesCommand::Delete(args)) = delete.command else {
             panic!("instances delete expected");
         };
