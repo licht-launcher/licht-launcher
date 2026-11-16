@@ -124,8 +124,7 @@ pub async fn modpacks_versions(args: ModpacksVersionsArgs) -> licht_core::Result
         .timeout(licht_core::MANIFEST_REQUEST_TIMEOUT)
         .build()
         .map_err(CoreError::from)?;
-    let versions =
-        list_modpack_versions(&client, args.source.into(), &args.project_id).await?;
+    let versions = list_modpack_versions(&client, args.source.into(), &args.project_id).await?;
     for line in format_modpack_versions(&versions, args.json) {
         println!("{line}");
     }

@@ -7,9 +7,7 @@ mod versions;
 pub use install::{InstallArgs, install};
 pub use instances::{InstancesCommand, instances_list};
 pub use launch::{LaunchArgs, launch};
-pub use modpacks::{
-    ModpacksCommand, modpacks_install, modpacks_search, modpacks_versions,
-};
+pub use modpacks::{ModpacksCommand, modpacks_install, modpacks_search, modpacks_versions};
 pub use versions::{VersionsArgs, versions};
 
 use clap::Subcommand;
