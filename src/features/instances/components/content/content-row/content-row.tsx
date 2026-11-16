@@ -2,10 +2,7 @@ import { BlocksIcon, ImageIcon, SparklesIcon, Trash2Icon } from "lucide-react";
 import type { Ref } from "react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import {
-  formatContentTitle,
-  formatSize,
-} from "@/features/instances/lib/content-table";
+import { formatContentTitle } from "@/features/instances/lib/content-table";
 import type { InstanceContentEntry } from "@/lib/generated/InstanceContentEntry";
 import type { InstanceContentKind } from "@/lib/generated/InstanceContentKind";
 import { cn } from "@/lib/utils";
@@ -62,7 +59,6 @@ export function ContentRow({
           </div>
         </div>
       </td>
-      <td className={contentRowStyles.metaCell}>{formatSize(entry.size)}</td>
       <td className={contentRowStyles.cell}>
         <div className={contentRowStyles.actions}>
           <Switch

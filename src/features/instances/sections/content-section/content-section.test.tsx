@@ -283,7 +283,7 @@ describe("ContentSection", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("sorts content by name and size with direction indicators", async () => {
+  it("sorts content by name with a direction indicator", async () => {
     listInstanceContent.mockResolvedValue([
       {
         name: "zeta.jar",
@@ -309,19 +309,14 @@ describe("ContentSection", () => {
 
     await screen.findByRole("button", { name: "Content" });
     let contentHeader = screen.getByRole("columnheader", { name: "Content" });
-    let sizeHeader = screen.getByRole("columnheader", { name: "Size" });
     expect(contentHeader).toHaveAttribute("aria-sort", "ascending");
-    expect(sizeHeader).toHaveAttribute("aria-sort", "none");
+    expect(
+      screen.queryByRole("columnheader", { name: "Size" }),
+    ).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Content" }));
     contentHeader = screen.getByRole("columnheader", { name: "Content" });
     expect(contentHeader).toHaveAttribute("aria-sort", "descending");
-
-    fireEvent.click(screen.getByRole("button", { name: "Size" }));
-    sizeHeader = screen.getByRole("columnheader", { name: "Size" });
-    contentHeader = screen.getByRole("columnheader", { name: "Content" });
-    expect(sizeHeader).toHaveAttribute("aria-sort", "ascending");
-    expect(contentHeader).toHaveAttribute("aria-sort", "none");
   });
 
   it("shows the empty installation message when no content is installed", async () => {
@@ -421,8 +416,7 @@ describe("ContentSection", () => {
         <ContentSection folder="classic" filter="all" search="" />
       </QueryClientProvider>,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Size" }));
-    fireEvent.click(screen.getByRole("button", { name: "Size" }));
+    fireEvent.click(screen.getByRole("button", { name: "Content" }));
     expect(await screen.findByText("Mod 2999")).toBeVisible();
     expect(screen.getAllByRole("switch")[0]).toHaveAccessibleName(
       "Disable Mod 2999",
