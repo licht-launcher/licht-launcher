@@ -252,13 +252,15 @@ mod tests {
 
     #[test]
     fn interactive_list_is_empty_when_nothing_was_found() {
-        assert!(format_java_detections(
-            &JavaDetections::default(),
-            JavaDetectOutput {
-                json: false,
-                interactive: true,
-            }
-        )
-        .is_empty());
+        assert!(
+            format_java_detections(
+                &JavaDetections::default(),
+                JavaDetectOutput {
+                    json: false,
+                    interactive: true,
+                }
+            )
+            .is_empty()
+        );
     }
 }

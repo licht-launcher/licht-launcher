@@ -113,15 +113,9 @@ mod tests {
 
     #[test]
     fn parses_java_detect() {
-        let cli = Cli::try_parse_from([
-            "licht-cli",
-            "java",
-            "detect",
-            "--cache",
-            "cache",
-            "--json",
-        ])
-        .expect("valid java detect");
+        let cli =
+            Cli::try_parse_from(["licht-cli", "java", "detect", "--cache", "cache", "--json"])
+                .expect("valid java detect");
 
         let Command::Java(JavaCommand::Detect(args)) = cli.command else {
             panic!("java detect expected");
