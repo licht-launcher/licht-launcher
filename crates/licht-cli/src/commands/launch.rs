@@ -202,10 +202,8 @@ mod tests {
 
     #[test]
     fn rejects_a_version_that_is_not_installed() {
-        let root = std::env::temp_dir().join(format!(
-            "licht-cli-launch-missing-{}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("licht-cli-launch-missing-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).expect("temp cache");
         let cache = SharedCache::at(&root);
