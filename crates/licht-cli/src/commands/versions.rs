@@ -68,10 +68,7 @@ pub async fn versions(args: VersionsArgs) -> licht_core::Result<i32> {
     Ok(0)
 }
 
-pub fn format_versions_list(
-    manifest: &VersionManifest,
-    output: VersionsListOutput,
-) -> Vec<String> {
+pub fn format_versions_list(manifest: &VersionManifest, output: VersionsListOutput) -> Vec<String> {
     let versions = manifest
         .versions
         .iter()
@@ -212,9 +209,7 @@ mod tests {
                     json: true,
                 }
             ),
-            vec![
-                "[\n  {\n    \"id\": \"23w31a\",\n    \"type\": \"snapshot\"\n  }\n]".to_string()
-            ]
+            vec!["[\n  {\n    \"id\": \"23w31a\",\n    \"type\": \"snapshot\"\n  }\n]".to_string()]
         );
     }
 }
