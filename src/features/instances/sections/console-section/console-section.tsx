@@ -133,7 +133,6 @@ export function ConsoleLogLevelFilter({
         <Button
           type="button"
           variant="outline"
-          size="sm"
           aria-label="Log level"
           className={cn(
             consoleSectionStyles.filterTrigger,
