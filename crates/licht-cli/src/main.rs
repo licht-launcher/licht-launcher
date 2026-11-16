@@ -1,16 +1,10 @@
-mod cli;
-mod commands;
-mod error;
-mod host;
-mod progress;
-
 use clap::Parser;
 
-use cli::Cli;
-use commands::{
+use licht_cli::cli::Cli;
+use licht_cli::commands::{
     Command, InstancesCommand, JavaCommand, install, instances_list, java_detect, launch, versions,
 };
-use error::report;
+use licht_cli::error::report;
 
 fn main() {
     licht_core::load_env_files();
