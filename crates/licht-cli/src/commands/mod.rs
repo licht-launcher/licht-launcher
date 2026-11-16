@@ -1,5 +1,5 @@
 mod install;
-mod instances;
+pub mod instances;
 mod launch;
 pub mod versions;
 
