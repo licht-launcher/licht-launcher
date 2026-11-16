@@ -58,10 +58,6 @@ pub async fn instances_list(args: InstancesListArgs) -> licht_core::Result<i32> 
     result
 }
 
-const HEADER_STYLE: &str = "\u{1b}[1;33m";
-const DIM: &str = "\u{1b}[90m";
-const RESET: &str = "\u{1b}[0m";
-
 #[derive(Debug, Clone, Copy)]
 pub struct InstancesListOutput {
     pub json: bool,
@@ -75,7 +71,7 @@ pub fn format_instances_list(
     if output.json {
         vec![format_instances_json(entries)]
     } else if output.interactive {
-        format_instances_table(entries, true)
+        format_instances_table(entries)
     } else {
         entries.iter().map(instance_tsv_line).collect()
     }
@@ -139,7 +135,7 @@ fn instance_tsv_line(entry: &InstanceEntry) -> String {
     )
 }
 
-pub fn format_instances_table(entries: &[InstanceEntry], color: bool) -> Vec<String> {
+fn format_instances_table(entries: &[InstanceEntry]) -> Vec<String> {
     if entries.is_empty() {
         return Vec::new();
     }
@@ -167,97 +163,26 @@ pub fn format_instances_table(entries: &[InstanceEntry], color: bool) -> Vec<Str
         }
     }
 
-    let mut lines = Vec::with_capacity(rows.len() + 3);
-    lines.push(style_border(
-        &format_border_row(widths, '┌', '┬', '┐'),
-        color,
-    ));
-    lines.push(format_header_row(HEADERS, widths, color));
-    lines.push(style_border(
-        &format_border_row(widths, '├', '┼', '┤'),
-        color,
+    let mut lines = Vec::with_capacity(rows.len() + 2);
+    lines.push(format_table_row(HEADERS[0], HEADERS[1], HEADERS[2], widths));
+    lines.push(format!(
+        "{}  {}  {}",
+        "─".repeat(widths[0]),
+        "─".repeat(widths[1]),
+        "─".repeat(widths[2]),
     ));
     for row in &rows {
-        lines.push(format_data_row([&row[0], &row[1], &row[2]], widths, color));
+        lines.push(format_table_row(&row[0], &row[1], &row[2], widths));
     }
-    lines.push(style_border(
-        &format_border_row(widths, '└', '┴', '┘'),
-        color,
-    ));
     lines
 }
 
-fn format_border_row(widths: [usize; 3], left: char, mid: char, right: char) -> String {
+fn format_table_row(folder: &str, name: &str, version: &str, widths: [usize; 3]) -> String {
     format!(
-        "{left}{folder}{mid}{name}{mid}{version}{right}",
-        folder = "─".repeat(widths[0] + 2),
-        name = "─".repeat(widths[1] + 2),
-        version = "─".repeat(widths[2] + 2),
+        "{folder}{folder_pad}  {name}{name_pad}  {version}",
+        folder_pad = " ".repeat(widths[0].saturating_sub(display_width(folder))),
+        name_pad = " ".repeat(widths[1].saturating_sub(display_width(name))),
     )
-}
-
-fn format_header_row(headers: [&str; 3], widths: [usize; 3], color: bool) -> String {
-    let cells = [
-        pad_cell(headers[0], widths[0]),
-        pad_cell(headers[1], widths[1]),
-        pad_cell(headers[2], widths[2]),
-    ];
-    if color {
-        format_framed_row(
-            [
-                format!("{HEADER_STYLE}{}{RESET}", cells[0]),
-                format!("{HEADER_STYLE}{}{RESET}", cells[1]),
-                format!("{HEADER_STYLE}{}{RESET}", cells[2]),
-            ],
-            true,
-        )
-    } else {
-        format_framed_row(cells, false)
-    }
-}
-
-fn format_data_row(cells: [&str; 3], widths: [usize; 3], color: bool) -> String {
-    let folder = pad_cell(cells[0], widths[0]);
-    let name = pad_cell(cells[1], widths[1]);
-    let version = pad_cell(cells[2], widths[2]);
-    if color {
-        format_framed_row([folder, name, format!("{DIM}{version}{RESET}")], true)
-    } else {
-        format_framed_row([folder, name, version], false)
-    }
-}
-
-fn format_framed_row(cells: [String; 3], color: bool) -> String {
-    if color {
-        format!(
-            "{DIM}│{RESET} {folder} {DIM}│{RESET} {name} {DIM}│{RESET} {version} {DIM}│{RESET}",
-            folder = cells[0],
-            name = cells[1],
-            version = cells[2],
-        )
-    } else {
-        format!(
-            "│ {folder} │ {name} │ {version} │",
-            folder = cells[0],
-            name = cells[1],
-            version = cells[2],
-        )
-    }
-}
-
-fn pad_cell(value: &str, width: usize) -> String {
-    format!(
-        "{value}{pad}",
-        pad = " ".repeat(width.saturating_sub(display_width(value)))
-    )
-}
-
-fn style_border(line: &str, color: bool) -> String {
-    if color {
-        format!("{DIM}{line}{RESET}")
-    } else {
-        line.to_string()
-    }
 }
 
 fn instance_version(entry: &InstanceEntry) -> &str {
@@ -310,4 +235,3 @@ pub fn resolve_error(query: &str, error: InstanceResolveError) -> CoreError {
         }
     }
 }
-

@@ -1,6 +1,5 @@
 use licht_cli::commands::instances::{
-    InstanceRef, InstanceResolveError, InstancesListOutput, format_instances_list,
-    format_instances_table, resolve_instance,
+    InstanceRef, InstanceResolveError, InstancesListOutput, format_instances_list, resolve_instance,
 };
 use licht_core::InstanceEntry;
 
@@ -116,26 +115,14 @@ fn interactive_list_prints_an_aligned_table_with_headers() {
     ];
 
     assert_eq!(
-        format_instances_table(&entries, false),
+        format_instances_list(&entries, auto(true)),
         vec![
-            "┌───────────────────────────────────┬─────────────────────────────────────┬─────────────────────────────┐".to_string(),
-            "│ FOLDER                            │ NAME                                │ VERSION                     │".to_string(),
-            "├───────────────────────────────────┼─────────────────────────────────────┼─────────────────────────────┤".to_string(),
-            "│ Cobblemon-Official-Modpack-Fabric │ Cobblemon Official Modpack [Fabric] │ fabric-loader-0.20.1-1.21.1 │".to_string(),
-            "│ Fabulously-Optimized              │ Fabulously Optimized                │ fabric-loader-0.20.1-26.3   │".to_string(),
-            "└───────────────────────────────────┴─────────────────────────────────────┴─────────────────────────────┘".to_string(),
+            "FOLDER                             NAME                                 VERSION".to_string(),
+            "─────────────────────────────────  ───────────────────────────────────  ───────────────────────────".to_string(),
+            "Cobblemon-Official-Modpack-Fabric  Cobblemon Official Modpack [Fabric]  fabric-loader-0.20.1-1.21.1".to_string(),
+            "Fabulously-Optimized               Fabulously Optimized                 fabric-loader-0.20.1-26.3".to_string(),
         ]
     );
-
-    let colored = format_instances_list(&entries, auto(true));
-    assert_eq!(colored.len(), 6);
-    assert!(colored[0].starts_with("\u{1b}[90m┌"));
-    assert!(colored[1].starts_with("\u{1b}[90m│\u{1b}[0m \u{1b}[1;33mFOLDER"));
-    assert!(colored[1].contains("\u{1b}[90m│\u{1b}[0m"));
-    assert!(colored[2].contains('┼'));
-    assert!(colored[3].contains("\u{1b}[90mfabric-loader-0.20.1-1.21.1\u{1b}[0m"));
-    assert!(colored[3].starts_with("\u{1b}[90m│\u{1b}[0m "));
-    assert!(colored[5].contains('┘'));
 }
 
 #[test]
