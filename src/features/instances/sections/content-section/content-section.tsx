@@ -96,8 +96,8 @@ export function ContentSection({
             value.toLocaleLowerCase().includes(normalizedSearch),
           )),
     );
-    return sortContentEntries(entries, sortKey, sortDir);
-  }, [content.data, filter, search, sortKey, sortDir]);
+    return sortContentEntries(entries, sortDir);
+  }, [content.data, filter, search, sortDir]);
   const disabled = update.isPending || remove.isPending;
   const virtualization = useContentVirtualizer({
     entries: sortedEntries,

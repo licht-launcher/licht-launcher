@@ -135,6 +135,10 @@ describe("FilesSection", () => {
 
     renderFiles("classic");
 
+    const path = screen.getByRole("navigation", { name: "Current folder" });
+    expect(within(path).getByRole("button", { name: "Root" })).toBeDisabled();
+    expect(path.querySelectorAll("svg")).toHaveLength(2);
+
     expect(await screen.findByText("saves")).toBeInTheDocument();
     expect(
       screen.getByRole("columnheader", { name: "Name" }),

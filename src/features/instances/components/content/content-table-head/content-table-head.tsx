@@ -2,7 +2,6 @@ import {
   ArrowDownAZIcon,
   ArrowDownIcon,
   ArrowUpIcon,
-  BinaryIcon,
   type LucideIcon,
   Settings2Icon,
 } from "lucide-react";
@@ -18,7 +17,6 @@ export function ContentTableColumns() {
   return (
     <colgroup>
       <col />
-      <col className={contentTableHeadStyles.typeColumn} />
       <col className={contentTableHeadStyles.actionsColumn} />
     </colgroup>
   );
@@ -54,16 +52,6 @@ export function ContentTableHead({
           onSort={onSort}
           interactive={interactive}
           className={contentTableHeadStyles.nameHeader}
-        />
-        <ContentSortableHeader
-          label="Size"
-          icon={BinaryIcon}
-          column="size"
-          sortKey={sortKey}
-          sortDir={sortDir}
-          onSort={onSort}
-          interactive={interactive}
-          className={contentTableHeadStyles.typeHeader}
         />
         <th className={contentTableHeadStyles.actionsHeader}>
           <span className={contentTableHeadStyles.actionsHeaderContent}>
