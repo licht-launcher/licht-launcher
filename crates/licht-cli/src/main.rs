@@ -1,17 +1,11 @@
-mod cli;
-mod commands;
-mod error;
-mod host;
-mod progress;
-
 use clap::Parser;
 
-use cli::Cli;
-use commands::{
+use licht_cli::cli::Cli;
+use licht_cli::commands::{
     Command, InstancesCommand, ModpacksCommand, install, instances_list, launch, modpacks_install,
     modpacks_search, modpacks_versions, versions,
 };
-use error::report;
+use licht_cli::error::report;
 
 fn main() {
     licht_core::load_env_files();
