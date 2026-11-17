@@ -1,7 +1,9 @@
 use clap::Parser;
 
 use licht_cli::cli::Cli;
-use licht_cli::commands::{Command, InstancesCommand, install, instances_list, launch, versions};
+use licht_cli::commands::{
+    Command, InstancesCommand, install, instances_list, launch, repair, versions,
+};
 use licht_cli::error::report;
 
 fn main() {
@@ -32,6 +34,7 @@ async fn run(cli: Cli) -> licht_core::Result<i32> {
             Ok(0)
         }
         Command::Instances(InstancesCommand::List(args)) => instances_list(args).await,
+        Command::Repair(args) => repair(args).await,
     }
 }
 

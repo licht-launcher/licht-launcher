@@ -1,11 +1,13 @@
 mod install;
 pub mod instances;
 mod launch;
+mod repair;
 mod versions;
 
 pub use install::{InstallArgs, install};
 pub use instances::{InstancesCommand, instances_list};
 pub use launch::{LaunchArgs, launch};
+pub use repair::{RepairArgs, repair};
 pub use versions::{VersionsArgs, versions};
 
 use clap::Subcommand;
@@ -21,4 +23,6 @@ pub enum Command {
     /// Inspect saved instances.
     #[command(subcommand)]
     Instances(InstancesCommand),
+    /// Repair an instance installation.
+    Repair(RepairArgs),
 }
