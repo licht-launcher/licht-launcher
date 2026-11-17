@@ -1,7 +1,10 @@
 use clap::Parser;
 
 use licht_cli::cli::Cli;
-use licht_cli::commands::{Command, InstancesCommand, install, instances_list, launch, versions};
+use licht_cli::commands::{
+    Command, InstancesCommand, install, instances_create, instances_delete, instances_list,
+    instances_rename, launch, versions,
+};
 use licht_cli::error::report;
 
 fn main() {
@@ -32,6 +35,9 @@ async fn run(cli: Cli) -> licht_core::Result<i32> {
             Ok(0)
         }
         Command::Instances(InstancesCommand::List(args)) => instances_list(args).await,
+        Command::Instances(InstancesCommand::Create(args)) => instances_create(args).await,
+        Command::Instances(InstancesCommand::Rename(args)) => instances_rename(args).await,
+        Command::Instances(InstancesCommand::Delete(args)) => instances_delete(args).await,
     }
 }
 

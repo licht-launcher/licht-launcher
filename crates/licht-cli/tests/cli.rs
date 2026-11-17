@@ -97,6 +97,53 @@ fn parses_instances_list() {
 }
 
 #[test]
+fn parses_instances_create() {
+    let cli = Cli::try_parse_from([
+        "licht-cli",
+        "instances",
+        "create",
+        "--name",
+        "Survival",
+        "--version",
+        "1.20.1",
+    ])
+    .expect("valid instances create");
+
+    let Command::Instances(InstancesCommand::Create(args)) = cli.command else {
+        panic!("instances create expected");
+    };
+    assert_eq!(args.name, "Survival");
+    assert_eq!(args.version_id, "1.20.1");
+}
+
+#[test]
+fn parses_instances_rename_and_delete() {
+    let rename = Cli::try_parse_from([
+        "licht-cli",
+        "instances",
+        "rename",
+        "--instance",
+        "Survival",
+        "--name",
+        "Hardcore",
+    ])
+    .expect("valid instances rename");
+    let Command::Instances(InstancesCommand::Rename(args)) = rename.command else {
+        panic!("instances rename expected");
+    };
+    assert_eq!(args.instance, "Survival");
+    assert_eq!(args.name, "Hardcore");
+
+    let delete =
+        Cli::try_parse_from(["licht-cli", "instances", "delete", "--instance", "Hardcore"])
+            .expect("valid instances delete");
+    let Command::Instances(InstancesCommand::Delete(args)) = delete.command else {
+        panic!("instances delete expected");
+    };
+    assert_eq!(args.instance, "Hardcore");
+}
+
+#[test]
 fn launch_rejects_version_and_instance_together() {
     let error = Cli::try_parse_from([
         "licht-cli",

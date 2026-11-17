@@ -46,12 +46,16 @@ cargo run -p licht-cli -- versions
 cargo run -p licht-cli -- install --version 1.20.1
 cargo run -p licht-cli -- instances list
 cargo run -p licht-cli -- instances list --json
+cargo run -p licht-cli -- instances create --name Survival --version 1.20.1
+cargo run -p licht-cli -- instances rename --instance Survival --name Hardcore
+cargo run -p licht-cli -- instances delete --instance Hardcore
 cargo run -p licht-cli -- launch --version 1.20.1 --username Player
 cargo run -p licht-cli -- launch --instance Survival --username Player
 ```
 
 `launch` does not download. `install` does. `--instance` accepts a folder or a
 unique display name and cannot be combined with `--version` or `--game-dir`.
+`instances create` writes a profile only; run `install` before launching.
 `instances list` prints an aligned `FOLDER` / `NAME` / `VERSION` table in a
 terminal, tab-separated rows when stdout is not a TTY, and JSON with `--json`.
 `--game-dir` replaces the instance root for `--version` launches, `--cache`
