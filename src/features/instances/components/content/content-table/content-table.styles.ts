@@ -1,6 +1,6 @@
 export const contentTableStyles = {
   scrollArea: "min-h-0 flex-1",
-  tableWrapper: "min-w-[48rem]",
+  tableWrapper: "w-full min-w-full",
   table: "w-full table-fixed text-sm",
   empty:
     "flex min-h-56 flex-col items-center justify-center gap-3 px-4 text-center",

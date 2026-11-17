@@ -75,14 +75,6 @@ export function ContentLoading({
                   <td className={contentLoadingStyles.cell}>
                     <div
                       className={cn(
-                        contentLoadingStyles.metaPlaceholder,
-                        skeletonOpacity[index],
-                      )}
-                    />
-                  </td>
-                  <td className={contentLoadingStyles.cell}>
-                    <div
-                      className={cn(
                         contentLoadingStyles.actionPlaceholder,
                         skeletonOpacity[index],
                       )}
