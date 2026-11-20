@@ -43,6 +43,7 @@ instances, and launches a cached version or instance with an offline name:
 
 ```sh
 cargo run -p licht-cli -- versions
+cargo run -p licht-cli -- versions --type release --json
 cargo run -p licht-cli -- install --version 1.20.1
 cargo run -p licht-cli -- instances list
 cargo run -p licht-cli -- instances list --json

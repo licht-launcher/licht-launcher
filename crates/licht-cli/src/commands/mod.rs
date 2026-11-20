@@ -1,7 +1,7 @@
 mod install;
 pub mod instances;
 mod launch;
-mod versions;
+pub mod versions;
 
 pub use install::{InstallArgs, install};
 pub use instances::{InstancesCommand, instances_list};
