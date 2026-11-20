@@ -76,7 +76,7 @@ export function FilesBreadcrumb({
       className={filesSectionStyles.breadcrumbWrapper}
     >
       <ol className={filesSectionStyles.breadcrumbs}>
-        <li className={filesSectionStyles.breadcrumbItem}>
+        <li className={filesSectionStyles.breadcrumbRoot}>
           <button
             type="button"
             className={cn(
@@ -84,23 +84,35 @@ export function FilesBreadcrumb({
               relativePath === "" && filesSectionStyles.breadcrumbCurrent,
             )}
             disabled={folder === null || relativePath === ""}
+            aria-label="Root"
             onClick={() => {
               onRelativePathChange("");
             }}
           >
-            Root
+            <FolderIcon
+              aria-hidden
+              className={filesSectionStyles.breadcrumbFolderIcon}
+              strokeWidth={2}
+            />
           </button>
+          <ChevronRightIcon
+            aria-hidden
+            className={filesSectionStyles.breadcrumbIcon}
+            strokeWidth={2}
+          />
         </li>
         {parts.map((part, index) => {
           const path = parts.slice(0, index + 1).join("/");
           const current = index === parts.length - 1;
           return (
             <li key={path} className={filesSectionStyles.breadcrumbSegment}>
-              <ChevronRightIcon
-                aria-hidden
-                className={filesSectionStyles.breadcrumbIcon}
-                strokeWidth={2}
-              />
+              {index > 0 ? (
+                <ChevronRightIcon
+                  aria-hidden
+                  className={filesSectionStyles.breadcrumbIcon}
+                  strokeWidth={2}
+                />
+              ) : null}
               <button
                 type="button"
                 className={cn(
@@ -510,7 +522,11 @@ function FileRow({
         <span className={filesSectionStyles.entryContent}>
           <Icon
             aria-hidden
-            className={filesSectionStyles.entryIcon}
+            className={
+              entry.isDir
+                ? filesSectionStyles.entryFolderIcon
+                : filesSectionStyles.entryFileIcon
+            }
             strokeWidth={2}
           />
           <span className={filesSectionStyles.entryName}>{entry.name}</span>

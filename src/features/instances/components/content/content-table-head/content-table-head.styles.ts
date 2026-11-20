@@ -1,10 +1,8 @@
 export const contentTableHeadStyles = {
-  typeColumn: "w-28",
   actionsColumn: "w-44",
   head: "text-left text-xs font-medium tracking-wide text-muted-foreground",
   headRow: "border-b border-border/60",
   nameHeader: "px-3 py-3",
-  typeHeader: "w-28 px-3 py-3",
   actionsHeader: "w-44 px-3 py-3 text-right",
   actionsHeaderContent: "flex items-center justify-end gap-1 font-medium",
   actionsHeaderIcon: "size-3.5",

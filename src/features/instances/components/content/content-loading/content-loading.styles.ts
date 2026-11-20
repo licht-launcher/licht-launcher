@@ -1,6 +1,6 @@
 export const contentLoadingStyles = {
   root: "flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border/60 bg-black/20",
-  tableWrapper: "min-w-[48rem]",
+  tableWrapper: "w-full min-w-full",
   table: "w-full table-fixed text-sm",
   progress: "h-px rounded-none",
   scrollArea: "min-h-0 flex-1",
@@ -11,6 +11,5 @@ export const contentLoadingStyles = {
   textPlaceholder: "min-w-0 flex-1 space-y-2",
   titlePlaceholder: "h-4 w-2/5 animate-pulse rounded bg-muted",
   subtitlePlaceholder: "h-3 w-3/5 animate-pulse rounded bg-muted",
-  metaPlaceholder: "h-3 w-16 animate-pulse rounded bg-muted",
   actionPlaceholder: "ml-auto h-8 w-20 animate-pulse rounded-md bg-muted",
 } as const;
