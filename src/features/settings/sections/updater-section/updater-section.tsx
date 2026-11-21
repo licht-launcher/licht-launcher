@@ -80,7 +80,8 @@ export function UpdaterSection({
             id="automatic-updates-hint"
             className={updaterSectionStyles.rowDescription}
           >
-            Check and download updates in the background.
+            Install updates when the launcher starts and download new ones in
+            the background.
           </p>
         </div>
         <Switch

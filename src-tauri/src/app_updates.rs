@@ -83,6 +83,11 @@ impl Runtime {
         })
     }
 
+    /// False for installations whose updates come from somewhere else (Flatpak, portable, MSI).
+    pub fn self_updates_enabled(&self) -> anyhow::Result<bool> {
+        Ok(self_update_disabled(self.snapshot()?.phase).is_none())
+    }
+
     fn snapshot(&self) -> anyhow::Result<AppUpdateState> {
         Ok(self
             .state

@@ -110,7 +110,11 @@ signed updates for those installs; users must reinstall manually.
   the NSIS installer runs without a window and reopens the launcher. Silent
   installs cannot raise a UAC prompt, so the all-users MSI reports updates as
   unavailable and Settings points to GitHub Releases.
-- **Automatic updates** checks after the main window opens and every 30 minutes
+- With **Automatic updates** on, release builds check for an update in the startup
+  window before the launcher opens, then download, verify and install it and
+  restart. If the check or download fails, the installed version opens with a
+  warning. Development builds only update at startup when asked to.
+- **Automatic updates** also checks after the main window opens and every 30 minutes
   while no verified package is waiting to be applied. Available updates download
   in the background; installation always requires **Restart to update**.
 - Turning automatic updates off cancels automatic checks/downloads. Manual

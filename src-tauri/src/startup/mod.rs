@@ -54,10 +54,9 @@ async fn initialize(
     session: &Arc<state::Session>,
 ) -> anyhow::Result<()> {
     session.wait_ready().await?;
-    if let Some(scenario) = licht_core::take_startup_preview()? {
+    let preview = licht_core::take_startup_preview()?;
+    if let Some(scenario) = preview {
         preview::run(app, session, scenario).await?;
-    } else if updates::run(app, session).await? {
-        return Ok(());
     }
     let progress_app = app.clone();
     let progress_session = Arc::clone(session);
@@ -67,6 +66,12 @@ async fn initialize(
     let paths = crate::commands::LauncherPaths::load(reporter)
         .await
         .context("Could not prepare launcher storage")?;
+    let settings = licht_core::load_settings(&paths.settings).await?;
+    if preview.is_none()
+        && updates::run(app, session, &paths.settings, settings.automatic_updates).await?
+    {
+        return Ok(());
+    }
     session.update(app, |state| {
         state.phase = StartupPhase::StartingServices;
         state.total_bytes = None;
@@ -87,7 +92,6 @@ async fn initialize(
         client,
         database_client.clone(),
     ));
-    let settings = licht_core::load_settings(&paths.settings).await?;
     let custom_title_bar = !settings.disable_custom_title_bar;
     app.manage(database_client);
     app.manage(paths);
