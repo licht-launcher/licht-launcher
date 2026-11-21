@@ -2,8 +2,8 @@
 
 ## Profile directory
 
-The profile contains `settings.json`, `licht.db` (and SQLite WAL files), and
-startup requests. It normally lives in the system data directory under
+The profile contains `settings.json`, `licht.db` (and SQLite WAL files),
+startup requests, and the launcher logs in `logs/`. It normally lives in the system data directory under
 `Licht Launcher`. The content-directory move checkpoint is stored in `licht.db`.
 
 Set **`LICHT_DATA_DIR`** before starting the launcher to use a different profile.
@@ -75,6 +75,7 @@ The default layout is:
 <profile>/
   settings.json
   licht.db
+  logs/       # launcher logs, one file per day, last 7 kept
   data/       # game files and managed Java runtimes
   instances/  # instance files, mods, saves, and other user content
   cache/      # content caches and profile operational files

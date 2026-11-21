@@ -68,7 +68,11 @@ The core exports `CoreError`, derived with `thiserror`, and a `Result<T>` alias.
 I/O errors preserve their source. Application startup uses `anyhow` to add context
 at the boundary; errors propagate with `?`.
 
-Logging uses `tracing` and `tracing-subscriber`, with structured text on stderr.
+Logging uses `tracing` and `tracing-subscriber`, with structured text on stderr
+and in `<profile>/logs/licht.<date>.log`, written through `tracing-appender`.
+The file rotates daily and keeps the last 7 files. If the log directory cannot be
+opened, the app keeps logging to stderr and records a warning instead of failing
+to start. Panics are logged as errors before the default panic output.
 `RUST_LOG` selects filtering; absent or empty values default to INFO, and invalid
 filters return an error. Logs must not contain tokens, secrets, or personal data.
 
