@@ -12,6 +12,8 @@ mod theme;
 /// Logical height of the custom title bar strip (matches frontend `h-9`).
 #[cfg(windows)]
 const TITLE_BAR_HEIGHT: u32 = 36;
+/// The startup (and updater) window opens at the same size as the main window.
+pub(crate) const MAIN_WINDOW_SIZE: (f64, f64) = (1200.0, 800.0);
 
 pub fn run() -> anyhow::Result<()> {
     licht_core::load_env_files();
@@ -173,7 +175,7 @@ fn create_main_window(app: &tauri::AppHandle, custom_title_bar: bool) -> tauri::
     let theme = theme::preference(app)?;
     let builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::default())
         .title("Licht Launcher")
-        .inner_size(1200.0, 800.0)
+        .inner_size(MAIN_WINDOW_SIZE.0, MAIN_WINDOW_SIZE.1)
         .min_inner_size(960.0, 560.0)
         .max_inner_size(1200.0, 960.0)
         .fullscreen(false)

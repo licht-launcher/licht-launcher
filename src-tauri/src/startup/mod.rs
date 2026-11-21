@@ -13,7 +13,7 @@ pub fn create_window(app: &AppHandle, label: &str) -> tauri::Result<()> {
     let theme = crate::theme::preference(app)?;
     let builder = WebviewWindowBuilder::new(app, label, WebviewUrl::default())
         .title("Licht Launcher")
-        .inner_size(420.0, 320.0)
+        .inner_size(crate::MAIN_WINDOW_SIZE.0, crate::MAIN_WINDOW_SIZE.1)
         .center()
         .decorations(false)
         .visible(false)

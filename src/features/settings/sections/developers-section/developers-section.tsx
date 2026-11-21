@@ -401,8 +401,9 @@ export function DevelopersSection({
               Startup preview
             </h4>
             <p className={developersSectionStyles.rowDescription}>
-              Open a separate startup preview, or restart the launcher with the
-              selected scenario. Updates and migrations use simulated data.
+              Open the startup and updater window at its real size, or restart
+              the launcher with the selected scenario. Updates and migrations
+              use simulated data.
             </p>
           </div>
           <div className={developersSectionStyles.groupText}>
