@@ -15,7 +15,7 @@ import {
   mockSettingsCommands,
   snapshot,
 } from "@/features/settings/fixtures/render-settings";
-import { promptTitleBarRestart } from "@/features/settings/lib/title-bar-restart-toast";
+import { promptRestart } from "@/features/settings/lib/restart-toast";
 import { fromSnapshot } from "@/features/settings/model/draft";
 import { UpdaterSection } from "@/features/settings/sections/updater-section";
 import { SettingsDialog } from "@/features/settings/settings-dialog";
@@ -158,6 +158,23 @@ describe("UpdaterSection", () => {
     const { section } = await view();
     expect(section.getByRole("status")).toHaveTextContent(
       "This portable build does not update itself. Download new versions from GitHub Releases.",
+    );
+    expect(
+      section.getByRole("switch", { name: "Automatic updates" }),
+    ).toBeDisabled();
+    expect(
+      section.getByRole("button", { name: "Check for updates" }),
+    ).toBeDisabled();
+    await waitFor(() =>
+      expect(getUpdateCheckStatus()).toBe("managed-externally"),
+    );
+  });
+
+  it("points to GitHub Releases and offers no update actions in an MSI installation", async () => {
+    state = appUpdateState({ phase: "msi" });
+    const { section } = await view();
+    expect(section.getByRole("status")).toHaveTextContent(
+      "This MSI installation does not update itself. Download new versions from GitHub Releases.",
     );
     expect(
       section.getByRole("switch", { name: "Automatic updates" }),
@@ -329,7 +346,7 @@ describe("UpdaterSection", () => {
     fireEvent.click(section.getByRole("button", { name: "Restart to update" }));
     await waitFor(() =>
       expect(invoke).toHaveBeenCalledWith("open_startup_preview", {
-        scenario: "updateAndMigration",
+        scenario: "update",
       }),
     );
     expect(install).not.toHaveBeenCalled();
@@ -364,7 +381,7 @@ describe("UpdaterSection", () => {
         section.getByRole("button", { name: "Check for updates" }),
       ).toBeEnabled(),
     );
-    act(() => promptTitleBarRestart());
+    act(() => promptRestart("Apply the hardware acceleration change now?"));
     expect(await screen.findByText("Restart required")).toBeVisible();
     fireEvent.click(section.getByRole("button", { name: "Check for updates" }));
     await screen.findByText("Licht Launcher is up to date.");

@@ -118,7 +118,9 @@ describe("DevelopersSection", () => {
   it("groups window and concurrency controls and forwards their changes", () => {
     const onChange = vi.fn();
     view(onChange);
-    fireEvent.click(screen.getByRole("switch", { name: "System title bar" }));
+    expect(
+      screen.queryByRole("switch", { name: "System title bar" }),
+    ).not.toBeInTheDocument();
     fireEvent.keyDown(
       screen.getByRole("slider", { name: "Simultaneous downloads" }),
       { key: "ArrowRight" },
@@ -127,7 +129,6 @@ describe("DevelopersSection", () => {
       screen.getByRole("slider", { name: "Simultaneous writes" }),
       { key: "ArrowLeft" },
     );
-    expect(onChange).toHaveBeenCalledWith({ disableCustomTitleBar: true });
     expect(onChange).toHaveBeenCalledWith({ downloadConcurrency: 9 });
     expect(onChange).toHaveBeenCalledWith({ writeConcurrency: 7 });
     expect(
@@ -136,9 +137,6 @@ describe("DevelopersSection", () => {
         .map((heading) => heading.textContent),
     ).toEqual(["Player", "Window", "Transfers", "Testing"]);
     const window = within(screen.getByRole("region", { name: "Window" }));
-    expect(
-      window.getByRole("switch", { name: "System title bar" }),
-    ).toBeInTheDocument();
     expect(
       window.getByRole("button", { name: "Reset window bounds" }),
     ).toBeInTheDocument();
@@ -341,6 +339,31 @@ describe("DevelopersSection", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open preview" }));
     await waitFor(() => expect(openPreview).toHaveBeenCalledWith("migration"));
     expect(restartPreview).not.toHaveBeenCalled();
+  });
+
+  it("previews an update download that fails and opens the installed version", async () => {
+    openPreview.mockResolvedValueOnce(undefined);
+    view();
+    await waitFor(() =>
+      expect(
+        screen.getByRole("combobox", { name: "Startup test scenario" }),
+      ).toBeEnabled(),
+    );
+    fireEvent.click(
+      screen.getByRole("combobox", { name: "Startup test scenario" }),
+    );
+    expect(
+      await screen.findByRole("option", {
+        name: "Migration followed by update",
+      }),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("option", { name: "Update download failure" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Open preview" }));
+    await waitFor(() =>
+      expect(openPreview).toHaveBeenCalledWith("downloadFailure"),
+    );
   });
 
   it("requests a startup test restart and reports launch failures", async () => {

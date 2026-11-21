@@ -60,7 +60,6 @@ impl SettingsRepository {
             .map(u64::try_from)
             .transpose()
             .map_err(|error| sqlx::Error::Decode(Box::new(error)))?;
-        settings.disable_custom_title_bar = row.try_get("disable_custom_title_bar")?;
         settings.data_directory = row.try_get("data_directory")?;
         Ok(true)
     }
@@ -105,13 +104,13 @@ impl SettingsRepository {
             .map(i64::try_from)
             .transpose()
             .map_err(|_| CoreError::SettingsDownloadSpeed)?;
-        sqlx::query("INSERT INTO settings (id, username, fullscreen, width, height, max_memory_mb, jvm_arguments, java25, java21, java17, java8, download_concurrency, write_concurrency, download_speed_limit_bytes_per_second, disable_custom_title_bar, data_directory)
-            VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
-            ON CONFLICT (id) DO UPDATE SET username = excluded.username, fullscreen = excluded.fullscreen, width = excluded.width, height = excluded.height, max_memory_mb = excluded.max_memory_mb, jvm_arguments = excluded.jvm_arguments, java25 = excluded.java25, java21 = excluded.java21, java17 = excluded.java17, java8 = excluded.java8, download_concurrency = excluded.download_concurrency, write_concurrency = excluded.write_concurrency, download_speed_limit_bytes_per_second = excluded.download_speed_limit_bytes_per_second, disable_custom_title_bar = excluded.disable_custom_title_bar, data_directory = excluded.data_directory")
+        sqlx::query("INSERT INTO settings (id, username, fullscreen, width, height, max_memory_mb, jvm_arguments, java25, java21, java17, java8, download_concurrency, write_concurrency, download_speed_limit_bytes_per_second, data_directory)
+            VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+            ON CONFLICT (id) DO UPDATE SET username = excluded.username, fullscreen = excluded.fullscreen, width = excluded.width, height = excluded.height, max_memory_mb = excluded.max_memory_mb, jvm_arguments = excluded.jvm_arguments, java25 = excluded.java25, java21 = excluded.java21, java17 = excluded.java17, java8 = excluded.java8, download_concurrency = excluded.download_concurrency, write_concurrency = excluded.write_concurrency, download_speed_limit_bytes_per_second = excluded.download_speed_limit_bytes_per_second, data_directory = excluded.data_directory")
             .bind(&settings.username).bind(settings.fullscreen).bind(settings.width).bind(settings.height)
             .bind(settings.max_memory_mb).bind(arguments).bind(&settings.java25).bind(&settings.java21)
             .bind(&settings.java17).bind(&settings.java8).bind(settings.download_concurrency)
-            .bind(settings.write_concurrency).bind(speed_limit).bind(settings.disable_custom_title_bar)
+            .bind(settings.write_concurrency).bind(speed_limit)
             .bind(&settings.data_directory)
             .execute(connection).await?;
         Ok(())

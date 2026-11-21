@@ -69,8 +69,6 @@ function defaultCommandResponse(command: string): Promise<unknown> {
         writtenBytes: 0,
         paused: false,
       });
-    case "custom_title_bar_active":
-      return Promise.resolve(true);
     case "storage_summary":
       return Promise.resolve(storageSummary);
     case "list_instance_content":

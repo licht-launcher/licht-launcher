@@ -1,11 +1,10 @@
 {
   "identifier": "startup",
-  "description": "Startup windows can listen for progress, drag the logo region and reveal themselves centered when ready.",
-  "windows": ["startup", "startup-preview-*"],
+  "description": "Developer startup previews can listen for progress, drag their title bar and show themselves once rendered.",
+  "windows": ["startup-preview-*"],
   "permissions": [
     "core:event:allow-listen",
     "core:event:allow-unlisten",
-    "core:window:allow-center",
     "core:window:allow-show",
     "core:window:allow-start-dragging"
   ]

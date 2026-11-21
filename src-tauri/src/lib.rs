@@ -95,7 +95,6 @@ pub fn run() -> anyhow::Result<()> {
             commands::shell::open_repository,
             commands::shell::open_feedback,
             commands::shell::open_external_url,
-            commands::shell::custom_title_bar_active,
             commands::shell::restart_app,
             commands::shell::quit_app,
             commands::instances::get_last_played_folder,
@@ -169,16 +168,22 @@ pub fn run() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn create_main_window(app: &tauri::AppHandle, custom_title_bar: bool) -> tauri::Result<()> {
+/// Creates the launcher window, which shows startup and update progress before the
+/// launcher itself. Developer startup previews use the same window with their own label.
+pub(crate) fn create_launcher_window(app: &tauri::AppHandle, label: &str) -> tauri::Result<()> {
     let theme = theme::preference(app)?;
-    let builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::default())
+    let builder = WebviewWindowBuilder::new(app, label, WebviewUrl::default())
         .title("Licht Launcher")
         .inner_size(1200.0, 800.0)
         .min_inner_size(960.0, 560.0)
         .max_inner_size(1200.0, 960.0)
+        .center()
+        // Shown by the page once it has rendered; a window shown while the app is
+        // still starting stays unpainted until it receives input.
+        .visible(false)
         .fullscreen(false)
         .maximizable(false)
-        .decorations(!custom_title_bar)
+        .decorations(false)
         .theme(theme::native_theme(theme))
         .initialization_script(theme::initialization_script(theme)?)
         .background_color(tauri::window::Color(0x16, 0x17, 0x1a, 0xff));
@@ -194,11 +199,7 @@ fn create_main_window(app: &tauri::AppHandle, custom_title_bar: bool) -> tauri::
         use tauri_plugin_window_controls::WindowControlsBuilderExt;
         // Native min / (disabled) max / close above the WebView. Maximize stays
         // grayed while `maximizable(false)` clears WS_MAXIMIZEBOX.
-        if custom_title_bar {
-            builder.window_controls_height(TITLE_BAR_HEIGHT).build()?
-        } else {
-            builder.build()?
-        }
+        builder.window_controls_height(TITLE_BAR_HEIGHT).build()?
     };
     #[cfg(not(windows))]
     let window = builder.build()?;

@@ -27,6 +27,8 @@ pub enum AppUpdatePhase {
     ExternallyManaged,
     /// A portable build: no installer placed it, so it cannot replace itself.
     Portable,
+    /// An all-users MSI install: silent updates cannot raise its UAC prompt.
+    Msi,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
@@ -374,6 +376,7 @@ mod tests {
             AppUpdatePhase::Installing,
             AppUpdatePhase::ExternallyManaged,
             AppUpdatePhase::Portable,
+            AppUpdatePhase::Msi,
         ] {
             assert!(!app_update_can_check(phase));
         }

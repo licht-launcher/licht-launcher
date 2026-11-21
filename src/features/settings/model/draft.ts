@@ -23,7 +23,6 @@ export type Draft = {
   writeConcurrency: number;
   downloadSpeedLimitKbs: string;
   dataDirectory: string;
-  disableCustomTitleBar: boolean;
   automaticUpdates: boolean;
   language: Settings["language"];
   hardwareAcceleration: boolean;
@@ -67,7 +66,6 @@ export function fromSnapshot(
       settings.downloadSpeedLimitBytesPerSecond,
     ),
     dataDirectory: snapshot.applicationDirectory,
-    disableCustomTitleBar: settings.disableCustomTitleBar,
     automaticUpdates: settings.automaticUpdates,
     language: settings.language,
     hardwareAcceleration: settings.hardwareAcceleration,
@@ -122,7 +120,6 @@ export function toSettings(
     writeConcurrency: draft.writeConcurrency,
     downloadSpeedLimitBytesPerSecond: speed,
     dataDirectory: emptyToNull(draft.dataDirectory),
-    disableCustomTitleBar: draft.disableCustomTitleBar,
     automaticUpdates: draft.automaticUpdates,
     language: draft.language,
     hardwareAcceleration: draft.hardwareAcceleration,

@@ -1,4 +1,4 @@
-export const titleBarRestartToastStyles = {
+export const restartToastStyles = {
   root: "group/toast pointer-events-auto relative z-100 flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-3 overflow-hidden rounded-xl border border-border bg-popover px-3 pt-3 pb-3.5 text-popover-foreground shadow-none",
   header: "flex items-start gap-3",
   iconWell:

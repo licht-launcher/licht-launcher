@@ -81,33 +81,6 @@ describe("General preferences", () => {
     );
   });
 
-  it("keeps a restart pending while another restart-dependent preference is changed", async () => {
-    await renderSettings();
-    fireEvent.click(
-      await screen.findByRole("switch", {
-        name: "Use hardware acceleration when available",
-      }),
-    );
-    expect(await screen.findByText("Restart required")).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "Developer Tools" }));
-    fireEvent.click(screen.getByRole("switch", { name: "System title bar" }));
-    await waitFor(() =>
-      expect(invoke).toHaveBeenCalledWith("save_settings", {
-        settings: expect.objectContaining({ disableCustomTitleBar: true }),
-      }),
-    );
-    fireEvent.click(screen.getByRole("button", { name: "General" }));
-    fireEvent.click(
-      await screen.findByRole("switch", {
-        name: "Use hardware acceleration when available",
-      }),
-    );
-    expect(screen.getByText("Restart required")).toBeVisible();
-    await waitFor(() =>
-      expect(screen.getByText("Apply the title bar change now?")).toBeVisible(),
-    );
-  });
-
   it("shows restore only while minimizing on game start is enabled and saves both choices", async () => {
     await renderSettings();
     const minimize = await screen.findByRole("switch", {

@@ -7,10 +7,7 @@ use std::time::Duration;
 use licht_core::{StartupPhase, StartupPreviewScenario, StartupReporter, StartupUpdateStatus};
 use tauri::{AppHandle, Emitter, Manager};
 
-use super::{
-    create_window,
-    state::{Session, StartupRuntime},
-};
+use super::state::{Session, StartupRuntime};
 
 static NEXT_PREVIEW: AtomicU64 = AtomicU64::new(0);
 
@@ -43,7 +40,7 @@ pub fn open(
             .lock()
             .map_err(|_| anyhow::anyhow!("startup sessions lock failed"))?
             .insert(label.clone(), Arc::clone(&session));
-        create_window(&app, &label)?;
+        crate::create_launcher_window(&app, &label)?;
         let worker_app = app.clone();
         let worker = tauri::async_runtime::spawn(async move {
             let result = async {
@@ -95,50 +92,12 @@ pub async fn run(
     session: &Arc<Session>,
     scenario: StartupPreviewScenario,
 ) -> anyhow::Result<()> {
-    session.update(app, |state| {
-        state.preview = true;
-        state.phase = StartupPhase::CheckingUpdates;
-    })?;
-    pause(session).await?;
-    if matches!(scenario, StartupPreviewScenario::CheckFailure) {
-        session.update(app, |state| {
-            state.update_status = StartupUpdateStatus::Failed;
-            state.warning = Some(
-                "Simulated network failure. The installed launcher remains available.".to_string(),
-            );
-        })?;
-    } else {
-        session.update(app, |state| {
-            state.update_status = StartupUpdateStatus::UpToDate
-        })?;
-    }
-    if matches!(
-        scenario,
-        StartupPreviewScenario::Update | StartupPreviewScenario::UpdateAndMigration
-    ) {
-        session.update(app, |state| {
-            state.phase = StartupPhase::DownloadingUpdate;
-            state.version = Some("preview-version".to_string());
-            state.update_status = StartupUpdateStatus::Available;
-            state.total_bytes = Some(10 * 1024 * 1024);
-            state.processed_bytes = 0;
-        })?;
-        for step in 1..=10 {
-            pause(session).await?;
-            session.update(app, |state| state.processed_bytes = step * 1024 * 1024)?;
-        }
-        session.update(app, |state| {
-            state.phase = StartupPhase::VerifyingUpdate;
-            state.total_bytes = None;
-        })?;
-        pause(session).await?;
-        session.update(app, |state| state.phase = StartupPhase::InstallingUpdate)?;
-        pause(session).await?;
-    }
+    session.update(app, |state| state.preview = true)?;
+    // Storage (and any migration) is prepared before the update check, as in a real startup.
     if matches!(
         scenario,
         StartupPreviewScenario::Migration
-            | StartupPreviewScenario::UpdateAndMigration
+            | StartupPreviewScenario::MigrationAndUpdate
             | StartupPreviewScenario::MigrationFailure
     ) {
         let session = Arc::clone(session);
@@ -149,6 +108,56 @@ pub async fn run(
             reporter,
         )
         .await?;
+    }
+    session.update(app, |state| {
+        state.phase = StartupPhase::CheckingUpdates;
+        state.total_bytes = None;
+    })?;
+    pause(session).await?;
+    if matches!(scenario, StartupPreviewScenario::CheckFailure) {
+        session.update(app, |state| {
+            state.update_status = StartupUpdateStatus::Failed;
+            state.warning = Some(
+                "Simulated network failure. The installed launcher remains available.".to_string(),
+            );
+        })?;
+    } else if matches!(
+        scenario,
+        StartupPreviewScenario::Update
+            | StartupPreviewScenario::MigrationAndUpdate
+            | StartupPreviewScenario::DownloadFailure
+    ) {
+        session.update(app, |state| {
+            state.phase = StartupPhase::DownloadingUpdate;
+            state.version = Some("preview-version".to_string());
+            state.update_status = StartupUpdateStatus::Available;
+            state.total_bytes = Some(10 * 1024 * 1024);
+            state.processed_bytes = 0;
+        })?;
+        let failing = matches!(scenario, StartupPreviewScenario::DownloadFailure);
+        for step in 1..=if failing { 4 } else { 10 } {
+            pause(session).await?;
+            session.update(app, |state| state.processed_bytes = step * 1024 * 1024)?;
+        }
+        if failing {
+            session.update(app, |state| {
+                state.update_status = StartupUpdateStatus::Failed;
+                state.warning =
+                    Some("Simulated download failure. Starting the installed version.".to_string());
+            })?;
+        } else {
+            session.update(app, |state| {
+                state.phase = StartupPhase::VerifyingUpdate;
+                state.total_bytes = None;
+            })?;
+            pause(session).await?;
+            session.update(app, |state| state.phase = StartupPhase::InstallingUpdate)?;
+            pause(session).await?;
+        }
+    } else {
+        session.update(app, |state| {
+            state.update_status = StartupUpdateStatus::UpToDate
+        })?;
     }
     session.update(app, |state| {
         state.phase = StartupPhase::Ready;

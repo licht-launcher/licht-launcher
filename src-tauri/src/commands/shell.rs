@@ -1,13 +1,7 @@
-use tauri::{AppHandle, State, WebviewWindow};
+use tauri::{AppHandle, WebviewWindow};
 use tauri_plugin_opener::OpenerExt;
 
 const REPOSITORY_URL: &str = "https://github.com/licht-launcher/licht-launcher";
-
-/// Title bar mode chosen when the main window was created (restart to change).
-#[derive(Clone, Copy)]
-pub struct TitleBarMode {
-    pub custom: bool,
-}
 
 #[tauri::command]
 pub fn open_repository(app: AppHandle) -> Result<(), String> {
@@ -29,11 +23,6 @@ pub fn open_external_url(app: AppHandle, url: String) -> Result<(), String> {
     app.opener()
         .open_url(url, None::<&str>)
         .map_err(|error| error.to_string())
-}
-
-#[tauri::command]
-pub fn custom_title_bar_active(mode: State<'_, TitleBarMode>) -> bool {
-    mode.custom
 }
 
 #[tauri::command]

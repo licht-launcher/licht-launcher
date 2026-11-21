@@ -42,7 +42,6 @@ import { CreateInstanceMenu } from "@/features/new-instance/components/create-in
 import { CreateInstanceDialog } from "@/features/new-instance/create-instance-dialog";
 import { uniqueName } from "@/features/new-instance/model/create-state";
 import { PlayerAccountButton } from "@/features/settings/components/player-account-button";
-import { useCustomTitleBar } from "@/hooks/use-custom-title-bar";
 import { APP_CODENAME, APP_VERSION } from "@/lib/app-release";
 import { cn } from "@/lib/utils";
 import type { HomeSearch } from "@/routes/_app/index";
@@ -50,7 +49,6 @@ import type { HomeSearch } from "@/routes/_app/index";
 import { instancesChromeStyles } from "./instances-chrome.styles";
 
 export function InstancesChrome({ children }: { children: ReactNode }) {
-  const customTitleBar = useCustomTitleBar().data ?? true;
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
     id: SIDEBAR_LAYOUT_ID,
     panelIds: [...SIDEBAR_PANEL_IDS],
@@ -254,7 +252,6 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
     <>
       <div className={instancesChromeStyles.sidebar}>
         <TitleBar
-          windowControls={customTitleBar}
           actions={
             <PlayerAccountButton
               onAddAccount={() => dialogs.openGlobalSettings("account")}

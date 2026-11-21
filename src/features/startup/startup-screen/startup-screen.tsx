@@ -1,12 +1,11 @@
 import { useMutation } from "@tanstack/react-query";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect, useRef } from "react";
+import { TitleBar } from "@/components/title-bar/title-bar";
 import { Progress } from "@/components/ui/progress";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { useStartupProgress } from "@/features/startup/hooks/use-startup-progress";
 import { messageOf } from "@/lib/errors";
 import type { StartupPhase } from "@/lib/generated/StartupPhase";
-import logo from "../../../../src-tauri/icons/128x128@2x.png?no-inline";
 
 import { startupScreenStyles } from "./startup-screen.styles";
 
@@ -51,17 +50,13 @@ export function StartupScreen() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [previewWindow, closing.isPending, closePreview]);
-  const logoRef = useRef<HTMLImageElement>(null);
   const revealing = useRef(false);
   const { mutate: revealWindow, ...reveal } = useMutation({
     mutationFn: async () => {
       try {
         await document.fonts?.ready;
-        await logoRef.current?.decode();
       } finally {
-        const window = getCurrentWindow();
-        await window.center();
-        await window.show();
+        await getCurrentWindow().show();
       }
     },
   });
@@ -87,22 +82,25 @@ export function StartupScreen() {
       ? Math.min(100, (snapshot.processedBytes / snapshot.totalBytes) * 100)
       : undefined;
   return (
-    <ScrollArea className={startupScreenStyles.scrollArea}>
+    <div className={startupScreenStyles.root}>
+      <TitleBar>
+        <span data-tauri-drag-region className={startupScreenStyles.brand}>
+          Licht Launcher
+        </span>
+      </TitleBar>
       <main
-        className={startupScreenStyles.root}
+        className={startupScreenStyles.content}
         aria-label="Launcher startup"
         aria-busy={closing.isPending}
       >
-        <h1 data-tauri-drag-region className={startupScreenStyles.logoWrapper}>
-          <img
-            ref={logoRef}
-            src={logo}
-            alt="Licht Launcher"
-            draggable={false}
-            className={startupScreenStyles.logo}
-          />
-        </h1>
         <div className={startupScreenStyles.progress}>
+          <p
+            role="status"
+            aria-live="polite"
+            className={startupScreenStyles.message}
+          >
+            {labels[phase]}
+          </p>
           {!error && phase !== "ready" ? (
             <Progress
               value={value}
@@ -123,13 +121,6 @@ export function StartupScreen() {
               {formatBytes(snapshot.processedBytes)}
             </p>
           ) : null}
-          <p
-            role="status"
-            aria-live="polite"
-            className={startupScreenStyles.message}
-          >
-            {labels[phase]}
-          </p>
           {snapshot?.version ? (
             <p className={startupScreenStyles.detail}>
               Update: {snapshot.version}
@@ -156,7 +147,7 @@ export function StartupScreen() {
           ) : null}
           {reveal.error ? (
             <p role="alert" className={startupScreenStyles.error}>
-              Could not prepare the startup window: {reveal.error.message}
+              Could not show the launcher window: {messageOf(reveal.error)}
             </p>
           ) : null}
           {closing.error ? (
@@ -166,6 +157,6 @@ export function StartupScreen() {
           ) : null}
         </div>
       </main>
-    </ScrollArea>
+    </div>
   );
 }

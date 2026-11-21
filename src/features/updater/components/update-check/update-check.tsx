@@ -61,7 +61,7 @@ function legacyStatus(phase: AppUpdatePhase | undefined): UpdateCheckStatus {
   if (phase === "ready") return "available";
   if (phase === "upToDate") return "up-to-date";
   if (phase === "failed") return "failed";
-  if (phase === "externallyManaged" || phase === "portable")
+  if (phase === "externallyManaged" || phase === "portable" || phase === "msi")
     return "managed-externally";
   return "not-checked";
 }
@@ -139,7 +139,7 @@ export function UpdateCheck() {
     mutationFn: (action: "check" | "download" | "install") => {
       if (getUpdateSimulation())
         return action === "install"
-          ? openStartupPreview("updateAndMigration")
+          ? openStartupPreview("update")
           : Promise.resolve();
       if (action === "check") return checkAppUpdate();
       if (action === "download") return downloadAppUpdate();

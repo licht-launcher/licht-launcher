@@ -20,6 +20,10 @@ describe("application update state boundary", () => {
     const state = appUpdateState({ phase: "portable" });
     expect(parseAppUpdateState(state)).toEqual(state);
   });
+  it("accepts an MSI installation that does not update itself", () => {
+    const state = appUpdateState({ phase: "msi" });
+    expect(parseAppUpdateState(state)).toEqual(state);
+  });
   it.each([
     null,
     {},

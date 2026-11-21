@@ -7,51 +7,26 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { StrictMode } from "react";
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { startupProgress } from "@/features/startup/fixtures/progress";
 import { StartupScreen } from "@/features/startup/startup-screen";
 import type { StartupProgress } from "@/lib/generated/StartupProgress";
 
-const {
-  getProgress,
-  center,
-  show,
-  close,
-  windowInfo,
-  decode,
-  listen,
-  listeners,
-} = vi.hoisted(() => ({
-  getProgress: vi.fn(),
-  center: vi.fn(),
-  show: vi.fn(),
-  close: vi.fn(),
-  windowInfo: { label: "startup" },
-  decode: vi.fn(),
-  listen: vi.fn(),
-  listeners: new Set<(event: { payload: StartupProgress }) => void>(),
-}));
+const { getProgress, close, minimize, show, windowInfo, listen, listeners } =
+  vi.hoisted(() => ({
+    getProgress: vi.fn(),
+    close: vi.fn(),
+    minimize: vi.fn(),
+    show: vi.fn(),
+    windowInfo: { label: "main" },
+    listen: vi.fn(),
+    listeners: new Set<(event: { payload: StartupProgress }) => void>(),
+  }));
 vi.mock("@/api/commands", () => ({ getStartupProgress: getProgress }));
 vi.mock("@tauri-apps/api/window", () => ({
-  getCurrentWindow: () => ({ center, show, close, label: windowInfo.label }),
+  getCurrentWindow: () => ({ close, minimize, show, label: windowInfo.label }),
 }));
 vi.mock("@tauri-apps/api/event", () => ({ listen }));
-
-const originalDecode = Object.getOwnPropertyDescriptor(
-  HTMLImageElement.prototype,
-  "decode",
-);
-Object.defineProperty(HTMLImageElement.prototype, "decode", {
-  configurable: true,
-  value: decode,
-});
-afterAll(() => {
-  if (originalDecode) {
-    Object.defineProperty(HTMLImageElement.prototype, "decode", originalDecode);
-  } else {
-    Reflect.deleteProperty(HTMLImageElement.prototype, "decode");
-  }
-});
 
 function view() {
   const client = new QueryClient({
@@ -71,15 +46,11 @@ describe("StartupScreen", () => {
   beforeEach(() => {
     listeners.clear();
     getProgress.mockReset();
-    center.mockReset();
-    show.mockReset();
     close.mockReset().mockResolvedValue(undefined);
-    windowInfo.label = "startup";
-    decode.mockReset();
+    minimize.mockReset().mockResolvedValue(undefined);
+    show.mockReset().mockResolvedValue(undefined);
+    windowInfo.label = "main";
     listen.mockReset();
-    center.mockResolvedValue(undefined);
-    show.mockResolvedValue(undefined);
-    decode.mockResolvedValue(undefined);
     getProgress.mockResolvedValue(startupProgress());
     listen.mockImplementation(
       async (
@@ -173,12 +144,14 @@ describe("StartupScreen", () => {
     expect(listeners.size).toBe(0);
   });
 
-  it("does not show an X button inside the scenario preview", async () => {
+  it("does not show a separate close-preview button inside the scenario preview", async () => {
     windowInfo.label = "startup-preview-1";
     getProgress.mockResolvedValue(startupProgress({ preview: true }));
     view();
     await screen.findByText(/Development preview/);
-    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Close preview" }),
+    ).not.toBeInTheDocument();
   });
 
   it("closes a separate preview with Escape while it is loading", async () => {
@@ -188,7 +161,7 @@ describe("StartupScreen", () => {
     await waitFor(() => expect(close).toHaveBeenCalledOnce());
   });
 
-  it("does not expose preview close controls or Escape on the real startup window", async () => {
+  it("does not close the real launcher window with Escape", async () => {
     getProgress.mockResolvedValue(startupProgress({ preview: true }));
     view();
     await screen.findByText(/Development preview/);
@@ -235,7 +208,7 @@ describe("StartupScreen", () => {
     );
   });
 
-  it("keeps a migration failure visible without a close button", async () => {
+  it("keeps a migration failure visible and lets the window be closed", async () => {
     getProgress.mockResolvedValue(
       startupProgress({
         phase: "failed",
@@ -247,11 +220,12 @@ describe("StartupScreen", () => {
       "Destination contains different data",
     );
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(close).toHaveBeenCalledOnce());
   });
 
   it("falls back to polling when live events are unavailable and displays offline warnings", async () => {
-    listen.mockRejectedValueOnce(new Error("bridge unavailable"));
+    listen.mockRejectedValue(new Error("bridge unavailable"));
     getProgress.mockResolvedValue(
       startupProgress({ phase: "ready", warning: "Starting offline" }),
     );
@@ -263,7 +237,7 @@ describe("StartupScreen", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Ready");
   });
 
-  it("renders the existing logo above the progress and status on the sidebar background", async () => {
+  it("renders the launcher title bar with window controls and no installer logo", async () => {
     getProgress.mockResolvedValue(
       startupProgress({
         phase: "migratingInstances",
@@ -273,63 +247,50 @@ describe("StartupScreen", () => {
     );
     view();
     await screen.findByText("Migrating instances…");
-    const logo = screen.getByRole("img", { name: "Licht Launcher" });
+    const titleBar = screen.getByRole("banner");
+    expect(titleBar).toHaveTextContent("Licht Launcher");
+    expect(titleBar.querySelector("[data-tauri-drag-region]")).not.toBeNull();
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+    const status = screen.getByRole("status");
     const progress = screen.getByRole("progressbar");
     const counter = screen.getByText("10 files verified · 1.0 MB");
-    const status = screen.getByRole("status");
-    expect(logo.getAttribute("src")).toContain("128x128@2x.png");
-    expect(logo.getAttribute("src")).not.toMatch(/^data:/);
     expect(
-      logo.compareDocumentPosition(progress) & Node.DOCUMENT_POSITION_FOLLOWING,
+      status.compareDocumentPosition(progress) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(
       progress.compareDocumentPosition(counter) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
-    expect(
-      counter.compareDocumentPosition(status) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-    expect(logo.closest("[data-tauri-drag-region]")).not.toBeNull();
-    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Minimize" }));
+    await waitFor(() => expect(minimize).toHaveBeenCalledOnce());
   });
 
-  it("waits for the logo, centers and shows the rendered interface before starting the check", async () => {
-    let finishDecode: (() => void) | undefined;
-    decode.mockImplementation(
-      () =>
-        new Promise<void>((resolve) => {
-          finishDecode = resolve;
-        }),
-    );
-    center.mockImplementation(async () => {
-      expect(screen.getByRole("main")).toBeInTheDocument();
+  it("shows the hidden window once rendered, then starts reading progress", async () => {
+    let finishShow: (() => void) | undefined;
+    show.mockImplementation(() => {
       expect(screen.getByRole("status")).toHaveTextContent(
         "Preparing launcher…",
       );
-      expect(show).not.toHaveBeenCalled();
+      return new Promise<void>((resolve) => {
+        finishShow = resolve;
+      });
     });
-    show.mockImplementation(async () => {
-      expect(center).toHaveBeenCalledTimes(1);
-      expect(getProgress).not.toHaveBeenCalled();
-    });
+    getProgress.mockResolvedValue(startupProgress({ phase: "preparing" }));
     view();
-    await waitFor(() => expect(decode).toHaveBeenCalledTimes(1));
-    expect(center).not.toHaveBeenCalled();
-    expect(show).not.toHaveBeenCalled();
+    await waitFor(() => expect(show).toHaveBeenCalledOnce());
     expect(getProgress).not.toHaveBeenCalled();
-    await act(async () => finishDecode?.());
+    await act(async () => finishShow?.());
     await waitFor(() => expect(getProgress).toHaveBeenCalledTimes(1));
-    expect(show).toHaveBeenCalledTimes(1);
   });
 
-  it("still reveals the interface and reports a logo loading failure", async () => {
-    decode.mockRejectedValue(new Error("Logo decoding failed"));
+  it("still reads progress and reports it when the window cannot be shown", async () => {
+    show.mockRejectedValue(new Error("Show permission unavailable"));
+    getProgress.mockResolvedValue(startupProgress({ phase: "preparing" }));
     view();
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Logo decoding failed",
+      "Could not show the launcher window: Show permission unavailable",
     );
-    expect(center).toHaveBeenCalledTimes(1);
-    expect(show).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(getProgress).toHaveBeenCalledTimes(1));
   });
 });

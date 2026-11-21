@@ -16,7 +16,6 @@ import {
   createInstanceFromModpack,
   createInstanceFromModpackFile,
   createInstanceWithPlatform,
-  customTitleBarActive,
   deleteInstance,
   detectJavaInstallations,
   downloadAppUpdate,
@@ -163,9 +162,9 @@ describe("launcher commands", () => {
     expect(invoke).toHaveBeenCalledWith("open_startup_preview", {
       scenario: "migration",
     });
-    await restartStartupPreview("updateAndMigration");
+    await restartStartupPreview("migrationAndUpdate");
     expect(invoke).toHaveBeenCalledWith("restart_startup_preview", {
-      scenario: "updateAndMigration",
+      scenario: "migrationAndUpdate",
     });
     await requestUpdateRestart();
     expect(invoke).toHaveBeenCalledWith("request_update_restart");
@@ -537,9 +536,7 @@ describe("launcher commands", () => {
     expect(invoke).toHaveBeenCalledWith("get_settings");
   });
 
-  it("reads the applied title bar mode and can request a restart", async () => {
-    await customTitleBarActive();
-    expect(invoke).toHaveBeenCalledWith("custom_title_bar_active");
+  it("can request a restart", async () => {
     await restartApp();
     expect(invoke).toHaveBeenCalledWith("restart_app");
   });
@@ -566,7 +563,6 @@ describe("launcher commands", () => {
       downloadConcurrency: 4,
       writeConcurrency: 8,
       downloadSpeedLimitBytesPerSecond: null,
-      disableCustomTitleBar: false,
       dataDirectory: null,
       automaticUpdates: true,
       language: "en" as const,

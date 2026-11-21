@@ -33,7 +33,7 @@ From 0.8 on, the list continues (to be defined together with the project owner).
 | Platform | Artifact | In-app updates |
 | -------- | -------- | -------------- |
 | Windows  | `-windows-x64-setup.exe` (NSIS, current user) | Yes |
-| Windows  | `-windows-x64.msi` (WiX, all users) | Yes, through the MSI |
+| Windows  | `-windows-x64.msi` (WiX, all users) | No, new versions are installed by hand |
 | Windows  | `-windows-x64-portable.exe` | No, new versions are downloaded by hand |
 | Linux    | `-linux-x64.AppImage` | Yes |
 | Linux    | `-linux-x64.deb` | Yes, through the .deb (asks for the admin password) |
@@ -106,7 +106,16 @@ signed updates for those installs; users must reinstall manually.
 
 ### User flow
 
-- **Automatic updates** checks after the main window opens and every 30 minutes
+- Windows updates install silently (`installMode: quiet`): the launcher closes,
+  the NSIS installer runs without a window and reopens the launcher. Silent
+  installs cannot raise a UAC prompt, so the all-users MSI reports updates as
+  unavailable and Settings points to GitHub Releases.
+- The launcher window shows startup and update progress before the launcher
+  itself; no separate window opens. With **Automatic updates** on, release builds
+  check for an update there before the launcher opens, then download, verify and
+  install it and restart. If the check or download fails, the installed version opens with a
+  warning. Development builds only update at startup when asked to.
+- **Automatic updates** also checks after the main window opens and every 30 minutes
   while no verified package is waiting to be applied. Available updates download
   in the background; installation always requires **Restart to update**.
 - Turning automatic updates off cancels automatic checks/downloads. Manual
@@ -123,8 +132,7 @@ signed updates for those installs; users must reinstall manually.
   downloads are suspended. Windows drains launcher services in the updater's
   exit callback; Linux uses the normal restart/shutdown path after installation.
 - **Later** dismisses the ready notification without deleting the package or
-  changing preferences. Closing/reopening the app never installs automatically.
+  changing preferences. With **Automatic updates** off, reopening the app never
+  installs automatically.
 - Failures leave the installed launcher available and expose a retry in Updates.
   An unsuccessful installation attempt still requires another explicit action.
-- The startup installer remains available for explicit requests saved by older
-  launcher versions; it no longer checks/downloads automatically during startup.

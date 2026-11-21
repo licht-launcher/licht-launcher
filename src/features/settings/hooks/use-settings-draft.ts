@@ -4,9 +4,9 @@ import { toast } from "sonner";
 import { getSettings, runtimeJava, saveSettings } from "@/api/commands";
 import { useToastError } from "@/features/settings/hooks/use-toast-error";
 import {
-  dismissTitleBarRestartToast,
-  promptTitleBarRestart,
-} from "@/features/settings/lib/title-bar-restart-toast";
+  dismissRestartToast,
+  promptRestart,
+} from "@/features/settings/lib/restart-toast";
 import {
   type Draft,
   fromSnapshot,
@@ -39,7 +39,6 @@ export function useSettingsDraft(open: boolean) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const schemaRef = useRef(1);
   const persistRef = useRef<(current: Draft) => void>(() => {});
-  const appliedDisableCustomTitleBar = useRef<boolean | null>(null);
   const appliedHardwareAcceleration = useRef<boolean | null>(null);
 
   const save = useMutation({
@@ -50,14 +49,9 @@ export function useSettingsDraft(open: boolean) {
         appliedHardwareAcceleration.current !== null &&
         saved.hardwareAcceleration !== appliedHardwareAcceleration.current
       ) {
-        promptTitleBarRestart("Apply the hardware acceleration change now?");
-      } else if (
-        appliedDisableCustomTitleBar.current !== null &&
-        saved.disableCustomTitleBar !== appliedDisableCustomTitleBar.current
-      ) {
-        promptTitleBarRestart();
+        promptRestart("Apply the hardware acceleration change now?");
       } else {
-        dismissTitleBarRestartToast();
+        dismissRestartToast();
       }
     },
     onError: (error: unknown) => {
@@ -83,8 +77,6 @@ export function useSettingsDraft(open: boolean) {
   useEffect(() => {
     if (settings.data && runtime.isFetched && draft === null) {
       schemaRef.current = settings.data.settings.schema;
-      appliedDisableCustomTitleBar.current =
-        settings.data.settings.disableCustomTitleBar;
       appliedHardwareAcceleration.current =
         settings.data.settings.hardwareAcceleration;
       const next = fromSnapshot(settings.data, runtime.data ?? null);
@@ -101,7 +93,7 @@ export function useSettingsDraft(open: boolean) {
       if (timerRef.current !== null) {
         clearTimeout(timerRef.current);
       }
-      dismissTitleBarRestartToast();
+      dismissRestartToast();
     };
   }, []);
 
@@ -115,14 +107,11 @@ export function useSettingsDraft(open: boolean) {
     setDraft(next);
 
     if (
-      (patch.disableCustomTitleBar !== undefined ||
-        patch.hardwareAcceleration !== undefined) &&
-      appliedDisableCustomTitleBar.current !== null &&
+      patch.hardwareAcceleration !== undefined &&
       appliedHardwareAcceleration.current !== null &&
-      next.disableCustomTitleBar === appliedDisableCustomTitleBar.current &&
       next.hardwareAcceleration === appliedHardwareAcceleration.current
     ) {
-      dismissTitleBarRestartToast();
+      dismissRestartToast();
     }
 
     if (timerRef.current !== null) {
