@@ -3,10 +3,15 @@ use clap::Parser;
 use licht_cli::cli::Cli;
 use licht_cli::commands::{Command, InstancesCommand, install, instances_list, launch, versions};
 use licht_cli::error::report;
+use licht_cli::logging;
 
 fn main() {
     licht_core::load_env_files();
     let cli = Cli::parse();
+    if let Err(error) = logging::init(cli.verbose) {
+        report(&error);
+        std::process::exit(1);
+    }
     let code = match runtime() {
         Ok(runtime) => match runtime.block_on(run(cli)) {
             Ok(code) => code,
