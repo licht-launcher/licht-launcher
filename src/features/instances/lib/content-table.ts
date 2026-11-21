@@ -2,14 +2,8 @@ import type { InstanceContentEntry } from "@/lib/generated/InstanceContentEntry"
 import type { InstanceContentKind } from "@/lib/generated/InstanceContentKind";
 
 export type ContentFilter = "all" | InstanceContentKind;
-export type ContentSortKey = "name" | "size";
+export type ContentSortKey = "name";
 export type ContentSortDir = "asc" | "desc";
-
-export function formatSize(size: number): string {
-  if (size < 1024) return `${size} B`;
-  if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 export function formatContentTitle(name: string): string {
   const withoutExtension = name.replace(/\.[^.]+$/, "");
@@ -22,19 +16,15 @@ export function formatContentTitle(name: string): string {
 
 export function sortContentEntries(
   entries: InstanceContentEntry[],
-  key: ContentSortKey,
   dir: ContentSortDir,
 ): InstanceContentEntry[] {
   const sign = dir === "asc" ? 1 : -1;
-  return [...entries].sort((left, right) => {
-    const compare =
-      key === "size"
-        ? left.size - right.size
-        : left.title.localeCompare(right.title, undefined, {
-            sensitivity: "base",
-          });
-    return compare * sign;
-  });
+  return [...entries].sort(
+    (left, right) =>
+      left.title.localeCompare(right.title, undefined, {
+        sensitivity: "base",
+      }) * sign,
+  );
 }
 
 export function toggleContentSort(
