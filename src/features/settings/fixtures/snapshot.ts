@@ -19,7 +19,6 @@ export const snapshot = {
     writeConcurrency: 8,
     downloadSpeedLimitBytesPerSecond: null,
     dataDirectory: null,
-    disableCustomTitleBar: false,
     automaticUpdates: true,
     language: "en",
     hardwareAcceleration: true,

@@ -3,39 +3,39 @@ import { toast } from "sonner";
 import { restartApp } from "@/api/commands";
 import { Button } from "@/components/ui/button";
 
-import { titleBarRestartToastStyles } from "./title-bar-restart-toast.styles";
+import { restartToastStyles } from "./restart-toast.styles";
 
-export const TITLE_BAR_RESTART_TOAST_ID = "title-bar-restart";
+export const RESTART_TOAST_ID = "restart";
 
 /** Keep in sync with `.toast-progress-bar` animation duration in tokens.css. */
-const TITLE_BAR_RESTART_TOAST_MS = 12_000;
+const RESTART_TOAST_MS = 12_000;
 
-export function dismissTitleBarRestartToast() {
-  toast.dismiss(TITLE_BAR_RESTART_TOAST_ID);
+export function dismissRestartToast() {
+  toast.dismiss(RESTART_TOAST_ID);
 }
 
-export function promptTitleBarRestart(message: string) {
+export function promptRestart(message: string) {
   toast.custom(
     (id) => (
-      <div className={titleBarRestartToastStyles.root}>
-        <div className={titleBarRestartToastStyles.header}>
-          <div aria-hidden className={titleBarRestartToastStyles.iconWell}>
+      <div className={restartToastStyles.root}>
+        <div className={restartToastStyles.header}>
+          <div aria-hidden className={restartToastStyles.iconWell}>
             <RotateCcwIcon
-              className={titleBarRestartToastStyles.icon}
+              className={restartToastStyles.icon}
               strokeWidth={2}
             />
           </div>
-          <div className={titleBarRestartToastStyles.text}>
-            <p className={titleBarRestartToastStyles.title}>Restart required</p>
-            <p className={titleBarRestartToastStyles.message}>{message}</p>
+          <div className={restartToastStyles.text}>
+            <p className={restartToastStyles.title}>Restart required</p>
+            <p className={restartToastStyles.message}>{message}</p>
           </div>
         </div>
-        <div className={titleBarRestartToastStyles.actions}>
+        <div className={restartToastStyles.actions}>
           <Button
             type="button"
             variant="outline"
             size="sm"
-            className={titleBarRestartToastStyles.action}
+            className={restartToastStyles.action}
             onClick={(event) => {
               event.stopPropagation();
               toast.dismiss(id);
@@ -47,7 +47,7 @@ export function promptTitleBarRestart(message: string) {
           <Button
             type="button"
             size="sm"
-            className={titleBarRestartToastStyles.action}
+            className={restartToastStyles.action}
             onClick={(event) => {
               event.stopPropagation();
               toast.dismiss(id);
@@ -58,13 +58,13 @@ export function promptTitleBarRestart(message: string) {
             Restart
           </Button>
         </div>
-        <div aria-hidden className={titleBarRestartToastStyles.progressBar} />
+        <div aria-hidden className={restartToastStyles.progressBar} />
       </div>
     ),
     {
-      id: TITLE_BAR_RESTART_TOAST_ID,
+      id: RESTART_TOAST_ID,
       position: "bottom-center",
-      duration: TITLE_BAR_RESTART_TOAST_MS,
+      duration: RESTART_TOAST_MS,
       unstyled: true,
     },
   );

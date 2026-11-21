@@ -57,7 +57,6 @@ pub struct Settings {
     #[ts(type = "number | null")]
     pub download_speed_limit_bytes_per_second: Option<u64>,
     pub data_directory: Option<String>,
-    pub disable_custom_title_bar: bool,
     pub automatic_updates: bool,
     pub language: LauncherLanguage,
     pub hardware_acceleration: bool,
@@ -125,8 +124,6 @@ struct StoredSettings {
     download_speed_limit_bytes_per_second: Option<u64>,
     #[serde(default)]
     data_directory: Option<String>,
-    #[serde(default)]
-    disable_custom_title_bar: bool,
     #[serde(default = "default_true")]
     check_for_updates: bool,
     #[serde(default = "default_true")]
@@ -327,7 +324,6 @@ pub(super) fn validated(
         write_concurrency: settings.write_concurrency,
         download_speed_limit_bytes_per_second: settings.download_speed_limit_bytes_per_second,
         data_directory: normalize_directory(cache, settings.data_directory.as_deref())?,
-        disable_custom_title_bar: settings.disable_custom_title_bar,
         automatic_updates: settings.automatic_updates,
         language: settings.language,
         hardware_acceleration: settings.hardware_acceleration,
@@ -374,7 +370,6 @@ fn from_stored(cache: &SharedCache, stored: StoredSettings, total: u32) -> Resul
             write_concurrency: stored.write_concurrency,
             download_speed_limit_bytes_per_second,
             data_directory: stored.data_directory,
-            disable_custom_title_bar: stored.disable_custom_title_bar,
             automatic_updates: stored
                 .automatic_updates
                 .unwrap_or(stored.check_for_updates && stored.install_updates_on_restart),
@@ -531,7 +526,6 @@ fn load_file_settings(cache: &SharedCache, total: u32) -> Result<Settings> {
                 download_speed_limit_mib: None,
                 download_speed_limit_bytes_per_second: None,
                 data_directory: None,
-                disable_custom_title_bar: false,
                 check_for_updates: true,
                 install_updates_on_restart: true,
                 automatic_updates: Some(true),

@@ -143,7 +143,7 @@ async fn concurrent_first_opens_share_a_complete_migrated_schema() {
     futures_util::future::join_all((0..4).map(|_| async {
         barrier.wait().await;
         let mut connection = open_migrated(&cache).await.expect("concurrent open");
-        assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 13);
+        assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 14);
         assert_eq!(scalar(&mut connection, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('meta', 'download_jobs', 'download_job_artifacts')").await, 3);
         assert_artifact_path_lookup_is_indexed(&mut connection).await;
         connection.close().await.expect("close");
@@ -223,7 +223,7 @@ async fn a_version_one_database_gains_download_jobs_without_losing_existing_meta
         stored_last_played(&cache).await.expect("metadata"),
         Some("survival".into())
     );
-    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 13);
+    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 14);
     connection.close().await.expect("close");
 }
 
@@ -231,15 +231,15 @@ async fn a_version_one_database_gains_download_jobs_without_losing_existing_meta
 async fn a_newer_database_schema_is_rejected_without_downgrading_it() {
     let cache = cache("future-schema");
     let mut connection = raw_database(&cache).await;
-    sqlx::query("PRAGMA user_version = 14")
+    sqlx::query("PRAGMA user_version = 15")
         .execute(&mut connection)
         .await
         .expect("future schema");
     assert!(matches!(
         open_migrated(&cache).await,
-        Err(CoreError::DatabaseSchema { schema: 14 })
+        Err(CoreError::DatabaseSchema { schema: 15 })
     ));
-    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 14);
+    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 15);
     let journal: String = sqlx::query_scalar("PRAGMA journal_mode")
         .fetch_one(&mut connection)
         .await
@@ -356,7 +356,7 @@ async fn version_three_gains_indexed_artifact_lookup_without_changing_stored_dat
     connection.close().await.expect("close");
     let mut connection = open_migrated(&cache).await.expect("migrate");
     assert_artifact_path_lookup_is_indexed(&mut connection).await;
-    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 13);
+    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 14);
     let associations: Vec<(i64, String)> =
         sqlx::query_as("SELECT job_id, path FROM download_job_artifacts ORDER BY path")
             .fetch_all(&mut connection)
@@ -413,7 +413,7 @@ async fn version_four_gains_content_fingerprints_without_losing_metadata() {
 
     for _ in 0..2 {
         let mut connection = open_migrated(&cache).await.expect("open migrated database");
-        assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 13);
+        assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 14);
         assert_eq!(
             scalar(&mut connection, "SELECT COUNT(*) FROM content_fingerprints").await,
             0
@@ -444,7 +444,7 @@ async fn version_five_gains_modpack_tables_and_preserves_fingerprints() {
     .expect("fingerprint");
     connection.close().await.expect("close");
     let mut connection = open_migrated(&cache).await.expect("migrate");
-    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 13);
+    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 14);
     assert_eq!(scalar(&mut connection, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('modpack_indexes', 'modpack_dependencies', 'modpack_files')").await, 3);
     assert_eq!(scalar(&mut connection, "SELECT COUNT(*) FROM content_fingerprints WHERE instance_folder = 'First' AND relative_path = 'mods/a.jar' AND size = 10").await, 1);
     let value: String = sqlx::query_scalar("SELECT value FROM meta WHERE key = 'fixture'")
@@ -463,7 +463,7 @@ async fn version_seven_adds_empty_checkpoints_without_marking_old_jobs_complete(
         .execute(&mut connection).await.expect("version seven fixture");
     connection.close().await.expect("close");
     let mut connection = open_migrated(&cache).await.expect("upgrade");
-    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 13);
+    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 14);
     assert_eq!(
         scalar(
             &mut connection,
@@ -488,7 +488,7 @@ async fn version_eight_adds_native_cache_tables_without_changing_existing_data()
         .execute(&mut connection).await.expect("version eight fixture");
     connection.close().await.expect("close");
     let mut connection = open_migrated(&cache).await.expect("upgrade");
-    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 13);
+    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 14);
     assert_eq!(
         scalar(&mut connection, "SELECT COUNT(*) FROM native_generations").await,
         0
@@ -537,7 +537,7 @@ async fn version_eleven_gains_content_roots_and_drops_the_old_move_checkpoint() 
     .expect("version eleven fixture");
     connection.close().await.expect("close");
     let mut connection = open_migrated(&cache).await.expect("upgrade");
-    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 13);
+    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 14);
     let row: (
         String,
         i64,
@@ -577,7 +577,9 @@ async fn version_twelve_gains_curseforge_files_and_preserves_modpack_indexes() {
     let cache = cache("version-twelve-curseforge");
     let mut connection = open_migrated(&cache).await.expect("database");
     sqlx::raw_sql(
-        "DROP TABLE curseforge_files;
+        "ALTER TABLE settings ADD COLUMN disable_custom_title_bar INTEGER NOT NULL DEFAULT 0
+            CHECK(disable_custom_title_bar IN (0, 1));
+        DROP TABLE curseforge_files;
         INSERT INTO modpack_indexes (instances_directory, instance_folder, name) VALUES ('/data/instances', 'Pack', 'Fixture');
         PRAGMA user_version = 12;",
     )
@@ -586,7 +588,7 @@ async fn version_twelve_gains_curseforge_files_and_preserves_modpack_indexes() {
     .expect("version twelve fixture");
     connection.close().await.expect("close");
     let mut connection = open_migrated(&cache).await.expect("upgrade");
-    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 13);
+    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 14);
     assert_eq!(
         scalar(&mut connection, "SELECT COUNT(*) FROM curseforge_files").await,
         0
@@ -622,10 +624,55 @@ async fn version_twelve_gains_curseforge_files_and_preserves_modpack_indexes() {
 }
 
 #[tokio::test]
+async fn version_thirteen_drops_the_title_bar_column_and_keeps_the_settings_row() {
+    let cache = cache("version-thirteen-title-bar");
+    let mut connection = open_migrated(&cache).await.expect("database");
+    sqlx::raw_sql(
+        "ALTER TABLE settings ADD COLUMN disable_custom_title_bar INTEGER NOT NULL DEFAULT 0
+            CHECK(disable_custom_title_bar IN (0, 1));
+        INSERT INTO settings (id, username, fullscreen, max_memory_mb, jvm_arguments,
+            download_concurrency, write_concurrency, data_directory, disable_custom_title_bar)
+            VALUES (1, 'Alex', 1, 3072, '[\"-Xss2M\"]', 4, 8, '/data', 1);
+        PRAGMA user_version = 13;",
+    )
+    .execute(&mut connection)
+    .await
+    .expect("version thirteen fixture");
+    connection.close().await.expect("close");
+    let mut connection = open_migrated(&cache).await.expect("upgrade");
+    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 14);
+    assert_eq!(
+        scalar(
+            &mut connection,
+            "SELECT COUNT(*) FROM pragma_table_info('settings') WHERE name = 'disable_custom_title_bar'"
+        )
+        .await,
+        0
+    );
+    let row: (String, i64, i64, String, Option<String>) = sqlx::query_as(
+        "SELECT username, fullscreen, max_memory_mb, jvm_arguments, data_directory FROM settings",
+    )
+    .fetch_one(&mut connection)
+    .await
+    .expect("preserved row");
+    assert_eq!(
+        row,
+        (
+            "Alex".to_string(),
+            1,
+            3072,
+            "[\"-Xss2M\"]".to_string(),
+            Some("/data".to_string())
+        )
+    );
+    connection.close().await.expect("close");
+}
+
+#[tokio::test]
 async fn a_copied_move_needs_a_destination() {
     let cache = cache("copied-needs-destination");
     let mut connection = open_migrated(&cache).await.expect("database");
-    sqlx::query("INSERT INTO settings (id, username, fullscreen, max_memory_mb, jvm_arguments, download_concurrency, write_concurrency, disable_custom_title_bar) VALUES (1, 'Steve', 0, 2048, '[]', 8, 8, 0)")
+    sqlx::query("INSERT INTO settings (id, username, fullscreen, max_memory_mb, jvm_arguments, download_concurrency, write_concurrency) VALUES (1, 'Steve', 0, 2048, '[]', 8, 8)")
         .execute(&mut connection)
         .await
         .expect("settings row");
@@ -650,7 +697,7 @@ async fn version_ten_adds_an_empty_settings_table_without_changing_existing_data
         .execute(&mut connection).await.expect("version ten fixture");
     connection.close().await.expect("close");
     let mut connection = open_migrated(&cache).await.expect("upgrade");
-    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 13);
+    assert_eq!(scalar(&mut connection, "PRAGMA user_version").await, 14);
     assert_eq!(
         scalar(&mut connection, "SELECT COUNT(*) FROM settings").await,
         0

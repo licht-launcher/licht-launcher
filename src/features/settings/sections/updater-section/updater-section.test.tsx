@@ -15,7 +15,7 @@ import {
   mockSettingsCommands,
   snapshot,
 } from "@/features/settings/fixtures/render-settings";
-import { promptTitleBarRestart } from "@/features/settings/lib/title-bar-restart-toast";
+import { promptRestart } from "@/features/settings/lib/restart-toast";
 import { fromSnapshot } from "@/features/settings/model/draft";
 import { UpdaterSection } from "@/features/settings/sections/updater-section";
 import { SettingsDialog } from "@/features/settings/settings-dialog";
@@ -381,9 +381,7 @@ describe("UpdaterSection", () => {
         section.getByRole("button", { name: "Check for updates" }),
       ).toBeEnabled(),
     );
-    act(() =>
-      promptTitleBarRestart("Apply the hardware acceleration change now?"),
-    );
+    act(() => promptRestart("Apply the hardware acceleration change now?"));
     expect(await screen.findByText("Restart required")).toBeVisible();
     fireEvent.click(section.getByRole("button", { name: "Check for updates" }));
     await screen.findByText("Licht Launcher is up to date.");
