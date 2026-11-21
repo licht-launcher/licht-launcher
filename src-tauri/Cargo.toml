@@ -29,6 +29,7 @@ tauri-plugin-window-controls = "=0.2.1"
 tauri-plugin-wdio = { version = "=1.5.1", optional = true }
 tokio = { version = "=1.53.2", features = ["macros", "sync", "time"] }
 tracing = "=0.1.44"
+tracing-appender = "=0.2.5"
 tracing-subscriber = { version = "=0.3.23", features = ["env-filter"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
