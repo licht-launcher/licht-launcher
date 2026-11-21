@@ -1,13 +1,15 @@
 export const filesSectionStyles = {
-  breadcrumbWrapper: "min-w-0 flex-1",
+  breadcrumbWrapper:
+    "flex h-8 min-w-0 flex-1 items-center overflow-hidden rounded-lg border border-input bg-transparent px-2.5 dark:bg-input/30",
   breadcrumbs:
-    "flex min-w-0 flex-wrap items-center gap-1 text-xs font-medium text-muted-foreground",
-  breadcrumbItem: "min-w-0",
+    "flex min-w-0 items-center gap-1 overflow-hidden text-sm font-medium text-muted-foreground",
+  breadcrumbRoot: "flex shrink-0 items-center gap-1",
   breadcrumbButton:
-    "cursor-pointer rounded-sm outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
+    "inline-flex shrink-0 cursor-pointer items-center justify-center rounded-sm p-0 leading-none outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
   breadcrumbCurrent: "text-foreground",
   breadcrumbSegment: "flex min-w-0 items-center gap-1",
   breadcrumbIcon: "size-3.5 shrink-0",
+  breadcrumbFolderIcon: "size-3.5 shrink-0 text-muted-foreground",
   breadcrumbLink:
     "cursor-pointer truncate rounded-sm outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
   root: "flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border/60 bg-black/20",
@@ -50,6 +52,8 @@ export const filesSectionStyles = {
   entryButton:
     "flex w-full min-w-0 cursor-pointer items-center gap-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring",
   entryIcon: "size-4 shrink-0 text-muted-foreground",
+  entryFolderIcon: "size-4 shrink-0 text-accent-yellow",
+  entryFileIcon: "size-4 shrink-0 text-accent-file",
   entryName: "min-w-0 truncate font-medium text-foreground",
   metaCell: "px-3 py-3 text-xs text-muted-foreground tabular-nums",
   row: "border-b border-border/60 last:border-b-0",

@@ -1,16 +1,36 @@
 use clap::{CommandFactory, Parser, error::ErrorKind};
 use licht_cli::cli::Cli;
-use licht_cli::commands::{Command, InstancesCommand};
+use licht_cli::commands::{Command, InstancesCommand, JavaCommand};
 
 #[test]
 fn parses_versions_options() {
-    let cli = Cli::try_parse_from(["licht-cli", "versions", "--cache", "cache"])
-        .expect("valid versions arguments");
+    let cli = Cli::try_parse_from([
+        "licht-cli",
+        "versions",
+        "--cache",
+        "cache",
+        "--type",
+        "release",
+        "--json",
+    ])
+    .expect("valid versions arguments");
 
     let Command::Versions(args) = cli.command else {
         panic!("versions command expected");
     };
     assert_eq!(args.cache.as_deref(), Some(std::path::Path::new("cache")));
+    assert_eq!(
+        args.version_type,
+        Some(licht_cli::commands::versions::VersionTypeFilter::Release)
+    );
+    assert!(args.json);
+    assert_eq!(cli.verbose, 0);
+}
+
+#[test]
+fn parses_global_verbose_flags() {
+    let cli = Cli::try_parse_from(["licht-cli", "-vv", "versions"]).expect("verbose versions");
+    assert_eq!(cli.verbose, 2);
 }
 
 #[test]
@@ -144,6 +164,18 @@ fn parses_instances_rename_and_delete() {
 }
 
 #[test]
+fn parses_java_detect() {
+    let cli = Cli::try_parse_from(["licht-cli", "java", "detect", "--cache", "cache", "--json"])
+        .expect("valid java detect");
+
+    let Command::Java(JavaCommand::Detect(args)) = cli.command else {
+        panic!("java detect expected");
+    };
+    assert_eq!(args.cache.as_deref(), Some(std::path::Path::new("cache")));
+    assert!(args.json);
+}
+
+#[test]
 fn launch_rejects_version_and_instance_together() {
     let error = Cli::try_parse_from([
         "licht-cli",
@@ -214,7 +246,9 @@ fn help_is_available() {
     let error = Cli::try_parse_from(["licht-cli", "--help"]).expect_err("help exits parsing");
 
     assert_eq!(error.kind(), ErrorKind::DisplayHelp);
-    assert!(error.to_string().contains("Usage: licht-cli <COMMAND>"));
+    assert!(error.to_string().contains("Usage: licht-cli"));
+    assert!(error.to_string().contains("<COMMAND>"));
+    assert!(error.to_string().contains("--verbose"));
 }
 
 #[test]

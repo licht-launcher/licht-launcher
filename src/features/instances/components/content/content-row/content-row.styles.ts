@@ -1,5 +1,5 @@
 export const contentRowStyles = {
-  row: "border-b border-border/60",
+  row: "w-full border-b border-border/60",
   rowLast: "border-b-0",
   rowOdd: "bg-black/10",
   cell: "px-3 py-2",
@@ -8,7 +8,6 @@ export const contentRowStyles = {
   text: "min-w-0",
   name: "truncate font-medium",
   detail: "truncate text-xs text-muted-foreground",
-  metaCell: "px-3 py-2 text-xs text-muted-foreground",
   actions: "flex items-center justify-end gap-2",
   removeButton:
     "text-muted-foreground opacity-60 hover:text-destructive hover:opacity-100",
