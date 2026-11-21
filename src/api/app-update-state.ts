@@ -14,6 +14,7 @@ const phases: Record<AppUpdatePhase, true> = {
   failed: true,
   externallyManaged: true,
   portable: true,
+  msi: true,
 };
 
 function byteCount(value: unknown): value is number {

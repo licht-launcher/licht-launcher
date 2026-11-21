@@ -170,6 +170,23 @@ describe("UpdaterSection", () => {
     );
   });
 
+  it("points to GitHub Releases and offers no update actions in an MSI installation", async () => {
+    state = appUpdateState({ phase: "msi" });
+    const { section } = await view();
+    expect(section.getByRole("status")).toHaveTextContent(
+      "This MSI installation does not update itself. Download new versions from GitHub Releases.",
+    );
+    expect(
+      section.getByRole("switch", { name: "Automatic updates" }),
+    ).toBeDisabled();
+    expect(
+      section.getByRole("button", { name: "Check for updates" }),
+    ).toBeDisabled();
+    await waitFor(() =>
+      expect(getUpdateCheckStatus()).toBe("managed-externally"),
+    );
+  });
+
   it("requests a native manual check and reports the completed result", async () => {
     check.mockImplementationOnce(async () => {
       emit({ phase: "checking" });

@@ -28,6 +28,7 @@ const labels: Record<AppUpdatePhase, string> = {
   externallyManaged: "Updates for this installation are managed by Flatpak.",
   portable:
     "This portable build does not update itself. Download new versions from GitHub Releases.",
+  msi: "This MSI installation does not update itself. Download new versions from GitHub Releases.",
 };
 
 export function UpdaterSection({
@@ -45,7 +46,9 @@ export function UpdaterSection({
       state?.phase ?? "",
     );
   const selfUpdateOff =
-    state?.phase === "externallyManaged" || state?.phase === "portable";
+    state?.phase === "externallyManaged" ||
+    state?.phase === "portable" ||
+    state?.phase === "msi";
   const error = state?.error ?? (query.error ? messageOf(query.error) : null);
   const action =
     state?.phase === "ready"

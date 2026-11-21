@@ -33,7 +33,7 @@ From 0.8 on, the list continues (to be defined together with the project owner).
 | Platform | Artifact | In-app updates |
 | -------- | -------- | -------------- |
 | Windows  | `-windows-x64-setup.exe` (NSIS, current user) | Yes |
-| Windows  | `-windows-x64.msi` (WiX, all users) | Yes, through the MSI |
+| Windows  | `-windows-x64.msi` (WiX, all users) | No, new versions are installed by hand |
 | Windows  | `-windows-x64-portable.exe` | No, new versions are downloaded by hand |
 | Linux    | `-linux-x64.AppImage` | Yes |
 | Linux    | `-linux-x64.deb` | Yes, through the .deb (asks for the admin password) |
@@ -106,6 +106,10 @@ signed updates for those installs; users must reinstall manually.
 
 ### User flow
 
+- Windows updates install silently (`installMode: quiet`): the launcher closes,
+  the NSIS installer runs without a window and reopens the launcher. Silent
+  installs cannot raise a UAC prompt, so the all-users MSI reports updates as
+  unavailable and Settings points to GitHub Releases.
 - **Automatic updates** checks after the main window opens and every 30 minutes
   while no verified package is waiting to be applied. Available updates download
   in the background; installation always requires **Restart to update**.

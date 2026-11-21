@@ -2,6 +2,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use licht_core::{AppUpdateCache, AppUpdatePhase, AppUpdateState};
+use tauri::utils::config::BundleType;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow};
 use tauri_plugin_updater::{Update, UpdaterExt};
 use tokio::sync::{Mutex as AsyncMutex, OwnedMutexGuard, watch};
@@ -32,15 +33,21 @@ pub struct Runtime {
 }
 
 /// Where this installation's updates come from, decided once at startup.
-fn initial_phase(flatpak: bool, release_build: bool, installer_bundled: bool) -> AppUpdatePhase {
+fn initial_phase(flatpak: bool, release_build: bool, bundle: Option<BundleType>) -> AppUpdatePhase {
     if flatpak {
         AppUpdatePhase::ExternallyManaged
-    } else if release_build && !installer_bundled {
-        // The installers patch their bundle type into the binary; the portable
-        // build keeps none, and the updater would otherwise install a copy.
-        AppUpdatePhase::Portable
-    } else {
+    } else if !release_build {
+        // Development builds are never bundled and keep the updater usable.
         AppUpdatePhase::Idle
+    } else {
+        match bundle {
+            // The installers patch their bundle type into the binary; the portable
+            // build keeps none, and the updater would otherwise install a copy.
+            None => AppUpdatePhase::Portable,
+            // Updates install silently, and the all-users MSI needs elevation.
+            Some(BundleType::Msi) => AppUpdatePhase::Msi,
+            Some(_) => AppUpdatePhase::Idle,
+        }
     }
 }
 
@@ -53,6 +60,9 @@ fn self_update_disabled(phase: AppUpdatePhase) -> Option<&'static str> {
         AppUpdatePhase::Portable => Some(
             "This portable build does not update itself. Download new versions from GitHub Releases.",
         ),
+        AppUpdatePhase::Msi => Some(
+            "This MSI installation does not update itself. Download new versions from GitHub Releases.",
+        ),
         _ => None,
     }
 }
@@ -63,7 +73,7 @@ impl Runtime {
         initial.phase = initial_phase(
             licht_core::app_updates_managed_externally(),
             !cfg!(debug_assertions),
-            tauri::utils::platform::bundle_type().is_some(),
+            tauri::utils::platform::bundle_type(),
         );
         Arc::new(Self {
             state: Mutex::new((initial, Instant::now())),
@@ -399,13 +409,33 @@ mod tests {
 
     #[test]
     fn a_release_build_without_a_bundle_type_is_portable() {
-        assert_eq!(initial_phase(false, true, false), AppUpdatePhase::Portable);
-        assert_eq!(initial_phase(false, true, true), AppUpdatePhase::Idle);
-        // Development builds are never bundled and keep the updater usable.
-        assert_eq!(initial_phase(false, false, false), AppUpdatePhase::Idle);
+        assert_eq!(initial_phase(false, true, None), AppUpdatePhase::Portable);
         assert_eq!(
-            initial_phase(true, true, false),
+            initial_phase(false, true, Some(BundleType::AppImage)),
+            AppUpdatePhase::Idle
+        );
+        // Development builds are never bundled and keep the updater usable.
+        assert_eq!(initial_phase(false, false, None), AppUpdatePhase::Idle);
+        assert_eq!(
+            initial_phase(true, true, None),
             AppUpdatePhase::ExternallyManaged
+        );
+    }
+
+    #[test]
+    fn an_all_users_msi_install_does_not_update_itself() {
+        // Silent installs cannot raise the UAC prompt the all-users MSI needs.
+        assert_eq!(
+            initial_phase(false, true, Some(BundleType::Msi)),
+            AppUpdatePhase::Msi
+        );
+        assert_eq!(
+            initial_phase(false, true, Some(BundleType::Nsis)),
+            AppUpdatePhase::Idle
+        );
+        assert!(
+            self_update_disabled(AppUpdatePhase::Msi)
+                .is_some_and(|reason| reason.contains("GitHub Releases"))
         );
     }
 
