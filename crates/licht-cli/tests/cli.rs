@@ -4,13 +4,26 @@ use licht_cli::commands::{Command, InstancesCommand, JavaCommand};
 
 #[test]
 fn parses_versions_options() {
-    let cli = Cli::try_parse_from(["licht-cli", "versions", "--cache", "cache"])
-        .expect("valid versions arguments");
+    let cli = Cli::try_parse_from([
+        "licht-cli",
+        "versions",
+        "--cache",
+        "cache",
+        "--type",
+        "release",
+        "--json",
+    ])
+    .expect("valid versions arguments");
 
     let Command::Versions(args) = cli.command else {
         panic!("versions command expected");
     };
     assert_eq!(args.cache.as_deref(), Some(std::path::Path::new("cache")));
+    assert_eq!(
+        args.version_type,
+        Some(licht_cli::commands::versions::VersionTypeFilter::Release)
+    );
+    assert!(args.json);
     assert_eq!(cli.verbose, 0);
 }
 
