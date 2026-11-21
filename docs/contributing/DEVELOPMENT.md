@@ -52,6 +52,9 @@ cargo run -p licht-cli -- instances rename --instance Survival --name Hardcore
 cargo run -p licht-cli -- instances delete --instance Hardcore
 cargo run -p licht-cli -- java detect
 cargo run -p licht-cli -- java detect --json
+cargo run -p licht-cli -- modpacks search cobblemon --source modrinth
+cargo run -p licht-cli -- modpacks versions --source modrinth --id <project>
+cargo run -p licht-cli -- modpacks install --name Cobblemon --source modrinth --id <project> --version <version>
 cargo run -p licht-cli -- launch --version 1.20.1 --username Player
 cargo run -p licht-cli -- launch --instance Survival --username Player
 ```
