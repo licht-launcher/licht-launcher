@@ -56,8 +56,10 @@ unique display name and cannot be combined with `--version` or `--game-dir`.
 `instances list` prints an aligned `FOLDER` / `NAME` / `VERSION` table in a
 terminal, tab-separated rows when stdout is not a TTY, and JSON with `--json`.
 `--game-dir` replaces the instance root for `--version` launches, `--cache`
-replaces the data directory, and `--java` selects another Java executable. See
-the [runtime](../internals/RUNTIME.md), [storage](../internals/STORAGE.md), and
+replaces the data directory, and `--java` selects another Java executable.
+Logging goes to stderr: default INFO, `RUST_LOG` for a custom filter, or
+`-v`/`-vv` for debug/trace when `RUST_LOG` is unset. See the
+[runtime](../internals/RUNTIME.md), [storage](../internals/STORAGE.md), and
 [compatibility](../internals/COMPATIBILITY.md) documentation for details.
 
 ## Implementation and testing

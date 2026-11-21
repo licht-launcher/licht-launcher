@@ -2467,6 +2467,8 @@ dependencies = [
  "licht-core",
  "reqwest",
  "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
