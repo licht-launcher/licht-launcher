@@ -1,6 +1,6 @@
 use clap::{CommandFactory, Parser, error::ErrorKind};
 use licht_cli::cli::Cli;
-use licht_cli::commands::{Command, InstancesCommand};
+use licht_cli::commands::{Command, InstancesCommand, JavaCommand};
 
 #[test]
 fn parses_versions_options() {
@@ -111,6 +111,18 @@ fn parses_instances_list() {
 
     let Command::Instances(InstancesCommand::List(args)) = cli.command else {
         panic!("instances list expected");
+    };
+    assert_eq!(args.cache.as_deref(), Some(std::path::Path::new("cache")));
+    assert!(args.json);
+}
+
+#[test]
+fn parses_java_detect() {
+    let cli = Cli::try_parse_from(["licht-cli", "java", "detect", "--cache", "cache", "--json"])
+        .expect("valid java detect");
+
+    let Command::Java(JavaCommand::Detect(args)) = cli.command else {
+        panic!("java detect expected");
     };
     assert_eq!(args.cache.as_deref(), Some(std::path::Path::new("cache")));
     assert!(args.json);

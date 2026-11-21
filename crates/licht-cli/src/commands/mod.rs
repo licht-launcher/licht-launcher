@@ -1,10 +1,12 @@
 mod install;
 pub mod instances;
+mod java;
 mod launch;
 pub mod versions;
 
 pub use install::{InstallArgs, install};
 pub use instances::{InstancesCommand, instances_list};
+pub use java::{JavaCommand, java_detect};
 pub use launch::{LaunchArgs, launch};
 pub use versions::{VersionsArgs, versions};
 
@@ -21,4 +23,7 @@ pub enum Command {
     /// Inspect saved instances.
     #[command(subcommand)]
     Instances(InstancesCommand),
+    /// Inspect Java runtimes.
+    #[command(subcommand)]
+    Java(JavaCommand),
 }
