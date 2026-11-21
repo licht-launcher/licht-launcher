@@ -1,1 +1,1 @@
-export * from "./title-bar-restart-toast";
+export * from "./restart-toast";

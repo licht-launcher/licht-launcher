@@ -4,9 +4,9 @@ import { toast } from "sonner";
 import { getSettings, runtimeJava, saveSettings } from "@/api/commands";
 import { useToastError } from "@/features/settings/hooks/use-toast-error";
 import {
-  dismissTitleBarRestartToast,
-  promptTitleBarRestart,
-} from "@/features/settings/lib/title-bar-restart-toast";
+  dismissRestartToast,
+  promptRestart,
+} from "@/features/settings/lib/restart-toast";
 import {
   type Draft,
   fromSnapshot,
@@ -49,9 +49,9 @@ export function useSettingsDraft(open: boolean) {
         appliedHardwareAcceleration.current !== null &&
         saved.hardwareAcceleration !== appliedHardwareAcceleration.current
       ) {
-        promptTitleBarRestart("Apply the hardware acceleration change now?");
+        promptRestart("Apply the hardware acceleration change now?");
       } else {
-        dismissTitleBarRestartToast();
+        dismissRestartToast();
       }
     },
     onError: (error: unknown) => {
@@ -93,7 +93,7 @@ export function useSettingsDraft(open: boolean) {
       if (timerRef.current !== null) {
         clearTimeout(timerRef.current);
       }
-      dismissTitleBarRestartToast();
+      dismissRestartToast();
     };
   }, []);
 
@@ -111,7 +111,7 @@ export function useSettingsDraft(open: boolean) {
       appliedHardwareAcceleration.current !== null &&
       next.hardwareAcceleration === appliedHardwareAcceleration.current
     ) {
-      dismissTitleBarRestartToast();
+      dismissRestartToast();
     }
 
     if (timerRef.current !== null) {

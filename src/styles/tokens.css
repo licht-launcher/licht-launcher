@@ -295,7 +295,7 @@
   }
 }
 
-@keyframes title-bar-restart-toast-progress {
+@keyframes restart-toast-progress {
   from {
     transform: scaleX(1);
   }
@@ -319,7 +319,7 @@
 
 .toast-progress-bar {
   transform-origin: left center;
-  animation: title-bar-restart-toast-progress 12s linear forwards;
+  animation: restart-toast-progress 12s linear forwards;
 }
 
 .group\/toast:hover .toast-progress-bar,
