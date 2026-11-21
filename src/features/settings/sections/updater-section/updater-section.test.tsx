@@ -381,7 +381,9 @@ describe("UpdaterSection", () => {
         section.getByRole("button", { name: "Check for updates" }),
       ).toBeEnabled(),
     );
-    act(() => promptTitleBarRestart());
+    act(() =>
+      promptTitleBarRestart("Apply the hardware acceleration change now?"),
+    );
     expect(await screen.findByText("Restart required")).toBeVisible();
     fireEvent.click(section.getByRole("button", { name: "Check for updates" }));
     await screen.findByText("Licht Launcher is up to date.");

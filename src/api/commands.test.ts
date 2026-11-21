@@ -16,7 +16,6 @@ import {
   createInstanceFromModpack,
   createInstanceFromModpackFile,
   createInstanceWithPlatform,
-  customTitleBarActive,
   deleteInstance,
   detectJavaInstallations,
   downloadAppUpdate,
@@ -537,9 +536,7 @@ describe("launcher commands", () => {
     expect(invoke).toHaveBeenCalledWith("get_settings");
   });
 
-  it("reads the applied title bar mode and can request a restart", async () => {
-    await customTitleBarActive();
-    expect(invoke).toHaveBeenCalledWith("custom_title_bar_active");
+  it("can request a restart", async () => {
     await restartApp();
     expect(invoke).toHaveBeenCalledWith("restart_app");
   });

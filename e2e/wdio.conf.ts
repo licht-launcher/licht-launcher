@@ -5,7 +5,6 @@ import { fileURLToPath } from "node:url";
 
 import { stopDriversStartedByThisRun } from "./support/drivers.ts";
 import { captureFailure } from "./support/failures.ts";
-import { switchToMainWindow } from "./support/windows.ts";
 
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -57,9 +56,6 @@ export const config: WebdriverIO.Config = {
   mochaOpts: {
     ui: "bdd",
     timeout: 120_000,
-  },
-  async before() {
-    await switchToMainWindow();
   },
   async afterTest(test, _context, { passed }) {
     if (!passed) {

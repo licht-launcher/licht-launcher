@@ -39,7 +39,6 @@ export function useSettingsDraft(open: boolean) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const schemaRef = useRef(1);
   const persistRef = useRef<(current: Draft) => void>(() => {});
-  const appliedDisableCustomTitleBar = useRef<boolean | null>(null);
   const appliedHardwareAcceleration = useRef<boolean | null>(null);
 
   const save = useMutation({
@@ -51,11 +50,6 @@ export function useSettingsDraft(open: boolean) {
         saved.hardwareAcceleration !== appliedHardwareAcceleration.current
       ) {
         promptTitleBarRestart("Apply the hardware acceleration change now?");
-      } else if (
-        appliedDisableCustomTitleBar.current !== null &&
-        saved.disableCustomTitleBar !== appliedDisableCustomTitleBar.current
-      ) {
-        promptTitleBarRestart();
       } else {
         dismissTitleBarRestartToast();
       }
@@ -83,8 +77,6 @@ export function useSettingsDraft(open: boolean) {
   useEffect(() => {
     if (settings.data && runtime.isFetched && draft === null) {
       schemaRef.current = settings.data.settings.schema;
-      appliedDisableCustomTitleBar.current =
-        settings.data.settings.disableCustomTitleBar;
       appliedHardwareAcceleration.current =
         settings.data.settings.hardwareAcceleration;
       const next = fromSnapshot(settings.data, runtime.data ?? null);
@@ -115,11 +107,8 @@ export function useSettingsDraft(open: boolean) {
     setDraft(next);
 
     if (
-      (patch.disableCustomTitleBar !== undefined ||
-        patch.hardwareAcceleration !== undefined) &&
-      appliedDisableCustomTitleBar.current !== null &&
+      patch.hardwareAcceleration !== undefined &&
       appliedHardwareAcceleration.current !== null &&
-      next.disableCustomTitleBar === appliedDisableCustomTitleBar.current &&
       next.hardwareAcceleration === appliedHardwareAcceleration.current
     ) {
       dismissTitleBarRestartToast();

@@ -110,9 +110,10 @@ signed updates for those installs; users must reinstall manually.
   the NSIS installer runs without a window and reopens the launcher. Silent
   installs cannot raise a UAC prompt, so the all-users MSI reports updates as
   unavailable and Settings points to GitHub Releases.
-- With **Automatic updates** on, release builds check for an update in the startup
-  window before the launcher opens, then download, verify and install it and
-  restart. If the check or download fails, the installed version opens with a
+- The launcher window shows startup and update progress before the launcher
+  itself; no separate window opens. With **Automatic updates** on, release builds
+  check for an update there before the launcher opens, then download, verify and
+  install it and restart. If the check or download fails, the installed version opens with a
   warning. Development builds only update at startup when asked to.
 - **Automatic updates** also checks after the main window opens and every 30 minutes
   while no verified package is waiting to be applied. Available updates download
@@ -131,8 +132,7 @@ signed updates for those installs; users must reinstall manually.
   downloads are suspended. Windows drains launcher services in the updater's
   exit callback; Linux uses the normal restart/shutdown path after installation.
 - **Later** dismisses the ready notification without deleting the package or
-  changing preferences. Closing/reopening the app never installs automatically.
+  changing preferences. With **Automatic updates** off, reopening the app never
+  installs automatically.
 - Failures leave the installed launcher available and expose a retry in Updates.
   An unsuccessful installation attempt still requires another explicit action.
-- The startup installer remains available for explicit requests saved by older
-  launcher versions; it no longer checks/downloads automatically during startup.

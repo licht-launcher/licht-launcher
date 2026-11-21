@@ -2,38 +2,17 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use licht_core::{StartupPhase, StartupReporter};
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Manager};
 
 pub mod commands;
 pub mod preview;
 pub mod state;
 mod updates;
 
-pub fn create_window(app: &AppHandle, label: &str) -> tauri::Result<()> {
-    let theme = crate::theme::preference(app)?;
-    let builder = WebviewWindowBuilder::new(app, label, WebviewUrl::default())
-        .title("Licht Launcher")
-        .inner_size(crate::MAIN_WINDOW_SIZE.0, crate::MAIN_WINDOW_SIZE.1)
-        .center()
-        .decorations(false)
-        .visible(false)
-        .resizable(false)
-        .maximizable(false)
-        .theme(crate::theme::native_theme(theme))
-        .initialization_script(crate::theme::initialization_script(theme)?);
-    #[cfg(windows)]
-    let builder = match crate::desktop::webview_browser_args(app) {
-        Some(args) => builder.additional_browser_args(&args),
-        None => builder,
-    };
-    let window = builder.build()?;
-    crate::desktop::configure_webview(&window)?;
-    Ok(())
-}
-
 pub fn start(app: AppHandle, runtime: Arc<state::StartupRuntime>) -> anyhow::Result<()> {
-    create_window(&app, "startup")?;
-    let session = runtime.session("startup")?;
+    // The launcher window shows startup and update progress, then the launcher.
+    crate::create_launcher_window(&app, "main")?;
+    let session = runtime.session("main")?;
     let worker_runtime = Arc::clone(&runtime);
     let worker = tauri::async_runtime::spawn(async move {
         if let Err(error) = initialize(&app, &worker_runtime, &session).await {
@@ -92,13 +71,9 @@ async fn initialize(
         client,
         database_client.clone(),
     ));
-    let custom_title_bar = !settings.disable_custom_title_bar;
     app.manage(database_client);
     app.manage(paths);
     app.manage(Arc::clone(&downloads));
-    app.manage(crate::commands::shell::TitleBarMode {
-        custom: custom_title_bar,
-    });
     *runtime.downloads.lock().await = Some(Arc::clone(&downloads));
     crate::commands::downloads::forward_events(app.clone(), Arc::clone(&downloads));
     if session.is_stopped() {
@@ -108,7 +83,6 @@ async fn initialize(
         .recover_pending()
         .await
         .context("Could not restore the installation queue")?;
-    crate::create_main_window(app, custom_title_bar)?;
     if let Err(error) = crate::desktop::apply_preferences(app, &settings) {
         tracing::error!(%error, "Could not apply launcher behavior preferences");
         session.update(app, |state| {
@@ -134,9 +108,6 @@ async fn initialize(
                     .to_string(),
             )
         })?;
-    }
-    if let Some(window) = app.get_webview_window("startup") {
-        window.close()?;
     }
     Ok(())
 }

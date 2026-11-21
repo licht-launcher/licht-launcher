@@ -11,6 +11,7 @@ import { createRoot } from "react-dom/client";
 
 import { Toaster } from "@/components/ui/sonner";
 import { useLauncherTheme } from "@/features/settings/hooks/use-launcher-theme";
+import { StartupGate } from "@/features/startup/startup-gate";
 import { StartupScreen } from "@/features/startup/startup-screen";
 
 import { routeTree } from "./routeTree.gen";
@@ -41,18 +42,33 @@ if (root === null) {
   throw new Error("The application root element was not found.");
 }
 
-const startupWindow =
-  isTauri() && getCurrentWindow().label.startsWith("startup");
+// Developer startup previews open in their own window; the launcher window
+// shows startup itself and then the launcher.
+const previewWindow =
+  isTauri() && getCurrentWindow().label.startsWith("startup-preview-");
 
-function App() {
-  const theme = useLauncherTheme(startupWindow);
-  return startupWindow ? (
-    <StartupScreen />
-  ) : (
+function Startup() {
+  useLauncherTheme(true);
+  return <StartupScreen />;
+}
+
+function Launcher() {
+  const theme = useLauncherTheme(false);
+  return (
     <>
       <RouterProvider router={router} />
       <Toaster theme={theme} />
     </>
+  );
+}
+
+function App() {
+  return previewWindow ? (
+    <Startup />
+  ) : (
+    <StartupGate fallback={<Startup />}>
+      <Launcher />
+    </StartupGate>
   );
 }
 

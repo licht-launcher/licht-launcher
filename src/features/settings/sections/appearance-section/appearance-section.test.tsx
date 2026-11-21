@@ -5,7 +5,6 @@ import {
   invoke,
   mockSettingsCommands,
   renderSettings,
-  snapshot,
 } from "@/features/settings/fixtures/render-settings";
 
 vi.mock("@tauri-apps/api/core", async () => {
@@ -95,9 +94,10 @@ describe("AppearanceSection", () => {
     });
     await renderSettings();
     fireEvent.click(
-      await screen.findByRole("button", { name: "Developer Tools" }),
+      await screen.findByRole("switch", {
+        name: "Use hardware acceleration when available",
+      }),
     );
-    fireEvent.click(screen.getByRole("switch", { name: "System title bar" }));
     expect(await screen.findByText("Restart required")).toBeVisible();
     expect(screen.getByRole("button", { name: "Restart" })).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Later" }));
@@ -105,66 +105,5 @@ describe("AppearanceSection", () => {
       expect(screen.queryByText("Restart required")).not.toBeInTheDocument(),
     );
     expect(invoke).not.toHaveBeenCalledWith("restart_app");
-  });
-
-  it("asks to restart after the title bar setting is saved", async () => {
-    mockSettingsCommands((command) => {
-      if (command === "save_settings") {
-        return Promise.resolve({
-          ...snapshot.settings,
-          disableCustomTitleBar: true,
-        });
-      }
-      return undefined;
-    });
-
-    await renderSettings();
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Developer Tools" }),
-    );
-    fireEvent.click(screen.getByRole("switch", { name: "System title bar" }));
-
-    expect(await screen.findByText("Restart required")).toBeInTheDocument();
-    expect(
-      screen.getByText("Apply the title bar change now?"),
-    ).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Restart" }));
-    await waitFor(() => {
-      expect(invoke).toHaveBeenCalledWith("restart_app");
-    });
-  });
-
-  it("dismisses the restart toast when the title bar option is reverted", async () => {
-    let savedDisableCustomTitleBar = false;
-    mockSettingsCommands((command, args) => {
-      if (command === "save_settings") {
-        const settings = (
-          args as { settings?: { disableCustomTitleBar?: boolean } } | undefined
-        )?.settings;
-        savedDisableCustomTitleBar = settings?.disableCustomTitleBar ?? false;
-        return Promise.resolve({
-          ...snapshot.settings,
-          disableCustomTitleBar: savedDisableCustomTitleBar,
-        });
-      }
-      return undefined;
-    });
-
-    await renderSettings();
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Developer Tools" }),
-    );
-    const toggle = screen.getByRole("switch", {
-      name: "System title bar",
-    });
-
-    fireEvent.click(toggle);
-    expect(await screen.findByText("Restart required")).toBeInTheDocument();
-
-    fireEvent.click(toggle);
-    await waitFor(() => {
-      expect(screen.queryByText("Restart required")).not.toBeInTheDocument();
-    });
   });
 });

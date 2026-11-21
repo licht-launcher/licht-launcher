@@ -166,33 +166,6 @@ export function DevelopersSection({
         </div>
       </Card>
       <Card title="Window">
-        <div className={developersSectionStyles.row}>
-          <div className={developersSectionStyles.rowText}>
-            <label
-              htmlFor="disable-custom-title-bar"
-              className={developersSectionStyles.rowLabel}
-            >
-              System title bar
-            </label>
-            <div
-              id="disable-custom-title-bar-hint"
-              className={developersSectionStyles.windowSize}
-            >
-              <p className={developersSectionStyles.windowSizeValue}>
-                Use the operating system title bar instead of Licht's.
-              </p>
-            </div>
-          </div>
-          <Switch
-            id="disable-custom-title-bar"
-            className={developersSectionStyles.control}
-            aria-describedby="disable-custom-title-bar-hint"
-            checked={draft.disableCustomTitleBar}
-            onCheckedChange={(disableCustomTitleBar) =>
-              onChange({ disableCustomTitleBar })
-            }
-          />
-        </div>
         <div
           className={developersSectionStyles.group}
           aria-busy={windowPreview.isPending}

@@ -7,10 +7,7 @@ use std::time::Duration;
 use licht_core::{StartupPhase, StartupPreviewScenario, StartupReporter, StartupUpdateStatus};
 use tauri::{AppHandle, Emitter, Manager};
 
-use super::{
-    create_window,
-    state::{Session, StartupRuntime},
-};
+use super::state::{Session, StartupRuntime};
 
 static NEXT_PREVIEW: AtomicU64 = AtomicU64::new(0);
 
@@ -43,7 +40,7 @@ pub fn open(
             .lock()
             .map_err(|_| anyhow::anyhow!("startup sessions lock failed"))?
             .insert(label.clone(), Arc::clone(&session));
-        create_window(&app, &label)?;
+        crate::create_launcher_window(&app, &label)?;
         let worker_app = app.clone();
         let worker = tauri::async_runtime::spawn(async move {
             let result = async {

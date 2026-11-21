@@ -23,14 +23,12 @@ function currentWindow() {
 export function TitleBar({
   children,
   actions,
-  windowControls = true,
 }: {
   children?: ReactNode;
   actions?: ReactNode;
-  windowControls?: boolean;
 }) {
   const windowApi = currentWindow();
-  const nativeCaption = windowControls && usesNativeCaptionButtons();
+  const nativeCaption = usesNativeCaptionButtons();
   const [updateAvailable, setUpdateAvailable] = useState(
     () => getUpdateCheckStatus() === "available",
   );
@@ -80,7 +78,7 @@ export function TitleBar({
           ) : null}
           {actions}
         </div>
-        {!windowControls || nativeCaption ? null : (
+        {nativeCaption ? null : (
           <div data-window-controls className={titleBarStyles.windowControls}>
             <Button
               type="button"

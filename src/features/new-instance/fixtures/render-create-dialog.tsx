@@ -114,8 +114,6 @@ export function mockCreateCommands(
       case "get_last_played_folder":
       case "active_microsoft_account":
         return null;
-      case "custom_title_bar_active":
-        return true;
       case "download_telemetry":
         return { receivedBytes: 0, writtenBytes: 0, paused: false };
       case "prepare_instance_download":

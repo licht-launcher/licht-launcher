@@ -14,9 +14,7 @@ export function dismissTitleBarRestartToast() {
   toast.dismiss(TITLE_BAR_RESTART_TOAST_ID);
 }
 
-export function promptTitleBarRestart(
-  message = "Apply the title bar change now?",
-) {
+export function promptTitleBarRestart(message: string) {
   toast.custom(
     (id) => (
       <div className={titleBarRestartToastStyles.root}>
