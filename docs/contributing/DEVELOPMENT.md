@@ -55,12 +55,14 @@ cargo run -p licht-cli -- java detect --json
 cargo run -p licht-cli -- modpacks search cobblemon --source modrinth
 cargo run -p licht-cli -- modpacks versions --source modrinth --id <project>
 cargo run -p licht-cli -- modpacks install --name Cobblemon --source modrinth --id <project> --version <version>
+cargo run -p licht-cli -- repair --instance Survival
 cargo run -p licht-cli -- launch --version 1.20.1 --username Player
 cargo run -p licht-cli -- launch --instance Survival --username Player
 ```
 
-`launch` does not download. `install` does. `--instance` accepts a folder or a
-unique display name and cannot be combined with `--version` or `--game-dir`.
+`launch` does not download. `install` does. `repair` rechecks an instance through
+the download manager. `--instance` accepts a folder or a unique display name and
+cannot be combined with `--version` or `--game-dir` on `launch`.
 `instances create` writes a profile only; run `install` before launching.
 `instances list` prints an aligned `FOLDER` / `NAME` / `VERSION` table in a
 terminal, tab-separated rows when stdout is not a TTY, and JSON with `--json`.

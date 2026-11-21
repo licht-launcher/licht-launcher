@@ -4,7 +4,7 @@ use licht_cli::cli::Cli;
 use licht_cli::commands::{
     Command, InstancesCommand, JavaCommand, ModpacksCommand, install, instances_create,
     instances_delete, instances_list, instances_rename, java_detect, launch, modpacks_install,
-    modpacks_search, modpacks_versions, versions,
+    modpacks_search, modpacks_versions, repair, versions,
 };
 use licht_cli::error::report;
 use licht_cli::logging;
@@ -48,6 +48,7 @@ async fn run(cli: Cli) -> licht_core::Result<i32> {
         Command::Modpacks(ModpacksCommand::Search(args)) => modpacks_search(args).await,
         Command::Modpacks(ModpacksCommand::Versions(args)) => modpacks_versions(args).await,
         Command::Modpacks(ModpacksCommand::Install(args)) => modpacks_install(args).await,
+        Command::Repair(args) => repair(args).await,
     }
 }
 
