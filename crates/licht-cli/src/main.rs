@@ -1,7 +1,10 @@
 use clap::Parser;
 
 use licht_cli::cli::Cli;
-use licht_cli::commands::{Command, InstancesCommand, install, instances_list, launch, versions};
+use licht_cli::commands::{
+    Command, InstancesCommand, ModpacksCommand, install, instances_list, launch, modpacks_install,
+    modpacks_search, modpacks_versions, versions,
+};
 use licht_cli::error::report;
 use licht_cli::logging;
 
@@ -37,6 +40,9 @@ async fn run(cli: Cli) -> licht_core::Result<i32> {
             Ok(0)
         }
         Command::Instances(InstancesCommand::List(args)) => instances_list(args).await,
+        Command::Modpacks(ModpacksCommand::Search(args)) => modpacks_search(args).await,
+        Command::Modpacks(ModpacksCommand::Versions(args)) => modpacks_versions(args).await,
+        Command::Modpacks(ModpacksCommand::Install(args)) => modpacks_install(args).await,
     }
 }
 
