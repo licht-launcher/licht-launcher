@@ -5,10 +5,15 @@ use licht_cli::commands::{
     Command, InstancesCommand, JavaCommand, install, instances_list, java_detect, launch, versions,
 };
 use licht_cli::error::report;
+use licht_cli::logging;
 
 fn main() {
     licht_core::load_env_files();
     let cli = Cli::parse();
+    if let Err(error) = logging::init(cli.verbose) {
+        report(&error);
+        std::process::exit(1);
+    }
     let code = match runtime() {
         Ok(runtime) => match runtime.block_on(run(cli)) {
             Ok(code) => code,
