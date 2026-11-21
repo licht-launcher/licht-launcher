@@ -2,14 +2,20 @@ use clap::Parser;
 
 use licht_cli::cli::Cli;
 use licht_cli::commands::{
-    Command, InstancesCommand, ModpacksCommand, install, instances_list, launch, modpacks_install,
+    Command, InstancesCommand, JavaCommand, ModpacksCommand, install, instances_create,
+    instances_delete, instances_list, instances_rename, java_detect, launch, modpacks_install,
     modpacks_search, modpacks_versions, versions,
 };
 use licht_cli::error::report;
+use licht_cli::logging;
 
 fn main() {
     licht_core::load_env_files();
     let cli = Cli::parse();
+    if let Err(error) = logging::init(cli.verbose) {
+        report(&error);
+        std::process::exit(1);
+    }
     let code = match runtime() {
         Ok(runtime) => match runtime.block_on(run(cli)) {
             Ok(code) => code,
@@ -35,6 +41,10 @@ async fn run(cli: Cli) -> licht_core::Result<i32> {
             Ok(0)
         }
         Command::Instances(InstancesCommand::List(args)) => instances_list(args).await,
+        Command::Instances(InstancesCommand::Create(args)) => instances_create(args).await,
+        Command::Instances(InstancesCommand::Rename(args)) => instances_rename(args).await,
+        Command::Instances(InstancesCommand::Delete(args)) => instances_delete(args).await,
+        Command::Java(JavaCommand::Detect(args)) => java_detect(args).await,
         Command::Modpacks(ModpacksCommand::Search(args)) => modpacks_search(args).await,
         Command::Modpacks(ModpacksCommand::Versions(args)) => modpacks_versions(args).await,
         Command::Modpacks(ModpacksCommand::Install(args)) => modpacks_install(args).await,

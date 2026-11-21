@@ -43,9 +43,15 @@ instances, and launches a cached version or instance with an offline name:
 
 ```sh
 cargo run -p licht-cli -- versions
+cargo run -p licht-cli -- versions --type release --json
 cargo run -p licht-cli -- install --version 1.20.1
 cargo run -p licht-cli -- instances list
 cargo run -p licht-cli -- instances list --json
+cargo run -p licht-cli -- instances create --name Survival --version 1.20.1
+cargo run -p licht-cli -- instances rename --instance Survival --name Hardcore
+cargo run -p licht-cli -- instances delete --instance Hardcore
+cargo run -p licht-cli -- java detect
+cargo run -p licht-cli -- java detect --json
 cargo run -p licht-cli -- modpacks search cobblemon --source modrinth
 cargo run -p licht-cli -- modpacks versions --source modrinth --id <project>
 cargo run -p licht-cli -- modpacks install --name Cobblemon --source modrinth --id <project> --version <version>
@@ -55,11 +61,14 @@ cargo run -p licht-cli -- launch --instance Survival --username Player
 
 `launch` does not download. `install` does. `--instance` accepts a folder or a
 unique display name and cannot be combined with `--version` or `--game-dir`.
+`instances create` writes a profile only; run `install` before launching.
 `instances list` prints an aligned `FOLDER` / `NAME` / `VERSION` table in a
 terminal, tab-separated rows when stdout is not a TTY, and JSON with `--json`.
 `--game-dir` replaces the instance root for `--version` launches, `--cache`
-replaces the data directory, and `--java` selects another Java executable. See
-the [runtime](../internals/RUNTIME.md), [storage](../internals/STORAGE.md), and
+replaces the data directory, and `--java` selects another Java executable.
+Logging goes to stderr: default INFO, `RUST_LOG` for a custom filter, or
+`-v`/`-vv` for debug/trace when `RUST_LOG` is unset. See the
+[runtime](../internals/RUNTIME.md), [storage](../internals/STORAGE.md), and
 [compatibility](../internals/COMPATIBILITY.md) documentation for details.
 
 ## Implementation and testing

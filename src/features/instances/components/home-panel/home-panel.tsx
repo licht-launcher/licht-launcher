@@ -151,115 +151,115 @@ export function HomePanel({
               Console
             </TabsTrigger>
           </TabsList>
-          {tab === "console" ? (
-            <div className={homePanelStyles.tabActions}>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={lines.length === 0}
-                aria-label="Clear console"
-                onClick={onClearLog}
-              >
-                <EraserIcon data-icon="inline-start" aria-hidden />
-                Clear
-              </Button>
-              <ConsoleLogLevelFilter
-                selected={logLevels}
-                onSelectedChange={setLogLevels}
-              />
-            </div>
-          ) : tab === "files" ? (
-            <>
-              <FilesBreadcrumb
-                folder={folder}
-                relativePath={filesPath}
-                onRelativePathChange={setFilesPath}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className={homePanelStyles.header}
-                disabled={instance === null}
-                onClick={() => {
-                  if (instance !== null) {
-                    void openInstanceFolder(instance.folder);
-                  }
-                }}
-              >
-                <FolderOpenIcon data-icon="inline-start" aria-hidden />
-                Open folder
-              </Button>
-            </>
-          ) : tab === "content" ? (
-            <>
-              <Input
-                aria-label="Search content"
-                className={homePanelStyles.searchInput}
-                placeholder="Search content"
-                value={contentSearch}
-                startIcon={<SearchIcon aria-hidden />}
-                onChange={(event) => setContentSearch(event.target.value)}
-              />
-              <Select
-                value={contentFilter}
-                onValueChange={(value) =>
-                  setContentFilter(value as ContentFilter)
-                }
-              >
-                <SelectTrigger
-                  aria-label="Filter content"
-                  className={homePanelStyles.filterSelect}
+          <div className={homePanelStyles.tabActions}>
+            {tab === "console" ? (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={lines.length === 0}
+                  aria-label="Clear console"
+                  onClick={onClearLog}
                 >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">
-                    <BlocksIcon aria-hidden />
-                    All content
-                  </SelectItem>
-                  <SelectItem value="mods">
-                    <BlocksIcon aria-hidden />
-                    Mods
-                  </SelectItem>
-                  <SelectItem value="resourcePacks">
-                    <ImageIcon aria-hidden />
-                    Resource Packs
-                  </SelectItem>
-                  <SelectItem value="shaderPacks">
-                    <SparklesIcon aria-hidden />
-                    Shader Packs
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                aria-label="Refresh content"
-                disabled={folder === null || refreshingContent}
-                onClick={() => {
-                  if (folder === null) return;
-                  void queryClient
-                    .fetchQuery({
-                      ...instanceContentQuery(queryClient, folder, true),
-                      staleTime: 0,
-                    })
-                    .catch((error: unknown) =>
-                      toast.error(friendlyError(messageOf(error))),
-                    );
-                }}
-              >
-                <RefreshCwIcon
-                  aria-hidden
-                  className={
-                    refreshingContent ? homePanelStyles.refreshing : undefined
-                  }
+                  <EraserIcon data-icon="inline-start" aria-hidden />
+                  Clear
+                </Button>
+                <ConsoleLogLevelFilter
+                  selected={logLevels}
+                  onSelectedChange={setLogLevels}
                 />
-              </Button>
-            </>
-          ) : null}
+              </>
+            ) : tab === "files" ? (
+              <>
+                <FilesBreadcrumb
+                  folder={folder}
+                  relativePath={filesPath}
+                  onRelativePathChange={setFilesPath}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  className={homePanelStyles.header}
+                  disabled={instance === null}
+                  onClick={() => {
+                    if (instance !== null) {
+                      void openInstanceFolder(instance.folder);
+                    }
+                  }}
+                >
+                  <FolderOpenIcon data-icon="inline-start" aria-hidden />
+                  Open folder
+                </Button>
+              </>
+            ) : (
+              <>
+                <Input
+                  aria-label="Search content"
+                  className={homePanelStyles.searchInput}
+                  placeholder="Search content"
+                  value={contentSearch}
+                  startIcon={<SearchIcon aria-hidden />}
+                  onChange={(event) => setContentSearch(event.target.value)}
+                />
+                <Select
+                  value={contentFilter}
+                  onValueChange={(value) =>
+                    setContentFilter(value as ContentFilter)
+                  }
+                >
+                  <SelectTrigger
+                    aria-label="Filter content"
+                    className={homePanelStyles.filterSelect}
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">
+                      <BlocksIcon aria-hidden />
+                      All content
+                    </SelectItem>
+                    <SelectItem value="mods">
+                      <BlocksIcon aria-hidden />
+                      Mods
+                    </SelectItem>
+                    <SelectItem value="resourcePacks">
+                      <ImageIcon aria-hidden />
+                      Resource Packs
+                    </SelectItem>
+                    <SelectItem value="shaderPacks">
+                      <SparklesIcon aria-hidden />
+                      Shader Packs
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  aria-label="Refresh content"
+                  disabled={folder === null || refreshingContent}
+                  onClick={() => {
+                    if (folder === null) return;
+                    void queryClient
+                      .fetchQuery({
+                        ...instanceContentQuery(queryClient, folder, true),
+                        staleTime: 0,
+                      })
+                      .catch((error: unknown) =>
+                        toast.error(friendlyError(messageOf(error))),
+                      );
+                  }}
+                >
+                  <RefreshCwIcon
+                    aria-hidden
+                    className={
+                      refreshingContent ? homePanelStyles.refreshing : undefined
+                    }
+                  />
+                </Button>
+              </>
+            )}
+          </div>
         </div>
         <TabsContent value="files" className={homePanelStyles.tabContent}>
           <PageTransition direction={tabDirection}>

@@ -41,7 +41,7 @@ export function ContentTable({
           <tbody>
             {entries.length === 0 ? (
               <tr>
-                <td colSpan={3}>
+                <td colSpan={2}>
                   <div className={contentTableStyles.empty}>
                     <span className={contentTableStyles.emptyIconWell}>
                       <PackageIcon
@@ -67,7 +67,7 @@ export function ContentTable({
                     {gap > 0 ? (
                       <tr aria-hidden="true" tabIndex={-1}>
                         <td
-                          colSpan={3}
+                          colSpan={2}
                           className={contentTableStyles.emptyCell}
                           style={{ height: gap }}
                         />
@@ -91,7 +91,7 @@ export function ContentTable({
               virtualRows[virtualRows.length - 1].end ? (
               <tr aria-hidden="true" tabIndex={-1}>
                 <td
-                  colSpan={3}
+                  colSpan={2}
                   className={contentTableStyles.emptyCell}
                   style={{
                     height:
