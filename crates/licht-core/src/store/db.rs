@@ -10,7 +10,7 @@ use super::repositories::metadata::MetadataRepository;
 use crate::{CoreError, Result, SharedCache};
 
 const DB_FILE: &str = "licht.db";
-const SCHEMA_VERSION: u32 = 13;
+const SCHEMA_VERSION: u32 = 14;
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 // The database actor keeps one connection; the rest serve short reads and writes.
 const MAX_CONNECTIONS: u32 = 4;
@@ -349,6 +349,15 @@ async fn migrate(connection: &mut SqliteConnection) -> Result<()> {
                 UNIQUE (instances_directory, instance_folder, relative_path)
             );
             PRAGMA user_version = 13;",
+        )
+        .execute(&mut *transaction)
+        .await?;
+    }
+    if version < 14 {
+        // The launcher always uses its own title bar, so the opt-out column is gone.
+        sqlx::raw_sql(
+            "ALTER TABLE settings DROP COLUMN disable_custom_title_bar;
+            PRAGMA user_version = 14;",
         )
         .execute(&mut *transaction)
         .await?;

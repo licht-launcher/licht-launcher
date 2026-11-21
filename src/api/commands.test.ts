@@ -563,7 +563,6 @@ describe("launcher commands", () => {
       downloadConcurrency: 4,
       writeConcurrency: 8,
       downloadSpeedLimitBytesPerSecond: null,
-      disableCustomTitleBar: false,
       dataDirectory: null,
       automaticUpdates: true,
       language: "en" as const,

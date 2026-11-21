@@ -36,7 +36,6 @@ fn sample(download_concurrency: u32) -> Settings {
         write_concurrency: 8,
         download_speed_limit_bytes_per_second: None,
         data_directory: None,
-        disable_custom_title_bar: false,
         automatic_updates: true,
         language: licht_core::LauncherLanguage::English,
         hardware_acceleration: true,
@@ -319,6 +318,28 @@ async fn legacy_transparency_preferences_are_ignored_and_removed_on_save() {
     }
 }
 
+#[tokio::test]
+async fn legacy_title_bar_preferences_are_ignored_and_removed_on_save() {
+    let cache = database("legacy-title-bar").await;
+    std::fs::create_dir_all(cache.cache().root()).expect("root");
+    for disabled in [true, false] {
+        let legacy = serde_json::json!({"schema": 1, "disableCustomTitleBar": disabled});
+        std::fs::write(
+            settings_file(&cache),
+            serde_json::to_vec(&legacy).expect("json"),
+        )
+        .expect("legacy settings");
+        let settings = load_settings(&cache).await.expect("load legacy settings");
+        assert_eq!(settings.theme, licht_core::LauncherTheme::Dark);
+        save_settings(&cache, &settings).await.expect("save");
+        let saved: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(settings_file(&cache)).expect("saved file"))
+                .expect("json");
+        assert!(saved.get("disableCustomTitleBar").is_none());
+        assert_eq!(load_settings(&cache).await.expect("reload"), settings);
+    }
+}
+
 fn saved_file(cache: &Database) -> serde_json::Value {
     serde_json::from_slice(&std::fs::read(settings_file(cache)).expect("settings file"))
         .expect("settings JSON")
@@ -333,7 +354,6 @@ async fn the_file_keeps_only_startup_preferences_and_the_rest_roundtrips() {
     settings.java21 = Some("/opt/java21/bin/java".to_string());
     settings.width = None;
     settings.download_speed_limit_bytes_per_second = Some(9_007_199_254_740_991);
-    settings.disable_custom_title_bar = true;
     let saved = save_settings(&cache, &settings).await.expect("save");
     let mut keys = saved_file(&cache)
         .as_object()
