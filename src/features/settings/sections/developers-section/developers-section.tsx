@@ -94,12 +94,16 @@ export function DevelopersSection({
       label: "Migration with temporary fixtures",
     },
     {
-      value: "updateAndMigration",
-      label: "Update followed by migration",
+      value: "migrationAndUpdate",
+      label: "Migration followed by update",
     },
     {
       value: "checkFailure",
       label: "Update check failure / offline",
+    },
+    {
+      value: "downloadFailure",
+      label: "Update download failure",
     },
     {
       value: "migrationFailure",

@@ -59,8 +59,9 @@ pub enum StartupPreviewScenario {
     NoUpdate,
     Update,
     Migration,
-    UpdateAndMigration,
+    MigrationAndUpdate,
     CheckFailure,
+    DownloadFailure,
     MigrationFailure,
 }
 

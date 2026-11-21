@@ -163,9 +163,9 @@ describe("launcher commands", () => {
     expect(invoke).toHaveBeenCalledWith("open_startup_preview", {
       scenario: "migration",
     });
-    await restartStartupPreview("updateAndMigration");
+    await restartStartupPreview("migrationAndUpdate");
     expect(invoke).toHaveBeenCalledWith("restart_startup_preview", {
-      scenario: "updateAndMigration",
+      scenario: "migrationAndUpdate",
     });
     await requestUpdateRestart();
     expect(invoke).toHaveBeenCalledWith("request_update_restart");

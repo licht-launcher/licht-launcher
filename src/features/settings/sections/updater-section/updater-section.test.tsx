@@ -346,7 +346,7 @@ describe("UpdaterSection", () => {
     fireEvent.click(section.getByRole("button", { name: "Restart to update" }));
     await waitFor(() =>
       expect(invoke).toHaveBeenCalledWith("open_startup_preview", {
-        scenario: "updateAndMigration",
+        scenario: "update",
       }),
     );
     expect(install).not.toHaveBeenCalled();

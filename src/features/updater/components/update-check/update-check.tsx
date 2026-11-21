@@ -139,7 +139,7 @@ export function UpdateCheck() {
     mutationFn: (action: "check" | "download" | "install") => {
       if (getUpdateSimulation())
         return action === "install"
-          ? openStartupPreview("updateAndMigration")
+          ? openStartupPreview("update")
           : Promise.resolve();
       if (action === "check") return checkAppUpdate();
       if (action === "download") return downloadAppUpdate();

@@ -343,6 +343,31 @@ describe("DevelopersSection", () => {
     expect(restartPreview).not.toHaveBeenCalled();
   });
 
+  it("previews an update download that fails and opens the installed version", async () => {
+    openPreview.mockResolvedValueOnce(undefined);
+    view();
+    await waitFor(() =>
+      expect(
+        screen.getByRole("combobox", { name: "Startup test scenario" }),
+      ).toBeEnabled(),
+    );
+    fireEvent.click(
+      screen.getByRole("combobox", { name: "Startup test scenario" }),
+    );
+    expect(
+      await screen.findByRole("option", {
+        name: "Migration followed by update",
+      }),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("option", { name: "Update download failure" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Open preview" }));
+    await waitFor(() =>
+      expect(openPreview).toHaveBeenCalledWith("downloadFailure"),
+    );
+  });
+
   it("requests a startup test restart and reports launch failures", async () => {
     restartPreview.mockRejectedValueOnce(new Error("could not restart"));
     view();
