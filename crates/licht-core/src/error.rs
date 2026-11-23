@@ -204,6 +204,18 @@ pub enum CoreError {
     ModrinthLegacyIndex(#[source] Box<CoreError>),
 }
 
+/// An error and every cause below it, joined with `: `, for log fields.
+pub fn error_chain(error: &dyn std::error::Error) -> String {
+    let mut chain = error.to_string();
+    let mut source = error.source();
+    while let Some(cause) = source {
+        chain.push_str(": ");
+        chain.push_str(&cause.to_string());
+        source = cause.source();
+    }
+    chain
+}
+
 #[cfg(test)]
 mod tests {
     use std::error::Error;
@@ -225,5 +237,16 @@ mod tests {
 
         assert_eq!(cause.kind(), io::ErrorKind::PermissionDenied);
         assert_eq!(error.to_string(), "I/O operation failed");
+    }
+
+    #[test]
+    fn error_chains_join_every_cause_in_order() {
+        let cause = io::Error::new(io::ErrorKind::PermissionDenied, "the folder is read-only");
+        let error = crate::CoreError::ModrinthLegacyIndex(Box::new(crate::CoreError::from(cause)));
+
+        assert_eq!(
+            super::error_chain(&error),
+            format!("{error}: I/O operation failed: the folder is read-only")
+        );
     }
 }
