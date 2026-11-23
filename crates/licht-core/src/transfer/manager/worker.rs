@@ -7,6 +7,19 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use tokio::sync::{Mutex, mpsc, watch};
+use tracing::Instrument;
+
+/// Every event a job's worker emits carries the job, its operation and its target.
+fn job_span(snapshot: &DownloadJobSnapshot) -> tracing::Span {
+    tracing::info_span!(
+        "download_job",
+        job_id = %snapshot.id,
+        operation = ?snapshot.operation,
+        instance = snapshot.instance_folder.as_deref(),
+        version = snapshot.version_id.as_deref(),
+        java_major = snapshot.java_major,
+    )
+}
 
 impl DownloadManager {
     pub(super) async fn spawn(self: &Arc<Self>, snapshot: DownloadJobSnapshot) {
@@ -40,42 +53,49 @@ impl DownloadManager {
             .await
             .insert(snapshot.id.clone(), Arc::clone(&slot));
         self.emit(snapshot.clone());
+        let span = job_span(&snapshot);
         let manager = Arc::clone(self);
         let worker_slot = Arc::clone(&slot);
-        let worker = tokio::spawn(async move { manager.drive(snapshot.id, worker_slot).await });
+        let worker = tokio::spawn(
+            async move { manager.drive(snapshot.id, worker_slot).await }.instrument(span.clone()),
+        );
         let abort = worker.abort_handle();
         *slot.worker.lock().await = Some(abort.clone());
         if slot.suspending.load(Ordering::SeqCst) {
             abort.abort();
         }
         let manager = Arc::clone(self);
-        tokio::spawn(async move {
-            let outcome = worker.await;
-            let id = slot.snapshot.lock().await.id.clone();
-            manager.release_turn(&id).await;
-            let failure = match outcome {
-                Ok(Ok(())) => {
+        tokio::spawn(
+            async move {
+                let outcome = worker.await;
+                let id = slot.snapshot.lock().await.id.clone();
+                manager.release_turn(&id).await;
+                let failure = match outcome {
+                    Ok(Ok(())) => {
+                        slot.stopped.send_replace(true);
+                        return;
+                    }
+                    Ok(Err(error)) => error.to_string(),
+                    Err(_) => "download worker stopped unexpectedly".to_string(),
+                };
+                if slot.suspending.load(Ordering::SeqCst) || slot.restarting.load(Ordering::SeqCst)
+                {
+                    let id = slot.snapshot.lock().await.id.clone();
+                    let message = if slot.restarting.load(Ordering::SeqCst) {
+                        "download restarted as a full repair"
+                    } else {
+                        "download suspended for shutdown"
+                    };
+                    slot.completion.send_replace(Some(Err(message.to_string())));
+                    manager.active.lock().await.remove(&id);
                     slot.stopped.send_replace(true);
                     return;
                 }
-                Ok(Err(error)) => error.to_string(),
-                Err(_) => "download worker stopped unexpectedly".to_string(),
-            };
-            if slot.suspending.load(Ordering::SeqCst) || slot.restarting.load(Ordering::SeqCst) {
-                let id = slot.snapshot.lock().await.id.clone();
-                let message = if slot.restarting.load(Ordering::SeqCst) {
-                    "download restarted as a full repair"
-                } else {
-                    "download suspended for shutdown"
-                };
-                slot.completion.send_replace(Some(Err(message.to_string())));
-                manager.active.lock().await.remove(&id);
+                manager.fail(Arc::clone(&slot), failure).await;
                 slot.stopped.send_replace(true);
-                return;
             }
-            manager.fail(Arc::clone(&slot), failure).await;
-            slot.stopped.send_replace(true);
-        });
+            .instrument(span),
+        );
     }
 
     async fn drive(self: &Arc<Self>, id: String, slot: Arc<ActiveJob>) -> Result<()> {

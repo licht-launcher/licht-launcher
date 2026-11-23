@@ -76,6 +76,9 @@ and in `<profile>/logs/licht.<date>.log`, written through `tracing-appender`.
 The file rotates daily and keeps the last 7 files. If the log directory cannot be
 opened, the app keeps logging to stderr and records a warning instead of failing
 to start. Panics are logged as errors before the default panic output.
+Download jobs run inside a `download_job` span (job id, operation, instance,
+version, Java major) and game launches inside a `launch` span (instance folder),
+so their events can be told apart in the log. Player names are never span fields.
 `RUST_LOG` selects filtering; absent or empty values default to INFO, and invalid
 filters return an error. Logs must not contain tokens, secrets, or personal data.
 
