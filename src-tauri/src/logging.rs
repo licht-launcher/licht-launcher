@@ -1,9 +1,12 @@
 use std::env;
+use std::fs::{self, File, OpenOptions};
+use std::io;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use tracing::Subscriber;
-use tracing_appender::rolling::{RollingFileAppender, Rotation};
+use tracing_subscriber::fmt::format::Writer;
+use tracing_subscriber::fmt::time::{FormatTime, SystemTime};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{EnvFilter, filter::LevelFilter, fmt};
@@ -11,7 +14,7 @@ use tracing_subscriber::{EnvFilter, filter::LevelFilter, fmt};
 const LOG_DIRECTORY: &str = "logs";
 const LOG_FILE_PREFIX: &str = "licht";
 const LOG_FILE_SUFFIX: &str = "log";
-const RETAINED_LOG_FILES: usize = 7;
+const RETAINED_LOG_FILES: usize = 30;
 
 pub(crate) fn init() -> Result<()> {
     let directives = match env::var("RUST_LOG") {
@@ -21,10 +24,13 @@ pub(crate) fn init() -> Result<()> {
     };
 
     let filter = parse_filter(directives.as_deref())?;
-    let file = log_directory().and_then(|directory| file_appender(&directory));
-    let (file, file_error) = match file {
-        Ok(appender) => (Some(appender), None),
-        Err(error) => (None, Some(error)),
+    let opened = log_directory().and_then(|directory| {
+        let file = open_log_file(&directory, &launch_stamp()?)?;
+        Ok((directory, file))
+    });
+    let (directory, file, file_error) = match opened {
+        Ok((directory, file)) => (Some(directory), Some(file), None),
+        Err(error) => (None, None, Some(error)),
     };
 
     subscriber(filter, file)
@@ -36,6 +42,11 @@ pub(crate) fn init() -> Result<()> {
             error = format!("{error:#}"),
             "Could not open the launcher log file; logging to stderr only"
         );
+    }
+    if let Some(directory) = directory
+        && let Err(error) = prune_old_logs(&directory, RETAINED_LOG_FILES)
+    {
+        tracing::warn!(%error, "Could not remove old launcher log files");
     }
     install_panic_hook();
     Ok(())
@@ -56,24 +67,61 @@ fn parse_filter(directives: Option<&str>) -> Result<EnvFilter> {
         .context("Invalid RUST_LOG filter")
 }
 
-fn file_appender(directory: &Path) -> Result<RollingFileAppender> {
-    RollingFileAppender::builder()
-        .rotation(Rotation::DAILY)
-        .filename_prefix(LOG_FILE_PREFIX)
-        .filename_suffix(LOG_FILE_SUFFIX)
-        .max_log_files(RETAINED_LOG_FILES)
-        .build(directory)
+/// UTC launch time such as `2026-11-23T15-30-12Z`: sortable and valid in file names.
+fn launch_stamp() -> Result<String> {
+    let mut text = String::new();
+    SystemTime
+        .format_time(&mut Writer::new(&mut text))
+        .map_err(|_| anyhow::anyhow!("Could not format the launch time"))?;
+    let seconds = text
+        .get(..19)
+        .context("The launch time has an unexpected format")?;
+    Ok(format!("{}Z", seconds.replace(':', "-")))
+}
+
+/// Each launch writes its own file, named after the time it started.
+fn open_log_file(directory: &Path, stamp: &str) -> Result<File> {
+    fs::create_dir_all(directory)
+        .and_then(|()| {
+            OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(directory.join(format!("{LOG_FILE_PREFIX}.{stamp}.{LOG_FILE_SUFFIX}")))
+        })
         .context("Could not open the launcher log file")
 }
 
-fn subscriber(
-    filter: EnvFilter,
-    file: Option<RollingFileAppender>,
-) -> impl Subscriber + Send + Sync {
+/// Removes all but the newest `keep` launcher logs. Names sort by launch time, and
+/// older daily files (`licht.<date>.log`) sort before launches from the same day.
+fn prune_old_logs(directory: &Path, keep: usize) -> io::Result<()> {
+    let prefix = format!("{LOG_FILE_PREFIX}.");
+    let suffix = format!(".{LOG_FILE_SUFFIX}");
+    let mut names = Vec::new();
+    for entry in fs::read_dir(directory)? {
+        let entry = entry?;
+        if !entry.file_type()?.is_file() {
+            continue;
+        }
+        if let Some(name) = entry.file_name().to_str()
+            && name.starts_with(&prefix)
+            && name.ends_with(&suffix)
+        {
+            names.push(name.to_string());
+        }
+    }
+    names.sort();
+    let excess = names.len().saturating_sub(keep);
+    for name in &names[..excess] {
+        fs::remove_file(directory.join(name))?;
+    }
+    Ok(())
+}
+
+fn subscriber(filter: EnvFilter, file: Option<File>) -> impl Subscriber + Send + Sync {
     tracing_subscriber::registry()
         .with(filter)
         .with(fmt::layer().with_writer(std::io::stderr).with_ansi(false))
-        .with(file.map(|appender| fmt::layer().with_writer(appender).with_ansi(false)))
+        .with(file.map(|file| fmt::layer().with_writer(file).with_ansi(false)))
 }
 
 fn install_panic_hook() {
@@ -92,7 +140,9 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
 
-    use super::{file_appender, install_panic_hook, parse_filter, subscriber};
+    use super::{
+        install_panic_hook, launch_stamp, open_log_file, parse_filter, prune_old_logs, subscriber,
+    };
 
     struct TestWriter(Arc<Mutex<Vec<u8>>>);
 
@@ -196,32 +246,51 @@ mod tests {
         assert!(error.source().is_some());
     }
 
+    fn file_names(directory: &Path) -> Vec<String> {
+        let mut names: Vec<String> = log_files(directory)
+            .iter()
+            .map(|path| {
+                path.file_name()
+                    .and_then(|name| name.to_str())
+                    .expect("the log file name should be valid UTF-8")
+                    .to_string()
+            })
+            .collect();
+        names.sort();
+        names
+    }
+
     #[test]
-    fn file_logs_are_written_to_a_dated_file_in_a_created_directory() {
+    fn each_launch_writes_its_own_file_in_a_created_directory() {
         let root = TempDirectory::new();
         let directory = root.path().join("logs");
-        let appender = file_appender(&directory).expect("the log file should open");
-        let filter = parse_filter(None).expect("the filter should be valid");
 
-        tracing::subscriber::with_default(subscriber(filter, Some(appender)), || {
-            tracing::debug!("debug event");
-            tracing::info!(version = "0.1.1", "startup event");
-        });
+        for (stamp, message) in [
+            ("2026-11-23T09-00-00Z", "first launch"),
+            ("2026-11-23T15-30-12Z", "second launch"),
+        ] {
+            let file = open_log_file(&directory, stamp).expect("the log file should open");
+            let filter = parse_filter(None).expect("the filter should be valid");
+            tracing::subscriber::with_default(subscriber(filter, Some(file)), || {
+                tracing::debug!("debug event");
+                tracing::info!(launch = message, "startup event");
+            });
+        }
 
-        let files = log_files(&directory);
-        assert_eq!(files.len(), 1);
-        let name = files[0]
-            .file_name()
-            .and_then(|name| name.to_str())
-            .expect("the log file name should be valid UTF-8");
-        assert!(name.starts_with("licht."), "unexpected log file {name}");
-        assert!(name.ends_with(".log"), "unexpected log file {name}");
-        let contents = fs::read_to_string(&files[0]).expect("the log file should be readable");
-        assert!(contents.contains("startup event"));
-        assert!(contents.contains("version=\"0.1.1\""));
-        assert!(!contents.contains("debug event"));
+        assert_eq!(
+            file_names(&directory),
+            [
+                "licht.2026-11-23T09-00-00Z.log",
+                "licht.2026-11-23T15-30-12Z.log"
+            ]
+        );
+        let second = fs::read_to_string(directory.join("licht.2026-11-23T15-30-12Z.log"))
+            .expect("the log file should be readable");
+        assert!(second.contains("second launch"));
+        assert!(!second.contains("first launch"));
+        assert!(!second.contains("debug event"));
         assert!(
-            !contents.contains('\u{1b}'),
+            !second.contains('\u{1b}'),
             "file logs must not contain ANSI codes"
         );
     }
@@ -232,11 +301,56 @@ mod tests {
         let blocker = root.path().join("not-a-directory");
         fs::write(&blocker, b"").expect("the blocking file should be written");
 
-        let error = file_appender(&blocker.join("logs"))
+        let error = open_log_file(&blocker.join("logs"), "2026-11-23T15-30-12Z")
             .expect_err("a log directory below a file should fail");
 
         assert_eq!(error.to_string(), "Could not open the launcher log file");
         assert!(error.source().is_some());
+    }
+
+    #[test]
+    fn pruning_keeps_only_the_newest_launcher_logs() {
+        let root = TempDirectory::new();
+        let directory = root.path();
+        fs::write(directory.join("licht.2026-11-20.log"), b"").expect("legacy log");
+        for minute in 0..33 {
+            fs::write(
+                directory.join(format!("licht.2026-11-23T10-{minute:02}-00Z.log")),
+                b"",
+            )
+            .expect("launch log");
+        }
+        fs::write(directory.join("notes.txt"), b"").expect("unrelated file");
+
+        prune_old_logs(directory, 30).expect("old logs should be removed");
+
+        let names = file_names(directory);
+        assert_eq!(names.len(), 31, "unexpected files: {names:?}");
+        assert!(names.contains(&"notes.txt".to_string()));
+        assert!(!names.contains(&"licht.2026-11-20.log".to_string()));
+        assert!(!names.contains(&"licht.2026-11-23T10-02-00Z.log".to_string()));
+        assert!(names.contains(&"licht.2026-11-23T10-03-00Z.log".to_string()));
+        assert!(names.contains(&"licht.2026-11-23T10-32-00Z.log".to_string()));
+    }
+
+    #[test]
+    fn launch_stamps_are_sortable_and_safe_in_file_names() {
+        let stamp = launch_stamp().expect("the launch time should format");
+
+        assert_eq!(stamp.len(), 20, "unexpected stamp {stamp}");
+        assert!(stamp.ends_with('Z'), "unexpected stamp {stamp}");
+        for (index, character) in stamp.char_indices() {
+            let expected_separator = match index {
+                4 | 7 | 13 | 16 => Some('-'),
+                10 => Some('T'),
+                19 => Some('Z'),
+                _ => None,
+            };
+            match expected_separator {
+                Some(separator) => assert_eq!(character, separator, "unexpected stamp {stamp}"),
+                None => assert!(character.is_ascii_digit(), "unexpected stamp {stamp}"),
+            }
+        }
     }
 
     #[test]
