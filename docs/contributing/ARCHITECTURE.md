@@ -72,8 +72,8 @@ warning with the full cause chain and sends only the top-level message to the
 interface.
 
 Logging uses `tracing` and `tracing-subscriber`, with structured text on stderr
-and in `<profile>/logs/licht.<date>.log`, written through `tracing-appender`.
-The file rotates daily and keeps the last 7 files; **Settings →
+and in `<profile>/logs/licht.<launch time>.log`. Each launch writes its own file,
+named after its UTC start time, and startup keeps the 30 most recent; **Settings →
 Troubleshooting** shows the folder and opens it. If the log directory cannot be
 opened, the app keeps logging to stderr and records a warning instead of failing
 to start. Panics are logged as errors before the default panic output.
