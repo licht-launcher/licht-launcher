@@ -344,6 +344,14 @@ export function openExternalUrl(url: string): Promise<void> {
   return invoke("open_external_url", { url });
 }
 
+export function getLogsFolder(): Promise<string> {
+  return invoke("get_logs_folder");
+}
+
+export function openLogsFolder(): Promise<void> {
+  return invoke("open_logs_folder");
+}
+
 export function getLastPlayedFolder(): Promise<string | null> {
   return invoke("get_last_played_folder");
 }

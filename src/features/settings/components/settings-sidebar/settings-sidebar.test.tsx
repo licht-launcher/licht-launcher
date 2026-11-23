@@ -34,6 +34,14 @@ describe("SettingsSidebar", () => {
     expect(
       navigation.queryByRole("button", { name: "Developer Tools" }),
     ).not.toBeInTheDocument();
+    const troubleshooting = navigation.getByRole("button", {
+      name: "Troubleshooting",
+    });
+    expect(troubleshooting).toBeVisible();
+    expect(troubleshooting.querySelector("svg")).toHaveClass("lucide-wrench");
+    expect(
+      screen.queryByRole("button", { name: "Open logs folder" }),
+    ).not.toBeInTheDocument();
     const developers = within(
       screen.getByRole("navigation", { name: "Developer settings" }),
     );

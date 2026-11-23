@@ -5,6 +5,7 @@ import {
   HardDriveDownloadIcon,
   SettingsIcon,
   SquareCodeIcon,
+  WrenchIcon,
 } from "lucide-react";
 
 export const SECTIONS = [
@@ -38,6 +39,12 @@ export const SECTIONS = [
     label: "Updates",
     description: "How Licht Launcher checks and installs updates.",
     icon: CircleArrowUpIcon,
+  },
+  {
+    id: "troubleshooting",
+    label: "Troubleshooting",
+    description: "Logs, build information and problem reports.",
+    icon: WrenchIcon,
   },
   ...(import.meta.env.DEV
     ? [

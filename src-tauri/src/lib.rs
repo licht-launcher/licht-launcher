@@ -96,6 +96,8 @@ pub fn run() -> anyhow::Result<()> {
             commands::shell::open_repository,
             commands::shell::open_feedback,
             commands::shell::open_external_url,
+            commands::shell::get_logs_folder,
+            commands::shell::open_logs_folder,
             commands::shell::restart_app,
             commands::frontend_log::log_frontend_error,
             commands::shell::quit_app,

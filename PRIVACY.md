@@ -87,8 +87,12 @@ can cause additional network activity outside the launcher's control.
 
 ## Logs and information you submit
 
-Launcher diagnostics are written to standard error and to daily log files in
-the `logs` folder of the launcher profile directory; the last 7 files are kept. Game console output is
+Launcher diagnostics are written to standard error and to one log file per
+launch in the `logs` folder of the launcher profile directory; the 30 most
+recent files are kept.
+**Settings → Troubleshooting** shows and opens that folder, and its **Report a
+problem** button opens the GitHub issue page in your browser; nothing is sent
+until you submit a report yourself. Game console output is
 displayed in the launcher, and Minecraft or mods can write their own log and
 crash files in instance directories. These logs are not automatically uploaded
 by Licht Launcher. Logs can contain player names, local file paths, server

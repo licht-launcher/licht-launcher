@@ -23,6 +23,7 @@ import {
   getAppUpdateState,
   getBuildDiagnostics,
   getLastPlayedFolder,
+  getLogsFolder,
   getModpack,
   getPlayerHead,
   getSettings,
@@ -50,6 +51,7 @@ import {
   openExternalUrl,
   openFeedback,
   openInstanceFolder,
+  openLogsFolder,
   openRepository,
   openStartupPreview,
   pauseDownloadJob,
@@ -490,6 +492,17 @@ describe("launcher commands", () => {
     expect(invoke).toHaveBeenCalledWith("open_external_url", {
       url: "https://modrinth.com/modpack/fo",
     });
+  });
+
+  it("reads the launcher log folder from the native command", async () => {
+    vi.mocked(invoke).mockResolvedValueOnce("/data/Licht Launcher/logs");
+    await expect(getLogsFolder()).resolves.toBe("/data/Licht Launcher/logs");
+    expect(invoke).toHaveBeenCalledWith("get_logs_folder");
+  });
+
+  it("opens the launcher log folder through the native command", async () => {
+    await openLogsFolder();
+    expect(invoke).toHaveBeenCalledWith("open_logs_folder");
   });
 
   it("reads the cached player head through the native command", async () => {
