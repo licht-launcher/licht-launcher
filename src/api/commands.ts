@@ -394,6 +394,16 @@ export function getSettings(): Promise<SettingsSnapshot> {
   return invoke("get_settings");
 }
 
+/** Where the interface caught an error it reports to the launcher log. */
+export type FrontendErrorSource = "render" | "window" | "promise";
+
+export function logFrontendError(
+  source: FrontendErrorSource,
+  message: string,
+): Promise<void> {
+  return invoke("log_frontend_error", { source, message });
+}
+
 export function restartApp(): Promise<void> {
   return invoke("restart_app");
 }

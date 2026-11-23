@@ -79,6 +79,10 @@ to start. Panics are logged as errors before the default panic output.
 Download jobs run inside a `download_job` span (job id, operation, instance,
 version, Java major) and game launches inside a `launch` span (instance folder),
 so their events can be told apart in the log. Player names are never span fields.
+In the native app, the interface sends React render errors, uncaught errors and
+unhandled rejections to `log_frontend_error`, which logs them as `Interface error`
+(at most 20 per minute, messages truncated to 8,000 characters). Query and
+mutation failures are not sent again, since their commands already log them.
 `RUST_LOG` selects filtering; absent or empty values default to INFO, and invalid
 filters return an error. Logs must not contain tokens, secrets, or personal data.
 

@@ -2,6 +2,7 @@
 
 pub mod accounts;
 pub mod downloads;
+pub mod frontend_log;
 mod install_progress;
 pub mod instances;
 pub mod launch;
