@@ -158,7 +158,7 @@ pub fn open_instance_folder(
     }
     app.opener()
         .open_path(path.to_string_lossy().into_owned(), None::<&str>)
-        .map_err(|error| error.to_string())
+        .map_err(|error| super::command_error(&error))
 }
 
 #[tauri::command]

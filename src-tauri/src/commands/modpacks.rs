@@ -132,6 +132,6 @@ pub async fn install_modpack_files(
     }
     installing
         .await
-        .map_err(|_| "install task failed".to_string())?
+        .map_err(|error| super::command_failure("install task failed", &error))?
         .map_err(failure)
 }

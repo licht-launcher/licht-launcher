@@ -45,7 +45,7 @@ pub fn runtime_java(paths: State<'_, LauncherPaths>) -> Result<JavaPaths, String
 pub async fn java_installation_status(paths: JavaPaths) -> Result<JavaStatus, String> {
     tauri::async_runtime::spawn_blocking(move || licht_core::java_installation_status(&paths))
         .await
-        .map_err(|_| "Java check failed".to_string())
+        .map_err(|error| super::command_failure("Java check failed", &error))
 }
 
 #[tauri::command]
@@ -58,7 +58,7 @@ pub async fn detect_java_installations(
         Ok(detect_known_javas(&game, environment.os))
     })
     .await
-    .map_err(|_| "Java check failed".to_string())?
+    .map_err(|error| super::command_failure("Java check failed", &error))?
 }
 
 #[tauri::command]
@@ -75,14 +75,14 @@ fn picked_path(file: Option<tauri_plugin_dialog::FilePath>) -> Result<Option<Str
     };
     match file.into_path() {
         Ok(path) => Ok(Some(path.display().to_string())),
-        Err(error) => Err(error.to_string()),
+        Err(error) => Err(super::command_error(&error)),
     }
 }
 
 fn starting_directory(current: &str, fallback: &Path) -> Result<PathBuf, String> {
     let directory = browse_start_directory(current, fallback);
     if !directory.is_dir() {
-        std::fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
+        std::fs::create_dir_all(&directory).map_err(|error| super::command_error(&error))?;
     }
     Ok(directory)
 }
@@ -108,7 +108,9 @@ pub async fn browse_java(
         .pick_file(move |file| {
             let _ = sender.send(file);
         });
-    let file = receiver.await.map_err(|_| "browse failed".to_string())?;
+    let file = receiver
+        .await
+        .map_err(|error| super::command_failure("browse failed", &error))?;
     picked_path(file)
 }
 
@@ -128,6 +130,8 @@ pub async fn browse_application_directory(
         .pick_folder(move |file| {
             let _ = sender.send(file);
         });
-    let file = receiver.await.map_err(|_| "browse failed".to_string())?;
+    let file = receiver
+        .await
+        .map_err(|error| super::command_failure("browse failed", &error))?;
     picked_path(file)
 }
