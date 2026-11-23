@@ -73,8 +73,8 @@ interface.
 
 Logging uses `tracing` and `tracing-subscriber`, with structured text on stderr
 and in `<profile>/logs/licht.<date>.log`, written through `tracing-appender`.
-The file rotates daily and keeps the last 7 files; the Settings sidebar's
-**Open logs folder** button opens the folder. If the log directory cannot be
+The file rotates daily and keeps the last 7 files; **Settings →
+Troubleshooting** shows the folder and opens it. If the log directory cannot be
 opened, the app keeps logging to stderr and records a warning instead of failing
 to start. Panics are logged as errors before the default panic output.
 Download jobs run inside a `download_job` span (job id, operation, instance,
