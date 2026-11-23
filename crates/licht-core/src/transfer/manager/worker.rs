@@ -70,13 +70,16 @@ impl DownloadManager {
                 let outcome = worker.await;
                 let id = slot.snapshot.lock().await.id.clone();
                 manager.release_turn(&id).await;
-                let failure = match outcome {
+                let (failure, detail) = match outcome {
                     Ok(Ok(())) => {
                         slot.stopped.send_replace(true);
                         return;
                     }
-                    Ok(Err(error)) => error.to_string(),
-                    Err(_) => "download worker stopped unexpectedly".to_string(),
+                    Ok(Err(error)) => (error.to_string(), crate::error_chain(&error)),
+                    Err(error) => (
+                        "download worker stopped unexpectedly".to_string(),
+                        error.to_string(),
+                    ),
                 };
                 if slot.suspending.load(Ordering::SeqCst) || slot.restarting.load(Ordering::SeqCst)
                 {
@@ -91,6 +94,7 @@ impl DownloadManager {
                     slot.stopped.send_replace(true);
                     return;
                 }
+                tracing::warn!(error = %detail, "Download job failed");
                 manager.fail(Arc::clone(&slot), failure).await;
                 slot.stopped.send_replace(true);
             }
@@ -217,6 +221,11 @@ impl DownloadManager {
             Err(CoreError::DownloadCancelled) => DownloadJobStatus::Cancelled,
             Err(_) => DownloadJobStatus::Failed,
         };
+        if let Err(error) = &result
+            && !matches!(error, CoreError::DownloadCancelled)
+        {
+            tracing::warn!(error = %crate::error_chain(error), "Download job failed");
+        }
         snapshot.error = result
             .err()
             .filter(|error| !matches!(error, CoreError::DownloadCancelled))

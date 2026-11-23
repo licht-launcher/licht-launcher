@@ -18,8 +18,15 @@ impl Write for TestWriter {
     }
 }
 
-#[tokio::test]
-async fn job_logs_carry_the_job_and_instance_context() {
+struct FailedRepair {
+    job: DownloadJobSnapshot,
+    failed: DownloadJobSnapshot,
+    folder: String,
+    logs: String,
+}
+
+/// Runs a repair whose every attempt receives corrupt bytes and captures its logs.
+async fn failed_repair() -> FailedRepair {
     let output = Arc::new(Mutex::new(Vec::new()));
     let writer_output = Arc::clone(&output);
     let subscriber = tracing_subscriber::fmt()
@@ -55,7 +62,20 @@ async fn job_logs_carry_the_job_and_instance_context() {
         .lock()
         .expect("the log buffer lock should work")
         .clone();
-    let logs = String::from_utf8(bytes).expect("logs should contain valid UTF-8");
+    FailedRepair {
+        job,
+        failed,
+        folder: entry.folder,
+        logs: String::from_utf8(bytes).expect("logs should contain valid UTF-8"),
+    }
+}
+
+#[tokio::test]
+async fn job_logs_carry_the_job_and_instance_context() {
+    let FailedRepair {
+        job, folder, logs, ..
+    } = failed_repair().await;
+
     let line = logs
         .lines()
         .find(|line| line.contains("download attempt failed"))
@@ -73,7 +93,26 @@ async fn job_logs_carry_the_job_and_instance_context() {
         "unexpected log line: {line}"
     );
     assert!(
-        line.contains(&format!("instance={:?}", entry.folder)),
+        line.contains(&format!("instance={folder:?}")),
         "unexpected log line: {line}"
     );
+}
+
+#[tokio::test]
+async fn a_failed_job_is_logged_with_its_error() {
+    let FailedRepair {
+        job, failed, logs, ..
+    } = failed_repair().await;
+
+    let line = logs
+        .lines()
+        .find(|line| line.contains("Download job failed"))
+        .unwrap_or_else(|| panic!("the failed job was not logged: {logs}"));
+    assert!(line.contains("WARN"), "unexpected log line: {line}");
+    assert!(
+        line.contains(&format!("job_id={}", job.id)),
+        "unexpected log line: {line}"
+    );
+    let error = failed.error.expect("the failed job keeps its error");
+    assert!(line.contains(&error), "unexpected log line: {line}");
 }

@@ -65,7 +65,7 @@ pub use download::{
     download_all_with_control, download_file, download_file_with_control, download_verified_all,
     shared_transfer_limits,
 };
-pub use error::CoreError;
+pub use error::{CoreError, error_chain};
 pub use external_url::external_https_url;
 pub use install::{
     ASSET_OBJECT_BASE, CacheCheck, GameInstall, InstallPlan, install_game, install_game_version,

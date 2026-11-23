@@ -48,19 +48,8 @@ pub(crate) fn http_client() -> Result<reqwest::Client, CoreError> {
 
 /// Logs a failed command with every cause, then returns the message the interface shows.
 pub(crate) fn failure(error: CoreError) -> String {
-    tracing::warn!(error = %error_chain(&error), "Command failed");
+    tracing::warn!(error = %licht_core::error_chain(&error), "Command failed");
     error.to_string()
-}
-
-fn error_chain(error: &dyn std::error::Error) -> String {
-    let mut chain = error.to_string();
-    let mut source = error.source();
-    while let Some(cause) = source {
-        chain.push_str(": ");
-        chain.push_str(&cause.to_string());
-        source = cause.source();
-    }
-    chain
 }
 
 pub(crate) fn host_environment() -> Result<LaunchEnvironment, CoreError> {
