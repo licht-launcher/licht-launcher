@@ -194,6 +194,21 @@ async fn invalid_partial_responses_are_rejected_before_publishing() {
 }
 
 #[tokio::test]
+#[should_panic(
+    expected = "request 2 did not reach the test server within 10ms (1 received so far)"
+)]
+async fn a_missing_request_reports_which_request_timed_out() {
+    let mut server = Server::start().await;
+    let destination = Destination::new("missing-request");
+    let running = transfer(&server.url, &destination, &DownloadControl::new(), 1);
+    server.request().await.respond(Reply::full());
+    finish(running).await.expect("transfer");
+    server
+        .request_within(std::time::Duration::from_millis(10))
+        .await;
+}
+
+#[tokio::test]
 async fn a_bad_partial_checksum_is_discarded_before_retrying_the_whole_file() {
     let mut server = Server::start().await;
     let destination = Destination::new("bad-prefix");

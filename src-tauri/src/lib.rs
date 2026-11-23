@@ -44,6 +44,7 @@ pub fn run() -> anyhow::Result<()> {
         .manage(std::sync::Arc::clone(&runtime))
         .manage(updates)
         .manage(commands::LaunchSessions::new())
+        .manage(commands::frontend_log::FrontendLogLimiter::default())
         .manage(desktop::Runtime::new(hardware_acceleration, initial_theme))
         .setup(move |app| {
             startup::start(app.handle().clone(), startup_runtime)?;
@@ -98,6 +99,7 @@ pub fn run() -> anyhow::Result<()> {
             commands::shell::get_logs_folder,
             commands::shell::open_logs_folder,
             commands::shell::restart_app,
+            commands::frontend_log::log_frontend_error,
             commands::shell::quit_app,
             commands::instances::get_last_played_folder,
             commands::instances::set_last_played_folder,

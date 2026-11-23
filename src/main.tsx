@@ -7,12 +7,16 @@ import {
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { StrictMode } from "react";
-import { createRoot } from "react-dom/client";
+import { createRoot, type RootOptions } from "react-dom/client";
 
 import { Toaster } from "@/components/ui/sonner";
 import { useLauncherTheme } from "@/features/settings/hooks/use-launcher-theme";
 import { StartupGate } from "@/features/startup/startup-gate";
 import { StartupScreen } from "@/features/startup/startup-screen";
+import {
+  installGlobalErrorReporting,
+  reportInterfaceError,
+} from "@/lib/error-reporting";
 
 import { routeTree } from "./routeTree.gen";
 import "./styles/tokens.css";
@@ -37,6 +41,21 @@ declare module "@tanstack/react-router" {
 }
 
 const root = document.getElementById("root");
+
+// The native app writes interface errors to the launcher log; the web preview keeps
+// React's default console reporting.
+const rootOptions: RootOptions = {};
+if (isTauri()) {
+  installGlobalErrorReporting(window);
+  const reportRenderError = (
+    error: unknown,
+    info: { componentStack?: string },
+  ) => {
+    reportInterfaceError("render", error, info.componentStack);
+  };
+  rootOptions.onCaughtError = reportRenderError;
+  rootOptions.onUncaughtError = reportRenderError;
+}
 
 if (root === null) {
   throw new Error("The application root element was not found.");
@@ -72,7 +91,7 @@ function App() {
   );
 }
 
-createRoot(root).render(
+createRoot(root, rootOptions).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <App />

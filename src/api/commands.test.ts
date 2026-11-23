@@ -46,6 +46,7 @@ import {
   listModpackVersions,
   listRunningGames,
   listVersions,
+  logFrontendError,
   logoutMicrosoftAccount,
   openExternalUrl,
   openFeedback,
@@ -476,6 +477,14 @@ describe("launcher commands", () => {
   it("opens the feedback form through the native command", async () => {
     await openFeedback();
     expect(invoke).toHaveBeenCalledWith("open_feedback");
+  });
+
+  it("writes an interface error to the launcher log", async () => {
+    await logFrontendError("render", "TypeError: x is undefined");
+    expect(invoke).toHaveBeenCalledWith("log_frontend_error", {
+      source: "render",
+      message: "TypeError: x is undefined",
+    });
   });
 
   it("opens an external link through the native command", async () => {
