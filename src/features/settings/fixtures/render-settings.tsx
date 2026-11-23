@@ -12,6 +12,8 @@ import { appUpdateState } from "@/features/updater/fixtures/state";
 export { invoke } from "@/features/settings/fixtures/invoke";
 export { snapshot } from "@/features/settings/fixtures/snapshot";
 
+export const logsFolder = "/home/player/.local/share/Licht Launcher/logs";
+
 export function mockSettingsCommands(
   implement?: (command: string, args?: unknown) => unknown,
 ) {
@@ -65,6 +67,9 @@ export function mockSettingsCommands(
     }
     if (command === "restart_app") {
       return Promise.resolve();
+    }
+    if (command === "get_logs_folder") {
+      return Promise.resolve(logsFolder);
     }
     return Promise.resolve(null);
   });

@@ -3,6 +3,7 @@ import {
   CircleArrowUpIcon,
   CpuIcon,
   HardDriveDownloadIcon,
+  LifeBuoyIcon,
   SettingsIcon,
   SquareCodeIcon,
 } from "lucide-react";
@@ -38,6 +39,12 @@ export const SECTIONS = [
     label: "Updates",
     description: "How Licht Launcher checks and installs updates.",
     icon: CircleArrowUpIcon,
+  },
+  {
+    id: "troubleshooting",
+    label: "Troubleshooting",
+    description: "Logs, build information and problem reports.",
+    icon: LifeBuoyIcon,
   },
   ...(import.meta.env.DEV
     ? [

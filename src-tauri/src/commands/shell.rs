@@ -28,6 +28,13 @@ pub fn open_external_url(app: AppHandle, url: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn get_logs_folder() -> Result<String, String> {
+    crate::logging::log_directory()
+        .map(|directory| directory.to_string_lossy().into_owned())
+        .map_err(|error| format!("{error:#}"))
+}
+
+#[tauri::command]
 pub fn open_logs_folder(app: AppHandle) -> Result<(), String> {
     let directory = crate::logging::log_directory().map_err(|error| format!("{error:#}"))?;
     let directory = existing_log_folder(directory)?;
@@ -90,7 +97,7 @@ pub async fn get_build_diagnostics(
 mod tests {
     use std::fs;
 
-    use super::existing_log_folder;
+    use super::{existing_log_folder, get_logs_folder};
 
     #[test]
     fn the_log_folder_opens_only_when_it_exists() {
@@ -106,6 +113,17 @@ mod tests {
             Err(
                 "The log folder does not exist yet. Restart the launcher to create it.".to_string()
             )
+        );
+    }
+
+    #[test]
+    fn the_log_folder_is_the_logs_directory_of_the_profile() {
+        let profile =
+            licht_core::SharedCache::system().expect("the profile directory should resolve");
+
+        assert_eq!(
+            get_logs_folder(),
+            Ok(profile.root().join("logs").to_string_lossy().into_owned())
         );
     }
 }

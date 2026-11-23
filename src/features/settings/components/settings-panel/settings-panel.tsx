@@ -9,6 +9,7 @@ import { DevelopersSection } from "@/features/settings/sections/developers-secti
 import { DownloadsSection } from "@/features/settings/sections/downloads-section";
 import { InstancesSection } from "@/features/settings/sections/instances-section";
 import { JavaSection } from "@/features/settings/sections/java/java-section";
+import { TroubleshootingSection } from "@/features/settings/sections/troubleshooting-section";
 import { UpdaterSection } from "@/features/settings/sections/updater-section";
 import type { SettingsSnapshot } from "@/lib/generated/SettingsSnapshot";
 
@@ -68,6 +69,7 @@ export function SettingsPanel({
             {section === "updater" ? (
               <UpdaterSection draft={draft} onChange={onChange} />
             ) : null}
+            {section === "troubleshooting" ? <TroubleshootingSection /> : null}
           </div>
         </PageTransition>
       </ScrollArea>
