@@ -80,6 +80,8 @@ to start. Panics are logged as errors before the default panic output.
 Download jobs run inside a `download_job` span (job id, operation, instance,
 version, Java major) and game launches inside a `launch` span (instance folder),
 so their events can be told apart in the log. Player names are never span fields.
+A failed job is logged as `Download job failed` with its full cause chain
+(`licht_core::error_chain`), which `commands::failure` also uses.
 In the native app, the interface sends React render errors, uncaught errors and
 unhandled rejections to `log_frontend_error`, which logs them as `Interface error`
 (at most 20 per minute, messages truncated to 8,000 characters). Query and
