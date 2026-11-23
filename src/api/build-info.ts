@@ -31,7 +31,12 @@ export function parseBuildDiagnostics(value: unknown): BuildDiagnostics {
   return value as BuildDiagnostics;
 }
 
-export function formatBuildDiagnostics(data: BuildDiagnostics): string {
+export type BuildDiagnosticsEntry = { label: string; value: string };
+
+/** Labeled build and system details, in the order they are copied. */
+export function buildDiagnosticsEntries(
+  data: BuildDiagnostics,
+): BuildDiagnosticsEntry[] {
   const [version, target, revision] = buildIdentifier().split(" ");
   const architectureBits: Record<string, number | undefined> = {
     x86_64: 64,
@@ -50,12 +55,21 @@ export function formatBuildDiagnostics(data: BuildDiagnostics): string {
   const bits = architectureBits[data.systemArchitecture];
   const os = bits === undefined ? data.osName : `${data.osName} ${bits}-bit`;
   return [
-    `Build: Early Release ${version} ${target} (${revision})`,
-    `Profile: ${data.debug ? "Debug" : "Release"}`,
-    `Tauri: ${data.tauriVersion}`,
-    `WebView: ${data.webviewVersion ?? "N/A"}`,
-    `OS: ${os} (${data.osVersion ?? "N/A"})`,
-  ].join("\n");
+    {
+      label: "Build",
+      value: `Early Release ${version} ${target} (${revision})`,
+    },
+    { label: "Profile", value: data.debug ? "Debug" : "Release" },
+    { label: "Tauri", value: data.tauriVersion },
+    { label: "WebView", value: data.webviewVersion ?? "N/A" },
+    { label: "OS", value: `${os} (${data.osVersion ?? "N/A"})` },
+  ];
+}
+
+export function formatBuildDiagnostics(data: BuildDiagnostics): string {
+  return buildDiagnosticsEntries(data)
+    .map(({ label, value }) => `${label}: ${value}`)
+    .join("\n");
 }
 
 export function buildIdentifier(

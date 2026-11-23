@@ -1,7 +1,10 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { toast } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { formatBuildDiagnostics } from "@/api/build-info";
+import {
+  buildDiagnosticsEntries,
+  formatBuildDiagnostics,
+} from "@/api/build-info";
 import { buildDiagnostics } from "@/features/settings/fixtures/build-diagnostics";
 import {
   invoke,
@@ -46,6 +49,23 @@ describe("TroubleshootingSection", () => {
   afterEach(() => {
     toast.dismiss();
     vi.unstubAllGlobals();
+  });
+
+  it("puts problem reports first, then build information, then logs", async () => {
+    await openTroubleshooting();
+    const [report, build, logs] = [
+      "Report a problem",
+      "Build and system",
+      "Logs",
+    ].map((name) => screen.getByRole("region", { name }));
+
+    expect(
+      report.compareDocumentPosition(build) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      build.compareDocumentPosition(logs) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(within(report).getByText("Open an issue on GitHub")).toBeVisible();
   });
 
   it("shows the log folder and opens it", async () => {
@@ -99,8 +119,10 @@ describe("TroubleshootingSection", () => {
     );
     const formatted = formatBuildDiagnostics(buildDiagnostics);
 
-    for (const line of formatted.split("\n")) {
-      expect(await build.findByText(line)).toBeVisible();
+    for (const entry of buildDiagnosticsEntries(buildDiagnostics)) {
+      const term = await build.findByText(entry.label, { selector: "dt" });
+      expect(term.nextElementSibling?.tagName).toBe("DD");
+      expect(term.nextElementSibling).toHaveTextContent(entry.value);
     }
     fireEvent.click(build.getByRole("button", { name: "Copy" }));
 

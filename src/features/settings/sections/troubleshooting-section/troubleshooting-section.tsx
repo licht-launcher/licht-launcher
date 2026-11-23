@@ -1,7 +1,11 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { CopyIcon, FolderOpen, MessageSquareWarning } from "lucide-react";
+import { Fragment } from "react";
 import { toast } from "sonner";
-import { formatBuildDiagnostics } from "@/api/build-info";
+import {
+  buildDiagnosticsEntries,
+  formatBuildDiagnostics,
+} from "@/api/build-info";
 import {
   getBuildDiagnostics,
   getLogsFolder,
@@ -29,22 +33,25 @@ export function TroubleshootingSection() {
     queryFn: getBuildDiagnostics,
     staleTime: Number.POSITIVE_INFINITY,
   });
+  const entries = diagnostics.data
+    ? buildDiagnosticsEntries(diagnostics.data)
+    : null;
   const details = diagnostics.data
     ? formatBuildDiagnostics(diagnostics.data)
-    : null;
+    : "";
 
   const openLogs = useMutation({
     mutationFn: openLogsFolder,
     onError: reportFailure,
   });
   const copy = useMutation({
-    mutationFn: (text: string) => navigator.clipboard.writeText(text),
+    mutationFn: () => navigator.clipboard.writeText(details),
     onSuccess: () => toast.success("Build information copied."),
     onError: reportFailure,
   });
   const report = useMutation({
-    mutationFn: async (text: string) => {
-      await navigator.clipboard.writeText(text);
+    mutationFn: async () => {
+      await navigator.clipboard.writeText(details);
       await openFeedback();
     },
     onSuccess: () =>
@@ -54,6 +61,63 @@ export function TroubleshootingSection() {
 
   return (
     <div className={styles.root}>
+      <Card title="Report a problem">
+        <div className={styles.row}>
+          <div className={styles.rowText}>
+            <p className={styles.rowLabel}>Open an issue on GitHub</p>
+            <p className={styles.rowDescription}>
+              The build information is copied so you can paste it into your
+              report. Attach the logs if you can.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            className={styles.control}
+            disabled={entries === null || report.isPending}
+            onClick={() => report.mutate()}
+          >
+            <MessageSquareWarning data-icon="inline-start" aria-hidden />
+            Report a problem
+          </Button>
+        </div>
+      </Card>
+      <Card title="Build and system">
+        <div className={styles.rowStart}>
+          {entries ? (
+            <dl className={styles.details}>
+              {entries.map(({ label, value }) => (
+                <Fragment key={label}>
+                  <dt className={styles.term}>{label}</dt>
+                  <dd className={styles.definition} title={value}>
+                    {value}
+                  </dd>
+                </Fragment>
+              ))}
+            </dl>
+          ) : (
+            <p
+              className={
+                diagnostics.error ? styles.error : styles.rowDescription
+              }
+            >
+              {diagnostics.error
+                ? `Build information unavailable: ${messageOf(diagnostics.error)}`
+                : "Loading build information…"}
+            </p>
+          )}
+          <Button
+            type="button"
+            variant="outline"
+            className={styles.control}
+            disabled={entries === null || copy.isPending}
+            onClick={() => copy.mutate()}
+          >
+            <CopyIcon data-icon="inline-start" aria-hidden />
+            Copy
+          </Button>
+        </div>
+      </Card>
       <Card title="Logs">
         <div className={styles.row}>
           <div className={styles.rowText}>
@@ -81,50 +145,6 @@ export function TroubleshootingSection() {
           >
             <FolderOpen data-icon="inline-start" aria-hidden />
             Open logs folder
-          </Button>
-        </div>
-      </Card>
-      <Card title="Build and system">
-        <div className={styles.row}>
-          <div className={styles.details}>
-            {details?.split("\n").map((line) => (
-              <p key={line}>{line}</p>
-            ))}
-            {diagnostics.error ? (
-              <p className={styles.error}>
-                Build information unavailable: {messageOf(diagnostics.error)}
-              </p>
-            ) : null}
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            className={styles.control}
-            disabled={details === null || copy.isPending}
-            onClick={() => details && copy.mutate(details)}
-          >
-            <CopyIcon data-icon="inline-start" aria-hidden />
-            Copy
-          </Button>
-        </div>
-      </Card>
-      <Card title="Report a problem">
-        <div className={styles.row}>
-          <div className={styles.rowText}>
-            <p className={styles.rowDescription}>
-              Opens the issue page on GitHub and copies the build information so
-              you can paste it into your report. Attach the logs if you can.
-            </p>
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            className={styles.control}
-            disabled={details === null || report.isPending}
-            onClick={() => details && report.mutate(details)}
-          >
-            <MessageSquareWarning data-icon="inline-start" aria-hidden />
-            Report a problem
           </Button>
         </div>
       </Card>

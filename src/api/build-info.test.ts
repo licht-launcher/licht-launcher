@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  buildDiagnosticsEntries,
   buildIdentifier,
   formatBuildDiagnostics,
   parseBuildDiagnostics,
@@ -29,6 +30,19 @@ describe("build diagnostics", () => {
     vi.stubEnv("VITE_BUILD_REVISION", "a1aa4a6");
   });
   afterEach(() => vi.unstubAllEnvs());
+
+  it("lists the diagnostics as labeled entries in copy order", () => {
+    expect(buildDiagnosticsEntries(buildDiagnostics)).toEqual([
+      {
+        label: "Build",
+        value: `Early Release ${APP_VERSION} win-x64 (a1aa4a6)`,
+      },
+      { label: "Profile", value: "Release" },
+      { label: "Tauri", value: "2.12.1" },
+      { label: "WebView", value: "156.0.4314.50" },
+      { label: "OS", value: "Windows 11 Pro 64-bit (10.0.26300)" },
+    ]);
+  });
 
   it("copies the concise five-line early-release diagnostics", () => {
     expect(formatBuildDiagnostics({ ...buildDiagnostics, debug: true })).toBe(
