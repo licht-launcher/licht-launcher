@@ -72,6 +72,8 @@ warning with the full cause chain and sends only the top-level message to the
 interface. Errors from outside the core use `commands::command_error` (same
 behavior) or `commands::command_failure`, which shows a fixed summary and logs
 the cause behind it.
+Application update steps that fail log `Application update failed` with the
+summary the interface shows and the full cause chain.
 
 Logging uses `tracing` and `tracing-subscriber`, with structured text on stderr
 and in `<profile>/logs/licht.<launch time>.log`. Each launch writes its own file,

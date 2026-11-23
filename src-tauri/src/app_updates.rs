@@ -147,11 +147,25 @@ impl Runtime {
         }
     }
 
+    /// Logs why an update step failed, then shows `summary` in the interface.
+    fn fail_because(&self, app: &AppHandle, summary: &str, error: &anyhow::Error) {
+        log_update_failure(summary, error);
+        self.failed(app, summary);
+    }
+
     fn reserve(&self) -> anyhow::Result<OwnedMutexGuard<()>> {
         Arc::clone(&self.operation)
             .try_lock_owned()
             .map_err(|_| anyhow::anyhow!("An update operation is already running"))
     }
+}
+
+fn log_update_failure(summary: &str, error: &anyhow::Error) {
+    tracing::warn!(
+        summary,
+        error = %licht_core::error_chain(error.as_ref()),
+        "Application update failed"
+    );
 }
 
 fn cache(app: &AppHandle) -> anyhow::Result<AppUpdateCache> {
@@ -286,8 +300,11 @@ async fn check(
     *runtime.available.lock().await = Some(available.clone());
     let cached = match load_cache(app).await {
         Ok(cached) => cached,
-        Err(_) => {
-            tracing::warn!("Discarding an invalid application update cache");
+        Err(error) => {
+            tracing::warn!(
+                error = %licht_core::error_chain(error.as_ref()),
+                "Discarding an invalid application update cache"
+            );
             let cache = cache(app)?;
             tauri::async_runtime::spawn_blocking(move || cache.clear()).await??;
             None
@@ -387,6 +404,56 @@ async fn download(app: &AppHandle, runtime: &Arc<Runtime>, automatic: bool) -> a
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct TestWriter(Arc<std::sync::Mutex<Vec<u8>>>);
+
+    impl std::io::Write for TestWriter {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            self.0
+                .lock()
+                .expect("the log buffer lock should work")
+                .write(bytes)
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn update_failures_log_the_summary_and_every_cause() {
+        let output = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let writer_output = Arc::clone(&output);
+        let subscriber = tracing_subscriber::fmt()
+            .with_writer(move || TestWriter(Arc::clone(&writer_output)))
+            .with_ansi(false)
+            .without_time()
+            .finish();
+        let error = anyhow::anyhow!("connection reset").context("update manifest request failed");
+
+        tracing::subscriber::with_default(subscriber, || {
+            log_update_failure("Could not check for updates.", &error);
+        });
+
+        let bytes = output
+            .lock()
+            .expect("the log buffer lock should work")
+            .clone();
+        let logs = String::from_utf8(bytes).expect("logs should contain valid UTF-8");
+        assert!(logs.contains("WARN"), "unexpected logs: {logs}");
+        assert!(
+            logs.contains("Application update failed"),
+            "unexpected logs: {logs}"
+        );
+        assert!(
+            logs.contains("summary=\"Could not check for updates.\""),
+            "unexpected logs: {logs}"
+        );
+        assert!(
+            logs.contains("error=update manifest request failed: connection reset"),
+            "unexpected logs: {logs}"
+        );
+    }
 
     #[tokio::test]
     async fn automatic_download_cancellation_observes_the_current_preference() {
@@ -496,9 +563,10 @@ pub fn start(
                 Ok(None) => {
                     runtime.publish(&app, |state| state.phase = AppUpdatePhase::Idle)?;
                 }
-                Err(_) => runtime.failed(
+                Err(error) => runtime.fail_because(
                     &app,
                     "The cached update could not be verified. Check for updates to try again.",
+                    &error,
                 ),
             }
             drop(initial_operation);
@@ -509,11 +577,10 @@ pub fn start(
                     && !automatic_checks_skipped()
                     && licht_core::app_update_can_check(runtime.snapshot()?.phase)
                     && let Ok(_operation) = runtime.reserve()
-                    && check(&app, &runtime, Arc::clone(&startup_worker), true)
-                        .await
-                        .is_err()
+                    && let Err(error) =
+                        check(&app, &runtime, Arc::clone(&startup_worker), true).await
                 {
-                    runtime.failed(&app, "Could not prepare an automatic update. Check your connection and try again.");
+                    runtime.fail_because(&app, "Could not prepare an automatic update. Check your connection and try again.", &error);
                 }
                 tokio::select! {
                     _ = tokio::time::sleep(Duration::from_secs(licht_core::APP_UPDATE_INTERVAL_SECONDS)) => {},
@@ -524,7 +591,7 @@ pub fn start(
             }
         };
         tokio::select! {
-            result = work => { if result.is_err() { runtime.failed(&app, "Background updates stopped. Restart the launcher to try again."); } },
+            result = work => { if let Err(error) = result { runtime.fail_because(&app, "Background updates stopped. Restart the launcher to try again.", &error); } },
             result = session.cancelled() => { if result.is_err() { tracing::error!("Could not observe update worker shutdown"); } },
         }
     });
@@ -540,9 +607,9 @@ fn require_main(window: &WebviewWindow) -> Result<(), String> {
 }
 
 fn require_self_managed(runtime: &Runtime) -> Result<(), String> {
-    let state = runtime
-        .snapshot()
-        .map_err(|_| "Could not read application update state".to_string())?;
+    let state = runtime.snapshot().map_err(|error| {
+        crate::commands::command_failure("Could not read application update state", error.as_ref())
+    })?;
     match self_update_disabled(state.phase) {
         Some(reason) => Err(reason.to_string()),
         None => Ok(()),
@@ -555,9 +622,9 @@ pub fn get_app_update_state(
     runtime: State<'_, Arc<Runtime>>,
 ) -> Result<AppUpdateState, String> {
     require_main(&window)?;
-    runtime
-        .snapshot()
-        .map_err(|_| "Could not read application update state".to_string())
+    runtime.snapshot().map_err(|error| {
+        crate::commands::command_failure("Could not read application update state", error.as_ref())
+    })
 }
 
 #[tauri::command]
@@ -574,10 +641,11 @@ pub async fn check_app_update(
     let operation = runtime.reserve().map_err(|error| error.to_string())?;
     tauri::async_runtime::spawn(async move {
         let _operation = operation;
-        if check(&app, &runtime, startup, false).await.is_err() {
-            runtime.failed(
+        if let Err(error) = check(&app, &runtime, startup, false).await {
+            runtime.fail_because(
                 &app,
                 "Could not check for updates. Check your connection and try again.",
+                &error,
             );
         }
     });
@@ -596,8 +664,12 @@ pub async fn download_app_update(
     let operation = runtime.reserve().map_err(|error| error.to_string())?;
     tauri::async_runtime::spawn(async move {
         let _operation = operation;
-        if download(&app, &runtime, false).await.is_err() {
-            runtime.failed(&app, "Could not download and verify the update. Try again.");
+        if let Err(error) = download(&app, &runtime, false).await {
+            runtime.fail_because(
+                &app,
+                "Could not download and verify the update. Try again.",
+                &error,
+            );
         }
     });
     Ok(())
@@ -654,7 +726,17 @@ pub async fn install_app_update(
                         .to_string(),
                 );
             })
-            .map_err(|_| "Could not publish application update failure".to_string())?;
+            .map_err(|error| {
+                crate::commands::command_failure(
+                    "Could not publish application update failure",
+                    error.as_ref(),
+                )
+            })?;
     }
-    result.map_err(|_| "Could not install the cached update. Try again.".to_string())
+    result.map_err(|error| {
+        crate::commands::command_failure(
+            "Could not install the cached update. Try again.",
+            error.as_ref(),
+        )
+    })
 }
