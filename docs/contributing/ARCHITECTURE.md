@@ -67,6 +67,9 @@ and the query/cache layer. The UI runs in WebView2 on Windows and WebKitGTK on L
 The core exports `CoreError`, derived with `thiserror`, and a `Result<T>` alias.
 I/O errors preserve their source. Application startup uses `anyhow` to add context
 at the boundary; errors propagate with `?`.
+Tauri commands return `CoreError` through `commands::failure`, which logs a
+warning with the full cause chain and sends only the top-level message to the
+interface.
 
 Logging uses `tracing` and `tracing-subscriber`, with structured text on stderr
 and in `<profile>/logs/licht.<date>.log`, written through `tracing-appender`.

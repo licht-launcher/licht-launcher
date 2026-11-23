@@ -45,8 +45,21 @@ pub(crate) fn http_client() -> Result<reqwest::Client, CoreError> {
         .map_err(CoreError::from)
 }
 
+/// Logs a failed command with every cause, then returns the message the interface shows.
 pub(crate) fn failure(error: CoreError) -> String {
+    tracing::warn!(error = %error_chain(&error), "Command failed");
     error.to_string()
+}
+
+fn error_chain(error: &dyn std::error::Error) -> String {
+    let mut chain = error.to_string();
+    let mut source = error.source();
+    while let Some(cause) = source {
+        chain.push_str(": ");
+        chain.push_str(&cause.to_string());
+        source = cause.source();
+    }
+    chain
 }
 
 pub(crate) fn host_environment() -> Result<LaunchEnvironment, CoreError> {
@@ -71,4 +84,75 @@ pub(crate) fn host_environment() -> Result<LaunchEnvironment, CoreError> {
 
 pub(crate) fn instances_root(paths: &LauncherPaths) -> Result<PathBuf, CoreError> {
     paths.game.instances_dir()
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::{self, Write};
+    use std::sync::{Arc, Mutex};
+
+    use licht_core::CoreError;
+
+    use super::failure;
+
+    struct TestWriter(Arc<Mutex<Vec<u8>>>);
+
+    impl Write for TestWriter {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            self.0
+                .lock()
+                .expect("the log buffer lock should work")
+                .write(bytes)
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    fn capture_logs<T>(emit: impl FnOnce() -> T) -> (T, String) {
+        let output = Arc::new(Mutex::new(Vec::new()));
+        let writer_output = Arc::clone(&output);
+        let subscriber = tracing_subscriber::fmt()
+            .with_writer(move || TestWriter(Arc::clone(&writer_output)))
+            .with_ansi(false)
+            .without_time()
+            .finish();
+
+        let value = tracing::subscriber::with_default(subscriber, emit);
+
+        let bytes = output
+            .lock()
+            .expect("the log buffer lock should work")
+            .clone();
+        let logs = String::from_utf8(bytes).expect("logs should contain valid UTF-8");
+        (value, logs)
+    }
+
+    fn nested_error() -> CoreError {
+        let cause = io::Error::new(io::ErrorKind::PermissionDenied, "the folder is read-only");
+        CoreError::ModrinthLegacyIndex(Box::new(CoreError::from(cause)))
+    }
+
+    #[test]
+    fn failures_keep_the_message_shown_to_the_interface() {
+        let (message, _) = capture_logs(|| failure(nested_error()));
+
+        assert_eq!(message, nested_error().to_string());
+    }
+
+    #[test]
+    fn failures_are_logged_as_warnings_with_every_cause() {
+        let (_, logs) = capture_logs(|| failure(nested_error()));
+
+        assert!(logs.contains("WARN"), "unexpected logs: {logs}");
+        assert!(logs.contains("Command failed"), "unexpected logs: {logs}");
+        assert!(
+            logs.contains(&format!(
+                "{}: I/O operation failed: the folder is read-only",
+                nested_error()
+            )),
+            "unexpected logs: {logs}"
+        );
+    }
 }
