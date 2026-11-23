@@ -9,14 +9,14 @@ const REPOSITORY_URL: &str = "https://github.com/licht-launcher/licht-launcher";
 pub fn open_repository(app: AppHandle) -> Result<(), String> {
     app.opener()
         .open_url(REPOSITORY_URL, None::<&str>)
-        .map_err(|error| error.to_string())
+        .map_err(|error| super::command_error(&error))
 }
 
 #[tauri::command]
 pub fn open_feedback(app: AppHandle) -> Result<(), String> {
     app.opener()
         .open_url(format!("{REPOSITORY_URL}/issues/new/choose"), None::<&str>)
-        .map_err(|error| error.to_string())
+        .map_err(|error| super::command_error(&error))
 }
 
 #[tauri::command]
@@ -24,7 +24,7 @@ pub fn open_external_url(app: AppHandle, url: String) -> Result<(), String> {
     let url = licht_core::external_https_url(&url).map_err(super::failure)?;
     app.opener()
         .open_url(url, None::<&str>)
-        .map_err(|error| error.to_string())
+        .map_err(|error| super::command_error(&error))
 }
 
 #[tauri::command]
@@ -40,7 +40,7 @@ pub fn open_logs_folder(app: AppHandle) -> Result<(), String> {
     let directory = existing_log_folder(directory)?;
     app.opener()
         .open_path(directory.to_string_lossy().into_owned(), None::<&str>)
-        .map_err(|error| error.to_string())
+        .map_err(|error| super::command_error(&error))
 }
 
 /// Logging creates the folder at startup; it is missing only when that failed.
@@ -90,7 +90,9 @@ pub async fn get_build_diagnostics(
         )
     })
     .await
-    .map_err(|_| "Could not collect build and runtime information".to_string())
+    .map_err(|error| {
+        super::command_failure("Could not collect build and runtime information", &error)
+    })
 }
 
 #[cfg(test)]
