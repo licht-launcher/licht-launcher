@@ -76,6 +76,10 @@ and in `<profile>/logs/licht.<date>.log`, written through `tracing-appender`.
 The file rotates daily and keeps the last 7 files. If the log directory cannot be
 opened, the app keeps logging to stderr and records a warning instead of failing
 to start. Panics are logged as errors before the default panic output.
+In the native app, the interface sends React render errors, uncaught errors and
+unhandled rejections to `log_frontend_error`, which logs them as `Interface error`
+(at most 20 per minute, messages truncated to 8,000 characters). Query and
+mutation failures are not sent again, since their commands already log them.
 `RUST_LOG` selects filtering; absent or empty values default to INFO, and invalid
 filters return an error. Logs must not contain tokens, secrets, or personal data.
 
