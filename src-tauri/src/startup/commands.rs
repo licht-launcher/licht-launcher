@@ -4,17 +4,16 @@ use licht_core::{StartupPreviewScenario, StartupProgress};
 use tauri::{AppHandle, State, WebviewWindow};
 
 use super::state::StartupRuntime;
+use crate::commands::{command_error, command_failure, failure};
 
 #[tauri::command]
 pub fn get_startup_progress(
     window: WebviewWindow,
     runtime: State<'_, Arc<StartupRuntime>>,
 ) -> Result<StartupProgress, String> {
-    let session = runtime
-        .session(window.label())
-        .map_err(|error| error.to_string())?;
+    let session = runtime.session(window.label()).map_err(failure)?;
     session.acknowledge();
-    session.snapshot().map_err(|error| error.to_string())
+    session.snapshot().map_err(failure)
 }
 
 #[tauri::command]
@@ -31,8 +30,8 @@ pub async fn open_startup_preview(
     // WebView2 creation must not block the synchronous IPC/UI thread on Windows.
     tauri::async_runtime::spawn_blocking(move || super::preview::open(app, runtime, scenario))
         .await
-        .map_err(|_| "Could not join startup preview creation".to_string())?
-        .map_err(|error| error.to_string())
+        .map_err(|error| command_failure("Could not join startup preview creation", &error))?
+        .map_err(|error| command_error(error.as_ref()))
 }
 
 #[tauri::command]
@@ -51,7 +50,7 @@ pub async fn close_startup_preview(app: AppHandle, window: WebviewWindow) -> Res
     if window.label() != "main" || !cfg!(debug_assertions) {
         return Err("Startup tests require the development launcher".to_string());
     }
-    super::preview::close(&app).map_err(|error| error.to_string())
+    super::preview::close(&app).map_err(|error| command_error(error.as_ref()))
 }
 
 #[tauri::command]
@@ -64,11 +63,8 @@ pub async fn restart_startup_preview(
     if window.label() != "main" || !cfg!(debug_assertions) {
         return Err("Startup restart tests require the development launcher".to_string());
     }
-    downloads
-        .suspend_all()
-        .await
-        .map_err(|error| error.to_string())?;
-    licht_core::request_startup_preview(scenario).map_err(|error| error.to_string())?;
+    downloads.suspend_all().await.map_err(failure)?;
+    licht_core::request_startup_preview(scenario).map_err(failure)?;
     app.request_restart();
     Ok(())
 }
@@ -82,12 +78,8 @@ pub async fn request_update_restart(
     if window.label() != "main" {
         return Err("Updates must be requested from the launcher".to_string());
     }
-    downloads
-        .suspend_all()
-        .await
-        .map_err(|error| error.to_string())?;
-    licht_core::request_startup_update(env!("CARGO_PKG_VERSION"))
-        .map_err(|error| error.to_string())?;
+    downloads.suspend_all().await.map_err(failure)?;
+    licht_core::request_startup_update(env!("CARGO_PKG_VERSION")).map_err(failure)?;
     app.request_restart();
     Ok(())
 }
