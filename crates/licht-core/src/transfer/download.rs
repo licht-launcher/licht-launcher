@@ -7,7 +7,6 @@ use reqwest::StatusCode;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::Mutex;
 use tokio_util::io::StreamReader;
-use tracing::warn;
 
 mod bandwidth;
 mod http;
@@ -198,7 +197,7 @@ async fn download_locked(job: &TransferJob<'_>, part: &Path) -> Result<()> {
                     return Err(error);
                 }
 
-                warn!(attempt, "download attempt failed");
+                tracing::warn!(attempt, "download attempt failed");
                 tokio::select! {
                     biased;
                     error = job.control.interrupted() => {
@@ -349,7 +348,7 @@ async fn transfer_partial(
     }
 
     if job.checksum.expected().is_none() {
-        warn!("download has no checksum; content is not verified");
+        tracing::warn!("download has no checksum; content is not verified");
     } else {
         let actual = hasher.finish();
         if !job.checksum.matches(&actual) {

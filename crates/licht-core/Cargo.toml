@@ -39,3 +39,4 @@ zip = { version = "=9.4.2", default-features = false, features = ["deflate"] }
 
 [dev-dependencies]
 tokio = { version = "=1.53.2", features = ["macros", "net", "rt-multi-thread", "test-util"] }
+tracing-subscriber = "=0.3.23"
