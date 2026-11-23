@@ -48,8 +48,22 @@ pub(crate) fn http_client() -> Result<reqwest::Client, CoreError> {
 
 /// Logs a failed command with every cause, then returns the message the interface shows.
 pub(crate) fn failure(error: CoreError) -> String {
-    tracing::warn!(error = %licht_core::error_chain(&error), "Command failed");
+    command_error(&error)
+}
+
+/// Like [`failure`], for errors that do not come from the core.
+pub(crate) fn command_error(error: &dyn std::error::Error) -> String {
+    tracing::warn!(error = %licht_core::error_chain(error), "Command failed");
     error.to_string()
+}
+
+/// Logs `summary` with the cause behind it and returns only `summary` to the interface.
+pub(crate) fn command_failure(summary: &str, error: &dyn std::error::Error) -> String {
+    tracing::warn!(
+        error = %format!("{summary}: {}", licht_core::error_chain(error)),
+        "Command failed"
+    );
+    summary.to_string()
 }
 
 pub(crate) fn host_environment() -> Result<LaunchEnvironment, CoreError> {
@@ -83,7 +97,7 @@ mod tests {
 
     use licht_core::CoreError;
 
-    use super::failure;
+    use super::{command_error, command_failure, failure};
 
     struct TestWriter(Arc<Mutex<Vec<u8>>>);
 
@@ -142,6 +156,38 @@ mod tests {
                 "{}: I/O operation failed: the folder is read-only",
                 nested_error()
             )),
+            "unexpected logs: {logs}"
+        );
+    }
+
+    #[test]
+    fn command_errors_keep_their_message_and_log_every_cause() {
+        let error = io::Error::other(nested_error());
+
+        let (message, logs) = capture_logs(|| command_error(&error));
+
+        assert_eq!(message, error.to_string());
+        assert!(logs.contains("WARN"), "unexpected logs: {logs}");
+        assert!(logs.contains("Command failed"), "unexpected logs: {logs}");
+        assert!(
+            logs.contains(&format!(
+                "{}: I/O operation failed: the folder is read-only",
+                nested_error()
+            )),
+            "unexpected logs: {logs}"
+        );
+    }
+
+    #[test]
+    fn command_failures_show_their_summary_and_log_the_cause_behind_it() {
+        let error = io::Error::new(io::ErrorKind::BrokenPipe, "the worker stopped");
+
+        let (message, logs) = capture_logs(|| command_failure("Java check failed", &error));
+
+        assert_eq!(message, "Java check failed");
+        assert!(logs.contains("WARN"), "unexpected logs: {logs}");
+        assert!(
+            logs.contains("Java check failed: the worker stopped"),
             "unexpected logs: {logs}"
         );
     }

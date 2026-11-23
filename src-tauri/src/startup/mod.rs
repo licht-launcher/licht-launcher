@@ -93,15 +93,16 @@ async fn initialize(
         })?;
     }
     session.update(app, |state| state.phase = StartupPhase::Ready)?;
-    if crate::app_updates::start(
+    if let Err(error) = crate::app_updates::start(
         app.clone(),
         Arc::clone(runtime),
         Arc::clone(session),
         settings.automatic_updates,
-    )
-    .is_err()
-    {
-        tracing::error!("Could not start background application updates");
+    ) {
+        tracing::error!(
+            error = %licht_core::error_chain(error.as_ref()),
+            "Could not start background application updates"
+        );
         session.update(app, |state| {
             state.warning = Some(
                 "Background updates could not start. Restart the launcher to try again."

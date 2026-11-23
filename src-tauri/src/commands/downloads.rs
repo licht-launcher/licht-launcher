@@ -33,7 +33,7 @@ pub async fn storage_summary(
         licht_core::storage_summary(&game).map_err(failure)
     })
     .await
-    .map_err(|_| "Storage check failed".to_string())?
+    .map_err(|error| super::command_failure("Storage check failed", &error))?
 }
 
 #[tauri::command]
