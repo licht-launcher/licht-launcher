@@ -1,5 +1,10 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { CopyIcon, FolderOpen, MessageSquareWarning } from "lucide-react";
+import {
+  CopyIcon,
+  ExternalLinkIcon,
+  FolderOpen,
+  MessageSquareWarning,
+} from "lucide-react";
 import { Fragment } from "react";
 import { toast } from "sonner";
 import {
@@ -50,12 +55,7 @@ export function TroubleshootingSection() {
     onError: reportFailure,
   });
   const report = useMutation({
-    mutationFn: async () => {
-      await navigator.clipboard.writeText(details);
-      await openFeedback();
-    },
-    onSuccess: () =>
-      toast.success("Build information copied. Paste it into your report."),
+    mutationFn: openFeedback,
     onError: reportFailure,
   });
 
@@ -66,19 +66,50 @@ export function TroubleshootingSection() {
           <div className={styles.rowText}>
             <p className={styles.rowLabel}>Open an issue on GitHub</p>
             <p className={styles.rowDescription}>
-              The build information is copied so you can paste it into your
-              report. Attach the logs if you can.
+              Include the build information below and attach the logs if you
+              can.
             </p>
           </div>
           <Button
             type="button"
             variant="outline"
             className={styles.control}
-            disabled={entries === null || report.isPending}
+            disabled={report.isPending}
             onClick={() => report.mutate()}
           >
             <MessageSquareWarning data-icon="inline-start" aria-hidden />
             Report a problem
+            <ExternalLinkIcon data-icon="inline-end" aria-hidden />
+          </Button>
+        </div>
+      </Card>
+      <Card title="Logs">
+        <div className={styles.row}>
+          <div className={styles.rowText}>
+            <p className={styles.rowLabel}>Launcher logs</p>
+            <p className={styles.rowDescription}>
+              One file per launch; the 30 most recent are kept.
+            </p>
+            {logsFolder.data ? (
+              <p className={styles.path} title={logsFolder.data}>
+                {logsFolder.data}
+              </p>
+            ) : null}
+            {logsFolder.error ? (
+              <p className={styles.error}>
+                Log folder unavailable: {messageOf(logsFolder.error)}
+              </p>
+            ) : null}
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            className={styles.control}
+            disabled={openLogs.isPending}
+            onClick={() => openLogs.mutate()}
+          >
+            <FolderOpen data-icon="inline-start" aria-hidden />
+            Open logs folder
           </Button>
         </div>
       </Card>
@@ -115,36 +146,6 @@ export function TroubleshootingSection() {
           >
             <CopyIcon data-icon="inline-start" aria-hidden />
             Copy
-          </Button>
-        </div>
-      </Card>
-      <Card title="Logs">
-        <div className={styles.row}>
-          <div className={styles.rowText}>
-            <p className={styles.rowLabel}>Launcher logs</p>
-            <p className={styles.rowDescription}>
-              One file per day; the last 7 days are kept.
-            </p>
-            {logsFolder.data ? (
-              <p className={styles.path} title={logsFolder.data}>
-                {logsFolder.data}
-              </p>
-            ) : null}
-            {logsFolder.error ? (
-              <p className={styles.error}>
-                Log folder unavailable: {messageOf(logsFolder.error)}
-              </p>
-            ) : null}
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            className={styles.control}
-            disabled={openLogs.isPending}
-            onClick={() => openLogs.mutate()}
-          >
-            <FolderOpen data-icon="inline-start" aria-hidden />
-            Open logs folder
           </Button>
         </div>
       </Card>

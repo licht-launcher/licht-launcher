@@ -3,9 +3,9 @@ import {
   CircleArrowUpIcon,
   CpuIcon,
   HardDriveDownloadIcon,
-  LifeBuoyIcon,
   SettingsIcon,
   SquareCodeIcon,
+  WrenchIcon,
 } from "lucide-react";
 
 export const SECTIONS = [
@@ -44,7 +44,7 @@ export const SECTIONS = [
     id: "troubleshooting",
     label: "Troubleshooting",
     description: "Logs, build information and problem reports.",
-    icon: LifeBuoyIcon,
+    icon: WrenchIcon,
   },
   ...(import.meta.env.DEV
     ? [

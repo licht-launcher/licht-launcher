@@ -51,19 +51,19 @@ describe("TroubleshootingSection", () => {
     vi.unstubAllGlobals();
   });
 
-  it("puts problem reports first, then build information, then logs", async () => {
+  it("puts problem reports first, then logs, then build information", async () => {
     await openTroubleshooting();
-    const [report, build, logs] = [
+    const [report, logs, build] = [
       "Report a problem",
-      "Build and system",
       "Logs",
+      "Build and system",
     ].map((name) => screen.getByRole("region", { name }));
 
     expect(
-      report.compareDocumentPosition(build) & Node.DOCUMENT_POSITION_FOLLOWING,
+      report.compareDocumentPosition(logs) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(
-      build.compareDocumentPosition(logs) & Node.DOCUMENT_POSITION_FOLLOWING,
+      logs.compareDocumentPosition(build) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(within(report).getByText("Open an issue on GitHub")).toBeVisible();
   });
@@ -149,41 +149,25 @@ describe("TroubleshootingSection", () => {
     expect(build.getByRole("button", { name: "Copy" })).toBeDisabled();
   });
 
-  it("copies the build information before opening the report page", async () => {
-    const order: string[] = [];
-    const writeText = stubClipboard(
-      vi.fn().mockImplementation(() => {
-        order.push("copy");
-        return Promise.resolve();
-      }),
-    );
-    mockSettingsCommands((command) => {
-      if (command === "open_feedback") {
-        order.push("open");
-        return Promise.resolve();
-      }
-      return undefined;
-    });
+  it("opens the report page without copying anything", async () => {
+    const writeText = stubClipboard();
     await openTroubleshooting();
+    const button = await screen.findByRole("button", {
+      name: "Report a problem",
+    });
 
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Report a problem" }),
-    );
+    expect(button.lastElementChild).toHaveClass("lucide-external-link");
+    fireEvent.click(button);
 
-    await waitFor(() => expect(order).toEqual(["copy", "open"]));
-    expect(writeText).toHaveBeenCalledWith(
-      formatBuildDiagnostics(buildDiagnostics),
-    );
-    expect(
-      await screen.findByText(
-        "Build information copied. Paste it into your report.",
-      ),
-    ).toBeVisible();
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith("open_feedback"));
+    expect(writeText).not.toHaveBeenCalled();
   });
 
-  it("does not open the report page when the information cannot be copied", async () => {
-    stubClipboard(
-      vi.fn().mockRejectedValue(new Error("Clipboard unavailable")),
+  it("reports a report page that cannot be opened", async () => {
+    mockSettingsCommands((command) =>
+      command === "open_feedback"
+        ? Promise.reject("No browser is available")
+        : undefined,
     );
     await openTroubleshooting();
 
@@ -191,7 +175,6 @@ describe("TroubleshootingSection", () => {
       await screen.findByRole("button", { name: "Report a problem" }),
     );
 
-    expect(await screen.findByText("Clipboard unavailable")).toBeVisible();
-    expect(invoke).not.toHaveBeenCalledWith("open_feedback");
+    expect(await screen.findByText("No browser is available")).toBeVisible();
   });
 });
