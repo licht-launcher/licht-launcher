@@ -1,5 +1,5 @@
 use std::env;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use tracing::Subscriber;
@@ -21,9 +21,7 @@ pub(crate) fn init() -> Result<()> {
     };
 
     let filter = parse_filter(directives.as_deref())?;
-    let file = licht_core::SharedCache::system()
-        .context("Could not resolve the launcher data directory")
-        .and_then(|cache| file_appender(&cache.root().join(LOG_DIRECTORY)));
+    let file = log_directory().and_then(|directory| file_appender(&directory));
     let (file, file_error) = match file {
         Ok(appender) => (Some(appender), None),
         Err(error) => (None, Some(error)),
@@ -41,6 +39,13 @@ pub(crate) fn init() -> Result<()> {
     }
     install_panic_hook();
     Ok(())
+}
+
+/// The folder holding the launcher log files, inside the profile directory.
+pub(crate) fn log_directory() -> Result<PathBuf> {
+    let cache = licht_core::SharedCache::system()
+        .context("Could not resolve the launcher data directory")?;
+    Ok(cache.root().join(LOG_DIRECTORY))
 }
 
 fn parse_filter(directives: Option<&str>) -> Result<EnvFilter> {

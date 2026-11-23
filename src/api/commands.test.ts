@@ -49,6 +49,7 @@ import {
   openExternalUrl,
   openFeedback,
   openInstanceFolder,
+  openLogsFolder,
   openRepository,
   openStartupPreview,
   pauseDownloadJob,
@@ -474,6 +475,11 @@ describe("launcher commands", () => {
   it("opens the feedback form through the native command", async () => {
     await openFeedback();
     expect(invoke).toHaveBeenCalledWith("open_feedback");
+  });
+
+  it("opens the launcher log folder through the native command", async () => {
+    await openLogsFolder();
+    expect(invoke).toHaveBeenCalledWith("open_logs_folder");
   });
 
   it("opens an external link through the native command", async () => {

@@ -1,7 +1,9 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { FolderOpen } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 import { buildIdentifier, formatBuildDiagnostics } from "@/api/build-info";
-import { getBuildDiagnostics } from "@/api/commands";
+import { getBuildDiagnostics, openLogsFolder } from "@/api/commands";
 import { Button } from "@/components/ui/button";
 import { DialogTitle } from "@/components/ui/dialog";
 import {
@@ -36,6 +38,10 @@ export function SettingsSidebar({
       await navigator.clipboard.writeText(formatBuildDiagnostics(diagnostics));
     },
     onSettled: () => setCopyTooltipOpen(true),
+  });
+  const openLogs = useMutation({
+    mutationFn: openLogsFolder,
+    onError: (error: unknown) => toast.error(friendlyError(messageOf(error))),
   });
 
   function renderSection(item: (typeof SECTIONS)[number]) {
@@ -75,6 +81,19 @@ export function SettingsSidebar({
             )}
           </nav>
         ) : null}
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className={settingsSidebarStyles.navButton}
+          disabled={openLogs.isPending}
+          onClick={() => openLogs.mutate()}
+        >
+          <FolderOpen className={settingsSidebarStyles.navIcon} />
+          <span className={settingsSidebarStyles.navLabel}>
+            Open logs folder
+          </span>
+        </Button>
         <TooltipProvider>
           <Tooltip open={copyTooltipOpen} onOpenChange={setCopyTooltipOpen}>
             <TooltipTrigger asChild>

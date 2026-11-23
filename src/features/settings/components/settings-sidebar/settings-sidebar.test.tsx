@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { formatBuildDiagnostics } from "@/api/build-info";
 import { buildDiagnostics } from "@/features/settings/fixtures/build-diagnostics";
 import {
+  invoke,
   mockSettingsCommands,
   renderSettings,
 } from "@/features/settings/fixtures/render-settings";
@@ -117,6 +118,35 @@ describe("SettingsSidebar", () => {
       ),
     );
     expect(writeText).not.toHaveBeenCalled();
+  });
+
+  it("opens the launcher log folder from the footer", async () => {
+    await renderSettings();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Open logs folder" }),
+    );
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("open_logs_folder"),
+    );
+  });
+
+  it("reports a log folder that cannot be opened", async () => {
+    mockSettingsCommands((command) =>
+      command === "open_logs_folder"
+        ? Promise.reject(
+            "The log folder does not exist yet. Restart the launcher to create it.",
+          )
+        : undefined,
+    );
+    await renderSettings();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Open logs folder" }),
+    );
+    expect(
+      await screen.findByText(
+        "The log folder does not exist yet. Restart the launcher to create it.",
+      ),
+    ).toBeVisible();
   });
 
   it("keeps an accessible dialog name and navigates without the app footer", async () => {
