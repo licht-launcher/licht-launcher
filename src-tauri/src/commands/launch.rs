@@ -7,9 +7,15 @@ use licht_core::{
 };
 use tauri::{AppHandle, Emitter, State};
 use tokio::sync::{mpsc, oneshot};
+use tracing::Instrument;
 
 use super::sessions::LaunchSessions;
 use super::{LauncherPaths, failure, host_environment, http_client};
+
+/// Every event a launch emits carries the instance folder. The player name stays out of logs.
+fn launch_span(folder: &str) -> tracing::Span {
+    tracing::info_span!("launch", instance = folder)
+}
 
 #[tauri::command]
 pub async fn launch(
@@ -37,6 +43,7 @@ pub async fn launch(
         &folder,
         &username,
     )
+    .instrument(launch_span(&folder))
     .await;
     drop(guard);
     if let Err(error) = crate::desktop::game_finished(&app, &folder) {
@@ -185,4 +192,57 @@ async fn launch_one(
     };
     clear_launch_lock(&dir)?;
     Ok(exit)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::{self, Write};
+    use std::sync::{Arc, Mutex};
+
+    use super::launch_span;
+
+    struct TestWriter(Arc<Mutex<Vec<u8>>>);
+
+    impl Write for TestWriter {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            self.0
+                .lock()
+                .expect("the log buffer lock should work")
+                .write(bytes)
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn launch_logs_carry_the_instance_folder() {
+        let output = Arc::new(Mutex::new(Vec::new()));
+        let writer_output = Arc::clone(&output);
+        let subscriber = tracing_subscriber::fmt()
+            .with_writer(move || TestWriter(Arc::clone(&writer_output)))
+            .with_ansi(false)
+            .without_time()
+            .finish();
+
+        tracing::subscriber::with_default(subscriber, || {
+            let _launch = launch_span("Survival").entered();
+            tracing::warn!("event inside the launch");
+        });
+
+        let bytes = output
+            .lock()
+            .expect("the log buffer lock should work")
+            .clone();
+        let logs = String::from_utf8(bytes).expect("logs should contain valid UTF-8");
+        assert!(
+            logs.contains("launch{instance=\"Survival\"}"),
+            "unexpected logs: {logs}"
+        );
+        assert!(
+            logs.contains("event inside the launch"),
+            "unexpected logs: {logs}"
+        );
+    }
 }
