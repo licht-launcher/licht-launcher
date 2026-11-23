@@ -10,6 +10,10 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::sync::{mpsc, oneshot};
 
+/// Upper bound for one step of a transfer test. Passing tests take milliseconds;
+/// the margin only absorbs a loaded machine, such as CI or an antivirus scan.
+const STEP_TIMEOUT: Duration = Duration::from_secs(30);
+
 pub(super) fn transfer(
     url: &str,
     destination: &Destination,
@@ -69,9 +73,9 @@ pub(super) fn queue(
 pub(super) async fn finish(
     running: tokio::task::JoinHandle<licht_core::Result<()>>,
 ) -> licht_core::Result<()> {
-    tokio::time::timeout(Duration::from_secs(5), running)
+    tokio::time::timeout(STEP_TIMEOUT, running)
         .await
-        .expect("transfer timeout")
+        .unwrap_or_else(|_| panic!("transfer did not finish within {STEP_TIMEOUT:?}"))
         .expect("join")
 }
 pub(super) async fn last_progress(
@@ -106,16 +110,25 @@ impl Destination {
         self.path.with_file_name("file.jar.part")
     }
     pub(super) async fn wait_for_partial(&self, length: u64) {
-        tokio::time::timeout(Duration::from_secs(5), async {
+        let part = self.part();
+        let reached = tokio::time::timeout(STEP_TIMEOUT, async {
             loop {
-                if std::fs::metadata(self.part()).is_ok_and(|metadata| metadata.len() == length) {
+                if std::fs::metadata(&part).is_ok_and(|metadata| metadata.len() == length) {
                     break;
                 }
                 tokio::time::sleep(Duration::from_millis(5)).await;
             }
         })
-        .await
-        .expect("partial write timeout");
+        .await;
+        if reached.is_err() {
+            let current = std::fs::metadata(&part).map_or_else(
+                |_| "missing".to_string(),
+                |metadata| format!("{} bytes", metadata.len()),
+            );
+            panic!(
+                "partial file did not reach {length} bytes within {STEP_TIMEOUT:?} (now {current})"
+            );
+        }
     }
 }
 impl Drop for Destination {
@@ -155,6 +168,7 @@ impl Reply {
 pub(super) struct Server {
     pub(super) url: String,
     pub(super) incoming: mpsc::UnboundedReceiver<Request>,
+    received: usize,
     task: tokio::task::JoinHandle<()>,
 }
 impl Server {
@@ -202,14 +216,27 @@ impl Server {
         Self {
             url,
             incoming,
+            received: 0,
             task,
         }
     }
     pub(super) async fn request(&mut self) -> Request {
-        tokio::time::timeout(Duration::from_secs(5), self.incoming.recv())
+        self.request_within(STEP_TIMEOUT).await
+    }
+    /// Waits for the next request; a timeout names which request never arrived.
+    pub(super) async fn request_within(&mut self, limit: Duration) -> Request {
+        let expected = self.received + 1;
+        let request = tokio::time::timeout(limit, self.incoming.recv())
             .await
-            .expect("request timeout")
-            .expect("server request")
+            .unwrap_or_else(|_| {
+                panic!(
+                    "request {expected} did not reach the test server within {limit:?} ({} received so far)",
+                    self.received
+                )
+            })
+            .expect("server request");
+        self.received = expected;
+        request
     }
 }
 impl Drop for Server {
