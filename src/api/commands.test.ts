@@ -477,16 +477,16 @@ describe("launcher commands", () => {
     expect(invoke).toHaveBeenCalledWith("open_feedback");
   });
 
-  it("opens the launcher log folder through the native command", async () => {
-    await openLogsFolder();
-    expect(invoke).toHaveBeenCalledWith("open_logs_folder");
-  });
-
   it("opens an external link through the native command", async () => {
     await openExternalUrl("https://modrinth.com/modpack/fo");
     expect(invoke).toHaveBeenCalledWith("open_external_url", {
       url: "https://modrinth.com/modpack/fo",
     });
+  });
+
+  it("opens the launcher log folder through the native command", async () => {
+    await openLogsFolder();
+    expect(invoke).toHaveBeenCalledWith("open_logs_folder");
   });
 
   it("reads the cached player head through the native command", async () => {
