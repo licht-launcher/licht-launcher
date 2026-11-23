@@ -75,7 +75,7 @@ The default layout is:
 <profile>/
   settings.json
   licht.db
-  logs/       # launcher logs, one file per day, last 7 kept
+  logs/       # launcher logs, one file per launch, 30 most recent kept
   data/       # game files and managed Java runtimes
   instances/  # instance files, mods, saves, and other user content
   cache/      # content caches and profile operational files
