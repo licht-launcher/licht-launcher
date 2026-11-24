@@ -106,20 +106,12 @@ fn resolve_within(root: &Path, relative_path: &str) -> Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use licht_testkit::temp::TempDir;
 
-    fn temp_cache(name: &str) -> SharedCache {
-        let stamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("time")
-            .as_nanos();
-        let root = std::env::temp_dir().join(format!(
-            "licht-instance-fs-{}-{name}-{stamp}",
-            std::process::id()
-        ));
-        let _ = fs::remove_dir_all(&root);
-        fs::create_dir_all(&root).expect("cache root");
-        SharedCache::at(root)
+    fn temp_cache(name: &str) -> (TempDir, SharedCache) {
+        let temp = TempDir::new(&format!("instance-fs-{name}"));
+        let cache = SharedCache::at(temp.path().to_path_buf());
+        (temp, cache)
     }
 
     fn prepare_instance(cache: &SharedCache, folder: &str) -> PathBuf {
@@ -130,7 +122,7 @@ mod tests {
 
     #[test]
     fn lists_root_with_directories_first() {
-        let cache = temp_cache("list-root");
+        let (_temp, cache) = temp_cache("list-root");
         let root = prepare_instance(&cache, "classic");
         fs::create_dir_all(root.join("saves")).expect("saves");
         fs::write(root.join("options.txt"), b"fov:70\n").expect("options");
@@ -147,7 +139,7 @@ mod tests {
 
     #[test]
     fn lists_a_subdirectory() {
-        let cache = temp_cache("list-sub");
+        let (_temp, cache) = temp_cache("list-sub");
         let root = prepare_instance(&cache, "classic");
         let saves = root.join("saves").join("world");
         fs::create_dir_all(&saves).expect("world");
@@ -161,7 +153,7 @@ mod tests {
 
     #[test]
     fn rejects_parent_directory_escape() {
-        let cache = temp_cache("escape");
+        let (_temp, cache) = temp_cache("escape");
         prepare_instance(&cache, "classic");
 
         let error = list_instance_entries(&cache, "classic", "..").expect_err("parent escape");
@@ -174,7 +166,7 @@ mod tests {
 
     #[test]
     fn rejects_missing_instance_directory() {
-        let cache = temp_cache("missing");
+        let (_temp, cache) = temp_cache("missing");
         let error = list_instance_entries(&cache, "gone", "").expect_err("missing");
         assert!(matches!(error, CoreError::Io(_)));
     }

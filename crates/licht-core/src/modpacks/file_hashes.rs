@@ -192,7 +192,7 @@ pub(super) fn prepare_destination_sha1_md5(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
+    use licht_testkit::temp::TempDir;
 
     const HELLO_WORLD_SHA1: &str = "2aae6c35c94fcfb415dbe95f408b9ce91ee846ed";
     const HELLO_WORLD_MD5: &str = "5eb63bbbe01eeed093cb22bb8f5acdc3";
@@ -281,19 +281,20 @@ mod tests {
 
     #[test]
     fn hashes_a_file_and_reports_missing_ones() {
-        let root = temp_dir("hash");
+        let temp = TempDir::new("hashes-hash");
+        let root = temp.path().to_path_buf();
         let path = root.join("mod.jar");
         assert!(hash_file(&path).unwrap().is_none());
         fs::write(&path, b"hello").unwrap();
         let (sha1, sha512) = hash_file(&path).unwrap().expect("hashes");
         assert_eq!(sha1, "aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d");
         assert_eq!(sha512.len(), 128);
-        let _ = fs::remove_dir_all(&root);
     }
 
     #[tokio::test]
     async fn sha512_mismatch_removes_the_cached_file() {
-        let root = temp_dir("sha512");
+        let temp = TempDir::new("hashes-sha512");
+        let root = temp.path().to_path_buf();
         let path = root.join("mod.jar");
         fs::write(&path, b"hello").unwrap();
         let (sha1, sha512) = hash_file(&path).unwrap().expect("hashes");
@@ -310,12 +311,12 @@ mod tests {
                 .unwrap()
         );
         assert!(!path.exists());
-        let _ = fs::remove_dir_all(&root);
     }
 
     #[tokio::test]
     async fn empty_sha1_does_not_accept_an_existing_mod_file() {
-        let root = temp_dir("empty-sha");
+        let temp = TempDir::new("hashes-empty-sha");
+        let root = temp.path().to_path_buf();
         let path = root.join("mod.jar");
         fs::write(&path, b"hello").unwrap();
         let control = DownloadControl::new();
@@ -328,12 +329,12 @@ mod tests {
         let error = ensure_sha512(&path, "00", &control).await.unwrap_err();
         assert!(matches!(error, CoreError::Sha512Mismatch { .. }));
         assert!(!path.exists());
-        let _ = fs::remove_dir_all(&root);
     }
 
     #[tokio::test]
     async fn ensure_sha512_accepts_a_matching_file() {
-        let root = temp_dir("ensure");
+        let temp = TempDir::new("hashes-ensure");
+        let root = temp.path().to_path_buf();
         let path = root.join("mod.jar");
         fs::write(&path, b"hello").unwrap();
         let (_, sha512) = hash_file(&path).unwrap().expect("hashes");
@@ -341,12 +342,12 @@ mod tests {
             .await
             .expect("matches");
         assert!(path.is_file());
-        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]
     fn a_file_without_a_hash_is_not_treated_as_installed() {
-        let root = temp_dir("no-hash");
+        let temp = TempDir::new("hashes-no-hash");
+        let root = temp.path().to_path_buf();
         let path = root.join("a.jar");
         fs::write(&path, b"hello world").unwrap();
         assert!(prepare_destination_sha1_md5(&path, "", None).unwrap());
@@ -354,12 +355,12 @@ mod tests {
         fs::write(&path, b"hello world").unwrap();
         assert!(prepare_destination_sha1_md5(&path, "", Some("")).unwrap());
         assert!(!path.exists());
-        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]
     fn sha1_or_md5_match_skips_the_download_and_a_mismatch_does_not() {
-        let root = temp_dir("sha1-md5");
+        let temp = TempDir::new("hashes-sha1-md5");
+        let root = temp.path().to_path_buf();
         let path = root.join("a.jar");
         fs::write(&path, b"hello world").unwrap();
         assert!(!prepare_destination_sha1_md5(&path, HELLO_WORLD_SHA1, None).unwrap());
@@ -371,21 +372,21 @@ mod tests {
                 .unwrap()
         );
         assert!(!path.exists());
-        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]
     fn a_missing_file_has_to_be_fetched() {
-        let root = temp_dir("missing");
+        let temp = TempDir::new("hashes-missing");
+        let root = temp.path().to_path_buf();
         let path = root.join("a.jar");
         assert!(file_hash_md5(&path).unwrap().is_none());
         assert!(prepare_destination_sha1_md5(&path, HELLO_WORLD_SHA1, None).unwrap());
-        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]
     fn md5_mismatch_removes_the_file() {
-        let root = temp_dir("md5");
+        let temp = TempDir::new("hashes-md5");
+        let root = temp.path().to_path_buf();
         let path = root.join("a.jar");
         fs::write(&path, b"hello world").unwrap();
         ensure_md5(&path, &HELLO_WORLD_MD5.to_uppercase()).expect("matches");
@@ -393,20 +394,5 @@ mod tests {
         let error = ensure_md5(&path, &"0".repeat(32)).unwrap_err();
         assert!(matches!(error, CoreError::Md5Mismatch { .. }));
         assert!(!path.exists());
-        let _ = fs::remove_dir_all(&root);
-    }
-
-    fn temp_dir(label: &str) -> PathBuf {
-        let stamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("time")
-            .as_nanos();
-        let root = std::env::temp_dir().join(format!(
-            "licht-hashes-{label}-{}-{stamp}",
-            std::process::id()
-        ));
-        let _ = fs::remove_dir_all(&root);
-        fs::create_dir_all(&root).unwrap();
-        root
     }
 }

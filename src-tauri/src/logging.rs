@@ -136,38 +136,13 @@ fn install_panic_hook() {
 mod tests {
     use std::fs;
     use std::path::{Path, PathBuf};
-    use std::sync::atomic::{AtomicUsize, Ordering};
 
     use licht_testkit::logs::LogCapture;
+    use licht_testkit::temp::TempDir;
 
     use super::{
         install_panic_hook, launch_stamp, open_log_file, parse_filter, prune_old_logs, subscriber,
     };
-
-    struct TempDirectory(PathBuf);
-
-    impl TempDirectory {
-        fn new() -> Self {
-            static NEXT: AtomicUsize = AtomicUsize::new(0);
-            let path = std::env::temp_dir().join(format!(
-                "licht-logging-test-{}-{}",
-                std::process::id(),
-                NEXT.fetch_add(1, Ordering::Relaxed)
-            ));
-            fs::create_dir_all(&path).expect("the test directory should be created");
-            Self(path)
-        }
-
-        fn path(&self) -> &Path {
-            &self.0
-        }
-    }
-
-    impl Drop for TempDirectory {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.0);
-        }
-    }
 
     fn capture_logs_while(directives: Option<&str>, emit: impl FnOnce()) -> String {
         let capture =
@@ -235,7 +210,7 @@ mod tests {
 
     #[test]
     fn each_launch_writes_its_own_file_in_a_created_directory() {
-        let root = TempDirectory::new();
+        let root = TempDir::new("logging-test");
         let directory = root.path().join("logs");
 
         for (stamp, message) in [
@@ -270,7 +245,7 @@ mod tests {
 
     #[test]
     fn file_logs_report_an_error_when_the_directory_cannot_be_created() {
-        let root = TempDirectory::new();
+        let root = TempDir::new("logging-test");
         let blocker = root.path().join("not-a-directory");
         fs::write(&blocker, b"").expect("the blocking file should be written");
 
@@ -283,7 +258,7 @@ mod tests {
 
     #[test]
     fn pruning_keeps_only_the_newest_launcher_logs() {
-        let root = TempDirectory::new();
+        let root = TempDir::new("logging-test");
         let directory = root.path();
         fs::write(directory.join("licht.2026-11-20.log"), b"").expect("legacy log");
         for minute in 0..33 {

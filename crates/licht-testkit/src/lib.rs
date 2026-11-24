@@ -3,3 +3,4 @@
 //! A helper moves here once a second crate needs it.
 
 pub mod logs;
+pub mod temp;
