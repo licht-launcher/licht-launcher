@@ -11,6 +11,7 @@ fn simulated_resolution(index: usize) -> ContentResolution {
             title: format!("Resolved {index}"),
             version: Some(index.to_string()),
             icon_url: None,
+            from_modpack: false,
         },
         fingerprint: ContentFingerprint {
             relative_path: Path::new("mods")

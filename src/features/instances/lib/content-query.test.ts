@@ -14,6 +14,7 @@ const entry: InstanceContentEntry = {
   title: "Known title",
   version: "1.0",
   iconUrl: null,
+  fromModpack: false,
 };
 type Publish = (entries: InstanceContentEntry[], initial: boolean) => void;
 

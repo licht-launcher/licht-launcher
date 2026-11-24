@@ -12,6 +12,7 @@ use crate::hashes::sha1_hex;
 mod concurrency;
 mod files;
 mod fingerprints;
+mod modpack;
 mod progress;
 mod providers;
 
