@@ -9,8 +9,8 @@ import {
   SparklesIcon,
 } from "lucide-react";
 import { type ReactNode, useState } from "react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { MarqueeText } from "@/components/ui/marquee-text";
 import {
   useModpack,
   useModpackVersions,
@@ -132,7 +132,7 @@ function StoreModpack({
         </Fact>
         <Fact label="Version" className={styles.versionFact}>
           {version ? (
-            <Badge>{version.name}</Badge>
+            <MarqueeText>{version.name}</MarqueeText>
           ) : (
             <span className={styles.muted}>Unknown</span>
           )}
