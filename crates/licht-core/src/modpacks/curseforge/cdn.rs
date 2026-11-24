@@ -175,7 +175,8 @@ mod tests {
 
     #[tokio::test]
     async fn a_live_redirect_to_a_disallowed_url_is_rejected() {
-        use crate::test_http::{error_chain, lock_local_http, with_stub_retries};
+        use crate::error_chain;
+        use crate::test_http::{lock_local_http, with_stub_retries};
 
         let _guard = lock_local_http().await;
         let client = cdn_client("test-key").expect("client");

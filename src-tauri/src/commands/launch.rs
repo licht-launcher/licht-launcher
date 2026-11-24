@@ -196,46 +196,17 @@ async fn launch_one(
 
 #[cfg(test)]
 mod tests {
-    use std::io::{self, Write};
-    use std::sync::{Arc, Mutex};
+    use licht_testkit::logs::LogCapture;
 
     use super::launch_span;
 
-    struct TestWriter(Arc<Mutex<Vec<u8>>>);
-
-    impl Write for TestWriter {
-        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
-            self.0
-                .lock()
-                .expect("the log buffer lock should work")
-                .write(bytes)
-        }
-
-        fn flush(&mut self) -> io::Result<()> {
-            Ok(())
-        }
-    }
-
     #[test]
     fn launch_logs_carry_the_instance_folder() {
-        let output = Arc::new(Mutex::new(Vec::new()));
-        let writer_output = Arc::clone(&output);
-        let subscriber = tracing_subscriber::fmt()
-            .with_writer(move || TestWriter(Arc::clone(&writer_output)))
-            .with_ansi(false)
-            .without_time()
-            .finish();
+        let capture = LogCapture::start();
+        let _launch = launch_span("Survival").entered();
+        tracing::warn!("event inside the launch");
+        let logs = capture.text();
 
-        tracing::subscriber::with_default(subscriber, || {
-            let _launch = launch_span("Survival").entered();
-            tracing::warn!("event inside the launch");
-        });
-
-        let bytes = output
-            .lock()
-            .expect("the log buffer lock should work")
-            .clone();
-        let logs = String::from_utf8(bytes).expect("logs should contain valid UTF-8");
         assert!(
             logs.contains("launch{instance=\"Survival\"}"),
             "unexpected logs: {logs}"

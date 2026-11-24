@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/licht-cli", "crates/licht-core", "src-tauri"]
+members = ["crates/licht-cli", "crates/licht-core", "crates/licht-testkit", "src-tauri"]
 resolver = "3"
 
 [workspace.package]

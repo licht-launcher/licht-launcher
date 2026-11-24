@@ -135,29 +135,14 @@ fn install_panic_hook() {
 #[cfg(test)]
 mod tests {
     use std::fs;
-    use std::io::{self, Write};
     use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::{Arc, Mutex};
+
+    use licht_testkit::logs::LogCapture;
 
     use super::{
         install_panic_hook, launch_stamp, open_log_file, parse_filter, prune_old_logs, subscriber,
     };
-
-    struct TestWriter(Arc<Mutex<Vec<u8>>>);
-
-    impl Write for TestWriter {
-        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
-            self.0
-                .lock()
-                .expect("the log buffer lock should work")
-                .write(bytes)
-        }
-
-        fn flush(&mut self) -> io::Result<()> {
-            Ok(())
-        }
-    }
 
     struct TempDirectory(PathBuf);
 
@@ -185,22 +170,10 @@ mod tests {
     }
 
     fn capture_logs_while(directives: Option<&str>, emit: impl FnOnce()) -> String {
-        let output = Arc::new(Mutex::new(Vec::new()));
-        let writer_output = output.clone();
-        let subscriber = tracing_subscriber::fmt()
-            .with_env_filter(parse_filter(directives).expect("the filter should be valid"))
-            .with_writer(move || TestWriter(writer_output.clone()))
-            .with_ansi(false)
-            .without_time()
-            .finish();
-
-        tracing::subscriber::with_default(subscriber, emit);
-
-        let bytes = output
-            .lock()
-            .expect("the log buffer lock should work")
-            .clone();
-        String::from_utf8(bytes).expect("logs should contain valid UTF-8")
+        let capture =
+            LogCapture::filtered(parse_filter(directives).expect("the filter should be valid"));
+        emit();
+        capture.text()
     }
 
     fn capture_logs(directives: Option<&str>) -> String {
