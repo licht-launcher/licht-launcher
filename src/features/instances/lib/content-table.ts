@@ -14,6 +14,23 @@ export function formatContentTitle(name: string): string {
     .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
+/** Entries of the chosen kind whose title, file name or version contains the search. */
+export function filterContentEntries(
+  entries: readonly InstanceContentEntry[],
+  filter: ContentFilter,
+  search: string,
+): InstanceContentEntry[] {
+  const normalizedSearch = search.trim().toLocaleLowerCase();
+  return entries.filter(
+    (entry) =>
+      (filter === "all" || entry.kind === filter) &&
+      (normalizedSearch === "" ||
+        [entry.title, entry.name, entry.version ?? ""].some((value) =>
+          value.toLocaleLowerCase().includes(normalizedSearch),
+        )),
+  );
+}
+
 export function sortContentEntries(
   entries: InstanceContentEntry[],
   dir: ContentSortDir,

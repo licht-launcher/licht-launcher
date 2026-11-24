@@ -21,6 +21,7 @@ import {
   type ContentFilter,
   type ContentSortDir,
   type ContentSortKey,
+  filterContentEntries,
   sortContentEntries,
   toggleContentSort,
 } from "@/features/instances/lib/content-table";
@@ -103,19 +104,17 @@ export function ContentSection({
     () => (content.data ?? []).filter((entry) => !entry.fromModpack),
     [content.data],
   );
-  const sortedEntries = useMemo(() => {
-    const normalizedSearch = search.trim().toLocaleLowerCase();
-    const entries = listedEntries.filter(
-      (entry) =>
-        (filter === "all" || entry.kind === filter) &&
-        (normalizedSearch === "" ||
-          [entry.title, entry.name, entry.version ?? ""].some((value) =>
-            value.toLocaleLowerCase().includes(normalizedSearch),
-          )),
-    );
-    return sortContentEntries(entries, sortDir);
-  }, [listedEntries, filter, search, sortDir]);
+  const sortedEntries = useMemo(
+    () =>
+      sortContentEntries(
+        filterContentEntries(listedEntries, filter, search),
+        sortDir,
+      ),
+    [listedEntries, filter, search, sortDir],
+  );
   const disabled = update.isPending || remove.isPending;
+  const toggleContent = (entry: InstanceContentEntry, enabled: boolean) =>
+    update.mutate({ kind: entry.kind, name: entry.name, enabled });
   const virtualization = useContentVirtualizer({
     entries: sortedEntries,
     folder,
@@ -188,8 +187,7 @@ export function ContentSection({
           virtualization={virtualization}
           actions={{
             disabled,
-            onToggle: (entry, enabled) =>
-              update.mutate({ kind: entry.kind, name: entry.name, enabled }),
+            onToggle: toggleContent,
             onRemove: setPendingRemoval,
           }}
         />
@@ -197,8 +195,10 @@ export function ContentSection({
           <ModpackContentDialog
             open={modpackOpen}
             onOpenChange={(open) => setModpackOpenFor(open ? folder : null)}
+            iconUrl={modpack.type === "modpack" ? modpack.iconUrl : null}
             folder={folder}
             entries={modpackEntries}
+            actions={{ disabled, onToggle: toggleContent }}
           />
         ) : null}
         <ContentRemovalDialog

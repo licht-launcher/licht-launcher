@@ -64,7 +64,8 @@ export function ContentRow({
 export type ContentActions = {
   disabled: boolean;
   onToggle: (entry: InstanceContentEntry, enabled: boolean) => void;
-  onRemove: (entry: InstanceContentEntry) => void;
+  /** Omitted where content can be disabled but not deleted. */
+  onRemove?: (entry: InstanceContentEntry) => void;
 };
 
 function ContentRowActions({
@@ -83,18 +84,20 @@ function ContentRowActions({
           aria-label={`${entry.enabled ? "Disable" : "Enable"} ${entry.title}`}
           onCheckedChange={(enabled) => onToggle(entry, enabled)}
         />
-        <Button
-          data-content-action="remove"
-          type="button"
-          size="icon"
-          variant="ghost"
-          className={contentRowStyles.removeButton}
-          aria-label={`Remove ${formatContentTitle(entry.name)}`}
-          disabled={disabled}
-          onClick={() => onRemove(entry)}
-        >
-          <Trash2Icon aria-hidden className={contentRowStyles.icon} />
-        </Button>
+        {onRemove ? (
+          <Button
+            data-content-action="remove"
+            type="button"
+            size="icon"
+            variant="ghost"
+            className={contentRowStyles.removeButton}
+            aria-label={`Remove ${formatContentTitle(entry.name)}`}
+            disabled={disabled}
+            onClick={() => onRemove(entry)}
+          >
+            <Trash2Icon aria-hidden className={contentRowStyles.icon} />
+          </Button>
+        ) : null}
       </div>
     </td>
   );
