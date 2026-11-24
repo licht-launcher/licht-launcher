@@ -6,6 +6,8 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use time::UtcOffset;
 use tracing::Subscriber;
+use tracing_subscriber::field::RecordFields;
+use tracing_subscriber::fmt::FormatFields;
 use tracing_subscriber::fmt::MakeWriter;
 use tracing_subscriber::fmt::format::Writer;
 use tracing_subscriber::fmt::time::{FormatTime, SystemTime};
@@ -206,6 +208,7 @@ fn subscriber(
         .with(console_layer(console, std::io::stderr))
         .with(file.map(|file| {
             fmt::layer()
+                .fmt_fields(PlainFields::default())
                 .with_writer(file)
                 .with_ansi(false)
                 // Progress lines only help while watching the console.
@@ -213,6 +216,22 @@ fn subscriber(
                     metadata.target() != licht_core::DOWNLOAD_PROGRESS_TARGET
                 }))
         }))
+}
+
+/// The log file's field formatter. Layers share span fields formatted by the same
+/// formatter type, so the file needs a type of its own: otherwise it would reuse the
+/// console's colored span fields.
+#[derive(Default)]
+struct PlainFields(fmt::format::DefaultFields);
+
+impl<'writer> FormatFields<'writer> for PlainFields {
+    fn format_fields<R: RecordFields>(
+        &self,
+        writer: Writer<'writer>,
+        fields: R,
+    ) -> std::fmt::Result {
+        self.0.format_fields(writer, fields)
+    }
 }
 
 fn install_panic_hook() {
@@ -654,6 +673,26 @@ mod tests {
             .collect();
         names.sort();
         names
+    }
+
+    #[test]
+    fn span_fields_in_the_log_file_have_no_colors_when_the_console_does() {
+        let root = TempDir::new("logging-test");
+        let file = open_log_file(root.path(), "2026-11-24T10-00-00Z").expect("log file");
+        let filter = parse_filter(None).expect("the filter should be valid");
+        let console = ConsoleStyle::for_build(true, false, false);
+        tracing::subscriber::with_default(subscriber(filter, console, Some(file)), || {
+            let _launch = tracing::info_span!("launch", instance = "Survival").entered();
+            tracing::info!("Game started");
+        });
+
+        let logs = fs::read_to_string(root.path().join("licht.2026-11-24T10-00-00Z.log"))
+            .expect("the log file should be readable");
+        assert!(
+            logs.contains("launch{instance=\"Survival\"}"),
+            "unexpected logs: {logs:?}"
+        );
+        assert!(!logs.contains('\u{1b}'), "unexpected colors: {logs:?}");
     }
 
     #[test]
