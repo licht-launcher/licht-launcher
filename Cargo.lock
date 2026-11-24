@@ -2465,6 +2465,7 @@ version = "0.3.1"
 dependencies = [
  "clap",
  "licht-core",
+ "licht-testkit",
  "reqwest",
  "tokio",
  "tracing",

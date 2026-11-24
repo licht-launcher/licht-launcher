@@ -99,17 +99,18 @@ pub async fn get_build_diagnostics(
 mod tests {
     use std::fs;
 
+    use licht_testkit::temp::TempDir;
+
     use super::{existing_log_folder, get_logs_folder};
 
     #[test]
     fn the_log_folder_opens_only_when_it_exists() {
-        let root =
-            std::env::temp_dir().join(format!("licht-log-folder-test-{}", std::process::id()));
-        let logs = root.join("logs");
+        let root = TempDir::new("log-folder-test");
+        let logs = root.path().join("logs");
         fs::create_dir_all(&logs).expect("the log folder should be created");
 
         assert_eq!(existing_log_folder(logs.clone()), Ok(logs.clone()));
-        fs::remove_dir_all(&root).expect("the test folder should be removed");
+        fs::remove_dir_all(root.path()).expect("the test folder should be removed");
         assert_eq!(
             existing_log_folder(logs),
             Err(
