@@ -21,7 +21,10 @@ describe("ContentKindIcon", () => {
       <ContentKindIcon kind="resourcePacks" tone="muted" />,
     );
 
-    const icon = container.querySelector("[data-kind=resourcePacks] svg");
+    const well = container.querySelector("[data-kind=resourcePacks]");
+    expect(well).not.toHaveClass("bg-muted");
+    expect(well).not.toHaveClass("bg-accent-orange/15");
+    const icon = well?.querySelector("svg");
     expect(icon).toHaveClass("text-muted-foreground");
     expect(icon).not.toHaveClass("text-accent-orange");
   });
@@ -29,6 +32,6 @@ describe("ContentKindIcon", () => {
   it("has a smaller size for inline counts", () => {
     const { container } = render(<ContentKindIcon kind="mods" size="sm" />);
 
-    expect(container.querySelector("[data-kind=mods]")).toHaveClass("size-6");
+    expect(container.querySelector("[data-kind=mods]")).toHaveClass("size-4");
   });
 });

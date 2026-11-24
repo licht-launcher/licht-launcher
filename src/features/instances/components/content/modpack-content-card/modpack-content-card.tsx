@@ -1,4 +1,5 @@
-import { EyeIcon, PackageIcon } from "lucide-react";
+import { EyeIcon, LockIcon, PackageIcon } from "lucide-react";
+import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { SOURCE_LABELS } from "@/features/discover/lib/discover-search";
 import { ContentKindIcon } from "@/features/instances/components/content/content-kind-icon";
@@ -41,7 +42,13 @@ function StoreModpackCard({
   return (
     <ModpackCard
       iconUrl={summary.iconUrl}
-      title={`Provided by ${summary.name}`}
+      title={
+        <>
+          <LockIcon aria-hidden className={styles.lock} />
+          <span className={styles.titlePrefix}>Provided by</span>{" "}
+          <span className={styles.titleName}>{summary.name}</span>
+        </>
+      }
       version={summary.version}
       {...props}
     />
@@ -55,7 +62,11 @@ function FileModpackCard({
   return (
     <ModpackCard
       iconUrl={null}
-      title={`Imported from a ${SOURCE_LABELS[origin.source]} file`}
+      title={
+        <span className={styles.titleName}>
+          Imported from a {SOURCE_LABELS[origin.source]} file
+        </span>
+      }
       version={null}
       {...props}
     />
@@ -70,7 +81,7 @@ function ModpackCard({
   onView,
 }: CardProps & {
   iconUrl: string | null;
-  title: string;
+  title: ReactNode;
   version: string | null;
 }) {
   const counts = countContent(entries);
