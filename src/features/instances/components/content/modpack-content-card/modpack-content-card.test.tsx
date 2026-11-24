@@ -76,6 +76,7 @@ describe("ModpackContentCard", () => {
   it("shows what the modpack ships and which version provides it", async () => {
     getModpack.mockResolvedValue({
       name: "Fabulously Optimized",
+      author: "robotkoer",
       iconUrl: null,
     });
     listModpackVersions.mockResolvedValue([
@@ -87,9 +88,14 @@ describe("ModpackContentCard", () => {
 
     expect(screen.getByText("2 mods")).toBeInTheDocument();
     expect(screen.getByText("1 resource pack")).toBeInTheDocument();
-    expect(await screen.findByText("Fabulously Optimized")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Fabulously Optimized" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("by robotkoer · Modrinth")).toBeInTheDocument();
     expect(await screen.findByText("15.0.0-beta.3")).toBeInTheDocument();
-    expect(screen.getByText(/^Updated /)).toBeInTheDocument();
+    expect(
+      screen.getByText("Updated").nextElementSibling,
+    ).not.toHaveTextContent("Unknown");
     expect(getModpack).toHaveBeenCalledWith("modrinth", "fo");
   });
 
@@ -103,13 +109,17 @@ describe("ModpackContentCard", () => {
       await screen.findByText("Modpack details are unavailable."),
     ).toBeInTheDocument();
     expect(screen.getByText("2 mods")).toBeInTheDocument();
+    expect(screen.getAllByText("Unknown")).toHaveLength(2);
   });
 
   it("shows a pack imported from disk without asking a store", () => {
     renderCard({ type: "modpackFile", source: "modrinth" });
 
     expect(
-      screen.getByText("Imported from a modpack file"),
+      screen.getByRole("heading", { name: "Imported modpack" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Installed from a Modrinth file"),
     ).toBeInTheDocument();
     expect(getModpack).not.toHaveBeenCalled();
   });
