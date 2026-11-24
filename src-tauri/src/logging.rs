@@ -536,7 +536,10 @@ mod tests {
         let output = console_output(ConsoleStyle::for_build(true, false, false));
 
         assert_eq!(output.lines().count(), 1, "unexpected output: {output}");
-        assert!(output.contains("[launch]"), "the area is missing: {output}");
+        assert!(
+            output.contains("\u{1b}[1;96m[launch]"),
+            "the area is not bold in its color: {output:?}"
+        );
         assert!(
             output.contains("Game started"),
             "unexpected output: {output}"
