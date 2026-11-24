@@ -82,6 +82,8 @@ named after its UTC start time, and startup keeps the 30 most recent; **Settings
 Troubleshooting** shows the folder and opens it. If the log directory cannot be
 opened, the app keeps logging to stderr and records a warning instead of failing
 to start. Panics are logged as errors before the default panic output.
+Each launch logs `System information` (the build diagnostics shown in
+Troubleshooting), and application update checks and downloads log their result.
 Download jobs run inside a `download_job` span (job id, operation, instance,
 version, Java major) and game launches inside a `launch` span (instance folder),
 so their events can be told apart in the log. Player names are never span fields.

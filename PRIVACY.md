@@ -89,7 +89,8 @@ can cause additional network activity outside the launcher's control.
 
 Launcher diagnostics are written to standard error and to one log file per
 launch in the `logs` folder of the launcher profile directory; the 30 most
-recent files are kept.
+recent files are kept. Each file starts with the launcher version and system
+details (operating system, architecture, and WebView version).
 **Settings → Troubleshooting** shows and opens that folder, and its **Report a
 problem** button opens the GitHub issue page in your browser; nothing is sent
 until you submit a report yourself. Game console output is

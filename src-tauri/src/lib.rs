@@ -21,6 +21,11 @@ pub fn run() -> anyhow::Result<()> {
         "Starting Licht Launcher"
     );
 
+    // Querying the operating system can take a moment, so it must not delay the window.
+    tauri::async_runtime::spawn_blocking(|| {
+        commands::shell::log_system_information(&commands::shell::collect_build_diagnostics());
+    });
+
     let runtime = startup::state::StartupRuntime::new();
     let updates = app_updates::Runtime::new();
     let startup_runtime = std::sync::Arc::clone(&runtime);
