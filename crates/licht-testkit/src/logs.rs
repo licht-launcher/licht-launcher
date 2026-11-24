@@ -1,5 +1,3 @@
-//! Capturing logs to assert on them.
-
 use std::io::{self, Write};
 use std::sync::{Arc, Mutex, PoisonError};
 
@@ -28,7 +26,6 @@ impl LogCapture {
         Self::filtered(EnvFilter::new("info"))
     }
 
-    /// Captures the events `filter` enables.
     pub fn filtered(filter: EnvFilter) -> Self {
         let output = Arc::new(Mutex::new(Vec::new()));
         let writer_output = Arc::clone(&output);
@@ -46,10 +43,6 @@ impl LogCapture {
     }
 
     /// Everything captured so far.
-    ///
-    /// # Panics
-    ///
-    /// If the logs are not valid UTF-8, which would mean the formatter is broken.
     pub fn text(&self) -> String {
         let bytes = self
             .output
