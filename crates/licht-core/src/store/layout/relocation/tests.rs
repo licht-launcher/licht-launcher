@@ -33,7 +33,7 @@ async fn apply_with(
 
 #[tokio::test]
 async fn changing_directory_moves_content_after_restart_and_keeps_the_profile() {
-    let (legacy, home) = fixture("relocation");
+    let (_temp, legacy, home) = fixture("relocation");
     initialize_at(&legacy, &home).await.expect("initialize");
     let source = crate::settings::testing::game_cache_at(&home)
         .await
@@ -305,7 +305,7 @@ async fn stored_roots(home: &SharedCache) -> (Option<String>, Option<String>, bo
 
 #[tokio::test]
 async fn content_roots_live_in_the_settings_row() {
-    let (legacy, home) = fixture("relocation-state");
+    let (_temp, legacy, home) = fixture("relocation-state");
     initialize_at(&legacy, &home).await.expect("initialize");
     let game = crate::settings::testing::game_cache_at(&home)
         .await
@@ -329,7 +329,7 @@ async fn content_roots_live_in_the_settings_row() {
 
 #[tokio::test]
 async fn a_row_from_before_content_roots_adopts_the_current_directory() {
-    let (legacy, home) = fixture("relocation-state-upgrade");
+    let (_temp, legacy, home) = fixture("relocation-state-upgrade");
     initialize_at(&legacy, &home).await.expect("initialize");
     let game = crate::settings::testing::game_cache_at(&home)
         .await
@@ -358,7 +358,7 @@ async fn a_row_from_before_content_roots_adopts_the_current_directory() {
 
 #[tokio::test]
 async fn saving_settings_keeps_the_move_checkpoint() {
-    let (legacy, home) = fixture("relocation-state-save");
+    let (_temp, legacy, home) = fixture("relocation-state-save");
     initialize_at(&legacy, &home).await.expect("initialize");
     let source = crate::settings::testing::game_cache_at(&home)
         .await
@@ -396,7 +396,7 @@ async fn saving_settings_keeps_the_move_checkpoint() {
 #[tokio::test]
 async fn a_copied_move_finishes_after_its_source_was_cleaned() {
     for copied in [false, true] {
-        let (legacy, home) = fixture(&format!("relocation-state-pending-{copied}"));
+        let (_temp, legacy, home) = fixture(&format!("relocation-state-pending-{copied}"));
         initialize_at(&legacy, &home).await.expect("initialize");
         let source = crate::settings::testing::game_cache_at(&home)
             .await
@@ -453,7 +453,7 @@ async fn a_copied_move_finishes_after_its_source_was_cleaned() {
 
 #[tokio::test]
 async fn interrupted_copy_resumes_without_overwriting_different_files() {
-    let (legacy, home) = fixture("relocation-interrupted");
+    let (_temp, legacy, home) = fixture("relocation-interrupted");
     initialize_at(&legacy, &home).await.expect("initialize");
     let source = crate::settings::testing::game_cache_at(&home)
         .await
@@ -495,7 +495,7 @@ async fn interrupted_copy_resumes_without_overwriting_different_files() {
 
 #[tokio::test]
 async fn interrupted_cleanup_preserves_changed_source_and_resumes_after_resolution() {
-    let (legacy, home) = fixture("relocation-cleanup");
+    let (_temp, legacy, home) = fixture("relocation-cleanup");
     initialize_at(&legacy, &home).await.expect("initialize");
     let source = crate::settings::testing::game_cache_at(&home)
         .await
@@ -547,7 +547,7 @@ async fn interrupted_cleanup_preserves_changed_source_and_resumes_after_resoluti
 #[tokio::test]
 async fn rejects_overlapping_roots_and_unavailable_previous_directories() {
     for (name, unavailable) in [("nested", false), ("missing", true)] {
-        let (legacy, home) = fixture(name);
+        let (_temp, legacy, home) = fixture(name);
         initialize_at(&legacy, &home).await.expect("initialize");
         let source = crate::settings::testing::game_cache_at(&home)
             .await
@@ -582,7 +582,7 @@ async fn rejects_overlapping_roots_and_unavailable_previous_directories() {
 
 #[tokio::test]
 async fn isolated_profile_does_not_import_legacy_settings_or_data() {
-    let (legacy, default_home) = fixture("isolated");
+    let (_temp, legacy, default_home) = fixture("isolated");
     let mut settings = crate::settings::load_settings_at(&legacy)
         .await
         .expect("settings");
@@ -620,7 +620,7 @@ async fn isolated_profile_does_not_import_legacy_settings_or_data() {
 #[cfg(unix)]
 #[tokio::test]
 async fn source_links_are_rejected_without_touching_external_files() {
-    let (legacy, home) = fixture("relocation-link");
+    let (_temp, legacy, home) = fixture("relocation-link");
     initialize_at(&legacy, &home).await.expect("initialize");
     let source = crate::settings::testing::game_cache_at(&home)
         .await
@@ -657,7 +657,7 @@ async fn source_links_are_rejected_without_touching_external_files() {
 
 #[tokio::test]
 async fn conflicting_destination_preserves_files_and_can_be_retried() {
-    let (legacy, home) = fixture("relocation-conflict");
+    let (_temp, legacy, home) = fixture("relocation-conflict");
     initialize_at(&legacy, &home).await.expect("initialize");
     let source = crate::settings::testing::game_cache_at(&home)
         .await
@@ -731,7 +731,7 @@ async fn choose_sibling_directory(home: &SharedCache) -> SharedCache {
 
 #[tokio::test]
 async fn a_destination_without_room_refuses_the_move_and_keeps_the_checkpoint() {
-    let (legacy, home) = fixture("relocation-no-space");
+    let (_temp, legacy, home) = fixture("relocation-no-space");
     initialize_at(&legacy, &home).await.expect("initialize");
     let source = crate::settings::testing::game_cache_at(&home)
         .await
@@ -772,7 +772,7 @@ async fn a_destination_without_room_refuses_the_move_and_keeps_the_checkpoint() 
 
 #[tokio::test]
 async fn files_already_at_the_destination_do_not_count_toward_the_space_check() {
-    let (legacy, home) = fixture("relocation-resume-space");
+    let (_temp, legacy, home) = fixture("relocation-resume-space");
     initialize_at(&legacy, &home).await.expect("initialize");
     let source = crate::settings::testing::game_cache_at(&home)
         .await
@@ -803,7 +803,7 @@ async fn files_already_at_the_destination_do_not_count_toward_the_space_check() 
 
 #[tokio::test]
 async fn an_unknown_destination_volume_does_not_block_the_move() {
-    let (legacy, home) = fixture("relocation-unknown-volume");
+    let (_temp, legacy, home) = fixture("relocation-unknown-volume");
     initialize_at(&legacy, &home).await.expect("initialize");
     let source = crate::settings::testing::game_cache_at(&home)
         .await

@@ -7,11 +7,12 @@ use licht_core::{
     parse_java_version, parse_version, probe_java_major, required_runtime, runtime_java_paths,
     use_custom_java, validate_java,
 };
+use licht_testkit::temp::TempDir;
 
 #[test]
 fn an_installed_runtime_java_is_offered_and_a_missing_file_is_invalid() {
-    let root = std::env::temp_dir().join(format!("licht-runtime-java-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&root);
+    let temp = TempDir::new("runtime-java");
+    let root = temp.path().to_path_buf();
     let cache = SharedCache::at(&root);
     let environment = LaunchEnvironment {
         os: OsName::Windows,
@@ -49,8 +50,6 @@ fn an_installed_runtime_java_is_offered_and_a_missing_file_is_invalid() {
     assert!(!status.java21);
     assert!(!status.java17);
     assert!(!status.java8);
-
-    let _ = std::fs::remove_dir_all(root);
 }
 
 #[test]
@@ -114,7 +113,8 @@ fn a_version_without_java_version_has_no_required_runtime() {
 
 #[test]
 fn a_custom_java_is_used_without_downloading() {
-    let directory = std::env::temp_dir().join(format!("licht-java-custom-{}", std::process::id()));
+    let temp = TempDir::new("java-custom");
+    let directory = temp.path().to_path_buf();
     let executable = directory.join("java.exe");
     std::fs::create_dir_all(&directory).expect("temp dir");
     std::fs::write(&executable, b"custom").expect("java");
@@ -130,7 +130,6 @@ fn a_custom_java_is_used_without_downloading() {
     std::fs::write(&script, b"#!/bin/sh").expect("script");
     let other = use_custom_java(&script).expect_err("only a Java launcher may run");
     assert!(matches!(other, CoreError::JavaPath));
-    let _ = std::fs::remove_dir_all(directory);
 }
 
 #[test]
@@ -164,8 +163,8 @@ fn search_roots_follow_the_operating_system() {
 
 #[test]
 fn discovery_finds_binaries_and_ignores_a_missing_root() {
-    let root = std::env::temp_dir().join(format!("licht-java-discover-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&root);
+    let temp = TempDir::new("java-discover");
+    let root = temp.path().to_path_buf();
     let windows = root.join("win").join("jdk-21").join("bin").join("java.exe");
     let linux = root
         .join("linux")
@@ -202,8 +201,8 @@ fn discovery_finds_binaries_and_ignores_a_missing_root() {
 
 #[test]
 fn browse_starts_in_the_existing_folder_or_the_fallback() {
-    let root = std::env::temp_dir().join(format!("licht-java-browse-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&root);
+    let temp = TempDir::new("java-browse");
+    let root = temp.path().to_path_buf();
     let runtime = root.join("runtime");
     let bin = root.join("jdk").join("bin");
     std::fs::create_dir_all(&bin).expect("bin");
@@ -230,13 +229,12 @@ fn browse_starts_in_the_existing_folder_or_the_fallback() {
         ),
         runtime
     );
-    let _ = std::fs::remove_dir_all(root);
 }
 
 #[test]
 fn a_release_file_reports_the_major_without_running_java() {
-    let root = std::env::temp_dir().join(format!("licht-java-release-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&root);
+    let temp = TempDir::new("java-release");
+    let root = temp.path().to_path_buf();
     let home = root.join("temurin21");
     let executable = home.join("bin").join("java.exe");
     std::fs::create_dir_all(executable.parent().expect("bin")).expect("runtime");
@@ -253,14 +251,12 @@ fn a_release_file_reports_the_major_without_running_java() {
     )
     .expect("release");
     assert_eq!(probe_java_major(&eight).expect("java 8"), 8);
-    let _ = std::fs::remove_dir_all(root);
 }
 
 #[test]
 fn one_point_eight_and_one_point_twenty_one_need_different_javas() {
-    let directory = std::env::temp_dir().join(format!("licht-java-probe-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&directory);
-    std::fs::create_dir_all(&directory).expect("directory");
+    let temp = TempDir::new("java-probe");
+    let directory = temp.path().to_path_buf();
     let java_8 = write_java_stub(&directory, "java8", "1.8.0_51", StubKind::Stderr);
     let java_21 = write_java_stub(&directory, "java21", "21.0.7", StubKind::Stdout);
     let broken = write_java_stub(&directory, "broken", "nope", StubKind::Stderr);

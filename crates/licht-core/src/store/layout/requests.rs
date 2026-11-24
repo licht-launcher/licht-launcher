@@ -113,6 +113,8 @@ pub fn take_startup_preview() -> Result<Option<StartupPreviewScenario>> {
 
 #[cfg(test)]
 mod tests {
+    use licht_testkit::temp::TempDir;
+
     use super::*;
     #[test]
     fn manual_update_overrides_preferences_while_automatic_startup_respects_them() {
@@ -129,14 +131,8 @@ mod tests {
 
     #[test]
     fn pending_update_intent_detects_failed_restarts_and_is_consumed_by_a_new_version() {
-        let root = std::env::temp_dir().join(format!(
-            "licht-update-intent-{}",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("time")
-                .as_nanos()
-        ));
-        fs::create_dir_all(&root).expect("directory");
+        let temp = TempDir::new("update-intent");
+        let root = temp.path().to_path_buf();
         let path = root.join("request.json");
         assert_eq!(intent_at(&path, "1.0.0").expect("absent"), (false, false));
         fs::write(&path, br#"{"fromVersion":"1.0.0","attempted":false}"#).expect("request");

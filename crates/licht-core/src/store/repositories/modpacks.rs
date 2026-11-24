@@ -140,14 +140,12 @@ impl ModpackRepository {
 mod tests {
     use super::*;
     use crate::{DatabaseService, SharedCache};
+    use licht_testkit::temp::TempDir;
 
-    fn fixture() -> SharedCache {
-        let stamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos();
-        let name = format!("licht-modpack-db-{}-{stamp}", std::process::id());
-        SharedCache::at(std::env::temp_dir().join(name))
+    fn fixture() -> (TempDir, SharedCache) {
+        let temp = TempDir::new("modpack-db");
+        let cache = SharedCache::at(temp.path());
+        (temp, cache)
     }
 
     fn index() -> StoredModpack {
@@ -175,7 +173,7 @@ mod tests {
 
     #[tokio::test]
     async fn persists_isolates_duplicates_and_deletes_structured_indexes() {
-        let cache = fixture();
+        let (_temp, cache) = fixture();
         let instances = cache.root().join("instances");
         let other = cache.root().join("other-instances");
         let database = crate::Database::open(&cache).await.expect("database");
@@ -271,12 +269,11 @@ mod tests {
             .expect("dependencies");
         assert_eq!(dependencies.len(), 2);
         service.shutdown().await.expect("shutdown");
-        std::fs::remove_dir_all(cache.root()).expect("cleanup");
     }
 
     #[tokio::test]
     async fn invalid_replacement_rolls_back_the_entire_index() {
-        let cache = fixture();
+        let (_temp, cache) = fixture();
         let mut connection = crate::store::db::open_migrated(&cache)
             .await
             .expect("database");
@@ -305,7 +302,6 @@ mod tests {
             original.files
         );
         connection.close().await.expect("close");
-        std::fs::remove_dir_all(cache.root()).expect("cleanup");
     }
     fn curseforge_files() -> Vec<StoredCurseforgeFile> {
         let file = |path: &str, sha1: Option<String>, md5: Option<String>| StoredCurseforgeFile {
@@ -328,7 +324,7 @@ mod tests {
 
     #[tokio::test]
     async fn curseforge_files_are_isolated_duplicated_and_deleted_with_the_instance() {
-        let cache = fixture();
+        let (_temp, cache) = fixture();
         let instances = cache.root().join("instances");
         let other = cache.root().join("other-instances");
         let database = crate::Database::open(&cache).await.expect("database");
@@ -385,12 +381,11 @@ mod tests {
             curseforge_files()
         );
         service.shutdown().await.expect("shutdown");
-        std::fs::remove_dir_all(cache.root()).expect("cleanup");
     }
 
     #[tokio::test]
     async fn a_curseforge_file_without_a_hash_rolls_back_the_replacement() {
-        let cache = fixture();
+        let (_temp, cache) = fixture();
         let mut connection = crate::store::db::open_migrated(&cache)
             .await
             .expect("database");
@@ -422,6 +417,5 @@ mod tests {
             original
         );
         connection.close().await.expect("close");
-        std::fs::remove_dir_all(cache.root()).expect("cleanup");
     }
 }

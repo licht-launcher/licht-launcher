@@ -209,9 +209,10 @@ async fn import_planned(
 #[cfg(test)]
 mod tests {
     use super::plan::{BlockedMod, PlannedFile};
-    use super::test_support::{temp_dir, zip_with};
+    use super::test_support::zip_with;
     use super::*;
     use crate::{GlobalLaunch, InstanceSource, ModpackSource, create_pending_instance};
+    use licht_testkit::temp::TempDir;
     use tokio::sync::mpsc;
 
     const SHA1: &str = "2aae6c35c94fcfb415dbe95f408b9ce91ee846ed";
@@ -243,7 +244,8 @@ mod tests {
             }],
             blocked: Vec::new(),
         };
-        let root = temp_dir("import");
+        let temp = TempDir::new("curse-import");
+        let root = temp.path().to_path_buf();
         let instances = root.join("instances");
         fs::create_dir_all(&instances).unwrap();
         let service = crate::DatabaseService::start(
@@ -300,7 +302,6 @@ mod tests {
             }]
         );
         service.shutdown().await.expect("shutdown");
-        let _ = fs::remove_dir_all(&root);
     }
 
     #[tokio::test]
@@ -322,7 +323,8 @@ mod tests {
             ],
             ..Plan::default()
         };
-        let root = temp_dir("blocked");
+        let temp = TempDir::new("curse-blocked");
+        let root = temp.path().to_path_buf();
         let instances = root.join("instances");
         fs::create_dir_all(&instances).unwrap();
         let service = crate::DatabaseService::start(
@@ -365,7 +367,6 @@ mod tests {
                 .is_empty()
         );
         service.shutdown().await.expect("shutdown");
-        let _ = fs::remove_dir_all(&root);
     }
 
     #[tokio::test]
@@ -377,7 +378,8 @@ mod tests {
             ),
             ("overrides/instance.json", b"pwned"),
         ]);
-        let root = temp_dir("override");
+        let temp = TempDir::new("curse-override");
+        let root = temp.path().to_path_buf();
         let instances = root.join("instances");
         fs::create_dir_all(&instances).unwrap();
         let service = crate::DatabaseService::start(
@@ -415,12 +417,12 @@ mod tests {
                 .exists()
         );
         service.shutdown().await.expect("shutdown");
-        let _ = fs::remove_dir_all(&root);
     }
 
     #[tokio::test]
     async fn skips_a_mod_whose_sha1_already_matches() {
-        let root = temp_dir("cached");
+        let temp = TempDir::new("curse-cached");
+        let root = temp.path().to_path_buf();
         let cache = SharedCache::at(root.join("cache"));
         let instance = root.join("instance");
         let mods = instance.join("mods");
@@ -454,12 +456,12 @@ mod tests {
         service.shutdown().await.expect("shutdown");
         installed.expect("cached file should not be downloaded");
         assert_eq!(fs::read(mods.join("a.jar")).unwrap(), b"hello world");
-        let _ = fs::remove_dir_all(&root);
     }
 
     #[tokio::test]
     async fn imports_a_legacy_index_into_sqlite_and_removes_the_file() {
-        let root = temp_dir("legacy");
+        let temp = TempDir::new("curse-legacy");
+        let root = temp.path().to_path_buf();
         let cache = SharedCache::at(root.join("cache"));
         let instance = root.join("instance");
         for path in ["mods/a.jar", "resourcepacks/b.zip"] {
@@ -500,12 +502,12 @@ mod tests {
                 ("resourcepacks/b.zip", None, Some(MD5), false),
             ]
         );
-        let _ = fs::remove_dir_all(&root);
     }
 
     #[tokio::test]
     async fn keeps_an_invalid_legacy_index_and_stores_nothing() {
-        let root = temp_dir("legacy-invalid");
+        let temp = TempDir::new("curse-legacy-invalid");
+        let root = temp.path().to_path_buf();
         let cache = SharedCache::at(root.join("cache"));
         let instance = root.join("instance");
         fs::create_dir_all(&instance).unwrap();
@@ -534,12 +536,12 @@ mod tests {
                 body
             );
         }
-        let _ = fs::remove_dir_all(&root);
     }
 
     #[tokio::test]
     async fn ignores_a_legacy_index_in_a_modrinth_instance() {
-        let root = temp_dir("legacy-modrinth");
+        let temp = TempDir::new("curse-legacy-modrinth");
+        let root = temp.path().to_path_buf();
         let cache = SharedCache::at(root.join("cache"));
         let instance = root.join("instance");
         fs::create_dir_all(&instance).unwrap();
@@ -562,12 +564,12 @@ mod tests {
         installed.expect("a Modrinth instance has no CurseForge files");
         assert!(stored.is_empty());
         assert!(instance.join(CURSEFORGE_INDEX_FILE).exists());
-        let _ = fs::remove_dir_all(&root);
     }
 
     #[tokio::test]
     async fn stored_files_take_precedence_over_a_leftover_legacy_index() {
-        let root = temp_dir("legacy-leftover");
+        let temp = TempDir::new("curse-legacy-leftover");
+        let root = temp.path().to_path_buf();
         let cache = SharedCache::at(root.join("cache"));
         let instance = root.join("instance");
         let mods = instance.join("mods");
@@ -603,7 +605,6 @@ mod tests {
         service.shutdown().await.expect("shutdown");
         installed.expect("the leftover file must not be parsed");
         assert_eq!(stored, files);
-        let _ = fs::remove_dir_all(&root);
     }
 
     #[cfg(windows)]
@@ -612,7 +613,8 @@ mod tests {
         use std::os::windows::fs::OpenOptionsExt;
 
         const FILE_SHARE_READ: u32 = 1;
-        let root = temp_dir("legacy-locked");
+        let temp = TempDir::new("curse-legacy-locked");
+        let root = temp.path().to_path_buf();
         let cache = SharedCache::at(root.join("cache"));
         let instance = root.join("instance");
         for path in ["mods/a.jar", "resourcepacks/b.zip"] {
@@ -650,7 +652,6 @@ mod tests {
         retried.expect("the retry imports the index");
         assert_eq!(stored_after_retry.len(), 2);
         assert!(!index.exists());
-        let _ = fs::remove_dir_all(&root);
     }
 
     fn modrinth_index() -> crate::modpacks::mrpack::storage::StoredModpack {

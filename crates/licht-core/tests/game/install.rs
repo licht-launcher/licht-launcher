@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -8,6 +7,7 @@ use licht_core::{
     DownloadProgress, GameArguments, InstallPlan, LaunchEnvironment, Library, LibraryDownloads,
     OsName, OsRule, Rule, RuleAction, SharedCache, Version, VersionDownloads, install_version,
 };
+use licht_testkit::temp::TempDir;
 use sha1::{Digest, Sha1};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
@@ -20,7 +20,8 @@ const NATIVE: &[u8] = b"native-64";
 
 #[tokio::test]
 async fn installing_twice_downloads_only_the_first_time() {
-    let directory = temporary_directory("install");
+    let temp = temporary_directory("install");
+    let directory = temp.path().to_path_buf();
     let cache = SharedCache::at(&directory);
     let server = serve().await;
     let asset_hash = sha1_hex(ASSET);
@@ -93,13 +94,12 @@ async fn installing_twice_downloads_only_the_first_time() {
         std::fs::read(cache.version_jar("1.21.11").unwrap()).unwrap(),
         CLIENT
     );
-
-    let _ = std::fs::remove_dir_all(directory);
 }
 
 #[tokio::test]
 async fn a_same_sized_file_stays_on_install_and_is_replaced_on_repair() {
-    let directory = temporary_directory("same-size");
+    let temp = temporary_directory("same-size");
+    let directory = temp.path().to_path_buf();
     let cache = SharedCache::at(&directory);
     let server = serve().await;
     let asset_hash = sha1_hex(ASSET);
@@ -152,13 +152,12 @@ async fn a_same_sized_file_stays_on_install_and_is_replaced_on_repair() {
     .expect("repair");
     assert!(server.requests.load(Ordering::SeqCst) > requests_after_install);
     assert_eq!(std::fs::read(&jar).unwrap(), CLIENT);
-
-    let _ = std::fs::remove_dir_all(directory);
 }
 
 #[tokio::test]
 async fn an_existing_file_with_no_published_size_is_replaced_when_its_contents_differ() {
-    let directory = temporary_directory("zero-size");
+    let temp = temporary_directory("zero-size");
+    let directory = temp.path().to_path_buf();
     let cache = SharedCache::at(&directory);
     let server = serve().await;
     let asset_hash = sha1_hex(ASSET);
@@ -208,13 +207,12 @@ async fn an_existing_file_with_no_published_size_is_replaced_when_its_contents_d
     .expect("replaced");
     assert!(server.requests.load(Ordering::SeqCst) > requests_after_install);
     assert_eq!(std::fs::read(&jar).unwrap(), CLIENT);
-
-    let _ = std::fs::remove_dir_all(directory);
 }
 
 #[tokio::test]
 async fn an_index_with_the_wrong_sha1_downloads_nothing() {
-    let directory = temporary_directory("bad-index");
+    let temp = temporary_directory("bad-index");
+    let directory = temp.path().to_path_buf();
     let cache = SharedCache::at(&directory);
     let server = serve().await;
     let asset_hash = sha1_hex(ASSET);
@@ -234,12 +232,12 @@ async fn an_index_with_the_wrong_sha1_downloads_nothing() {
 
     assert!(matches!(error, CoreError::Sha1Mismatch { .. }));
     assert_eq!(server.requests.load(Ordering::SeqCst), 0);
-    let _ = std::fs::remove_dir_all(directory);
 }
 
 #[tokio::test]
 async fn an_architecture_placeholder_downloads_only_that_native() {
-    let directory = temporary_directory("native-arch");
+    let temp = temporary_directory("native-arch");
+    let directory = temp.path().to_path_buf();
     let cache = SharedCache::at(&directory);
     let server = serve().await;
     let asset_hash = sha1_hex(ASSET);
@@ -312,12 +310,12 @@ async fn an_architecture_placeholder_downloads_only_that_native() {
             .unwrap()
             .exists()
     );
-    let _ = std::fs::remove_dir_all(directory);
 }
 
 #[tokio::test]
 async fn only_the_running_platform_native_is_stored() {
-    let directory = temporary_directory("natives-platform");
+    let temp = temporary_directory("natives-platform");
+    let directory = temp.path().to_path_buf();
     let cache = SharedCache::at(&directory);
     let server = serve().await;
     let asset_hash = sha1_hex(ASSET);
@@ -405,7 +403,6 @@ async fn only_the_running_platform_native_is_stored() {
             .expect("legacy 32 path")
             .exists()
     );
-    let _ = std::fs::remove_dir_all(directory);
 }
 
 fn native_jar(name: &str, path: &str, os_name: &str, base: &str) -> Library {
@@ -632,11 +629,8 @@ fn sha1_hex(bytes: &[u8]) -> String {
     hex
 }
 
-fn temporary_directory(name: &str) -> PathBuf {
-    let directory =
-        std::env::temp_dir().join(format!("licht-install-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&directory);
-    directory
+fn temporary_directory(name: &str) -> TempDir {
+    TempDir::new(&format!("install-{name}"))
 }
 
 async fn serve() -> Server {

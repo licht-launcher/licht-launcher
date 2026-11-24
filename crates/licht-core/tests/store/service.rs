@@ -1,6 +1,5 @@
 use sqlx::{Connection, SqliteConnection, sqlite::SqliteConnectOptions};
 use std::future::Future;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::task::Poll;
 
 use crate::{open_migrated, stored_last_played};
@@ -8,32 +7,19 @@ use licht_core::{
     CoreError, Database, DatabaseService, DownloadJobOperation, DownloadJobStatus,
     DownloadJobUpdate, DownloadPhase, DownloadProgress, SharedCache, db_path,
 };
-
-static NEXT_FIXTURE: AtomicU64 = AtomicU64::new(0);
+use licht_testkit::temp::TempDir;
 
 struct Fixture {
     cache: SharedCache,
+    _temp: TempDir,
 }
 
 impl Fixture {
     fn new() -> Self {
-        let sequence = NEXT_FIXTURE.fetch_add(1, Ordering::SeqCst);
+        let temp = TempDir::new("database-service");
         Self {
-            cache: SharedCache::at(std::env::temp_dir().join(format!(
-                "licht-database-service-{}-{sequence}",
-                std::process::id()
-            ))),
-        }
-    }
-}
-
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        if let Err(error) = std::fs::remove_dir_all(self.cache.root())
-            && error.kind() != std::io::ErrorKind::NotFound
-            && !std::thread::panicking()
-        {
-            panic!("fixture cleanup failed: {error}");
+            cache: SharedCache::at(temp.path().join("profile")),
+            _temp: temp,
         }
     }
 }

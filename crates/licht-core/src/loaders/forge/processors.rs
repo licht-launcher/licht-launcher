@@ -309,6 +309,8 @@ async fn execute_child(
 
 #[cfg(test)]
 mod tests {
+    use licht_testkit::temp::TempDir;
+
     use super::*;
 
     #[test]
@@ -333,11 +335,8 @@ mod tests {
             tokio::time::sleep(Duration::from_secs(60)).await;
             return;
         }
-        let root = std::env::temp_dir().join(format!(
-            "licht-processor-cancellation-{}",
-            std::process::id()
-        ));
-        fs::create_dir_all(&root).expect("fixture directory");
+        let temp = TempDir::new("processor-cancellation");
+        let root = temp.path().to_path_buf();
         let marker = root.join("pid.txt");
         if marker.exists() {
             fs::remove_file(&marker).expect("previous marker");
@@ -379,6 +378,5 @@ mod tests {
             .expect("worker");
         assert!(matches!(result, Err(CoreError::DownloadCancelled)));
         assert!(crate::process_start_time(pid).is_none());
-        fs::remove_dir_all(root).expect("cleanup");
     }
 }

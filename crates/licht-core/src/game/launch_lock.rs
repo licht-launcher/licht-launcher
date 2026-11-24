@@ -109,22 +109,22 @@ pub fn list_running_launch_folders(instances_dir: &Path) -> Result<Vec<String>> 
 
 #[cfg(test)]
 mod tests {
+    use licht_testkit::temp::TempDir;
+
     use super::*;
 
     #[test]
     fn launch_lock_round_trips_on_disk() {
-        let dir = std::env::temp_dir().join(format!("licht-launch-lock-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).expect("temp dir");
+        let temp = TempDir::new("launch-lock");
+        let dir = temp.path();
         let lock = LaunchLock {
             pid: 42,
             start_time: 1_700_000_000,
         };
-        write_launch_lock(&dir, &lock).expect("write");
-        assert_eq!(read_launch_lock(&dir).expect("read"), Some(lock));
-        clear_launch_lock(&dir).expect("clear");
-        assert_eq!(read_launch_lock(&dir).expect("gone"), None);
-        let _ = fs::remove_dir_all(&dir);
+        write_launch_lock(dir, &lock).expect("write");
+        assert_eq!(read_launch_lock(dir).expect("read"), Some(lock));
+        clear_launch_lock(dir).expect("clear");
+        assert_eq!(read_launch_lock(dir).expect("gone"), None);
     }
 
     #[test]

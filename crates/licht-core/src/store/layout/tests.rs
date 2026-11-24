@@ -6,17 +6,15 @@ use sqlx::{
     sqlite::{SqliteConnectOptions, SqliteJournalMode},
 };
 
+use licht_testkit::temp::TempDir;
+
 use super::*;
 
-pub(super) fn fixture(name: &str) -> (SharedCache, SharedCache) {
-    let root = std::env::temp_dir().join(format!(
-        "licht-layout-{name}-{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("time")
-            .as_nanos()
-    ));
+pub(super) fn fixture(name: &str) -> (TempDir, SharedCache, SharedCache) {
+    let temp = TempDir::new(&format!("layout-{name}"));
+    let root = temp.path().to_path_buf();
     (
+        temp,
         SharedCache::at(
             root.join("legacy")
                 .join("Licht")
@@ -42,7 +40,7 @@ async fn legacy_database(legacy: &SharedCache) -> SqliteConnection {
 
 #[tokio::test]
 async fn fresh_layout_places_settings_and_wal_database_at_the_launcher_root() {
-    let (legacy, home) = fixture("fresh");
+    let (_temp, legacy, home) = fixture("fresh");
     initialize_at(&legacy, &home).await.expect("initialize");
     assert_eq!(
         crate::settings::testing::game_cache_at(&home)
@@ -73,7 +71,7 @@ async fn fresh_layout_places_settings_and_wal_database_at_the_launcher_root() {
 
 #[tokio::test]
 async fn migration_preserves_files_settings_committed_wal_and_job_paths() {
-    let (legacy, home) = fixture("preserve");
+    let (_temp, legacy, home) = fixture("preserve");
     fs::create_dir_all(legacy.root().join("libraries")).expect("library directory");
     let artifact = legacy.root().join("libraries").join("one.jar");
     fs::write(&artifact, b"library").expect("library");
@@ -209,7 +207,7 @@ async fn migration_preserves_files_settings_committed_wal_and_job_paths() {
 
 #[tokio::test]
 async fn conflicting_destination_preserves_source_and_retries_after_resolution() {
-    let (legacy, home) = fixture("conflict");
+    let (_temp, legacy, home) = fixture("conflict");
     fs::create_dir_all(legacy.root().join("versions")).expect("legacy versions");
     fs::write(legacy.root().join("versions/file.json"), b"original").expect("original");
     fs::create_dir_all(home.root().join("data/versions")).expect("destination");
@@ -235,7 +233,7 @@ async fn conflicting_destination_preserves_source_and_retries_after_resolution()
 
 #[tokio::test]
 async fn migration_preserves_custom_game_directory_and_remaps_its_instance_root() {
-    let (legacy, home) = fixture("custom");
+    let (_temp, legacy, home) = fixture("custom");
     let chosen = home.root().parent().expect("parent").join("custom");
     fs::create_dir_all(legacy.root()).expect("legacy");
     let mut settings = crate::settings::load_settings_at(&legacy)
@@ -280,7 +278,7 @@ async fn migration_preserves_custom_game_directory_and_remaps_its_instance_root(
 
 #[tokio::test]
 async fn migration_retries_after_a_late_settings_conflict_without_rewriting_original_profiles() {
-    let (legacy, home) = fixture("late-conflict");
+    let (_temp, legacy, home) = fixture("late-conflict");
     fs::create_dir_all(legacy.root().join("runtime")).expect("runtime");
     let java = legacy.root().join("runtime").join("java.exe");
     fs::write(&java, b"java").expect("java");
@@ -320,7 +318,7 @@ async fn migration_retries_after_a_late_settings_conflict_without_rewriting_orig
 
 #[tokio::test]
 async fn migration_retries_after_its_settings_file_was_published_without_the_database() {
-    let (legacy, home) = fixture("published-settings");
+    let (_temp, legacy, home) = fixture("published-settings");
     let mut settings = crate::settings::load_settings_at(&legacy)
         .await
         .expect("defaults");
@@ -370,7 +368,7 @@ async fn migration_retries_after_its_settings_file_was_published_without_the_dat
 
 #[tokio::test]
 async fn concurrent_initializations_share_one_complete_migration() {
-    let (legacy, home) = fixture("concurrent");
+    let (_temp, legacy, home) = fixture("concurrent");
     fs::create_dir_all(legacy.root().join("versions")).expect("versions");
     fs::write(
         legacy.root().join("versions").join("fixture.json"),
@@ -396,7 +394,7 @@ async fn concurrent_initializations_share_one_complete_migration() {
 
 #[tokio::test]
 async fn migration_does_not_duplicate_instance_payloads_in_temporary_cache() {
-    let (legacy, home) = fixture("no-staged-world");
+    let (_temp, legacy, home) = fixture("no-staged-world");
     crate::settings::testing::save_settings_at(
         &legacy,
         &crate::settings::load_settings_at(&legacy)
@@ -444,7 +442,7 @@ async fn migration_does_not_duplicate_instance_payloads_in_temporary_cache() {
 
 #[test]
 fn migration_copies_preserve_modification_time_and_executable_permissions() {
-    let (legacy, home) = fixture("file-metadata");
+    let (_temp, legacy, home) = fixture("file-metadata");
     fs::create_dir_all(legacy.root()).expect("legacy directory");
     let source = legacy.root().join("java");
     let destination = home.root().join("data").join("java");
@@ -491,7 +489,7 @@ fn migration_copies_preserve_modification_time_and_executable_permissions() {
 
 #[tokio::test]
 async fn startup_progress_can_stop_migration_before_publishing_and_retry() {
-    let (legacy, home) = fixture("progress-cancellation");
+    let (_temp, legacy, home) = fixture("progress-cancellation");
     fs::create_dir_all(legacy.root().join("versions")).expect("versions");
     fs::write(
         legacy.root().join("versions").join("fixture.json"),
@@ -533,7 +531,7 @@ async fn write_legacy_settings(legacy: &SharedCache) {
 
 #[tokio::test]
 async fn migration_removes_the_verified_legacy_profile_and_its_empty_folders() {
-    let (legacy, home) = fixture("legacy-cleanup");
+    let (_temp, legacy, home) = fixture("legacy-cleanup");
     write_legacy_settings(&legacy).await;
     legacy_database(&legacy)
         .await
@@ -592,7 +590,7 @@ async fn migration_removes_the_verified_legacy_profile_and_its_empty_folders() {
 
 #[tokio::test]
 async fn startup_cleans_an_already_migrated_profile_and_keeps_what_differs() {
-    let (legacy, home) = fixture("legacy-cleanup-later");
+    let (_temp, legacy, home) = fixture("legacy-cleanup-later");
     initialize_at(&legacy, &home).await.expect("new profile");
     // A profile migrated before cleanup existed still holds its legacy copy.
     write_legacy_settings(&legacy).await;
@@ -640,7 +638,7 @@ async fn startup_cleans_an_already_migrated_profile_and_keeps_what_differs() {
 
 #[tokio::test]
 async fn a_stopped_legacy_cleanup_keeps_the_profile_and_retries_on_the_next_startup() {
-    let (legacy, home) = fixture("legacy-cleanup-retry");
+    let (_temp, legacy, home) = fixture("legacy-cleanup-retry");
     write_legacy_settings(&legacy).await;
     fs::create_dir_all(legacy.root().join("versions")).expect("versions");
     fs::write(legacy.root().join("versions/fixture.json"), b"fixture").expect("fixture");
@@ -697,7 +695,7 @@ async fn listed_instances(home: &SharedCache) -> Vec<crate::InstanceEntry> {
 
 #[tokio::test]
 async fn migration_registers_legacy_instance_profiles_and_their_icons() {
-    let (legacy, home) = fixture("legacy-profiles");
+    let (_temp, legacy, home) = fixture("legacy-profiles");
     write_legacy_settings(&legacy).await;
     fs::create_dir_all(legacy.root().join("runtime")).expect("runtime");
     let java = legacy.root().join("runtime").join("java.exe");
@@ -738,7 +736,7 @@ async fn migration_registers_legacy_instance_profiles_and_their_icons() {
 
 #[tokio::test]
 async fn startup_registers_profiles_left_by_an_earlier_migration_without_overwriting() {
-    let (legacy, home) = fixture("legacy-profiles-later");
+    let (_temp, legacy, home) = fixture("legacy-profiles-later");
     // A 0.3.0 profile: the database exists and migrated folders kept their profile files.
     crate::settings::testing::save_settings_at(
         &home,
@@ -831,7 +829,7 @@ async fn startup_migration_previews_use_temporary_fixtures_for_success_and_confl
 
 #[tokio::test]
 async fn startup_moves_settings_from_the_file_into_the_database() {
-    let (legacy, home) = fixture("settings-to-database");
+    let (_temp, legacy, home) = fixture("settings-to-database");
     fs::create_dir_all(home.root()).expect("home");
     fs::write(
         home.root().join("settings.json"),
@@ -860,7 +858,7 @@ async fn startup_moves_settings_from_the_file_into_the_database() {
 
 #[tokio::test]
 async fn startup_reads_update_preferences_before_migration_and_prefers_the_current_settings() {
-    let (legacy, home) = fixture("startup-preferences");
+    let (_temp, legacy, home) = fixture("startup-preferences");
     let mut old = crate::settings::load_settings_at(&legacy)
         .await
         .expect("defaults");
@@ -906,7 +904,7 @@ async fn held_open(path: &std::path::Path) -> bool {
 
 #[tokio::test]
 async fn an_open_pool_holds_the_database_until_it_closes() {
-    let (_, home) = fixture("pool-close");
+    let (_temp, _, home) = fixture("pool-close");
     let database = Database::open(&home).await.expect("database");
     let mut connection = database.acquire().await.expect("connection");
     sqlx::query("INSERT INTO meta VALUES ('pool', 'open')")
@@ -921,7 +919,7 @@ async fn an_open_pool_holds_the_database_until_it_closes() {
 
 #[tokio::test]
 async fn the_legacy_migration_publishes_a_database_nothing_holds_open() {
-    let (legacy, home) = fixture("migration-closed");
+    let (_temp, legacy, home) = fixture("migration-closed");
     let settings = crate::settings::load_settings_at(&legacy)
         .await
         .expect("defaults");
@@ -943,7 +941,7 @@ async fn the_legacy_migration_publishes_a_database_nothing_holds_open() {
 
 #[tokio::test]
 async fn startup_returns_the_open_profile_pool() {
-    let (legacy, home) = fixture("startup-pool");
+    let (_temp, legacy, home) = fixture("startup-pool");
     let database = initialize_at_with_progress(Some(&legacy), &home, &StartupReporter::default())
         .await
         .expect("initialize");

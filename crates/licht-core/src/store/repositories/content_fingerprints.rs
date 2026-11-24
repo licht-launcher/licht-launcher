@@ -73,15 +73,12 @@ impl ContentFingerprintRepository {
 mod tests {
     use super::*;
     use crate::{DatabaseService, SharedCache};
+    use licht_testkit::temp::TempDir;
 
-    fn cache() -> SharedCache {
-        SharedCache::at(std::env::temp_dir().join(format!(
-            "licht-content-repository-{}",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("time")
-                .as_nanos()
-        )))
+    fn cache() -> (TempDir, SharedCache) {
+        let temp = TempDir::new("content-repository");
+        let cache = SharedCache::at(temp.path());
+        (temp, cache)
     }
 
     fn entry(path: &str, size: i64) -> ContentFingerprint {
@@ -95,7 +92,7 @@ mod tests {
 
     #[tokio::test]
     async fn content_index_persists_and_isolates_instances_and_data_directories() {
-        let cache = cache();
+        let (_temp, cache) = cache();
         let other = SharedCache::at(cache.root().join("other-data"));
         let service =
             DatabaseService::start(crate::Database::open(&cache).await.expect("database"))
@@ -140,7 +137,7 @@ mod tests {
 
     #[tokio::test]
     async fn content_index_sync_updates_adds_and_removes_only_its_instance_entries() {
-        let cache = cache();
+        let (_temp, cache) = cache();
         let service =
             DatabaseService::start(crate::Database::open(&cache).await.expect("database"))
                 .await
@@ -179,7 +176,7 @@ mod tests {
 
     #[tokio::test]
     async fn content_index_sync_rolls_back_removals_when_an_update_fails() {
-        let cache = cache();
+        let (_temp, cache) = cache();
         let service =
             DatabaseService::start(crate::Database::open(&cache).await.expect("database"))
                 .await

@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 async fn content_reuses_persisted_fingerprints_and_manual_refresh_revalidates_bytes() {
-    let cache = cache("fingerprint-refresh");
+    let (_temp, cache) = cache("fingerprint-refresh");
     let root = instance(&cache);
     let path = root.join("mods").join("one.jar");
     fs::write(&path, b"old").expect("original mod");
@@ -58,7 +58,7 @@ async fn content_reuses_persisted_fingerprints_and_manual_refresh_revalidates_by
 
 #[tokio::test]
 async fn content_detects_added_resized_and_removed_files() {
-    let cache = cache("fingerprint-changes");
+    let (_temp, cache) = cache("fingerprint-changes");
     let root = instance(&cache);
     let path = root.join("mods").join("one.jar");
     let removed = root.join("mods").join("removed.jar");
@@ -131,7 +131,7 @@ async fn content_detects_added_resized_and_removed_files() {
 
 #[tokio::test]
 async fn content_detects_mtime_changes_even_when_size_is_unchanged() {
-    let cache = cache("fingerprint-mtime");
+    let (_temp, cache) = cache("fingerprint-mtime");
     let root = instance(&cache);
     let path = root.join("mods").join("one.jar");
     fs::write(&path, b"old").expect("original");

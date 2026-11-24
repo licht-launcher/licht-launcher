@@ -378,6 +378,7 @@ async fn read_text(client: &reqwest::Client, url: &str) -> Result<String> {
 mod tests {
     use super::*;
     use crate::hashes::sha1_hex;
+    use licht_testkit::temp::TempDir;
 
     fn environment() -> LaunchEnvironment {
         LaunchEnvironment {
@@ -388,18 +389,11 @@ mod tests {
         }
     }
 
-    fn temp_cache(label: &str) -> SharedCache {
-        let stamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("time")
-            .as_nanos();
-        let root = std::env::temp_dir().join(format!(
-            "licht-manifest-{label}-{}-{stamp}",
-            std::process::id()
-        ));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(root.join("versions")).unwrap();
-        SharedCache::at(root)
+    fn temp_cache(label: &str) -> (TempDir, SharedCache) {
+        let temp = TempDir::new(&format!("manifest-{label}"));
+        std::fs::create_dir_all(temp.path().join("versions")).unwrap();
+        let cache = SharedCache::at(temp.path().to_path_buf());
+        (temp, cache)
     }
 
     /// Returns the base URL of a host that drops every connection without answering.
@@ -429,18 +423,17 @@ mod tests {
 
     #[test]
     fn writes_and_reads_the_manifest_cache() {
-        let cache = temp_cache("roundtrip");
+        let (_temp, cache) = temp_cache("roundtrip");
         let body = include_str!("../../tests/fixtures/version_manifest_v2.json");
         write_manifest_cache(&cache, body).expect("write");
         let loaded = read_manifest_cache(&cache).expect("read");
         let manifest = parse_version_manifest(&loaded).expect("parse");
         assert!(!manifest.versions.is_empty());
-        let _ = std::fs::remove_dir_all(cache.root());
     }
 
     #[test]
     fn lists_installed_versions_without_a_manifest() {
-        let cache = temp_cache("installed");
+        let (_temp, cache) = temp_cache("installed");
         let id = "1.20.1";
         let dir = cache.root().join("versions").join(id);
         std::fs::create_dir_all(&dir).unwrap();
@@ -455,12 +448,11 @@ mod tests {
         assert_eq!(summaries.len(), 1);
         assert_eq!(summaries[0].id, id);
         assert!(summaries[0].installed);
-        let _ = std::fs::remove_dir_all(cache.root());
     }
 
     #[test]
     fn ready_when_jar_exists_or_loader_parent_has_a_jar() {
-        let cache = temp_cache("ready");
+        let (_temp, cache) = temp_cache("ready");
         let vanilla = "1.20.1";
         let vanilla_dir = cache.root().join("versions").join(vanilla);
         std::fs::create_dir_all(&vanilla_dir).unwrap();
@@ -491,7 +483,6 @@ mod tests {
         std::fs::create_dir_all(loader_jar.parent().expect("loader parent")).unwrap();
         std::fs::write(loader_jar, b"loader").unwrap();
         assert!(is_version_ready(&cache, loader, &environment()));
-        let _ = std::fs::remove_dir_all(cache.root());
     }
 
     #[test]
@@ -506,7 +497,7 @@ mod tests {
                     os_version: String::new(),
                     features: std::collections::BTreeMap::new(),
                 };
-                let cache = temp_cache("platform-readiness");
+                let (_temp, cache) = temp_cache("platform-readiness");
                 let id = "1.21.11";
                 let profile = cache.version_json(id).expect("profile");
                 std::fs::create_dir_all(profile.parent().expect("parent"))
@@ -578,14 +569,13 @@ mod tests {
                         .iter()
                         .all(|summary| !summary.installed)
                 );
-                std::fs::remove_dir_all(cache.root()).expect("cleanup");
             }
         }
     }
 
     #[test]
     fn readiness_checks_presence_instead_of_rehashing_installed_payloads() {
-        let cache = temp_cache("lightweight-readiness");
+        let (_temp, cache) = temp_cache("lightweight-readiness");
         let id = "1.20.1";
         let profile = cache.version_json(id).expect("profile");
         std::fs::create_dir_all(profile.parent().expect("parent")).expect("version directory");
@@ -618,12 +608,11 @@ mod tests {
         std::fs::write(&client, b"client").expect("restore client");
         std::fs::write(&profile, b"invalid metadata").expect("invalid profile");
         assert!(!is_version_ready(&cache, id, &environment()));
-        std::fs::remove_dir_all(cache.root()).expect("cleanup");
     }
 
     #[test]
     fn lightweight_readiness_rejects_invalid_published_hash_metadata() {
-        let cache = temp_cache("readiness-hash-metadata");
+        let (_temp, cache) = temp_cache("readiness-hash-metadata");
         let id = "1.20.1";
         let profile = cache.version_json(id).expect("profile");
         std::fs::create_dir_all(profile.parent().expect("parent")).expect("directory");
@@ -650,12 +639,11 @@ mod tests {
         }}}]);
         std::fs::write(&profile, serde_json::to_vec(&invalid).expect("JSON")).expect("profile");
         assert!(!is_version_ready(&cache, id, &environment()));
-        std::fs::remove_dir_all(cache.root()).expect("cleanup");
     }
 
     #[tokio::test]
     async fn both_hosts_fail_then_cache_hit() {
-        let cache = temp_cache("cache-hit");
+        let (_temp, cache) = temp_cache("cache-hit");
         let body = include_str!("../../tests/fixtures/version_manifest_v2.json");
         write_manifest_cache(&cache, body).expect("write");
         let client = reqwest::Client::builder()
@@ -667,12 +655,11 @@ mod tests {
             .await
             .expect("cache");
         assert!(!manifest.versions.is_empty());
-        let _ = std::fs::remove_dir_all(cache.root());
     }
 
     #[tokio::test]
     async fn fresh_cache_skips_network() {
-        let cache = temp_cache("fresh-ttl");
+        let (_temp, cache) = temp_cache("fresh-ttl");
         let body = include_str!("../../tests/fixtures/version_manifest_v2.json");
         write_manifest_cache(&cache, body).expect("write");
         assert!(manifest_cache_is_fresh(&cache, MANIFEST_CACHE_TTL));
@@ -686,12 +673,11 @@ mod tests {
             .await
             .expect("fresh cache");
         assert!(!manifest.versions.is_empty());
-        let _ = std::fs::remove_dir_all(cache.root());
     }
 
     #[tokio::test]
     async fn expired_cache_falls_back_after_network_failure() {
-        let cache = temp_cache("expired-ttl");
+        let (_temp, cache) = temp_cache("expired-ttl");
         let body = include_str!("../../tests/fixtures/version_manifest_v2.json");
         write_manifest_cache(&cache, body).expect("write");
         let path = version_manifest_cache_path(&cache);
@@ -712,12 +698,11 @@ mod tests {
             .await
             .expect("stale cache fallback");
         assert!(!manifest.versions.is_empty());
-        let _ = std::fs::remove_dir_all(cache.root());
     }
 
     #[tokio::test]
     async fn both_hosts_fail_and_no_cache_is_unavailable() {
-        let cache = temp_cache("no-cache");
+        let (_temp, cache) = temp_cache("no-cache");
         let client = reqwest::Client::builder()
             .timeout(Duration::from_millis(200))
             .build()
@@ -727,7 +712,6 @@ mod tests {
             .await
             .expect_err("unavailable");
         assert!(matches!(error, CoreError::VersionManifestUnavailable));
-        let _ = std::fs::remove_dir_all(cache.root());
     }
 
     #[tokio::test]
@@ -766,7 +750,7 @@ mod tests {
             let _ = socket.write_all(response_body.as_bytes()).await;
         });
 
-        let cache = temp_cache("legacy-ok");
+        let (_temp, cache) = temp_cache("legacy-ok");
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(5))
             .build()
@@ -778,12 +762,11 @@ mod tests {
             .expect("legacy");
         assert!(!manifest.versions.is_empty());
         assert!(version_manifest_cache_path(&cache).is_file());
-        let _ = std::fs::remove_dir_all(cache.root());
     }
 
     #[tokio::test]
     async fn list_summaries_falls_back_to_installed_only() {
-        let cache = temp_cache("installed-only");
+        let (_temp, cache) = temp_cache("installed-only");
         let id = "1.20.1";
         let dir = cache.root().join("versions").join(id);
         std::fs::create_dir_all(&dir).unwrap();
@@ -807,6 +790,5 @@ mod tests {
         let installed = list_installed_version_summaries(&cache, &environment());
         assert_eq!(installed.len(), 1);
         assert_eq!(installed[0].id, id);
-        let _ = std::fs::remove_dir_all(cache.root());
     }
 }

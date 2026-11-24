@@ -126,6 +126,8 @@ impl Default for BandwidthLimiter {
 
 #[cfg(test)]
 mod tests {
+    use licht_testkit::temp::TempDir;
+
     use super::*;
 
     #[tokio::test(start_paused = true)]
@@ -218,12 +220,8 @@ mod tests {
                 reply.await.expect("fixture reply");
             }
         });
-        let stamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos();
-        let directory =
-            std::env::temp_dir().join(format!("licht-bandwidth-{}-{stamp}", std::process::id()));
+        let temp = TempDir::new("bandwidth");
+        let directory = temp.path().to_path_buf();
         let tasks: Vec<_> = (0..2)
             .map(|index| crate::DownloadTask {
                 url: url.clone(),
@@ -270,6 +268,5 @@ mod tests {
             );
         }
         server.await.expect("server");
-        std::fs::remove_dir_all(directory).expect("cleanup");
     }
 }

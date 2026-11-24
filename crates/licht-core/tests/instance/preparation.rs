@@ -4,10 +4,12 @@ use licht_core::{
     create_pending_instance, instance_version_for_launch, list_instances, load_instance,
     update_instance_version,
 };
+use licht_testkit::temp::TempDir;
 
 #[tokio::test]
 async fn a_modpack_instance_exists_before_its_version_is_resolved_and_cannot_launch() {
-    let root = root("pack");
+    let temp = root("pack");
+    let root = temp.path().to_path_buf();
     let service = super::database(&root).await;
     let client = service.client();
     let source = InstanceSource::Modpack {
@@ -86,12 +88,12 @@ async fn a_modpack_instance_exists_before_its_version_is_resolved_and_cannot_lau
         "fabric-loader-0.16.10-1.21.1"
     );
     service.shutdown().await.expect("shutdown");
-    std::fs::remove_dir_all(root).expect("cleanup");
 }
 
 #[tokio::test]
 async fn every_loader_keeps_its_selection_on_disk_before_downloading() {
-    let root = root("loaders");
+    let temp = root("loaders");
+    let root = temp.path().to_path_buf();
     let service = super::database(&root).await;
     let client = service.client();
     for platform in [
@@ -128,7 +130,6 @@ async fn every_loader_keeps_its_selection_on_disk_before_downloading() {
         ));
     }
     service.shutdown().await.expect("shutdown");
-    std::fs::remove_dir_all(root).expect("cleanup");
 }
 
 fn template() -> GlobalLaunch {
@@ -141,13 +142,14 @@ fn template() -> GlobalLaunch {
     }
 }
 
-fn root(name: &str) -> std::path::PathBuf {
-    std::env::temp_dir().join(format!("licht-pending-{name}-{}", std::process::id()))
+fn root(name: &str) -> TempDir {
+    TempDir::new(&format!("pending-{name}"))
 }
 
 #[tokio::test]
 async fn a_pending_instance_may_share_a_name_and_gets_its_own_folder() {
-    let root = root("pending-twin");
+    let temp = root("pending-twin");
+    let root = temp.path().to_path_buf();
     let service = super::database(&root).await;
     let client = service.client();
     let source = InstanceSource::Vanilla {

@@ -1,8 +1,9 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
+use licht_testkit::temp::TempDir;
 use zip::write::SimpleFileOptions;
 
 use super::{archive, artifacts, processors, receipt};
@@ -26,17 +27,9 @@ fn modpack_build_without_the_game_prefix_is_accepted() {
     assert!(url.ends_with("/forge-1.20.1-47.3.0-installer.jar"));
 }
 
-fn directory() -> PathBuf {
-    let root = std::env::temp_dir().join(format!(
-        "licht loader tests {}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("time")
-            .as_nanos()
-    ));
-    fs::create_dir_all(&root).expect("mkdir");
-    root
+/// The folder name has spaces on purpose: installer paths must survive them.
+fn directory() -> TempDir {
+    TempDir::new("loader tests")
 }
 
 fn jar(path: &Path, entries: &[(&str, &[u8])]) {
@@ -78,7 +71,8 @@ fn offline_client() -> reqwest::Client {
 #[tokio::test]
 async fn prepared_forge_profiles_are_reused_without_resolving_checksums_again() {
     for family in [super::ForgeFamily::Forge, super::ForgeFamily::NeoForge] {
-        let root = directory();
+        let temp = directory();
+        let root = temp.path().to_path_buf();
         let cache = SharedCache::at(&root);
         let path = root.join("installer.jar");
         jar(&path, &[("unused", b"fixture")]);
@@ -124,13 +118,13 @@ async fn prepared_forge_profiles_are_reused_without_resolving_checksums_again() 
         );
         drop(initial);
         drop(reopened);
-        fs::remove_dir_all(root).expect("cleanup");
     }
 }
 
 #[tokio::test]
 async fn tampered_prepared_profile_is_rebuilt_from_the_installer() {
-    let root = directory();
+    let temp = directory();
+    let root = temp.path().to_path_buf();
     let cache = SharedCache::at(&root);
     let path = root.join("installer.jar");
     jar(&path, &[("unused", b"fixture")]);
@@ -165,12 +159,12 @@ async fn tampered_prepared_profile_is_rebuilt_from_the_installer() {
     drop(initial);
     drop(reopened);
     drop(reopened_without_hash);
-    fs::remove_dir_all(root).expect("cleanup");
 }
 
 #[tokio::test]
 async fn prepared_profile_cache_requires_a_matching_request_and_valid_checksum() {
-    let root = directory();
+    let temp = directory();
+    let root = temp.path().to_path_buf();
     let cache = SharedCache::at(&root);
     let path = root.join("installer.jar");
     jar(&path, &[("unused", b"fixture")]);
@@ -218,12 +212,12 @@ async fn prepared_profile_cache_requires_a_matching_request_and_valid_checksum()
             .is_none()
     );
     drop(initial);
-    fs::remove_dir_all(root).expect("cleanup");
 }
 
 #[test]
 fn receipt_detects_tampered_libraries_client_and_profiles() {
-    let root = directory();
+    let temp = directory();
+    let root = temp.path().to_path_buf();
     let cache = SharedCache::at(&root);
     let profile = cache.version_json("forge-fixture").expect("profile");
     fs::create_dir_all(profile.parent().expect("parent")).expect("mkdir");
@@ -246,11 +240,11 @@ fn receipt_detects_tampered_libraries_client_and_profiles() {
     fs::write(&client, b"client").expect("restore");
     fs::write(&profile, b"{\"modified\":true}").expect("change profile");
     assert!(!receipt::ready(&cache, "forge-fixture"));
-    fs::remove_dir_all(root).expect("cleanup");
 }
 
-fn launch_fixture() -> (SharedCache, crate::Version) {
-    let cache = SharedCache::at(directory());
+fn launch_fixture() -> (TempDir, SharedCache, crate::Version) {
+    let temp = directory();
+    let cache = SharedCache::at(temp.path());
     let mut profile: serde_json::Value =
         serde_json::from_str(include_str!("../../../tests/fixtures/version-1.20.6.json"))
             .expect("Mojang fixture");
@@ -276,12 +270,12 @@ fn launch_fixture() -> (SharedCache, crate::Version) {
     fs::write(&library, b"library").expect("library");
     receipt::record(&cache, "forge-fixture", &[library]).expect("receipt");
     let version = crate::parse_version(&profile.to_string()).expect("version");
-    (cache, version)
+    (temp, cache, version)
 }
 
 #[test]
 fn direct_forge_launch_does_not_rehash_installed_binaries() {
-    let (cache, version) = launch_fixture();
+    let (_temp, cache, version) = launch_fixture();
     fs::write(
         cache.version_jar("forge-fixture").expect("client"),
         b"changed client",
@@ -321,12 +315,11 @@ fn direct_forge_launch_does_not_rehash_installed_binaries() {
         .expect("lightweight direct launch check");
         assert!(command.iter().any(|argument| argument == "fixture.Main"));
     }
-    fs::remove_dir_all(cache.root()).expect("cleanup");
 }
 
 #[test]
 fn direct_forge_launch_rejects_missing_outputs_or_changed_profile_metadata() {
-    let (cache, version) = launch_fixture();
+    let (_temp, cache, version) = launch_fixture();
     let environment = crate::LaunchEnvironment {
         os: OsName::Windows,
         arch: crate::Arch::X86_64,
@@ -383,12 +376,11 @@ fn direct_forge_launch_rejects_missing_outputs_or_changed_profile_metadata() {
         ),
         Err(CoreError::LoaderInstall { .. })
     ));
-    fs::remove_dir_all(cache.root()).expect("cleanup");
 }
 
 #[test]
 fn direct_forge_launch_requires_a_completed_installation_receipt() {
-    let (cache, version) = launch_fixture();
+    let (_temp, cache, version) = launch_fixture();
     let environment = crate::LaunchEnvironment {
         os: OsName::Windows,
         arch: crate::Arch::X86_64,
@@ -428,12 +420,12 @@ fn direct_forge_launch_requires_a_completed_installation_receipt() {
             Err(CoreError::LoaderInstall { .. })
         ));
     }
-    fs::remove_dir_all(cache.root()).expect("cleanup");
 }
 
 #[test]
 fn embedded_bytes_are_checked_before_publishing_and_archive_paths_are_validated() {
-    let root = directory();
+    let temp = directory();
+    let root = temp.path().to_path_buf();
     let destination = root.join("library.jar");
     let expected = crate::hashes::sha1_hex(b"verified");
     assert!(artifacts::write_verified(&destination, b"wrong", &expected).is_err());
@@ -456,7 +448,6 @@ fn embedded_bytes_are_checked_before_publishing_and_archive_paths_are_validated(
         b"patch"
     );
     drop(archive);
-    fs::remove_dir_all(root).expect("cleanup");
 }
 
 fn processor() -> archive::Processor {
@@ -471,7 +462,8 @@ fn processor() -> archive::Processor {
 
 #[test]
 fn processor_command_uses_manifest_main_class_and_platform_separator() {
-    let root = directory();
+    let temp = directory();
+    let root = temp.path().to_path_buf();
     let cache = SharedCache::at(&root);
     let processor_jar = cache
         .library(&artifacts::maven_path("demo:processor:1").expect("coordinate"))
@@ -514,12 +506,12 @@ fn processor_command_uses_manifest_main_class_and_platform_separator() {
         )
         .is_err()
     );
-    fs::remove_dir_all(root).expect("cleanup");
 }
 
 #[tokio::test]
 async fn processor_failure_is_reported_and_server_processors_are_not_run() {
-    let root = directory();
+    let temp = directory();
+    let root = temp.path().to_path_buf();
     let cache = SharedCache::at(&root);
     cache.create().expect("cache");
     let archive_path = root.join("installer.jar");
@@ -583,7 +575,6 @@ async fn processor_failure_is_reported_and_server_processors_are_not_run() {
         CoreError::LoaderProcessor { processor: 1, .. }
     ));
     drop(installer);
-    fs::remove_dir_all(root).expect("cleanup");
 }
 
 fn loader_environment() -> crate::LaunchEnvironment {
@@ -597,7 +588,7 @@ fn loader_environment() -> crate::LaunchEnvironment {
 
 #[tokio::test]
 async fn reuse_keeps_a_loader_library_when_the_receipt_files_exist() {
-    let (cache, _) = launch_fixture();
+    let (_temp, cache, _) = launch_fixture();
     let library = cache
         .library("demo/library/1/library-1.jar")
         .expect("library");
@@ -621,12 +612,11 @@ async fn reuse_keeps_a_loader_library_when_the_receipt_files_exist() {
     assert!(kept.is_none());
     assert_eq!(fs::read(&library).expect("library"), changed);
     settings.close().await;
-    fs::remove_dir_all(cache.root()).expect("cleanup");
 }
 
 #[tokio::test]
 async fn repair_does_not_accept_a_loader_library_whose_bytes_changed() {
-    let (cache, _) = launch_fixture();
+    let (_temp, cache, _) = launch_fixture();
     let library = cache
         .library("demo/library/1/library-1.jar")
         .expect("library");
@@ -649,12 +639,11 @@ async fn repair_does_not_accept_a_loader_library_whose_bytes_changed() {
     );
     assert_eq!(fs::read(&library).expect("library"), changed);
     settings.close().await;
-    fs::remove_dir_all(cache.root()).expect("cleanup");
 }
 
 #[tokio::test]
 async fn reuse_does_not_skip_a_loader_whose_library_is_missing() {
-    let (cache, _) = launch_fixture();
+    let (_temp, cache, _) = launch_fixture();
     let library = cache
         .library("demo/library/1/library-1.jar")
         .expect("library");
@@ -675,12 +664,12 @@ async fn reuse_does_not_skip_a_loader_whose_library_is_missing() {
         .is_err()
     );
     settings.close().await;
-    fs::remove_dir_all(cache.root()).expect("cleanup");
 }
 
 #[tokio::test]
 async fn an_existing_loader_profile_is_reused_without_checking_library_bytes() {
-    let root = directory();
+    let temp = directory();
+    let root = temp.path().to_path_buf();
     let cache = SharedCache::at(&root);
     let id = "forge-50.0.1";
     let profile = cache.version_json(id).expect("profile");
@@ -709,5 +698,4 @@ async fn an_existing_loader_profile_is_reused_without_checking_library_bytes() {
     .expect("existing loader");
     assert_eq!(reused, id);
     assert_eq!(fs::read(&library).expect("library"), changed);
-    fs::remove_dir_all(root).expect("cleanup");
 }

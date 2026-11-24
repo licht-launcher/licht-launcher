@@ -404,14 +404,14 @@ pub async fn clear_last_played_folder(database: &Database) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use licht_testkit::temp::TempDir;
+
     use super::*;
 
     #[tokio::test]
     async fn a_reconnect_after_the_file_is_gone_does_not_create_an_empty_database() {
-        let cache = SharedCache::at(
-            std::env::temp_dir().join(format!("licht-db-reconnect-{}", std::process::id())),
-        );
-        let _ = std::fs::remove_dir_all(cache.root());
+        let temp = TempDir::new("db-reconnect");
+        let cache = SharedCache::at(temp.path());
         let database = Database::open(&cache).await.expect("database");
         // Take every pooled connection out of the pool, so the next acquire reconnects.
         while database.pool.size() > 0 {

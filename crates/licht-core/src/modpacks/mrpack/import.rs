@@ -36,9 +36,9 @@ pub(crate) async fn import_mrpack_into(
 mod tests {
     use super::*;
     use crate::{GlobalLaunch, InstanceSource, ModpackSource, create_pending_instance};
+    use licht_testkit::temp::TempDir;
     use std::fs;
     use std::io::{Cursor, Write};
-    use std::path::PathBuf;
     use zip::CompressionMethod;
     use zip::write::SimpleFileOptions;
 
@@ -60,8 +60,8 @@ mod tests {
             zip.finish().unwrap();
         }
         let bytes = buffer.into_inner();
-        let root = std::env::temp_dir().join(format!("licht-mrpack-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&root);
+        let temp = TempDir::new("mrpack");
+        let root = temp.path().to_path_buf();
         let instances = root.join("instances");
         fs::create_dir_all(&instances).unwrap();
         let service = crate::DatabaseService::start(
@@ -100,7 +100,6 @@ mod tests {
             [("minecraft".to_string(), "1.20.1".to_string())]
         );
         service.shutdown().await.expect("shutdown");
-        let _ = fs::remove_dir_all(&root);
     }
 
     #[tokio::test]
@@ -122,7 +121,8 @@ mod tests {
                 ),
                 (name, b"pwned"),
             ]);
-            let root = temp_dir("override");
+            let temp = TempDir::new("mrpack-override");
+            let root = temp.path().to_path_buf();
             let instances = root.join("instances");
             fs::create_dir_all(&instances).unwrap();
             let service = crate::DatabaseService::start(
@@ -155,7 +155,6 @@ mod tests {
             assert!(!instance_dir.join("C:evil.txt").exists(), "{name}");
             assert!(!instance_dir.join("CON").exists(), "{name}");
             service.shutdown().await.expect("shutdown");
-            let _ = fs::remove_dir_all(&root);
         }
     }
 
@@ -184,20 +183,6 @@ mod tests {
         )
         .await
         .expect("pending instance")
-    }
-
-    fn temp_dir(label: &str) -> PathBuf {
-        let stamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("time")
-            .as_nanos();
-        let root = std::env::temp_dir().join(format!(
-            "licht-mrpack-{label}-{}-{stamp}",
-            std::process::id()
-        ));
-        let _ = fs::remove_dir_all(&root);
-        fs::create_dir_all(&root).unwrap();
-        root
     }
 
     fn zip_with(files: &[(&str, &[u8])]) -> Vec<u8> {

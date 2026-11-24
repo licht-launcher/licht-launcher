@@ -8,6 +8,7 @@ use licht_core::{
     SharedCache, Version, VersionDownloads, install_version, offline_account,
     prepare_offline_launch,
 };
+use licht_testkit::temp::TempDir;
 use sha1::{Digest, Sha1};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
@@ -40,8 +41,8 @@ fn steve_has_the_offline_uuid() {
 
 #[tokio::test]
 async fn an_installed_version_launches_offline_with_its_client_jar() {
-    let directory = std::env::temp_dir().join(format!("licht-offline-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&directory);
+    let temp = TempDir::new("offline");
+    let directory = temp.path().to_path_buf();
     let cache = SharedCache::at(&directory);
     let settings = licht_core::Database::open(&SharedCache::at(directory.join("settings")))
         .await
@@ -112,17 +113,13 @@ async fn an_installed_version_launches_offline_with_its_client_jar() {
     assert_eq!(std::fs::read(&jar).expect("jar still there"), CLIENT);
 
     database.shutdown().await.expect("shutdown");
-    let _ = std::fs::remove_dir_all(directory);
 }
 
 #[tokio::test]
 async fn two_offline_instances_reuse_an_extraction_without_reopening_native_archives() {
     use std::io::Write;
-    let stamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .expect("clock")
-        .as_nanos();
-    let root = std::env::temp_dir().join(format!("licht-offline-native-cache-{stamp}"));
+    let temp = TempDir::new("offline-native-cache");
+    let root = temp.path().to_path_buf();
     let cache = SharedCache::at(root.join("data"));
     let database = licht_core::DatabaseService::start(
         licht_core::Database::open(&SharedCache::at(root.join("settings")))
@@ -210,13 +207,12 @@ async fn two_offline_instances_reuse_an_extraction_without_reopening_native_arch
         .expect("native argument");
     assert_eq!(PathBuf::from(&second.command[position + 1]), natives);
     database.shutdown().await.expect("shutdown");
-    std::fs::remove_dir_all(root).expect("cleanup");
 }
 
 #[tokio::test]
 async fn a_launchwrapper_version_uses_the_instance_as_its_default_folder() {
-    let directory = std::env::temp_dir().join(format!("licht-wrapper-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&directory);
+    let temp = TempDir::new("wrapper");
+    let directory = temp.path().to_path_buf();
     let cache = SharedCache::at(directory.join("data"));
     let database = licht_core::DatabaseService::start(
         licht_core::Database::open(&SharedCache::at(directory.join("settings")))
@@ -306,14 +302,12 @@ async fn a_launchwrapper_version_uses_the_instance_as_its_default_folder() {
     );
 
     database.shutdown().await.expect("shutdown");
-    let _ = std::fs::remove_dir_all(directory);
 }
 
 #[tokio::test]
 async fn a_launchwrapper_game_copies_resources_and_keeps_auth_session_literal() {
-    let directory =
-        std::env::temp_dir().join(format!("licht-assets-launch-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&directory);
+    let temp = TempDir::new("assets-launch");
+    let directory = temp.path().to_path_buf();
     let cache = SharedCache::at(directory.join("data"));
     let database = licht_core::DatabaseService::start(
         licht_core::Database::open(&SharedCache::at(directory.join("settings")))
@@ -374,7 +368,6 @@ async fn a_launchwrapper_game_copies_resources_and_keeps_auth_session_literal() 
     );
 
     database.shutdown().await.expect("shutdown");
-    let _ = std::fs::remove_dir_all(directory);
 }
 
 fn wrapped(main_class: &str, library_name: Option<&str>) -> Version {

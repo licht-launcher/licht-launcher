@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 async fn progressive_content_publishes_local_rows_before_database_failure() {
-    let cache = cache("progressive-before-database");
+    let (_temp, cache) = cache("progressive-before-database");
     let root = instance(&cache);
     fs::write(root.join("mods").join("one.jar"), b"mod").expect("mod");
     let service =
@@ -32,7 +32,7 @@ async fn progressive_content_publishes_local_rows_before_database_failure() {
 
 #[tokio::test]
 async fn progressive_content_propagates_publication_failure() {
-    let cache = cache("progressive-emission-error");
+    let (_temp, cache) = cache("progressive-emission-error");
     instance(&cache);
     let service =
         crate::DatabaseService::start(crate::Database::open(&cache).await.expect("database"))
@@ -112,7 +112,7 @@ fn progressive_content_batches_are_throttled_and_errors_propagate() {
 
 #[tokio::test]
 async fn progressive_content_measures_first_list_and_completion_with_local_fixtures() {
-    let cache = cache("progressive-latency");
+    let (_temp, cache) = cache("progressive-latency");
     let root = instance(&cache);
     for index in 0..256 {
         fs::write(

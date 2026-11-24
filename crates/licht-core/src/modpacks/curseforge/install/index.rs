@@ -147,7 +147,7 @@ fn present_hash(value: &Option<String>) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::modpacks::curseforge::install::test_support::temp_dir;
+    use licht_testkit::temp::TempDir;
 
     #[test]
     fn rejects_an_index_url_or_path_outside_the_allowlist() {
@@ -176,13 +176,13 @@ mod tests {
             "mods/a.jar",
             "https://edge.forgecdn.net/files/1/2/a.jar?api-key=secret",
         );
-        let root = temp_dir("pick");
+        let temp = TempDir::new("curse-pick");
+        let root = temp.path().to_path_buf();
         let task = pending_task(&keyed, &root)
             .expect("task")
             .expect("download");
         assert!(task.task.url.contains("edge.forgecdn.net"));
         assert!(!task.task.url.contains("secret"));
-        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]
@@ -193,9 +193,9 @@ mod tests {
         assert!(matches!(error, CoreError::ModpackArchive));
 
         file.md5 = Some("5eb63bbbe01eeed093cb22bb8f5acdc3".into());
-        let root = temp_dir("md5-only");
+        let temp = TempDir::new("curse-md5-only");
+        let root = temp.path().to_path_buf();
         assert!(pending_task(&file, &root).expect("md5 is enough").is_some());
-        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]

@@ -161,17 +161,15 @@ mod tests {
     use super::*;
     use crate::modpacks::curseforge::storage::StoredCurseforgeFile;
     use crate::modpacks::mrpack::storage::StoredModpackHeader;
+    use licht_testkit::temp::TempDir;
     use sha2::{Digest, Sha512};
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     #[tokio::test]
     async fn final_modrinth_verification_only_checks_new_downloads_and_enforces_sha512() {
         for valid_sha512 in [true, false] {
-            let stamp = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("clock")
-                .as_nanos();
-            let root = std::env::temp_dir().join(format!("licht-pack-verification-{stamp}"));
+            let temp = TempDir::new("pack-verification");
+            let root = temp.path().to_path_buf();
             let home = SharedCache::at(&root);
             let game = SharedCache::at(root.join("data"));
             let directory = game.instance_dir("Pack").expect("instance");
@@ -247,13 +245,13 @@ mod tests {
                 body
             );
             service.shutdown().await.expect("shutdown");
-            std::fs::remove_dir_all(root).expect("cleanup");
         }
     }
 
     #[tokio::test]
     async fn imports_a_legacy_index_into_sqlite_and_removes_the_file() {
-        let root = temp_dir("legacy");
+        let temp = TempDir::new("mrpack-install-legacy");
+        let root = temp.path().to_path_buf();
         let cache = SharedCache::at(root.join("cache"));
         let instance = root.join("instance");
         place_pack_files(&instance);
@@ -326,12 +324,12 @@ mod tests {
                 ),
             ]
         );
-        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[tokio::test]
     async fn keeps_an_invalid_legacy_index_and_stores_nothing() {
-        let root = temp_dir("legacy-invalid");
+        let temp = TempDir::new("mrpack-install-legacy-invalid");
+        let root = temp.path().to_path_buf();
         let cache = SharedCache::at(root.join("cache"));
         let instance = root.join("instance");
         place_pack_files(&instance);
@@ -361,12 +359,12 @@ mod tests {
             );
         }
         service.shutdown().await.expect("shutdown");
-        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[tokio::test]
     async fn stored_rows_take_precedence_over_a_leftover_legacy_index() {
-        let root = temp_dir("legacy-leftover");
+        let temp = TempDir::new("mrpack-install-legacy-leftover");
+        let root = temp.path().to_path_buf();
         let cache = SharedCache::at(root.join("cache"));
         let instance = root.join("instance");
         place_pack_files(&instance);
@@ -389,12 +387,12 @@ mod tests {
             std::fs::read_to_string(instance.join(MODPACK_INDEX_FILE)).unwrap(),
             "not json"
         );
-        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[tokio::test]
     async fn ignores_a_legacy_index_in_a_curseforge_instance() {
-        let root = temp_dir("legacy-curseforge");
+        let temp = TempDir::new("mrpack-install-legacy-curseforge");
+        let root = temp.path().to_path_buf();
         let cache = SharedCache::at(root.join("cache"));
         let instance = root.join("instance");
         place_pack_files(&instance);
@@ -431,12 +429,12 @@ mod tests {
         assert!(header.is_none());
         assert_eq!(stored, curseforge);
         assert!(instance.join(MODPACK_INDEX_FILE).exists());
-        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[tokio::test]
     async fn leaves_a_legacy_index_alone_while_a_curseforge_one_waits_for_import() {
-        let root = temp_dir("legacy-both");
+        let temp = TempDir::new("mrpack-install-legacy-both");
+        let root = temp.path().to_path_buf();
         let cache = SharedCache::at(root.join("cache"));
         let instance = root.join("instance");
         place_pack_files(&instance);
@@ -457,7 +455,6 @@ mod tests {
         installed.expect("the CurseForge import decides this instance");
         assert!(header.is_none());
         assert!(instance.join(MODPACK_INDEX_FILE).exists());
-        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[cfg(windows)]
@@ -466,7 +463,8 @@ mod tests {
         use std::os::windows::fs::OpenOptionsExt;
 
         const FILE_SHARE_READ: u32 = 1;
-        let root = temp_dir("legacy-locked");
+        let temp = TempDir::new("mrpack-install-legacy-locked");
+        let root = temp.path().to_path_buf();
         let cache = SharedCache::at(root.join("cache"));
         let instance = root.join("instance");
         place_pack_files(&instance);
@@ -502,7 +500,6 @@ mod tests {
         retried.expect("the retry imports the index");
         assert_eq!(files_after_retry.len(), 2);
         assert!(!index.exists());
-        let _ = std::fs::remove_dir_all(&root);
     }
 
     const LEGACY_INDEX: &str = include_str!("../../../tests/fixtures/modrinth/licht-modpack.json");
@@ -551,19 +548,5 @@ mod tests {
         .await;
         settings.close().await;
         installed
-    }
-
-    fn temp_dir(label: &str) -> std::path::PathBuf {
-        let stamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("time")
-            .as_nanos();
-        let root = std::env::temp_dir().join(format!(
-            "licht-mrpack-install-{label}-{}-{stamp}",
-            std::process::id()
-        ));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).unwrap();
-        root
     }
 }
