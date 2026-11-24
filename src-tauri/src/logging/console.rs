@@ -204,6 +204,75 @@ impl Visit for EventFields {
     }
 }
 
+const PROGRESS_BAR_WIDTH: u64 = 20;
+const BYTES_PER_MB: f64 = 1024.0 * 1024.0;
+
+/// The numbers of a `Download progress` event, taken out of its fields.
+#[derive(Debug, Default, PartialEq, Eq)]
+struct Progress {
+    percent: u64,
+    finished: u64,
+    total: u64,
+    bytes_done: u64,
+    bytes_total: u64,
+}
+
+impl Progress {
+    /// Removes the numeric progress fields, leaving the rest to be shown as usual.
+    fn from_fields(fields: &mut Vec<(&'static str, String)>) -> Self {
+        let mut progress = Self::default();
+        fields.retain(|(name, value)| {
+            let slot = match *name {
+                "percent" => &mut progress.percent,
+                "finished" => &mut progress.finished,
+                "total" => &mut progress.total,
+                "bytes_done" => &mut progress.bytes_done,
+                "bytes_total" => &mut progress.bytes_total,
+                _ => return true,
+            };
+            match value.parse() {
+                Ok(number) => {
+                    *slot = number;
+                    false
+                }
+                Err(_) => true,
+            }
+        });
+        progress
+    }
+
+    /// `[████░░░░]  40%  824/2061 files  96.4/241.0 MB`; counts appear when known.
+    fn write(&self, writer: &mut format::Writer<'_>, color: u8) -> fmt::Result {
+        let percent = self.percent.min(100);
+        let filled = percent * PROGRESS_BAR_WIDTH / 100;
+        let filled_width = usize::try_from(filled).unwrap_or_default();
+        let empty_width = usize::try_from(PROGRESS_BAR_WIDTH - filled).unwrap_or_default();
+        writer.write_str("[")?;
+        paint(writer, Style::Color(color), &"█".repeat(filled_width))?;
+        paint(writer, Style::Dim, &"░".repeat(empty_width))?;
+        write!(writer, "] {percent:>3}%")?;
+        if self.total > 0 {
+            write!(writer, "  {}/{} files", self.finished, self.total)?;
+        }
+        if self.bytes_total > 0 {
+            // Display only, so the precision lost converting to f64 does not matter.
+            let done = self.bytes_done as f64 / BYTES_PER_MB;
+            let total = self.bytes_total as f64 / BYTES_PER_MB;
+            write!(writer, "  {done:.1}/{total:.1} MB")?;
+        }
+        Ok(())
+    }
+}
+
+fn write_inline(writer: &mut format::Writer<'_>, fields: &[(&'static str, String)]) -> fmt::Result {
+    for (name, value) in fields {
+        write!(writer, " ")?;
+        paint(writer, Style::Dim, &format!("{name}="))?;
+        writer.write_str(value)?;
+    }
+    Ok(())
+}
+
 /// The fields of a span, recorded by [`SpanFieldsLayer`] so events can show them.
 struct SpanFields(Vec<(&'static str, String)>);
 
@@ -282,6 +351,13 @@ where
                 }
             }
         }
+        if metadata.target() == licht_core::DOWNLOAD_PROGRESS_TARGET {
+            let progress = Progress::from_fields(&mut all_fields);
+            write!(writer, " ")?;
+            progress.write(&mut writer, area.color)?;
+            write_inline(&mut writer, &all_fields)?;
+            return writeln!(writer);
+        }
         if all_fields.len() <= INLINE_FIELDS {
             for (name, value) in &all_fields {
                 write!(writer, " ")?;
@@ -309,7 +385,40 @@ where
 mod tests {
     use tracing::Level;
 
-    use super::{AREAS, Style, area, colors, library_name, message_style};
+    use super::{AREAS, Progress, Style, area, colors, library_name, message_style};
+
+    #[test]
+    fn progress_numbers_are_taken_out_of_the_fields() {
+        let mut fields = vec![
+            ("percent", "40".to_string()),
+            ("finished", "824".to_string()),
+            ("total", "2061".to_string()),
+            ("bytes_done", "101082726".to_string()),
+            ("bytes_total", "252706816".to_string()),
+            ("component", "Minecraft".to_string()),
+            ("job_id", "7".to_string()),
+        ];
+
+        let progress = Progress::from_fields(&mut fields);
+
+        assert_eq!(
+            progress,
+            Progress {
+                percent: 40,
+                finished: 824,
+                total: 2061,
+                bytes_done: 101_082_726,
+                bytes_total: 252_706_816,
+            }
+        );
+        assert_eq!(
+            fields,
+            [
+                ("component", "Minecraft".to_string()),
+                ("job_id", "7".to_string())
+            ]
+        );
+    }
 
     #[test]
     fn modules_are_tagged_with_the_area_they_log_for() {

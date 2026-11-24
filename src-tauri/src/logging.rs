@@ -11,7 +11,7 @@ use tracing_subscriber::fmt::time::{FormatTime, SystemTime};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::registry::LookupSpan;
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::{EnvFilter, Layer, filter::LevelFilter, fmt};
+use tracing_subscriber::{EnvFilter, Layer, filter::LevelFilter, filter::filter_fn, fmt};
 
 mod console;
 
@@ -194,7 +194,15 @@ fn subscriber(
     tracing_subscriber::registry()
         .with(filter)
         .with(console_layer(console, std::io::stderr))
-        .with(file.map(|file| fmt::layer().with_writer(file).with_ansi(false)))
+        .with(file.map(|file| {
+            fmt::layer()
+                .with_writer(file)
+                .with_ansi(false)
+                // Progress lines only help while watching the console.
+                .with_filter(filter_fn(|metadata| {
+                    metadata.target() != licht_core::DOWNLOAD_PROGRESS_TARGET
+                }))
+        }))
 }
 
 fn install_panic_hook() {
@@ -301,6 +309,32 @@ mod tests {
                 format!("{indent}max_memory_mb  4096"),
                 format!("{indent}instance       Survival"),
             ]
+        );
+    }
+
+    #[test]
+    fn download_progress_is_drawn_as_a_bar_on_one_line() {
+        let output = console_output_of(ConsoleStyle::for_build(true, false, true), || {
+            let _job = tracing::info_span!("download_job", job_id = 7).entered();
+            tracing::info!(
+                target: licht_core::DOWNLOAD_PROGRESS_TARGET,
+                percent = 40,
+                finished = 824,
+                total = 2061,
+                bytes_done = 101_082_726_u64,
+                bytes_total = 252_706_816_u64,
+                component = "Minecraft",
+                "Download progress"
+            );
+        });
+
+        assert_eq!(output.lines().count(), 1, "unexpected output: {output}");
+        assert!(
+            output.ends_with(
+                " INFO  [download]  Download progress [████████░░░░░░░░░░░░]  40%  \
+                 824/2061 files  96.4/241.0 MB component=Minecraft job_id=7\n"
+            ),
+            "unexpected output: {output}"
         );
     }
 
@@ -475,6 +509,33 @@ mod tests {
             .collect();
         names.sort();
         names
+    }
+
+    #[test]
+    fn download_progress_stays_out_of_the_log_file() {
+        let root = TempDir::new("logging-test");
+        let file = open_log_file(root.path(), "2026-11-24T10-00-00Z").expect("log file");
+        let filter = parse_filter(None).expect("the filter should be valid");
+        let console = ConsoleStyle::for_build(false, false, true);
+        tracing::subscriber::with_default(subscriber(filter, console, Some(file)), || {
+            tracing::info!(
+                target: licht_core::DOWNLOAD_PROGRESS_TARGET,
+                percent = 40,
+                "Download progress"
+            );
+            tracing::info!("Download job completed");
+        });
+
+        let logs = fs::read_to_string(root.path().join("licht.2026-11-24T10-00-00Z.log"))
+            .expect("the log file should be readable");
+        assert!(
+            logs.contains("Download job completed"),
+            "unexpected logs: {logs}"
+        );
+        assert!(
+            !logs.contains("Download progress"),
+            "unexpected logs: {logs}"
+        );
     }
 
     #[test]

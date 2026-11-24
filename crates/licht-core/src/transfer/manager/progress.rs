@@ -1,4 +1,4 @@
-use super::{ActiveJob, DownloadManager};
+use super::{ActiveJob, DOWNLOAD_PROGRESS_TARGET, DownloadManager};
 use crate::transfer::installation::InstallationEvent;
 use crate::{
     DownloadJobSnapshot, DownloadJobStatus, DownloadJobUpdate, DownloadProgress, DownloadState,
@@ -6,6 +6,9 @@ use crate::{
 };
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
+
+/// No progress of the current stage has been logged yet.
+pub(super) const NO_PROGRESS_LOGGED: u8 = u8::MAX;
 
 impl DownloadManager {
     pub(super) async fn apply_event(
@@ -24,6 +27,8 @@ impl DownloadManager {
                 snapshot.component = Some(component);
                 snapshot.phase = phase;
                 snapshot.progress = empty_progress();
+                slot.logged_progress
+                    .store(NO_PROGRESS_LOGGED, Ordering::SeqCst);
                 true
             }
             InstallationEvent::Version(version) => {
@@ -36,6 +41,7 @@ impl DownloadManager {
             }
             InstallationEvent::Progress(progress) => {
                 snapshot.progress = progress;
+                log_progress(slot, &snapshot);
                 false
             }
         };
@@ -108,6 +114,45 @@ impl DownloadManager {
         *last_emit = Instant::now();
         Ok(())
     }
+}
+
+/// The share of a stage that is done, in whole percent: bytes when the size is known,
+/// files otherwise.
+pub(super) fn progress_percent(progress: &DownloadProgress) -> Option<u8> {
+    let (done, total) = if progress.bytes_total > 0 {
+        (progress.bytes_done, progress.bytes_total)
+    } else if progress.total > 0 {
+        (u64::from(progress.finished), u64::from(progress.total))
+    } else {
+        return None;
+    };
+    u8::try_from(done.min(total).saturating_mul(100) / total).ok()
+}
+
+/// Logs a stage's progress each time it reaches another tenth, so the console can
+/// follow a download without a line for every file.
+fn log_progress(slot: &ActiveJob, snapshot: &DownloadJobSnapshot) {
+    let Some(percent) = progress_percent(&snapshot.progress) else {
+        return;
+    };
+    let tenth = percent / 10;
+    let logged = slot.logged_progress.load(Ordering::SeqCst);
+    if logged != NO_PROGRESS_LOGGED && tenth <= logged {
+        return;
+    }
+    slot.logged_progress.store(tenth, Ordering::SeqCst);
+    let progress = &snapshot.progress;
+    tracing::info!(
+        target: DOWNLOAD_PROGRESS_TARGET,
+        percent,
+        finished = progress.finished,
+        total = progress.total,
+        bytes_done = progress.bytes_done,
+        bytes_total = progress.bytes_total,
+        component = snapshot.component.as_ref().map(tracing::field::debug),
+        phase = ?snapshot.phase,
+        "Download progress"
+    );
 }
 
 fn empty_progress() -> DownloadProgress {
