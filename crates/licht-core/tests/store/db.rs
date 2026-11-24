@@ -3,12 +3,14 @@ use licht_core::{
     CoreError, Database, SharedCache, clear_last_played_folder, db_path, last_played_folder,
     set_last_played_folder,
 };
+use licht_testkit::temp::TempDir;
 use sqlx::{Connection, Row, SqliteConnection, sqlite::SqliteConnectOptions};
 
-fn cache(name: &str) -> SharedCache {
-    let root = std::env::temp_dir().join(format!("licht-db-{}-{name}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&root);
-    SharedCache::at(root)
+/// A cache whose root does not exist yet, inside a folder removed on drop.
+fn cache(name: &str) -> (TempDir, SharedCache) {
+    let temp = TempDir::new(&format!("db-{name}"));
+    let cache = SharedCache::at(temp.path().join("profile"));
+    (temp, cache)
 }
 
 async fn raw_database(cache: &SharedCache) -> SqliteConnection {
@@ -33,7 +35,7 @@ async fn scalar(connection: &mut SqliteConnection, query: &'static str) -> i64 {
 
 #[tokio::test]
 async fn open_creates_the_database_and_is_idempotent() {
-    let cache = cache("open");
+    let (_temp, cache) = cache("open");
     open_migrated(&cache)
         .await
         .expect("open")
@@ -51,7 +53,7 @@ async fn open_creates_the_database_and_is_idempotent() {
 
 #[tokio::test]
 async fn version_nine_downloads_gain_a_persistent_fifo_order_without_losing_state() {
-    let cache = cache("version-nine-queue");
+    let (_temp, cache) = cache("version-nine-queue");
     let game = SharedCache::at(cache.root().join("data"));
     open_migrated(&cache)
         .await
@@ -103,7 +105,7 @@ async fn version_nine_downloads_gain_a_persistent_fifo_order_without_losing_stat
 
 #[tokio::test]
 async fn opening_an_up_to_date_database_can_read_while_another_connection_is_writing() {
-    let cache = cache("open-during-write");
+    let (_temp, cache) = cache("open-during-write");
     let database = Database::open(&cache).await.expect("database");
     set_last_played_folder(&database, "survival")
         .await
@@ -138,7 +140,7 @@ async fn opening_an_up_to_date_database_can_read_while_another_connection_is_wri
 
 #[tokio::test]
 async fn concurrent_first_opens_share_a_complete_migrated_schema() {
-    let cache = cache("concurrent-first-open");
+    let (_temp, cache) = cache("concurrent-first-open");
     let barrier = tokio::sync::Barrier::new(4);
     futures_util::future::join_all((0..4).map(|_| async {
         barrier.wait().await;
@@ -152,7 +154,7 @@ async fn concurrent_first_opens_share_a_complete_migrated_schema() {
 
 #[tokio::test]
 async fn artifact_cleanup_seeks_by_path_on_new_and_reopened_databases() {
-    let cache = cache("artifact-path-lookup");
+    let (_temp, cache) = cache("artifact-path-lookup");
     for _ in 0..2 {
         let mut connection = open_migrated(&cache).await.expect("open");
         assert_artifact_path_lookup_is_indexed(&mut connection).await;
@@ -176,7 +178,7 @@ async fn assert_artifact_path_lookup_is_indexed(connection: &mut SqliteConnectio
 
 #[tokio::test]
 async fn last_played_folder_round_trips() {
-    let cache = cache("last-played");
+    let (_temp, cache) = cache("last-played");
     let database = Database::open(&cache).await.expect("database");
     assert_eq!(last_played_folder(&database).await.expect("empty"), None);
     set_last_played_folder(&database, "classic")
@@ -206,7 +208,7 @@ async fn last_played_folder_round_trips() {
 
 #[tokio::test]
 async fn a_version_one_database_gains_download_jobs_without_losing_existing_metadata() {
-    let cache = cache("downloads-migration");
+    let (_temp, cache) = cache("downloads-migration");
     let mut connection = raw_database(&cache).await;
     sqlx::raw_sql("CREATE TABLE meta (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL); INSERT INTO meta VALUES ('last_played_folder', 'survival'); PRAGMA user_version = 1;").execute(&mut connection).await.expect("legacy schema");
     connection.close().await.expect("close");
@@ -229,7 +231,7 @@ async fn a_version_one_database_gains_download_jobs_without_losing_existing_meta
 
 #[tokio::test]
 async fn a_newer_database_schema_is_rejected_without_downgrading_it() {
-    let cache = cache("future-schema");
+    let (_temp, cache) = cache("future-schema");
     let mut connection = raw_database(&cache).await;
     sqlx::query("PRAGMA user_version = 15")
         .execute(&mut connection)
@@ -258,7 +260,7 @@ async fn a_newer_database_schema_is_rejected_without_downgrading_it() {
 
 #[tokio::test]
 async fn a_failed_migration_preserves_the_previous_schema_and_metadata() {
-    let cache = cache("failed-migration");
+    let (_temp, cache) = cache("failed-migration");
     let mut connection = raw_database(&cache).await;
     sqlx::raw_sql("CREATE TABLE meta (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL); INSERT INTO meta VALUES ('last_played_folder', 'survival'); CREATE TABLE download_jobs (existing TEXT); INSERT INTO download_jobs VALUES ('preserve me'); PRAGMA user_version = 1;").execute(&mut connection).await.expect("conflicting schema");
     assert!(matches!(
@@ -282,7 +284,7 @@ async fn a_failed_migration_preserves_the_previous_schema_and_metadata() {
 
 #[tokio::test]
 async fn version_two_jobs_keep_their_identity_and_progress_when_targets_become_optional() {
-    let cache = cache("version-two-jobs");
+    let (_temp, cache) = cache("version-two-jobs");
     let game = SharedCache::at(cache.root().join("data"));
     let mut connection = raw_database(&cache).await;
     sqlx::raw_sql("CREATE TABLE meta (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL); INSERT INTO meta VALUES ('last_played_folder', 'Survival'); CREATE TABLE download_jobs (id INTEGER PRIMARY KEY AUTOINCREMENT, data_directory TEXT NOT NULL, instance_folder TEXT NOT NULL, version_id TEXT NOT NULL, operation TEXT NOT NULL, status TEXT NOT NULL, component TEXT, phase TEXT NOT NULL, progress TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL); PRAGMA user_version = 2;").execute(&mut connection).await.expect("legacy schema");
@@ -335,7 +337,7 @@ async fn version_two_jobs_keep_their_identity_and_progress_when_targets_become_o
 
 #[tokio::test]
 async fn version_three_gains_indexed_artifact_lookup_without_changing_stored_data() {
-    let cache = cache("version-three-artifacts");
+    let (_temp, cache) = cache("version-three-artifacts");
     let game = SharedCache::at(cache.root().join("data"));
     let mut connection = raw_database(&cache).await;
     sqlx::raw_sql("CREATE TABLE meta (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL); INSERT INTO meta VALUES ('last_played_folder', 'Survival'); CREATE TABLE download_jobs (id INTEGER PRIMARY KEY AUTOINCREMENT, data_directory TEXT NOT NULL, instance_folder TEXT, version_id TEXT, operation TEXT NOT NULL, status TEXT NOT NULL, component TEXT, phase TEXT NOT NULL, progress TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, error TEXT, java_major INTEGER); CREATE INDEX download_jobs_directory ON download_jobs (data_directory, id); CREATE TABLE download_job_artifacts (job_id INTEGER NOT NULL, path TEXT NOT NULL, PRIMARY KEY(job_id, path)); PRAGMA user_version = 3;").execute(&mut connection).await.expect("legacy schema");
@@ -393,7 +395,7 @@ async fn version_three_gains_indexed_artifact_lookup_without_changing_stored_dat
 
 #[tokio::test]
 async fn version_four_gains_content_fingerprints_without_losing_metadata() {
-    let cache = cache("version-four-content");
+    let (_temp, cache) = cache("version-four-content");
     let mut connection = raw_database(&cache).await;
     sqlx::raw_sql(
         "CREATE TABLE meta (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL);
@@ -430,7 +432,7 @@ async fn version_four_gains_content_fingerprints_without_losing_metadata() {
 
 #[tokio::test]
 async fn version_five_gains_modpack_tables_and_preserves_fingerprints() {
-    let cache = cache("version-five-modpacks");
+    let (_temp, cache) = cache("version-five-modpacks");
     let mut connection = open_migrated(&cache).await.expect("database");
     sqlx::raw_sql("DROP TABLE settings; DROP TABLE native_outputs; DROP TABLE native_generations; DROP TABLE download_job_checkpoints; DROP TABLE instances; DROP TABLE modpack_files; DROP TABLE modpack_dependencies; DROP TABLE modpack_indexes; DROP TABLE curseforge_files; PRAGMA user_version = 5;
         INSERT INTO meta VALUES ('fixture', 'preserved');")
@@ -457,7 +459,7 @@ async fn version_five_gains_modpack_tables_and_preserves_fingerprints() {
 
 #[tokio::test]
 async fn version_seven_adds_empty_checkpoints_without_marking_old_jobs_complete() {
-    let cache = cache("version-seven-checkpoints");
+    let (_temp, cache) = cache("version-seven-checkpoints");
     let mut connection = open_migrated(&cache).await.expect("database");
     sqlx::raw_sql("DROP TABLE settings; DROP TABLE native_outputs; DROP TABLE native_generations; DROP TABLE download_job_checkpoints; INSERT INTO meta VALUES ('fixture', 'preserved'); DROP TABLE curseforge_files; PRAGMA user_version = 7;")
         .execute(&mut connection).await.expect("version seven fixture");
@@ -482,7 +484,7 @@ async fn version_seven_adds_empty_checkpoints_without_marking_old_jobs_complete(
 
 #[tokio::test]
 async fn version_eight_adds_native_cache_tables_without_changing_existing_data() {
-    let cache = cache("version-eight-native-cache");
+    let (_temp, cache) = cache("version-eight-native-cache");
     let mut connection = open_migrated(&cache).await.expect("database");
     sqlx::raw_sql("DROP TABLE settings; DROP TABLE native_outputs; DROP TABLE native_generations; INSERT INTO meta VALUES ('native-fixture', 'preserved'); DROP TABLE curseforge_files; PRAGMA user_version = 8;")
         .execute(&mut connection).await.expect("version eight fixture");
@@ -507,7 +509,7 @@ async fn version_eight_adds_native_cache_tables_without_changing_existing_data()
 
 #[tokio::test]
 async fn version_eleven_gains_content_roots_and_drops_the_old_move_checkpoint() {
-    let cache = cache("version-eleven-content-roots");
+    let (_temp, cache) = cache("version-eleven-content-roots");
     let mut connection = open_migrated(&cache).await.expect("database");
     sqlx::raw_sql(
         "DROP TABLE settings;
@@ -574,7 +576,7 @@ async fn version_eleven_gains_content_roots_and_drops_the_old_move_checkpoint() 
 
 #[tokio::test]
 async fn version_twelve_gains_curseforge_files_and_preserves_modpack_indexes() {
-    let cache = cache("version-twelve-curseforge");
+    let (_temp, cache) = cache("version-twelve-curseforge");
     let mut connection = open_migrated(&cache).await.expect("database");
     sqlx::raw_sql(
         "ALTER TABLE settings ADD COLUMN disable_custom_title_bar INTEGER NOT NULL DEFAULT 0
@@ -625,7 +627,7 @@ async fn version_twelve_gains_curseforge_files_and_preserves_modpack_indexes() {
 
 #[tokio::test]
 async fn version_thirteen_drops_the_title_bar_column_and_keeps_the_settings_row() {
-    let cache = cache("version-thirteen-title-bar");
+    let (_temp, cache) = cache("version-thirteen-title-bar");
     let mut connection = open_migrated(&cache).await.expect("database");
     sqlx::raw_sql(
         "ALTER TABLE settings ADD COLUMN disable_custom_title_bar INTEGER NOT NULL DEFAULT 0
@@ -670,7 +672,7 @@ async fn version_thirteen_drops_the_title_bar_column_and_keeps_the_settings_row(
 
 #[tokio::test]
 async fn a_copied_move_needs_a_destination() {
-    let cache = cache("copied-needs-destination");
+    let (_temp, cache) = cache("copied-needs-destination");
     let mut connection = open_migrated(&cache).await.expect("database");
     sqlx::query("INSERT INTO settings (id, username, fullscreen, max_memory_mb, jvm_arguments, download_concurrency, write_concurrency) VALUES (1, 'Steve', 0, 2048, '[]', 8, 8)")
         .execute(&mut connection)
@@ -691,7 +693,7 @@ async fn a_copied_move_needs_a_destination() {
 
 #[tokio::test]
 async fn version_ten_adds_an_empty_settings_table_without_changing_existing_data() {
-    let cache = cache("version-ten-settings");
+    let (_temp, cache) = cache("version-ten-settings");
     let mut connection = open_migrated(&cache).await.expect("database");
     sqlx::raw_sql("DROP TABLE settings; INSERT INTO meta VALUES ('settings-fixture', 'preserved'); DROP TABLE curseforge_files; PRAGMA user_version = 10;")
         .execute(&mut connection).await.expect("version ten fixture");

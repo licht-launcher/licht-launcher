@@ -4,6 +4,7 @@ use std::sync::Arc;
 use licht_core::{
     Arch, CacheCheck, CoreError, GameInstall, LaunchEnvironment, OsName, SharedCache, install_game,
 };
+use licht_testkit::temp::TempDir;
 use sha1::{Digest, Sha1};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
@@ -15,9 +16,8 @@ const ASSET: &[u8] = b"asset-bytes";
 
 #[tokio::test]
 async fn a_local_version_is_written_and_installed() {
-    let directory = std::env::temp_dir().join(format!("licht-game-install-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&directory);
-    std::fs::create_dir_all(&directory).expect("cache root");
+    let temp = TempDir::new("game-install");
+    let directory = temp.path().to_path_buf();
     let cache = SharedCache::at(&directory);
     let settings = licht_core::Database::open(&cache).await.expect("database");
     let server = serve().await;
@@ -90,7 +90,6 @@ async fn a_local_version_is_written_and_installed() {
     assert!(matches!(error, CoreError::Sha1Mismatch { .. }));
 
     settings.close().await;
-    let _ = std::fs::remove_dir_all(directory);
 }
 
 fn version_json(base: &str, index_sha1: &str) -> String {

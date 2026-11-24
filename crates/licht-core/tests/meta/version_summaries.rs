@@ -2,6 +2,7 @@ use licht_core::{
     Arch, LaunchEnvironment, OsName, SharedCache, VersionType, is_version_ready,
     parse_version_manifest, version_summaries,
 };
+use licht_testkit::temp::TempDir;
 
 fn environment() -> LaunchEnvironment {
     LaunchEnvironment {
@@ -43,8 +44,8 @@ fn manifest() -> licht_core::VersionManifest {
 
 #[test]
 fn a_saved_version_json_is_installed_and_a_bad_id_is_not() {
-    let root = std::env::temp_dir().join(format!("licht-summaries-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&root);
+    let temp = TempDir::new("summaries");
+    let root = temp.path().to_path_buf();
     let cache = SharedCache::at(&root);
     let json = cache.version_json("1.2").expect("version path");
     std::fs::create_dir_all(json.parent().expect("parent")).expect("version dir");
@@ -56,21 +57,12 @@ fn a_saved_version_json_is_installed_and_a_bad_id_is_not() {
     assert!(summaries[0].installed);
     assert_eq!(summaries[1].id, "bad/id");
     assert!(!summaries[1].installed);
-
-    let _ = std::fs::remove_dir_all(root);
 }
 
 #[test]
 fn a_local_loader_profile_is_listed_and_needs_its_artifacts() {
-    let root = std::env::temp_dir().join(format!(
-        "licht-summaries-loader-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("time")
-            .as_nanos()
-    ));
-    let _ = std::fs::remove_dir_all(&root);
+    let temp = TempDir::new("summaries-loader");
+    let root = temp.path().to_path_buf();
     let cache = SharedCache::at(&root);
     let id = "fabric-loader-0.16.0-1.20.1";
     let json = cache.version_json(id).expect("version path");
@@ -93,13 +85,12 @@ fn a_local_loader_profile_is_listed_and_needs_its_artifacts() {
         .find(|entry| entry.id == id)
         .expect("local loader summary");
     assert!(!loader.installed);
-
-    let _ = std::fs::remove_dir_all(root);
 }
 
 #[test]
 fn provisional_forge_profiles_are_not_launch_ready() {
-    let root = std::env::temp_dir().join(format!("licht-forge-ready-{}", std::process::id()));
+    let temp = TempDir::new("forge-ready");
+    let root = temp.path().to_path_buf();
     let cache = SharedCache::at(&root);
     let parent = cache.version_json("1.20.1").expect("parent path");
     std::fs::create_dir_all(parent.parent().expect("parent directory")).expect("mkdir");
@@ -124,5 +115,4 @@ fn provisional_forge_profiles_are_not_launch_ready() {
             "a vanilla parent is not a completed loader"
         );
     }
-    std::fs::remove_dir_all(root).expect("cleanup");
 }

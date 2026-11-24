@@ -7,6 +7,7 @@ use licht_core::{
     LaunchEnvironment, OsName, SharedCache, create_download_job, get_download_job,
     list_download_jobs, recover_download_jobs, update_download_job,
 };
+use licht_testkit::temp::TempDir;
 
 #[tokio::test]
 async fn a_new_job_round_trips_as_a_queued_snapshot_with_a_string_id() {
@@ -620,26 +621,24 @@ fn update(status: DownloadJobStatus, progress: DownloadProgress) -> DownloadJobU
 struct Fixture {
     settings: licht_core::Database,
     game: SharedCache,
+    _root: TempDir,
 }
 
 impl Fixture {
     async fn new(name: &str) -> Self {
-        let root =
-            std::env::temp_dir().join(format!("licht-download-jobs-{name}-{}", std::process::id()));
-        std::fs::create_dir_all(&root).expect("fixture directory");
+        let root = TempDir::new(&format!("download-jobs-{name}"));
         Self {
-            settings: licht_core::Database::open(&SharedCache::at(root.join("settings")))
+            settings: licht_core::Database::open(&SharedCache::at(root.path().join("settings")))
                 .await
                 .expect("database"),
-            game: SharedCache::at(root.join("data")),
+            game: SharedCache::at(root.path().join("data")),
+            _root: root,
         }
     }
 
     /// The pool closes first: Windows cannot delete a database that is still open.
     async fn close(self) {
         self.settings.close().await;
-        std::fs::remove_dir_all(self.settings.cache().root().parent().expect("fixture root"))
-            .expect("cleanup");
     }
 
     async fn create(&self, folder: &str) -> DownloadJobSnapshot {

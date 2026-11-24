@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use licht_core::{CoreError, SharedCache};
+use licht_testkit::temp::TempDir;
 
 const HASH: &str = "bdf48ef6b5d0d23bbb02e17d04865216179f510a";
 
@@ -70,18 +71,19 @@ fn unsafe_path_pieces_are_rejected() {
 
 #[test]
 fn an_instance_sits_beside_the_data_directory() {
-    let root = std::env::temp_dir().join(format!("licht-instance-{}", std::process::id()));
+    let temp = TempDir::new("instance");
+    let root = temp.path().to_path_buf();
     let cache = SharedCache::at(root.join("data"));
     assert_eq!(
         cache.instance_dir("1.20.1").expect("instance"),
         root.join("instances").join("1.20.1")
     );
-    let _ = std::fs::remove_dir_all(root);
 }
 
 #[test]
 fn create_makes_the_shared_folders() {
-    let root = std::env::temp_dir().join(format!("licht-cache-{}", std::process::id()));
+    let temp = TempDir::new("cache");
+    let root = temp.path().to_path_buf();
     let cache = SharedCache::at(&root);
     cache.create().expect("the folders should be created");
 
@@ -95,7 +97,6 @@ fn create_makes_the_shared_folders() {
     ] {
         assert!(root.join(relative).is_dir());
     }
-    let _ = std::fs::remove_dir_all(root);
 }
 
 #[test]

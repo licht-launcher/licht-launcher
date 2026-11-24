@@ -7,6 +7,7 @@ use licht_core::{
     Library, LibraryDownloads, LibraryExtract, OsName, SharedCache, Version, VersionDownloads,
     create_natives_directory, extract_natives, native_libraries, parse_version,
 };
+use licht_testkit::temp::TempDir;
 use zip::ZipWriter;
 use zip::write::SimpleFileOptions;
 
@@ -84,8 +85,8 @@ fn saved_versions_pick_one_native_per_architecture() {
 
 #[test]
 fn extraction_keeps_the_binary_and_drops_excluded_entries() {
-    let root = std::env::temp_dir().join(format!("licht-natives-cache-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&root);
+    let temp = TempDir::new("natives-cache");
+    let root = temp.path().to_path_buf();
     let cache = SharedCache::at(&root);
     let native_path = "org/lwjgl/lwjgl/2.9.4/lwjgl-2.9.4-natives-windows.jar";
     let classpath_path = "org/lwjgl/lwjgl/2.9.4/lwjgl-2.9.4.jar";
@@ -119,8 +120,8 @@ fn extraction_keeps_the_binary_and_drops_excluded_entries() {
 
 #[test]
 fn a_nested_binary_lands_in_the_version_folder() {
-    let root = std::env::temp_dir().join(format!("licht-natives-nested-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&root);
+    let temp = TempDir::new("natives-nested");
+    let root = temp.path().to_path_buf();
     let cache = SharedCache::at(&root);
     let native_path = "org/lwjgl/lwjgl/3.4.3/lwjgl-3.4.3-natives-windows.jar";
     write_zip(
@@ -151,8 +152,8 @@ fn a_nested_binary_lands_in_the_version_folder() {
 
 #[test]
 fn a_root_binary_stays_when_the_library_path_is_the_natives_root() {
-    let root = std::env::temp_dir().join(format!("licht-natives-root-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&root);
+    let temp = TempDir::new("natives-root");
+    let root = temp.path().to_path_buf();
     let cache = SharedCache::at(&root);
     let native_path = "org/lwjgl/lwjgl/3.3.3/lwjgl-3.3.3-natives-windows.jar";
     write_zip(
@@ -177,8 +178,8 @@ fn a_root_binary_stays_when_the_library_path_is_the_natives_root() {
 
 #[test]
 fn a_path_outside_the_destination_is_rejected() {
-    let root = std::env::temp_dir().join(format!("licht-natives-slip-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&root);
+    let temp = TempDir::new("natives-slip");
+    let root = temp.path().to_path_buf();
     let cache = SharedCache::at(&root);
     let native_path = "org/lwjgl/lwjgl/2.9.4/lwjgl-2.9.4-natives-windows.jar";
     write_zip(
@@ -194,8 +195,8 @@ fn a_path_outside_the_destination_is_rejected() {
 
 #[test]
 fn natives_land_under_the_version() {
-    let root = std::env::temp_dir().join(format!("licht-natives-home-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&root);
+    let temp = TempDir::new("natives-home");
+    let root = temp.path().to_path_buf();
     let cache = SharedCache::at(&root);
     let directory = create_natives_directory(&cache, "26.3").expect("version folder");
 
@@ -208,7 +209,6 @@ fn natives_land_under_the_version() {
 
     let error = create_natives_directory(&cache, "..").expect_err("parent id");
     assert!(matches!(error, CoreError::CachePath));
-    let _ = std::fs::remove_dir_all(root);
 }
 
 fn paths(version: &Version, os: OsName, arch: Arch) -> Vec<String> {

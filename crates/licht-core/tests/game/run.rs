@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use licht_core::{CoreError, GameLine, LogCodec, OutputStream, run_game};
+use licht_testkit::temp::TempDir;
 use tokio::sync::{mpsc, oneshot};
 
 #[cfg(windows)]
@@ -70,7 +71,8 @@ async fn a_windows_game_process_has_no_console_and_preserves_both_streams() {
 
 #[tokio::test]
 async fn a_finished_process_reports_both_streams_and_success() {
-    let directory = temp_dir("streams");
+    let temp = temp_dir("streams");
+    let directory = temp.path().to_path_buf();
     let program = write_stub(&directory, "streams", Stub::Streams { code: 0 });
     let (output, mut incoming) = mpsc::channel(8);
 
@@ -92,7 +94,8 @@ async fn a_finished_process_reports_both_streams_and_success() {
 
 #[tokio::test]
 async fn a_failing_process_still_delivers_its_output() {
-    let directory = temp_dir("fail");
+    let temp = temp_dir("fail");
+    let directory = temp.path().to_path_buf();
     let program = write_stub(&directory, "fail", Stub::Streams { code: 1 });
     let (output, mut incoming) = mpsc::channel(8);
 
@@ -124,7 +127,8 @@ async fn an_empty_command_is_rejected() {
 
 #[tokio::test]
 async fn run_game_reports_the_child_pid() {
-    let directory = temp_dir("pid");
+    let temp = temp_dir("pid");
+    let directory = temp.path().to_path_buf();
     let program = write_stub(&directory, "pid", Stub::Streams { code: 0 });
     let command = [program.display().to_string()];
     let mut attempts = 0;
@@ -168,7 +172,8 @@ async fn run_game_reports_the_child_pid() {
 
 #[tokio::test]
 async fn the_working_directory_is_the_one_the_caller_passes() {
-    let directory = temp_dir("workdir");
+    let temp = temp_dir("workdir");
+    let directory = temp.path().to_path_buf();
     let program = write_stub(&directory, "workdir", Stub::Marker);
     let work = directory.join("work");
     std::fs::create_dir_all(&work).expect("work directory");
@@ -185,7 +190,8 @@ async fn the_working_directory_is_the_one_the_caller_passes() {
 
 #[tokio::test]
 async fn an_environment_variable_reaches_the_process() {
-    let directory = temp_dir("env");
+    let temp = temp_dir("env");
+    let directory = temp.path().to_path_buf();
     let program = write_stub(&directory, "env", Stub::Env);
     let (output, mut incoming) = mpsc::channel(8);
 
@@ -198,11 +204,8 @@ async fn an_environment_variable_reaches_the_process() {
     assert!(lines.iter().any(|line| line.line == "instances"));
 }
 
-fn temp_dir(name: &str) -> PathBuf {
-    let directory = std::env::temp_dir().join(format!("licht-run-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&directory);
-    std::fs::create_dir_all(&directory).expect("temp directory");
-    directory
+fn temp_dir(name: &str) -> TempDir {
+    TempDir::new(&format!("run-{name}"))
 }
 
 /// Linux can answer `exec` with "Text file busy" for a moment after the stub
