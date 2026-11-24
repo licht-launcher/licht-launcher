@@ -81,7 +81,7 @@ export function ModpackContentCard({
             action={action}
           />
           <dl className={styles.facts}>
-            <Fact label="Included" pinned>
+            <Fact label="Included" className={styles.includedFact}>
               {included}
             </Fact>
           </dl>
@@ -127,17 +127,17 @@ function StoreModpack({
         action={action}
       />
       <dl className={styles.facts}>
-        <Fact label="Included" pinned>
+        <Fact label="Included" className={styles.includedFact}>
           {included}
         </Fact>
-        <Fact label="Version">
+        <Fact label="Version" className={styles.versionFact}>
           {version ? (
             <Badge>{version.name}</Badge>
           ) : (
             <span className={styles.muted}>Unknown</span>
           )}
         </Fact>
-        <Fact label="Updated">
+        <Fact label="Updated" className={styles.updatedFact}>
           <span className={updated ? undefined : styles.muted}>
             {updated ?? "Unknown"}
           </span>
@@ -178,15 +178,15 @@ function CardHeader({
 
 function Fact({
   label,
-  pinned = false,
+  className,
   children,
 }: {
   label: string;
-  pinned?: boolean;
+  className: string;
   children: ReactNode;
 }) {
   return (
-    <div className={pinned ? styles.pinnedFact : styles.fact}>
+    <div className={className}>
       <dt className={styles.factLabel}>{label}</dt>
       <dd className={styles.factValue}>{children}</dd>
     </div>
