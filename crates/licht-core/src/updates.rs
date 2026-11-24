@@ -253,13 +253,36 @@ impl AppUpdateCache {
             "package.json.tmp",
             "package.bin.tmp",
         ] {
-            match std::fs::remove_file(self.directory.join(name)) {
-                Ok(()) => {}
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                Err(error) => return Err(error.into()),
-            }
+            remove_if_present(&self.directory.join(name))?;
         }
         Ok(())
+    }
+}
+
+/// How long to keep retrying a file another process holds open, such as an antivirus
+/// scanning a package that was just written.
+const HELD_FILE_ATTEMPTS: u32 = 40;
+const HELD_FILE_DELAY: std::time::Duration = std::time::Duration::from_millis(25);
+
+/// Windows refuses to delete a file another process has open without sharing deletes.
+const ERROR_SHARING_VIOLATION: i32 = 32;
+
+fn remove_if_present(path: &Path) -> Result<()> {
+    let mut attempt = 1;
+    loop {
+        match std::fs::remove_file(path) {
+            Ok(()) => return Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(error)
+                if cfg!(windows)
+                    && error.raw_os_error() == Some(ERROR_SHARING_VIOLATION)
+                    && attempt < HELD_FILE_ATTEMPTS =>
+            {
+                attempt += 1;
+                std::thread::sleep(HELD_FILE_DELAY);
+            }
+            Err(error) => return Err(error.into()),
+        }
     }
 }
 
@@ -317,6 +340,33 @@ mod tests {
         )
         .expect("updated version");
         assert!(updated.load().expect("obsolete package").is_none());
+        assert!(!cache.directory.join("package.bin").exists());
+    }
+
+    /// Another process, such as an antivirus scanning a file just written, can hold it
+    /// open for a moment without letting it be deleted.
+    #[cfg(windows)]
+    #[test]
+    fn clearing_waits_for_a_briefly_held_package() {
+        use std::os::windows::fs::OpenOptionsExt;
+
+        let (_temp, cache) = cache("held", "1.0.0", false);
+        cache
+            .store("1.1.0", &STANDARD.encode(SIGNATURE), b"test")
+            .expect("store signed package");
+        let held = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(cache.directory.join("package.bin"))
+            .expect("hold the package");
+        let release = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(150));
+            drop(held);
+        });
+
+        cache.clear().expect("clear once the package is released");
+        release.join().expect("the holder should finish");
+
         assert!(!cache.directory.join("package.bin").exists());
     }
 
