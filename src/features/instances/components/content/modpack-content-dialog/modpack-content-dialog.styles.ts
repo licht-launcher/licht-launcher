@@ -4,8 +4,9 @@ export const modpackContentDialogStyles = {
   icon: "size-9 shrink-0 rounded-md bg-muted object-cover",
   iconFallback:
     "flex size-9 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground [&_svg]:size-5",
-  title: "min-w-0 flex-1 truncate text-base font-semibold",
-  description: "sr-only",
+  heading: "flex min-w-0 flex-1 flex-col gap-1",
+  title: "truncate text-base font-semibold",
+  description: "truncate text-sm text-muted-foreground",
   summary:
     "flex flex-wrap items-center gap-x-5 gap-y-1 px-6 pt-4 text-sm font-medium",
   count: "flex items-center gap-2 tabular-nums",

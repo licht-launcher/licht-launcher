@@ -4,6 +4,7 @@ export const contentKindIconStyles = {
     default: { well: "size-8", icon: "size-4" },
     sm: { well: "size-6", icon: "size-3.5" },
   },
+  muted: { well: "bg-muted", icon: "text-muted-foreground" },
   kinds: {
     mods: { well: "bg-accent-violet/15", icon: "text-accent-violet" },
     resourcePacks: {

@@ -1,10 +1,24 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { ModpackOrigin } from "@/features/instances/lib/modpack-content";
 import type { InstanceContentEntry } from "@/lib/generated/InstanceContentEntry";
 import type { InstanceContentKind } from "@/lib/generated/InstanceContentKind";
 
 import { ModpackContentDialog } from "./modpack-content-dialog";
+
+const getModpack = vi.hoisted(() => vi.fn());
+const listModpackVersions = vi.hoisted(() => vi.fn());
+
+vi.mock("@/api/commands", () => ({
+  getModpack,
+  listModpackVersions,
+  listModpackSources: vi.fn(),
+  searchModpacks: vi.fn(),
+}));
+
+const IMPORTED: ModpackOrigin = { type: "modpackFile", source: "modrinth" };
 
 function entry(
   title: string,
@@ -28,17 +42,22 @@ const ENTRIES = [
   entry("Fresh", "resourcePacks"),
 ];
 
-function renderDialog(open = true) {
+function renderDialog(open = true, origin: ModpackOrigin = IMPORTED) {
   const onToggle = vi.fn();
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   render(
-    <ModpackContentDialog
-      open={open}
-      onOpenChange={vi.fn()}
-      iconUrl={null}
-      folder="classic"
-      entries={ENTRIES}
-      actions={{ disabled: false, onToggle }}
-    />,
+    <QueryClientProvider client={client}>
+      <ModpackContentDialog
+        open={open}
+        onOpenChange={vi.fn()}
+        origin={origin}
+        folder="classic"
+        entries={ENTRIES}
+        actions={{ disabled: false, onToggle }}
+      />
+    </QueryClientProvider>,
   );
   return { onToggle };
 }
@@ -107,6 +126,42 @@ describe("ModpackContentDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: /Content/ }));
 
     expect(listedTitles()).toEqual(["Sodium", "Iris", "Fresh"]);
+  });
+
+  it("describes the pack, its version, provider and release age", async () => {
+    getModpack.mockResolvedValue({
+      name: "Fabulously Optimized",
+      author: "robotkoer",
+      iconUrl: null,
+    });
+    listModpackVersions.mockResolvedValue([
+      { id: "v15", name: "15.0.0-beta.3", publishedAt: "2020-01-01T00:00:00Z" },
+    ]);
+
+    renderDialog(true, {
+      type: "modpack",
+      source: "modrinth",
+      projectId: "fo",
+      versionId: "v15",
+      iconUrl: null,
+    });
+
+    expect(
+      await screen.findByText(
+        /^Fabulously Optimized 15\.0\.0-beta\.3 · by robotkoer · Modrinth · Updated .+ ago$/,
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("says where an imported pack came from", () => {
+    renderDialog();
+
+    expect(
+      screen.getByRole("dialog", { name: "Modpack content" }),
+    ).toHaveAccessibleDescription(
+      "Imported modpack · Installed from a Modrinth file",
+    );
+    expect(getModpack).not.toHaveBeenCalled();
   });
 
   it("renders nothing while closed", () => {

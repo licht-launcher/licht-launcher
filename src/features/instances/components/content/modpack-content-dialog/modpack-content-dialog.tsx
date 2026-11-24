@@ -20,12 +20,21 @@ import {
 } from "@/features/instances/components/content/content-table-head";
 import { useContentVirtualizer } from "@/features/instances/hooks/use-content-virtualizer";
 import {
+  fileModpackSummary,
+  type ModpackSummary,
+  useStoreModpackSummary,
+} from "@/features/instances/hooks/use-modpack-summary";
+import {
   type ContentFilter,
   type ContentSortDir,
   filterContentEntries,
   sortContentEntries,
 } from "@/features/instances/lib/content-table";
-import { countContent } from "@/features/instances/lib/modpack-content";
+import {
+  countContent,
+  type ModpackOrigin,
+  type StoreModpackOrigin,
+} from "@/features/instances/lib/modpack-content";
 import type { InstanceContentEntry } from "@/lib/generated/InstanceContentEntry";
 
 import { modpackContentDialogStyles as styles } from "./modpack-content-dialog.styles";
@@ -41,28 +50,22 @@ type ModpackContent = {
 export function ModpackContentDialog({
   open,
   onOpenChange,
-  iconUrl,
+  origin,
   ...content
 }: ModpackContent & {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  iconUrl: string | null;
+  origin: ModpackOrigin;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className={styles.content} showCloseButton={false}>
         <DialogHeader className={styles.header}>
-          {iconUrl ? (
-            <img src={iconUrl} alt="" className={styles.icon} />
+          {origin.type === "modpack" ? (
+            <StoreModpackHeading origin={origin} />
           ) : (
-            <span aria-hidden className={styles.iconFallback}>
-              <PackageIcon />
-            </span>
+            <ModpackHeading summary={fileModpackSummary(origin)} />
           )}
-          <DialogTitle className={styles.title}>Modpack content</DialogTitle>
-          <DialogDescription className={styles.description}>
-            Files installed by this instance's modpack.
-          </DialogDescription>
           <DialogClose asChild>
             <Button
               type="button"
@@ -77,6 +80,36 @@ export function ModpackContentDialog({
         <ModpackContentBrowser {...content} />
       </DialogContent>
     </Dialog>
+  );
+}
+
+function StoreModpackHeading({ origin }: { origin: StoreModpackOrigin }) {
+  return <ModpackHeading summary={useStoreModpackSummary(origin)} />;
+}
+
+/** The pack's icon, then which pack and version, who provides it and how recent it is. */
+function ModpackHeading({ summary }: { summary: ModpackSummary }) {
+  return (
+    <>
+      {summary.iconUrl ? (
+        <img src={summary.iconUrl} alt="" className={styles.icon} />
+      ) : (
+        <span aria-hidden className={styles.iconFallback}>
+          <PackageIcon />
+        </span>
+      )}
+      <div className={styles.heading}>
+        <DialogTitle className={styles.title}>Modpack content</DialogTitle>
+        <DialogDescription className={styles.description}>
+          {[
+            summary.version
+              ? `${summary.name} ${summary.version}`
+              : summary.name,
+            ...summary.details,
+          ].join(" · ")}
+        </DialogDescription>
+      </div>
+    </>
   );
 }
 
@@ -110,7 +143,7 @@ function ModpackContentBrowser({ folder, entries, actions }: ModpackContent) {
       <p className={styles.summary}>
         {counts.map((count) => (
           <span key={count.kind} className={styles.count}>
-            <ContentKindIcon kind={count.kind} size="sm" />
+            <ContentKindIcon kind={count.kind} size="sm" tone="muted" />
             {count.label}
           </span>
         ))}

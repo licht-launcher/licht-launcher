@@ -8,6 +8,9 @@ export type ModpackOrigin = Extract<
   { type: "modpack" } | { type: "modpackFile" }
 >;
 
+export type StoreModpackOrigin = Extract<ModpackOrigin, { type: "modpack" }>;
+export type FileModpackOrigin = Extract<ModpackOrigin, { type: "modpackFile" }>;
+
 export function modpackOrigin(
   source: InstanceSource | undefined,
 ): ModpackOrigin | null {

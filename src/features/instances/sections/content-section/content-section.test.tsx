@@ -44,6 +44,7 @@ function renderContent(
         filter={filter}
         search={search}
         modpack={modpack}
+        toolbar={<button type="button">Refresh content</button>}
       />
     </QueryClientProvider>,
   );
@@ -552,6 +553,12 @@ describe("ContentSection", () => {
       expect(
         screen.getByRole("region", { name: "Modpack content" }),
       ).toHaveTextContent("1 mod");
+      expect(
+        screen.getByRole("heading", { name: "Extra content 1" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Refresh content" }),
+      ).toBeInTheDocument();
     });
 
     it("says when nothing was added on top of the modpack", async () => {
@@ -566,8 +573,11 @@ describe("ContentSection", () => {
       ).toBeInTheDocument();
       expect(screen.queryByRole("columnheader")).not.toBeInTheDocument();
       expect(
-        screen.getByRole("heading", { name: "Extra content 0" }),
-      ).toBeInTheDocument();
+        screen.queryByRole("heading", { name: /Extra content/ }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "Refresh content" }),
+      ).not.toBeInTheDocument();
     });
 
     it("opens the modpack content in a dialog and closes it again", async () => {

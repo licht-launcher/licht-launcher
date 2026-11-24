@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ModpackOrigin } from "@/features/instances/lib/modpack-content";
@@ -48,17 +48,36 @@ const ENTRIES = [
 function renderCard(
   origin: ModpackOrigin,
   entries: InstanceContentEntry[] = ENTRIES,
+  linked = false,
 ) {
   const onView = vi.fn();
+  const onOpenModpack = vi.fn();
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   render(
     <QueryClientProvider client={client}>
-      <ModpackContentCard origin={origin} entries={entries} onView={onView} />
+      <ModpackContentCard
+        origin={origin}
+        entries={entries}
+        onView={onView}
+        onOpenModpack={linked ? onOpenModpack : undefined}
+      />
     </QueryClientProvider>,
   );
-  return { onView };
+  return { onView, onOpenModpack };
+}
+
+function mockStore() {
+  getModpack.mockResolvedValue({
+    name: "Fabulously Optimized",
+    author: "robotkoer",
+    iconUrl: null,
+  });
+  listModpackVersions.mockResolvedValue([
+    { id: "v14", name: "14.0.0", publishedAt: null },
+    { id: "v15", name: "15.0.0-beta.3", publishedAt: "2020-01-01T00:00:00Z" },
+  ]);
 }
 
 describe("ModpackContentCard", () => {
@@ -67,52 +86,58 @@ describe("ModpackContentCard", () => {
     listModpackVersions.mockReset();
   });
 
-  it("shows what the modpack ships and which version provides it", async () => {
-    getModpack.mockResolvedValue({
-      name: "Fabulously Optimized",
-      author: "robotkoer",
-      iconUrl: null,
-    });
-    listModpackVersions.mockResolvedValue([
-      { id: "v14", name: "14.0.0", publishedAt: null },
-      { id: "v15", name: "15.0.0-beta.3", publishedAt: "2020-01-01T00:00:00Z" },
-    ]);
+  it("shows what the modpack ships and which pack and version provide it", async () => {
+    mockStore();
 
     renderCard(STORE);
 
+    const card = screen.getByRole("region", { name: "Modpack content" });
+    expect(
+      screen.getByRole("heading", { name: "Modpack content" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("2 mods")).toBeInTheDocument();
     expect(screen.getByText("1 resource pack")).toBeInTheDocument();
-    expect(
-      await screen.findByRole("heading", { name: "Fabulously Optimized" }),
-    ).toBeInTheDocument();
-    expect(await screen.findByText("15.0.0-beta.3")).toBeInTheDocument();
-    expect(screen.getByText("by robotkoer · Modrinth")).toBeInTheDocument();
-    expect(screen.getByText(/^Updated .+ ago$/)).toBeInTheDocument();
+    await waitFor(() =>
+      expect(card).toHaveTextContent(
+        "Provided byFabulously Optimized· 15.0.0-beta.3",
+      ),
+    );
+    // Author and release age are shown in the content dialog instead.
+    expect(card).not.toHaveTextContent(/robotkoer|Updated/);
     expect(getModpack).toHaveBeenCalledWith("modrinth", "fo");
   });
 
-  it("says when the modpack details cannot be loaded", async () => {
+  it("opens the pack's page from its name", async () => {
+    mockStore();
+    const { onOpenModpack } = renderCard(STORE, ENTRIES, true);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Fabulously Optimized" }),
+    );
+
+    expect(onOpenModpack).toHaveBeenCalledOnce();
+  });
+
+  it("still shows what the pack ships when the store cannot be reached", async () => {
     getModpack.mockRejectedValue(new Error("offline"));
     listModpackVersions.mockRejectedValue(new Error("offline"));
 
     renderCard(STORE);
 
-    expect(
-      await screen.findByText("Modpack details are unavailable."),
-    ).toBeInTheDocument();
+    await waitFor(() => expect(getModpack).toHaveBeenCalled());
     expect(screen.getByText("2 mods")).toBeInTheDocument();
-    expect(screen.queryByText(/Updated/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "View content" })).toBeEnabled();
   });
 
-  it("shows a pack imported from disk without asking a store", () => {
-    renderCard({ type: "modpackFile", source: "modrinth" });
+  it("says a pack imported from disk came from a file, without asking a store", () => {
+    renderCard({ type: "modpackFile", source: "modrinth" }, ENTRIES, true);
 
     expect(
-      screen.getByRole("heading", { name: "Imported modpack" }),
+      screen.getByText("Imported from a Modrinth file"),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("Installed from a Modrinth file"),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: /Provided/ }),
+    ).not.toBeInTheDocument();
     expect(getModpack).not.toHaveBeenCalled();
   });
 

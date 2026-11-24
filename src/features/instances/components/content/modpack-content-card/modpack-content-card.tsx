@@ -1,141 +1,110 @@
-import {
-  ClockIcon,
-  EyeIcon,
-  FileArchiveIcon,
-  LockIcon,
-  PackageIcon,
-} from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { EyeIcon, FileArchiveIcon, LockIcon, PackageIcon } from "lucide-react";
+import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  useModpack,
-  useModpackVersions,
-} from "@/features/discover/hooks/use-modpacks";
 import { SOURCE_LABELS } from "@/features/discover/lib/discover-search";
-import { formatTimeAgo } from "@/features/discover/lib/format";
 import { ContentKindIcon } from "@/features/instances/components/content/content-kind-icon";
+import { useStoreModpackSummary } from "@/features/instances/hooks/use-modpack-summary";
 import {
   countContent,
+  type FileModpackOrigin,
   type ModpackOrigin,
+  type StoreModpackOrigin,
 } from "@/features/instances/lib/modpack-content";
 import type { InstanceContentEntry } from "@/lib/generated/InstanceContentEntry";
 
 import { modpackContentCardStyles as styles } from "./modpack-content-card.styles";
 
-type StoreOrigin = Extract<ModpackOrigin, { type: "modpack" }>;
+type CardProps = {
+  entries: readonly InstanceContentEntry[];
+  onView: () => void;
+};
 
 /**
- * Summary of the modpack an instance was created from and the content it ships.
- * It sits at the top of the content panel, above the content the user added.
+ * The content an instance's modpack ships and which pack provides it. It heads
+ * the content panel; the pack's author and release age live in the content dialog.
  */
 export function ModpackContentCard({
   origin,
-  entries,
-  onView,
-}: {
+  onOpenModpack,
+  ...props
+}: CardProps & {
   origin: ModpackOrigin;
-  entries: readonly InstanceContentEntry[];
-  onView: () => void;
+  /** Opens the pack's store page; without it the pack name is plain text. */
+  onOpenModpack?: () => void;
 }) {
-  const included = <IncludedContent entries={entries} />;
-  const action = (
-    <Button
-      type="button"
-      variant="outline"
-      aria-haspopup="dialog"
-      disabled={entries.length === 0}
-      onClick={onView}
-    >
-      <EyeIcon data-icon="inline-start" aria-hidden />
-      View content
-    </Button>
-  );
-  return (
-    <section aria-label="Modpack content" className={styles.root}>
-      {origin.type === "modpack" ? (
-        <StoreModpack origin={origin} included={included} action={action} />
-      ) : (
-        <CardHeader
-          iconUrl={null}
-          title="Imported modpack"
-          subtitle={
-            <span className={styles.subtitlePart}>
-              <FileArchiveIcon aria-hidden />
-              Installed from a {SOURCE_LABELS[origin.source]} file
-            </span>
-          }
-          included={included}
-          action={action}
-        />
-      )}
-    </section>
+  return origin.type === "modpack" ? (
+    <StoreModpackCard
+      origin={origin}
+      onOpenModpack={onOpenModpack}
+      {...props}
+    />
+  ) : (
+    <FileModpackCard origin={origin} {...props} />
   );
 }
 
-function StoreModpack({
+function StoreModpackCard({
   origin,
-  included,
-  action,
-}: {
-  origin: StoreOrigin;
-  included: ReactNode;
-  action: ReactNode;
-}) {
-  const [now] = useState(() => Date.now());
-  const modpack = useModpack(origin.source, origin.projectId);
-  const versions = useModpackVersions(origin.source, origin.projectId);
-  const version = versions.data?.find((item) => item.id === origin.versionId);
-  const updated = formatTimeAgo(version?.publishedAt ?? null, now);
-  const sourceLabel = SOURCE_LABELS[origin.source];
-  const provider = modpack.isPending
-    ? "Loading modpack details…"
-    : modpack.isError
-      ? "Modpack details are unavailable."
-      : modpack.data.author
-        ? `by ${modpack.data.author} · ${sourceLabel}`
-        : sourceLabel;
+  onOpenModpack,
+  ...props
+}: CardProps & { origin: StoreModpackOrigin; onOpenModpack?: () => void }) {
+  const summary = useStoreModpackSummary(origin);
   return (
-    <CardHeader
-      iconUrl={modpack.data?.iconUrl ?? origin.iconUrl}
-      title={modpack.data?.name ?? "Modpack"}
-      version={version?.name ?? null}
-      subtitle={
+    <ModpackCard
+      iconUrl={summary.iconUrl}
+      provider={
         <>
-          <span className={styles.subtitlePart}>
-            <LockIcon aria-hidden />
-            {provider}
-          </span>
-          {updated && modpack.isSuccess ? (
-            <span className={styles.subtitlePart}>
-              <ClockIcon aria-hidden />
-              Updated {updated}
-            </span>
+          <LockIcon aria-hidden />
+          Provided by
+          {onOpenModpack ? (
+            <Button
+              type="button"
+              variant="link"
+              className={styles.providerLink}
+              onClick={onOpenModpack}
+            >
+              {summary.name}
+            </Button>
+          ) : (
+            <span className={styles.providerName}>{summary.name}</span>
+          )}
+          {summary.version ? (
+            <span className={styles.version}>· {summary.version}</span>
           ) : null}
         </>
       }
-      included={included}
-      action={action}
+      {...props}
     />
   );
 }
 
-function CardHeader({
-  iconUrl,
-  title,
-  version = null,
-  subtitle,
-  included,
-  action,
-}: {
-  iconUrl: string | null;
-  title: string;
-  version?: string | null;
-  subtitle: ReactNode;
-  included: ReactNode;
-  action: ReactNode;
-}) {
+function FileModpackCard({
+  origin,
+  ...props
+}: CardProps & { origin: FileModpackOrigin }) {
   return (
-    <div className={styles.header}>
+    <ModpackCard
+      iconUrl={null}
+      provider={
+        <>
+          <FileArchiveIcon aria-hidden />
+          Imported from a {SOURCE_LABELS[origin.source]} file
+        </>
+      }
+      {...props}
+    />
+  );
+}
+
+function ModpackCard({
+  iconUrl,
+  provider,
+  entries,
+  onView,
+}: CardProps & { iconUrl: string | null; provider: ReactNode }) {
+  const counts = countContent(entries);
+  return (
+    <section aria-label="Modpack content" className={styles.root}>
       {iconUrl ? (
         <img src={iconUrl} alt="" className={styles.icon} />
       ) : (
@@ -144,29 +113,29 @@ function CardHeader({
         </span>
       )}
       <div className={styles.heading}>
-        <div className={styles.titleLine}>
-          <h3 className={styles.title}>{title}</h3>
-          {version ? <span className={styles.version}>{version}</span> : null}
-        </div>
-        <p className={styles.subtitle}>{subtitle}</p>
-        <p className={styles.counts}>{included}</p>
+        <h3 className={styles.title}>Modpack content</h3>
+        <p className={styles.counts}>
+          {counts.length === 0
+            ? "No content"
+            : counts.map((count) => (
+                <span key={count.kind} className={styles.count}>
+                  <ContentKindIcon kind={count.kind} size="sm" tone="muted" />
+                  {count.label}
+                </span>
+              ))}
+        </p>
+        <p className={styles.provider}>{provider}</p>
       </div>
-      {action}
-    </div>
+      <Button
+        type="button"
+        variant="outline"
+        aria-haspopup="dialog"
+        disabled={entries.length === 0}
+        onClick={onView}
+      >
+        <EyeIcon data-icon="inline-start" aria-hidden />
+        View content
+      </Button>
+    </section>
   );
-}
-
-function IncludedContent({
-  entries,
-}: {
-  entries: readonly InstanceContentEntry[];
-}) {
-  const counts = countContent(entries);
-  if (counts.length === 0) return "No content";
-  return counts.map((count) => (
-    <span key={count.kind} className={styles.count}>
-      <ContentKindIcon kind={count.kind} size="sm" />
-      {count.label}
-    </span>
-  ));
 }

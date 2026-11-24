@@ -16,6 +16,16 @@ describe("ContentKindIcon", () => {
     expect(well?.querySelector("svg")).toHaveClass(tint, "size-4");
   });
 
+  it("drops the kind tint in the muted tone", () => {
+    const { container } = render(
+      <ContentKindIcon kind="resourcePacks" tone="muted" />,
+    );
+
+    const icon = container.querySelector("[data-kind=resourcePacks] svg");
+    expect(icon).toHaveClass("text-muted-foreground");
+    expect(icon).not.toHaveClass("text-accent-orange");
+  });
+
   it("has a smaller size for inline counts", () => {
     const { container } = render(<ContentKindIcon kind="mods" size="sm" />);
 

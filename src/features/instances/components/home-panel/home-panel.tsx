@@ -1,4 +1,5 @@
 import { useIsFetching, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import {
   BlocksIcon,
   EraserIcon,
@@ -82,6 +83,7 @@ export function HomePanel({
   const [filesPath, setFilesPath] = useState("");
   const [pathFolder, setPathFolder] = useState<string | null>(null);
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const folder = instance?.folder ?? null;
   const refreshingContent =
     useIsFetching({ queryKey: ["instance-content", folder] }) > 0;
@@ -91,6 +93,7 @@ export function HomePanel({
     setTab("content");
   }
 
+  const modpack = modpackOrigin(instance?.installation?.source);
   const contentToolbar = (
     <>
       <Input
@@ -247,7 +250,19 @@ export function HomePanel({
               folder={folder}
               filter={contentFilter}
               search={contentSearch}
-              modpack={modpackOrigin(instance?.installation?.source)}
+              modpack={modpack}
+              onOpenModpack={
+                modpack?.type === "modpack"
+                  ? () =>
+                      void navigate({
+                        to: "/discover/$source/$projectId",
+                        params: {
+                          source: modpack.source,
+                          projectId: modpack.projectId,
+                        },
+                      })
+                  : undefined
+              }
               toolbar={contentToolbar}
             />
           </PageTransition>

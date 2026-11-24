@@ -43,6 +43,7 @@ export function ContentSection({
   search,
   modpack = null,
   toolbar = null,
+  onOpenModpack,
 }: {
   folder: string | null;
   filter: ContentFilter;
@@ -50,6 +51,8 @@ export function ContentSection({
   modpack?: ModpackOrigin | null;
   /** Search, filter and refresh controls, shown right above the list. */
   toolbar?: ReactNode;
+  /** Opens the store page of the modpack the instance is linked to. */
+  onOpenModpack?: () => void;
 }) {
   const queryClient = useQueryClient();
   const [pendingRemoval, setPendingRemoval] =
@@ -144,6 +147,7 @@ export function ContentSection({
     setSortDir(next.dir);
   }
 
+  // Nothing to search, filter or refresh until the user adds content of their own.
   const noExtraContent =
     modpack !== null &&
     content.data !== undefined &&
@@ -156,21 +160,24 @@ export function ContentSection({
           origin={modpack}
           entries={modpackEntries}
           onView={() => setModpackOpenFor(folder)}
+          onOpenModpack={onOpenModpack}
         />
       ) : null}
-      <div className={contentSectionStyles.toolbar}>
-        {modpack !== null ? (
-          <h3 className={contentSectionStyles.extraTitle}>
-            Extra content{" "}
-            {content.data !== undefined ? (
-              <span className={contentSectionStyles.extraCount}>
-                {listedEntries.length}
-              </span>
-            ) : null}
-          </h3>
-        ) : null}
-        {toolbar}
-      </div>
+      {noExtraContent ? null : (
+        <div className={contentSectionStyles.toolbar}>
+          {modpack !== null ? (
+            <h3 className={contentSectionStyles.extraTitle}>
+              Extra content{" "}
+              {content.data !== undefined ? (
+                <span className={contentSectionStyles.extraCount}>
+                  {listedEntries.length}
+                </span>
+              ) : null}
+            </h3>
+          ) : null}
+          {toolbar}
+        </div>
+      )}
       {content.isPending ? (
         <ContentLoading sortKey={sortKey} sortDir={sortDir} />
       ) : content.isError && content.data === undefined ? (
@@ -223,7 +230,7 @@ export function ContentSection({
             <ModpackContentDialog
               open={modpackOpen}
               onOpenChange={(open) => setModpackOpenFor(open ? folder : null)}
-              iconUrl={modpack.type === "modpack" ? modpack.iconUrl : null}
+              origin={modpack}
               folder={folder}
               entries={modpackEntries}
               actions={{ disabled, onToggle: toggleContent }}
