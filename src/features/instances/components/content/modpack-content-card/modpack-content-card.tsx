@@ -125,7 +125,6 @@ function StoreModpack({
         action={action}
       />
       <dl className={styles.facts}>
-        <Fact label="Included">{included}</Fact>
         <Fact label="Version">
           {version ? (
             <Badge>{version.name}</Badge>
@@ -138,6 +137,7 @@ function StoreModpack({
             {updated ?? "Unknown"}
           </span>
         </Fact>
+        <Fact label="Included">{included}</Fact>
       </dl>
     </>
   );
