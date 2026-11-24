@@ -11,7 +11,7 @@ export const modpackContentDialogStyles = {
   count: "flex items-center gap-2 tabular-nums",
   toolbar: "flex items-center gap-2 px-6 py-4",
   searchInput: "min-w-0 flex-1 font-medium",
-  /** The rows pad their cells by 12px, so this inset lines them up with the 24px page margin. */
-  list: "flex min-h-0 flex-1 flex-col border-t border-border/60 px-3",
+  /** Rows stay full width; only their outer cells move in to the dialog's 24px margin. */
+  list: "flex min-h-0 flex-1 flex-col border-t border-border/60 [&_td:first-child]:pl-6 [&_td:last-child]:pr-6 [&_th:first-child]:pl-6 [&_th:last-child]:pr-6",
   headTable: "w-full shrink-0 table-fixed text-sm",
 } as const;
