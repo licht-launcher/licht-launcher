@@ -139,6 +139,12 @@ async fn changing_directory_moves_content_after_restart_and_keeps_the_profile() 
         .execute(&mut connection)
         .await
         .expect("CurseForge file");
+    sqlx::query("INSERT INTO modpack_override_files VALUES (?1, ?2, 'resourcepacks/pack.zip')")
+        .bind(instances.to_str().expect("instances path"))
+        .bind(&registered.folder)
+        .execute(&mut connection)
+        .await
+        .expect("override file");
     use sqlx::Connection;
     connection.close().await.expect("close");
     let mut settings = crate::settings::load_settings_at(&home)
@@ -266,6 +272,15 @@ async fn changing_directory_moves_content_after_restart_and_keeps_the_profile() 
             .expect("modpack scope");
     assert_eq!(
         std::path::PathBuf::from(modpack_directory),
+        target.instances_dir().expect("instances")
+    );
+    let override_directory: String =
+        sqlx::query_scalar("SELECT instances_directory FROM modpack_override_files")
+            .fetch_one(&mut connection)
+            .await
+            .expect("override scope");
+    assert_eq!(
+        std::path::PathBuf::from(override_directory),
         target.instances_dir().expect("instances")
     );
     let curseforge_directory: String =

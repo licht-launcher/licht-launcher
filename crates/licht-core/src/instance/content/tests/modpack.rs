@@ -137,6 +137,40 @@ async fn marks_files_from_a_curseforge_pack() {
 }
 
 #[tokio::test]
+async fn marks_files_the_pack_copied_from_its_overrides() {
+    let (_temp, cache) = cache("modpack-overrides");
+    let root = instance(&cache);
+    fs::write(root.join("mods").join("sodium.jar"), b"mod").expect("mod");
+    fs::write(root.join("resourcepacks").join("bundled.zip"), b"pack").expect("pack");
+    let service = database(&cache).await;
+    let database = service.client();
+    let instances = cache.instances_dir().expect("instances");
+    database
+        .replace_modpack(&instances, "classic", modrinth_pack(&["mods/sodium.jar"]))
+        .await
+        .expect("store pack");
+    database
+        .replace_modpack_override_files(
+            &instances,
+            "classic",
+            vec!["resourcepacks/bundled.zip".to_string()],
+        )
+        .await
+        .expect("store overrides");
+
+    let entries = listed(&cache, &database).await;
+
+    assert_eq!(
+        entries,
+        [
+            ("sodium.jar".to_string(), true),
+            ("bundled.zip".to_string(), true),
+        ]
+    );
+    service.shutdown().await.expect("shutdown");
+}
+
+#[tokio::test]
 async fn treats_everything_as_extra_without_a_modpack() {
     let (_temp, cache) = cache("modpack-none");
     let root = instance(&cache);

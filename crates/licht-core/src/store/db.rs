@@ -10,7 +10,7 @@ use super::repositories::metadata::MetadataRepository;
 use crate::{CoreError, Result, SharedCache};
 
 const DB_FILE: &str = "licht.db";
-const SCHEMA_VERSION: u32 = 14;
+const SCHEMA_VERSION: u32 = 15;
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 // The database actor keeps one connection; the rest serve short reads and writes.
 const MAX_CONNECTIONS: u32 = 4;
@@ -358,6 +358,20 @@ async fn migrate(connection: &mut SqliteConnection) -> Result<()> {
         sqlx::raw_sql(
             "ALTER TABLE settings DROP COLUMN disable_custom_title_bar;
             PRAGMA user_version = 14;",
+        )
+        .execute(&mut *transaction)
+        .await?;
+    }
+    if version < 15 {
+        // Files a pack copies from its overrides folder; with the index rows they make up
+        // the content the pack installed.
+        sqlx::raw_sql(
+            "CREATE TABLE modpack_override_files (
+                instances_directory TEXT NOT NULL, instance_folder TEXT NOT NULL,
+                relative_path TEXT NOT NULL,
+                PRIMARY KEY (instances_directory, instance_folder, relative_path)
+            );
+            PRAGMA user_version = 15;",
         )
         .execute(&mut *transaction)
         .await?;

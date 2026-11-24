@@ -4,7 +4,8 @@ use super::InstanceContentEntry;
 use super::files::content_directory;
 use crate::{DatabaseClient, Result, SharedCache};
 
-/// Instance-relative paths (`mods/sodium.jar`) that the instance's modpack installed.
+/// Instance-relative paths (`mods/sodium.jar`) that the instance's modpack installed,
+/// from its index or its overrides folder.
 pub(super) async fn modpack_paths(
     cache: &SharedCache,
     database: &DatabaseClient,
@@ -13,10 +14,12 @@ pub(super) async fn modpack_paths(
     let instances = cache.instances_dir()?;
     let modrinth = database.modpack_files(&instances, folder).await?;
     let curseforge = database.curseforge_files(&instances, folder).await?;
+    let overrides = database.modpack_override_files(&instances, folder).await?;
     Ok(modrinth
         .into_iter()
         .map(|file| file.relative_path)
         .chain(curseforge.into_iter().map(|file| file.relative_path))
+        .chain(overrides)
         .map(|path| path.replace('\\', "/"))
         .collect())
 }

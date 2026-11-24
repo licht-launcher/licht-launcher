@@ -130,7 +130,7 @@ accepted requests, and awaits dispatcher and connection closure. Dropping the
 service owner signals shutdown, but explicit shutdown is needed to await it and
 receive close errors.
 
-The database uses schema version 13 and a five-second busy timeout. Up-to-date
+The database uses schema version 15 and a five-second busy timeout. Up-to-date
 schema checks avoid a writer transaction; migrations recheck the version inside
 their transaction. Standalone persistence functions also use SQLx repositories
 and explicitly close their short-lived connections.
@@ -162,7 +162,14 @@ instance profiles. Modrinth packs use `modpack_indexes`, `modpack_dependencies` 
 one ordered row per file with the CDN URL, an optional SHA1 and MD5 (at least one is
 required), size, project and file ids, names and the `required` flag.
 
-Deleting or duplicating an instance deletes or copies both kinds of rows, and a
+Both kinds of pack also record, in `modpack_override_files`, the instance-relative
+path of every file they copied from their overrides folders (`overrides/` and
+`client-overrides/` for Modrinth, the manifest's overrides folder for CurseForge).
+Together with the index rows, these paths tell content the pack installed apart
+from content the user added. Instances installed before schema version 15 have no
+override rows until the pack is installed again.
+
+Deleting or duplicating an instance deletes or copies all of these rows, and a
 content-directory move rewrites their `instances_directory`. Starting a new install
 clears them before the pack is imported again.
 

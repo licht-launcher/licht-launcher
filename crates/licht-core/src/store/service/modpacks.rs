@@ -37,6 +37,8 @@ pub(super) enum Request {
         Vec<StoredCurseforgeFile>,
         oneshot::Sender<Result<()>>,
     ),
+    OverrideFiles(String, String, oneshot::Sender<Result<Vec<String>>>),
+    ReplaceOverrideFiles(String, String, Vec<String>, oneshot::Sender<Result<()>>),
     Duplicate(String, String, String, oneshot::Sender<Result<()>>),
     Delete(String, String, oneshot::Sender<Result<()>>),
 }
@@ -125,6 +127,39 @@ impl DatabaseClient {
         response.await.map_err(|_| unavailable())?
     }
 
+    /// Instance-relative paths the pack copied from its overrides folder.
+    pub(crate) async fn modpack_override_files(
+        &self,
+        instances: &Path,
+        folder: &str,
+    ) -> Result<Vec<String>> {
+        let (reply, response) = oneshot::channel();
+        self.send(super::Request::Modpacks(Request::OverrideFiles(
+            directory(instances)?,
+            folder.to_string(),
+            reply,
+        )))
+        .await?;
+        response.await.map_err(|_| unavailable())?
+    }
+
+    pub(crate) async fn replace_modpack_override_files(
+        &self,
+        instances: &Path,
+        folder: &str,
+        paths: Vec<String>,
+    ) -> Result<()> {
+        let (reply, response) = oneshot::channel();
+        self.send(super::Request::Modpacks(Request::ReplaceOverrideFiles(
+            directory(instances)?,
+            folder.to_string(),
+            paths,
+            reply,
+        )))
+        .await?;
+        response.await.map_err(|_| unavailable())?
+    }
+
     pub(crate) async fn replace_curseforge_files(
         &self,
         instances: &Path,
@@ -196,6 +231,15 @@ pub(super) async fn execute(connection: &mut SqliteConnection, request: Request)
         Request::ReplaceCurseforgeFiles(directory, folder, files, reply) => respond(
             reply,
             ModpackRepository::replace_curseforge_files(connection, &directory, &folder, &files)
+                .await,
+        ),
+        Request::OverrideFiles(directory, folder, reply) => respond(
+            reply,
+            ModpackRepository::override_files(connection, &directory, &folder).await,
+        ),
+        Request::ReplaceOverrideFiles(directory, folder, paths, reply) => respond(
+            reply,
+            ModpackRepository::replace_override_files(connection, &directory, &folder, &paths)
                 .await,
         ),
         Request::Duplicate(directory, source, destination, reply) => respond(

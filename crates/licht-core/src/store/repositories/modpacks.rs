@@ -94,6 +94,37 @@ impl ModpackRepository {
         Ok(())
     }
 
+    pub async fn override_files(
+        connection: &mut SqliteConnection,
+        directory: &str,
+        folder: &str,
+    ) -> Result<Vec<String>> {
+        Ok(sqlx::query_scalar("SELECT relative_path FROM modpack_override_files WHERE instances_directory = ?1 AND instance_folder = ?2 ORDER BY relative_path")
+            .bind(directory).bind(folder).fetch_all(connection).await?)
+    }
+
+    pub async fn replace_override_files(
+        connection: &mut SqliteConnection,
+        directory: &str,
+        folder: &str,
+        paths: &[String],
+    ) -> Result<()> {
+        let mut transaction = connection.begin_with("BEGIN IMMEDIATE").await?;
+        sqlx::query(
+            "DELETE FROM modpack_override_files WHERE instances_directory = ?1 AND instance_folder = ?2",
+        )
+        .bind(directory)
+        .bind(folder)
+        .execute(&mut *transaction)
+        .await?;
+        for path in paths {
+            sqlx::query("INSERT OR IGNORE INTO modpack_override_files (instances_directory, instance_folder, relative_path) VALUES (?1, ?2, ?3)")
+                .bind(directory).bind(folder).bind(path).execute(&mut *transaction).await?;
+        }
+        transaction.commit().await?;
+        Ok(())
+    }
+
     pub async fn delete(
         connection: &mut SqliteConnection,
         directory: &str,
@@ -101,6 +132,7 @@ impl ModpackRepository {
     ) -> Result<()> {
         // Children are removed explicitly, including on connections without foreign_keys enabled.
         for statement in [
+            "DELETE FROM modpack_override_files WHERE instances_directory = ?1 AND instance_folder = ?2",
             "DELETE FROM curseforge_files WHERE instances_directory = ?1 AND instance_folder = ?2",
             "DELETE FROM modpack_files WHERE instances_directory = ?1 AND instance_folder = ?2",
             "DELETE FROM modpack_dependencies WHERE instances_directory = ?1 AND instance_folder = ?2",
@@ -130,6 +162,8 @@ impl ModpackRepository {
         sqlx::query("INSERT INTO modpack_files SELECT instances_directory, ?3, position, relative_path, sha1, sha512, url, size FROM modpack_files WHERE instances_directory = ?1 AND instance_folder = ?2")
             .bind(directory).bind(source).bind(destination).execute(&mut *transaction).await?;
         sqlx::query("INSERT INTO curseforge_files SELECT instances_directory, ?3, position, relative_path, url, sha1, md5, size, project_id, file_id, file_name, name, required FROM curseforge_files WHERE instances_directory = ?1 AND instance_folder = ?2")
+            .bind(directory).bind(source).bind(destination).execute(&mut *transaction).await?;
+        sqlx::query("INSERT INTO modpack_override_files SELECT instances_directory, ?3, relative_path FROM modpack_override_files WHERE instances_directory = ?1 AND instance_folder = ?2")
             .bind(directory).bind(source).bind(destination).execute(&mut *transaction).await?;
         transaction.commit().await?;
         Ok(())
@@ -210,6 +244,29 @@ mod tests {
                 .expect("isolated instance")
                 .is_none()
         );
+        client
+            .replace_modpack_override_files(
+                &instances,
+                "First",
+                vec!["options.txt".into(), "resourcepacks/old.zip".into()],
+            )
+            .await
+            .expect("first overrides");
+        client
+            .replace_modpack_override_files(
+                &instances,
+                "First",
+                vec!["resourcepacks/pack.zip".into()],
+            )
+            .await
+            .expect("replaced overrides");
+        assert!(
+            client
+                .modpack_override_files(&other, "First")
+                .await
+                .expect("isolated overrides")
+                .is_empty()
+        );
         crate::duplicate_instance(&client, &instances, "First", "Copy")
             .await
             .expect("copy");
@@ -236,6 +293,20 @@ mod tests {
                 .await
                 .expect("deleted dependencies")
                 .is_empty()
+        );
+        assert!(
+            client
+                .modpack_override_files(&instances, "First")
+                .await
+                .expect("deleted overrides")
+                .is_empty()
+        );
+        assert_eq!(
+            client
+                .modpack_override_files(&instances, "Copy")
+                .await
+                .expect("copied overrides"),
+            ["resourcepacks/pack.zip"]
         );
         assert!(
             crate::load_instance(&client, &instances.join("Copy"))

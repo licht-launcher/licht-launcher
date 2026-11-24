@@ -24,10 +24,13 @@ pub(crate) async fn import_mrpack_into(
         .ok_or(CoreError::ModpackArchive)?;
     let updated =
         crate::update_instance_version(database, instances_dir, &entry.folder, version).await?;
-    extract_prefixed(&mut archive, &dir, "overrides/")?;
-    extract_prefixed(&mut archive, &dir, "client-overrides/")?;
+    let mut overrides = extract_prefixed(&mut archive, &dir, "overrides/")?;
+    overrides.extend(extract_prefixed(&mut archive, &dir, "client-overrides/")?);
     database
         .replace_modpack(instances_dir, &entry.folder, stored)
+        .await?;
+    database
+        .replace_modpack_override_files(instances_dir, &entry.folder, overrides)
         .await?;
     Ok(updated)
 }
@@ -57,6 +60,9 @@ mod tests {
             zip.start_file("client-overrides/client.txt", options)
                 .unwrap();
             zip.write_all(b"ok").unwrap();
+            zip.start_file("overrides/resourcepacks/pack.zip", options)
+                .unwrap();
+            zip.write_all(b"pack").unwrap();
             zip.finish().unwrap();
         }
         let bytes = buffer.into_inner();
@@ -98,6 +104,14 @@ mod tests {
                 .await
                 .expect("dependencies"),
             [("minecraft".to_string(), "1.20.1".to_string())]
+        );
+        assert_eq!(
+            service
+                .client()
+                .modpack_override_files(&instances, &entry.folder)
+                .await
+                .expect("override files"),
+            ["client.txt", "options.txt", "resourcepacks/pack.zip"]
         );
         service.shutdown().await.expect("shutdown");
     }

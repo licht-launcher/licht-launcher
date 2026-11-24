@@ -197,6 +197,13 @@ async fn import_planned(
     database
         .replace_curseforge_files(instances_dir, &entry.folder, stored_files(plan)?)
         .await?;
+    database
+        .replace_modpack_override_files(
+            instances_dir,
+            &entry.folder,
+            entries.into_iter().map(|(_, relative)| relative).collect(),
+        )
+        .await?;
     crate::update_instance_version(
         database,
         instances_dir,
@@ -282,6 +289,14 @@ mod tests {
         assert_eq!(profile.name, pending.name);
         assert!(!dir.join("instance.json").exists());
         assert!(!dir.join(CURSEFORGE_INDEX_FILE).exists());
+        assert_eq!(
+            service
+                .client()
+                .modpack_override_files(&instances, &entry.folder)
+                .await
+                .expect("override files"),
+            ["config/instance.json", "legacy.txt", "options.txt"]
+        );
         assert_eq!(
             service
                 .client()
