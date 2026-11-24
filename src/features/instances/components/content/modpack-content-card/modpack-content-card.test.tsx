@@ -91,11 +91,9 @@ describe("ModpackContentCard", () => {
     expect(
       await screen.findByRole("heading", { name: "Fabulously Optimized" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("by robotkoer · Modrinth")).toBeInTheDocument();
     expect(await screen.findByText("15.0.0-beta.3")).toBeInTheDocument();
-    expect(
-      screen.getByText("Updated").nextElementSibling,
-    ).not.toHaveTextContent("Unknown");
+    expect(screen.getByText("by robotkoer · Modrinth")).toBeInTheDocument();
+    expect(screen.getByText(/^Updated .+ ago$/)).toBeInTheDocument();
     expect(getModpack).toHaveBeenCalledWith("modrinth", "fo");
   });
 
@@ -109,7 +107,7 @@ describe("ModpackContentCard", () => {
       await screen.findByText("Modpack details are unavailable."),
     ).toBeInTheDocument();
     expect(screen.getByText("2 mods")).toBeInTheDocument();
-    expect(screen.getAllByText("Unknown")).toHaveLength(2);
+    expect(screen.queryByText(/Updated/)).not.toBeInTheDocument();
   });
 
   it("shows a pack imported from disk without asking a store", () => {

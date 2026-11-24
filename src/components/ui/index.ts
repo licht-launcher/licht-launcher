@@ -15,7 +15,6 @@ export {
   DialogTrigger,
 } from "@/components/ui/dialog";
 export { Input } from "@/components/ui/input";
-export { MarqueeText } from "@/components/ui/marquee-text";
 export {
   Popover,
   PopoverAnchor,

@@ -1,5 +1,6 @@
 import {
   BlocksIcon,
+  ClockIcon,
   EyeIcon,
   EyeOffIcon,
   FileArchiveIcon,
@@ -10,7 +11,6 @@ import {
 } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { MarqueeText } from "@/components/ui/marquee-text";
 import {
   useModpack,
   useModpackVersions,
@@ -73,10 +73,10 @@ export function ModpackContentCard({
             iconUrl={null}
             title="Imported modpack"
             subtitle={
-              <>
+              <span className={styles.subtitlePart}>
                 <FileArchiveIcon aria-hidden />
                 Installed from a {SOURCE_LABELS[origin.source]} file
-              </>
+              </span>
             }
             action={action}
           />
@@ -106,7 +106,7 @@ function StoreModpack({
   const version = versions.data?.find((item) => item.id === origin.versionId);
   const updated = formatTimeAgo(version?.publishedAt ?? null, now);
   const sourceLabel = SOURCE_LABELS[origin.source];
-  const subtitle = modpack.isPending
+  const provider = modpack.isPending
     ? "Loading modpack details…"
     : modpack.isError
       ? "Modpack details are unavailable."
@@ -118,10 +118,19 @@ function StoreModpack({
       <CardHeader
         iconUrl={modpack.data?.iconUrl ?? origin.iconUrl}
         title={modpack.data?.name ?? "Modpack"}
+        version={version?.name ?? null}
         subtitle={
           <>
-            <LockIcon aria-hidden />
-            {subtitle}
+            <span className={styles.subtitlePart}>
+              <LockIcon aria-hidden />
+              {provider}
+            </span>
+            {updated && modpack.isSuccess ? (
+              <span className={styles.subtitlePart}>
+                <ClockIcon aria-hidden />
+                Updated {updated}
+              </span>
+            ) : null}
           </>
         }
         action={action}
@@ -129,18 +138,6 @@ function StoreModpack({
       <dl className={styles.facts}>
         <Fact label="Included" className={styles.includedFact}>
           {included}
-        </Fact>
-        <Fact label="Version" className={styles.versionFact}>
-          {version ? (
-            <MarqueeText>{version.name}</MarqueeText>
-          ) : (
-            <span className={styles.muted}>Unknown</span>
-          )}
-        </Fact>
-        <Fact label="Updated" className={styles.updatedFact}>
-          <span className={updated ? undefined : styles.muted}>
-            {updated ?? "Unknown"}
-          </span>
         </Fact>
       </dl>
     </>
@@ -150,11 +147,13 @@ function StoreModpack({
 function CardHeader({
   iconUrl,
   title,
+  version = null,
   subtitle,
   action,
 }: {
   iconUrl: string | null;
   title: string;
+  version?: string | null;
   subtitle: ReactNode;
   action: ReactNode;
 }) {
@@ -168,7 +167,10 @@ function CardHeader({
         </span>
       )}
       <div className={styles.heading}>
-        <h3 className={styles.title}>{title}</h3>
+        <div className={styles.titleLine}>
+          <h3 className={styles.title}>{title}</h3>
+          {version ? <span className={styles.version}>{version}</span> : null}
+        </div>
         <p className={styles.subtitle}>{subtitle}</p>
       </div>
       {action}
