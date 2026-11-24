@@ -399,18 +399,70 @@ mod tests {
                 version = "fabric-loader-0.20.1-1.21.1"
             )
             .entered();
+            tracing::warn!(
+                target: "licht_core::transfer::download",
+                attempt = 1,
+                "download attempt failed"
+            );
+        });
+
+        assert!(
+            output.ends_with(
+                " WARN  [download]  download attempt failed attempt=1 job_id=30 \
+                 operation=Install instance=Cobblemon version=fabric-loader-0.20.1-1.21.1\n"
+            ),
+            "unexpected output: {output}"
+        );
+    }
+
+    #[test]
+    fn download_job_lifecycle_events_list_their_details() {
+        let output = console_output_of(ConsoleStyle::for_build(true, false, true), || {
+            let _job = tracing::info_span!(
+                "download_job",
+                job_id = 30,
+                operation = "Install",
+                instance = "Cobblemon"
+            )
+            .entered();
+            tracing::info!(
+                target: "licht_core::transfer::manager::worker",
+                "Download job started"
+            );
             tracing::info!(
                 target: "licht_core::transfer::manager::worker",
                 elapsed_seconds = 1,
                 "Download job completed"
             );
         });
+        let lines: Vec<_> = output.lines().collect();
+        let indent = " ".repeat(27);
 
+        assert_eq!(
+            lines[1..4],
+            [
+                format!("{indent}job_id     30"),
+                format!("{indent}operation  Install"),
+                format!("{indent}instance   Cobblemon"),
+            ],
+            "unexpected output: {output}"
+        );
         assert!(
-            output.ends_with(
-                " INFO  [download]  Download job completed elapsed_seconds=1 job_id=30 \
-                 operation=Install instance=Cobblemon version=fabric-loader-0.20.1-1.21.1\n"
-            ),
+            lines[0].ends_with(" INFO  [download]  Download job started"),
+            "unexpected output: {output}"
+        );
+        assert!(
+            lines[4].ends_with(" INFO  [download]  Download job completed"),
+            "unexpected output: {output}"
+        );
+        assert_eq!(
+            lines[5..],
+            [
+                format!("{indent}elapsed_seconds  1"),
+                format!("{indent}job_id           30"),
+                format!("{indent}operation        Install"),
+                format!("{indent}instance         Cobblemon"),
+            ],
             "unexpected output: {output}"
         );
     }

@@ -86,7 +86,8 @@ In development builds, stderr shows one line per event in muted colors, tagged
 with the launcher area that logged it (`[startup]`, `[launch]`, `[download]`,
 `[update]`, and so on; see `logging/console.rs`). Events with more than four
 fields of their own, such as `System information`, list them with their span fields
-on aligned lines below; span fields alone keep an event on one line. Colors stay on even though `tauri dev` pipes stderr. Other
+on aligned lines below, as do download job lifecycle events; otherwise span fields
+alone keep an event on one line. Colors stay on even though `tauri dev` pipes stderr. Other
 builds color stderr only when it is a terminal, and `NO_COLOR` turns colors off.
 The log file always keeps the standard format without colors.
 Each launch logs `System information` (the build diagnostics shown in
