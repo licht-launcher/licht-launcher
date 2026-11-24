@@ -2483,7 +2483,7 @@ dependencies = [
  "futures-util",
  "getrandom 0.3.4",
  "keyring",
- "licht-test-support",
+ "licht-testkit",
  "md-5",
  "minisign-verify",
  "png 0.18.1",
@@ -2514,7 +2514,7 @@ version = "0.3.1"
 dependencies = [
  "anyhow",
  "licht-core",
- "licht-test-support",
+ "licht-testkit",
  "reqwest",
  "serde_json",
  "tauri",
@@ -2532,7 +2532,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "licht-test-support"
+name = "licht-testkit"
 version = "0.3.1"
 dependencies = [
  "tracing",

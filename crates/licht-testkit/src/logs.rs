@@ -1,4 +1,4 @@
-//! Helpers shared by the workspace's tests. Only ever a dev-dependency.
+//! Capturing logs to assert on them.
 
 use std::io::{self, Write};
 use std::sync::{Arc, Mutex, PoisonError};
@@ -9,6 +9,9 @@ use tracing_subscriber::EnvFilter;
 
 /// Captures what this thread logs, formatted as the launcher writes it but without
 /// timestamps or colors, until the capture is dropped.
+///
+/// Async tests must run on a current-thread runtime (the `#[tokio::test]` default)
+/// so that spawned tasks log on the captured thread.
 pub struct LogCapture {
     output: Arc<Mutex<Vec<u8>>>,
     _default: DefaultGuard,
@@ -20,54 +23,41 @@ pub struct LogCapture {
 }
 
 impl LogCapture {
-    /// Captures events at the formatter's default level (INFO and above).
+    /// Captures INFO events and above, the launcher's default level.
     pub fn start() -> Self {
-        let output = Arc::new(Mutex::new(Vec::new()));
-        let subscriber = tracing_subscriber::fmt()
-            .with_writer(writer(&output))
-            .with_ansi(false)
-            .without_time()
-            .finish();
-        Self::install(output, Dispatch::new(subscriber))
+        Self::filtered(EnvFilter::new("info"))
     }
 
     /// Captures the events `filter` enables.
     pub fn filtered(filter: EnvFilter) -> Self {
         let output = Arc::new(Mutex::new(Vec::new()));
+        let writer_output = Arc::clone(&output);
         let subscriber = tracing_subscriber::fmt()
             .with_env_filter(filter)
-            .with_writer(writer(&output))
+            .with_writer(move || SharedWriter(Arc::clone(&writer_output)))
             .with_ansi(false)
             .without_time()
             .finish();
-        Self::install(output, Dispatch::new(subscriber))
-    }
-
-    fn install(output: Arc<Mutex<Vec<u8>>>, dispatch: Dispatch) -> Self {
         Self {
             output,
-            _default: tracing::dispatcher::set_default(&dispatch),
+            _default: tracing::subscriber::set_default(subscriber),
             _registered: Dispatch::new(tracing::subscriber::NoSubscriber::default()),
         }
     }
 
     /// Everything captured so far.
+    ///
+    /// # Panics
+    ///
+    /// If the logs are not valid UTF-8, which would mean the formatter is broken.
     pub fn text(&self) -> String {
-        let bytes = self.output.lock().unwrap_or_else(PoisonError::into_inner);
-        String::from_utf8_lossy(&bytes).into_owned()
+        let bytes = self
+            .output
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone();
+        String::from_utf8(bytes).expect("captured logs should be valid UTF-8")
     }
-}
-
-/// Runs `emit` and returns its value with everything it logged at the default level.
-pub fn capture_logs<T>(emit: impl FnOnce() -> T) -> (T, String) {
-    let capture = LogCapture::start();
-    let value = emit();
-    (value, capture.text())
-}
-
-fn writer(output: &Arc<Mutex<Vec<u8>>>) -> impl Fn() -> SharedWriter + use<> {
-    let output = Arc::clone(output);
-    move || SharedWriter(Arc::clone(&output))
 }
 
 struct SharedWriter(Arc<Mutex<Vec<u8>>>);
@@ -87,8 +77,9 @@ impl Write for SharedWriter {
 
 #[cfg(test)]
 mod tests {
-    use super::{LogCapture, capture_logs};
     use tracing_subscriber::EnvFilter;
+
+    use super::LogCapture;
 
     #[test]
     fn captures_events_until_dropped() {
@@ -105,18 +96,6 @@ mod tests {
             logs.contains("visible event attempt=2"),
             "unexpected logs: {logs}"
         );
-    }
-
-    #[test]
-    fn capture_logs_returns_the_value_and_its_logs() {
-        let (value, logs) = capture_logs(|| {
-            tracing::info!("computing");
-            42
-        });
-
-        assert_eq!(value, 42);
-        assert!(logs.contains("INFO"), "unexpected logs: {logs}");
-        assert!(logs.contains("computing"), "unexpected logs: {logs}");
     }
 
     #[test]

@@ -109,7 +109,7 @@ fn truncated(message: &str) -> std::borrow::Cow<'_, str> {
 mod tests {
     use std::time::{Duration, Instant};
 
-    use licht_test_support::capture_logs;
+    use licht_testkit::logs::LogCapture;
 
     use super::{
         FrontendErrorSource, FrontendLogLimiter, MAX_MESSAGE_CHARS, RATE_WINDOW,
@@ -138,14 +138,14 @@ mod tests {
     fn reported_errors_are_logged_on_one_line_with_their_source() {
         let limiter = FrontendLogLimiter::default();
 
-        let ((), logs) = capture_logs(|| {
-            record(
-                &limiter,
-                Instant::now(),
-                FrontendErrorSource::Render,
-                "TypeError: x is undefined\n    at Panel (panel.tsx:3)",
-            );
-        });
+        let capture = LogCapture::start();
+        record(
+            &limiter,
+            Instant::now(),
+            FrontendErrorSource::Render,
+            "TypeError: x is undefined\n    at Panel (panel.tsx:3)",
+        );
+        let logs = capture.text();
 
         assert_eq!(logs.lines().count(), 1, "unexpected logs: {logs}");
         assert!(logs.contains("ERROR"), "unexpected logs: {logs}");
@@ -162,14 +162,14 @@ mod tests {
         let limiter = FrontendLogLimiter::default();
         let message = "é".repeat(MAX_MESSAGE_CHARS + 50);
 
-        let ((), logs) = capture_logs(|| {
-            record(
-                &limiter,
-                Instant::now(),
-                FrontendErrorSource::Window,
-                &message,
-            );
-        });
+        let capture = LogCapture::start();
+        record(
+            &limiter,
+            Instant::now(),
+            FrontendErrorSource::Window,
+            &message,
+        );
+        let logs = capture.text();
 
         assert!(logs.contains("(truncated)"), "unexpected logs: {logs}");
         assert!(logs.contains(&"é".repeat(MAX_MESSAGE_CHARS)));
@@ -181,22 +181,22 @@ mod tests {
         let limiter = FrontendLogLimiter::default();
         let start = Instant::now();
 
-        let ((), logs) = capture_logs(|| {
-            for index in 0..REPORTS_PER_WINDOW + 5 {
-                record(
-                    &limiter,
-                    start + Duration::from_millis(u64::from(index)),
-                    FrontendErrorSource::Promise,
-                    &format!("failure {index}"),
-                );
-            }
+        let capture = LogCapture::start();
+        for index in 0..REPORTS_PER_WINDOW + 5 {
             record(
                 &limiter,
-                start + RATE_WINDOW,
+                start + Duration::from_millis(u64::from(index)),
                 FrontendErrorSource::Promise,
-                "after the window",
+                &format!("failure {index}"),
             );
-        });
+        }
+        record(
+            &limiter,
+            start + RATE_WINDOW,
+            FrontendErrorSource::Promise,
+            "after the window",
+        );
+        let logs = capture.text();
 
         let errors = logs.lines().filter(|line| line.contains("ERROR")).count();
         let warnings = logs.lines().filter(|line| line.contains("WARN")).count();

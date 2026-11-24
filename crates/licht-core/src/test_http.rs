@@ -16,19 +16,8 @@ pub(crate) async fn lock_local_http() -> MutexGuard<'static, ()> {
     LOCAL_HTTP.lock().await
 }
 
-pub(crate) fn error_chain(error: &dyn std::error::Error) -> String {
-    let mut message = error.to_string();
-    let mut source = std::error::Error::source(error);
-    while let Some(inner) = source {
-        message.push_str(": ");
-        message.push_str(&inner.to_string());
-        source = inner.source();
-    }
-    message
-}
-
 pub(crate) fn is_transient_local_connect(error: &reqwest::Error) -> bool {
-    let message = error_chain(error).to_ascii_lowercase();
+    let message = crate::error_chain(error).to_ascii_lowercase();
     message.contains("10048")
         || message.contains("addrinuse")
         || message.contains("address already in use")

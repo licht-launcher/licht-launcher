@@ -403,15 +403,17 @@ async fn download(app: &AppHandle, runtime: &Arc<Runtime>, automatic: bool) -> a
 
 #[cfg(test)]
 mod tests {
+    use licht_testkit::logs::LogCapture;
+
     use super::*;
 
     #[test]
     fn update_failures_log_the_summary_and_every_cause() {
         let error = anyhow::anyhow!("connection reset").context("update manifest request failed");
 
-        let ((), logs) = licht_test_support::capture_logs(|| {
-            log_update_failure("Could not check for updates.", &error);
-        });
+        let capture = LogCapture::start();
+        log_update_failure("Could not check for updates.", &error);
+        let logs = capture.text();
 
         assert!(logs.contains("WARN"), "unexpected logs: {logs}");
         assert!(

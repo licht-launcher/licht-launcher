@@ -11,7 +11,7 @@ Linux, built with Tauri v2, React, TypeScript, Vite, and a Rust Cargo workspace.
 | --- | --- | --- |
 | `crates/licht-core` | Manifests, downloads, Java, game execution, instances, authentication, loaders, and modpacks | Standalone Rust library without Tauri dependencies |
 | `crates/licht-cli` | Command-line parsing, terminal output, and orchestration (`commands/`, shared helpers) | Delegates domain behavior to `licht-core` |
-| `crates/licht-test-support` | Helpers shared by the workspace's tests, such as `LogCapture` for asserting on logs | Dev-dependency only; never shipped |
+| `crates/licht-testkit` | Helpers shared by the workspace's tests, such as `LogCapture` for asserting on logs | Dev-dependency only; never shipped |
 | `src-tauri` | Startup, logging configuration, typed commands, and events | Delegates domain behavior to the core |
 | `src` | Screens, UI state, and calls to the Tauri adapter | No Minecraft domain logic |
 

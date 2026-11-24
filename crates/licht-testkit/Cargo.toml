@@ -1,5 +1,5 @@
 [package]
-name = "licht-test-support"
+name = "licht-testkit"
 description = "Helpers shared by the workspace's tests; only ever a dev-dependency."
 version.workspace = true
 edition.workspace = true

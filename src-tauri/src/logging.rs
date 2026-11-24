@@ -138,7 +138,7 @@ mod tests {
     use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    use licht_test_support::LogCapture;
+    use licht_testkit::logs::LogCapture;
 
     use super::{
         install_panic_hook, launch_stamp, open_log_file, parse_filter, prune_old_logs, subscriber,

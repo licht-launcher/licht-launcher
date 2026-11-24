@@ -196,16 +196,16 @@ async fn launch_one(
 
 #[cfg(test)]
 mod tests {
-    use licht_test_support::capture_logs;
+    use licht_testkit::logs::LogCapture;
 
     use super::launch_span;
 
     #[test]
     fn launch_logs_carry_the_instance_folder() {
-        let ((), logs) = capture_logs(|| {
-            let _launch = launch_span("Survival").entered();
-            tracing::warn!("event inside the launch");
-        });
+        let capture = LogCapture::start();
+        let _launch = launch_span("Survival").entered();
+        tracing::warn!("event inside the launch");
+        let logs = capture.text();
 
         assert!(
             logs.contains("launch{instance=\"Survival\"}"),

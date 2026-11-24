@@ -1,4 +1,4 @@
-use licht_test_support::LogCapture;
+use licht_testkit::logs::LogCapture;
 
 use super::*;
 

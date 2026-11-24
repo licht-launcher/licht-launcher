@@ -95,7 +95,7 @@ mod tests {
     use std::io;
 
     use licht_core::CoreError;
-    use licht_test_support::capture_logs;
+    use licht_testkit::logs::LogCapture;
 
     use super::{command_error, command_failure, failure};
 
@@ -106,14 +106,16 @@ mod tests {
 
     #[test]
     fn failures_keep_the_message_shown_to_the_interface() {
-        let (message, _) = capture_logs(|| failure(nested_error()));
+        let message = failure(nested_error());
 
         assert_eq!(message, nested_error().to_string());
     }
 
     #[test]
     fn failures_are_logged_as_warnings_with_every_cause() {
-        let (_, logs) = capture_logs(|| failure(nested_error()));
+        let capture = LogCapture::start();
+        failure(nested_error());
+        let logs = capture.text();
 
         assert!(logs.contains("WARN"), "unexpected logs: {logs}");
         assert!(logs.contains("Command failed"), "unexpected logs: {logs}");
@@ -130,7 +132,9 @@ mod tests {
     fn command_errors_keep_their_message_and_log_every_cause() {
         let error = io::Error::other(nested_error());
 
-        let (message, logs) = capture_logs(|| command_error(&error));
+        let capture = LogCapture::start();
+        let message = command_error(&error);
+        let logs = capture.text();
 
         assert_eq!(message, error.to_string());
         assert!(logs.contains("WARN"), "unexpected logs: {logs}");
@@ -148,7 +152,9 @@ mod tests {
     fn command_failures_show_their_summary_and_log_the_cause_behind_it() {
         let error = io::Error::new(io::ErrorKind::BrokenPipe, "the worker stopped");
 
-        let (message, logs) = capture_logs(|| command_failure("Java check failed", &error));
+        let capture = LogCapture::start();
+        let message = command_failure("Java check failed", &error);
+        let logs = capture.text();
 
         assert_eq!(message, "Java check failed");
         assert!(logs.contains("WARN"), "unexpected logs: {logs}");
