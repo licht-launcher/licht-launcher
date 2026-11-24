@@ -52,7 +52,8 @@ const AREA_WIDTH: usize = 9;
 /// Where the message starts: time, level and area tag, each followed by a space.
 const MESSAGE_COLUMN: usize = 8 + 1 + 5 + 1 + AREA_WIDTH + 2 + 1;
 
-/// Events with more fields than this list them one per line below the message.
+/// Events with more fields of their own than this list them, together with their
+/// span fields, one per line below the message. Span fields alone never do.
 const INLINE_FIELDS: usize = 4;
 
 /// Muted colors from the terminal's 256-color palette, so the console stays calm.
@@ -432,6 +433,7 @@ where
             message_style(level, &fields.message),
             &fields.message,
         )?;
+        let listed = fields.fields.len() > INLINE_FIELDS;
         let mut all_fields = fields.fields;
         if let Some(scope) = context.event_scope() {
             for span in scope.from_root() {
@@ -457,7 +459,7 @@ where
             return Ok(());
         }
 
-        if all_fields.len() <= INLINE_FIELDS {
+        if !listed {
             write_inline(&mut line, ansi, &all_fields)?;
             line.push('\n');
         } else {
