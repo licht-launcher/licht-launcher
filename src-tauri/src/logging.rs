@@ -1,15 +1,19 @@
 use std::env;
 use std::fs::{self, File, OpenOptions};
-use std::io;
+use std::io::{self, IsTerminal};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use tracing::Subscriber;
+use tracing_subscriber::fmt::MakeWriter;
 use tracing_subscriber::fmt::format::Writer;
 use tracing_subscriber::fmt::time::{FormatTime, SystemTime};
 use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::registry::LookupSpan;
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::{EnvFilter, filter::LevelFilter, fmt};
+use tracing_subscriber::{EnvFilter, Layer, filter::LevelFilter, filter::filter_fn, fmt};
+
+mod console;
 
 const LOG_DIRECTORY: &str = "logs";
 const LOG_FILE_PREFIX: &str = "licht";
@@ -33,9 +37,13 @@ pub(crate) fn init() -> Result<()> {
         Err(error) => (None, None, Some(error)),
     };
 
-    subscriber(filter, file)
+    subscriber(filter, ConsoleStyle::detect(), file)
         .try_init()
         .context("Failed to initialize logging")?;
+    tracing::info!(
+        version = env!("CARGO_PKG_VERSION"),
+        "Starting Licht Launcher"
+    );
 
     if let Some(error) = file_error {
         tracing::warn!(
@@ -50,6 +58,22 @@ pub(crate) fn init() -> Result<()> {
     }
     install_panic_hook();
     Ok(())
+}
+
+pub(crate) fn log_system_information(diagnostics: &licht_core::BuildDiagnostics) {
+    tracing::info!(
+        version = %diagnostics.host_version,
+        revision = diagnostics.host_revision.as_deref(),
+        debug = diagnostics.debug,
+        tauri = %diagnostics.tauri_version,
+        webview = diagnostics.webview_version.as_deref(),
+        os = %diagnostics.os_name,
+        os_version = diagnostics.os_version.as_deref(),
+        kernel = diagnostics.kernel_version.as_deref(),
+        system_architecture = %diagnostics.system_architecture,
+        process_architecture = %diagnostics.process_architecture,
+        "System information"
+    );
 }
 
 /// The folder holding the launcher log files, inside the profile directory.
@@ -117,11 +141,68 @@ fn prune_old_logs(directory: &Path, keep: usize) -> io::Result<()> {
     Ok(())
 }
 
-fn subscriber(filter: EnvFilter, file: Option<File>) -> impl Subscriber + Send + Sync {
+/// How stderr shows events. The log file always keeps the standard format.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ConsoleStyle {
+    /// Events tagged by launcher area, for development builds.
+    development: bool,
+    colors: bool,
+}
+
+impl ConsoleStyle {
+    fn detect() -> Self {
+        Self::for_build(
+            cfg!(debug_assertions),
+            io::stderr().is_terminal(),
+            env::var_os("NO_COLOR").is_some_and(|value| !value.is_empty()),
+        )
+    }
+
+    /// `tauri dev` pipes the app's stderr into its own terminal, so development
+    /// builds use colors even when stderr is not a terminal. `NO_COLOR` always wins.
+    fn for_build(debug: bool, terminal: bool, no_color: bool) -> Self {
+        Self {
+            development: debug,
+            colors: !no_color && (debug || terminal),
+        }
+    }
+}
+
+fn console_layer<S>(
+    style: ConsoleStyle,
+    writer: impl for<'writer> MakeWriter<'writer> + Send + Sync + 'static,
+) -> Box<dyn Layer<S> + Send + Sync>
+where
+    S: Subscriber + for<'span> LookupSpan<'span>,
+{
+    let layer = fmt::layer().with_writer(writer).with_ansi(style.colors);
+    if style.development {
+        layer
+            .event_format(console::DevelopmentFormat::default())
+            .and_then(console::SpanFieldsLayer)
+            .boxed()
+    } else {
+        layer.boxed()
+    }
+}
+
+fn subscriber(
+    filter: EnvFilter,
+    console: ConsoleStyle,
+    file: Option<File>,
+) -> impl Subscriber + Send + Sync {
     tracing_subscriber::registry()
         .with(filter)
-        .with(fmt::layer().with_writer(std::io::stderr).with_ansi(false))
-        .with(file.map(|file| fmt::layer().with_writer(file).with_ansi(false)))
+        .with(console_layer(console, std::io::stderr))
+        .with(file.map(|file| {
+            fmt::layer()
+                .with_writer(file)
+                .with_ansi(false)
+                // Progress lines only help while watching the console.
+                .with_filter(filter_fn(|metadata| {
+                    metadata.target() != licht_core::DOWNLOAD_PROGRESS_TARGET
+                }))
+        }))
 }
 
 fn install_panic_hook() {
@@ -140,9 +221,360 @@ mod tests {
     use licht_testkit::logs::LogCapture;
     use licht_testkit::temp::TempDir;
 
+    use tracing_subscriber::layer::SubscriberExt;
+
     use super::{
-        install_panic_hook, launch_stamp, open_log_file, parse_filter, prune_old_logs, subscriber,
+        ConsoleStyle, console_layer, install_panic_hook, launch_stamp, log_system_information,
+        open_log_file, parse_filter, prune_old_logs, subscriber,
     };
+
+    #[test]
+    fn development_builds_color_the_console_even_through_a_pipe() {
+        assert_eq!(
+            ConsoleStyle::for_build(true, false, false),
+            ConsoleStyle {
+                development: true,
+                colors: true
+            }
+        );
+        assert_eq!(
+            ConsoleStyle::for_build(false, true, false),
+            ConsoleStyle {
+                development: false,
+                colors: true
+            }
+        );
+        assert_eq!(
+            ConsoleStyle::for_build(false, false, false),
+            ConsoleStyle {
+                development: false,
+                colors: false
+            }
+        );
+    }
+
+    #[test]
+    fn no_color_turns_colors_off_in_every_build() {
+        for (debug, terminal) in [(true, true), (true, false), (false, true)] {
+            assert!(!ConsoleStyle::for_build(debug, terminal, true).colors);
+        }
+    }
+
+    fn console_output(style: ConsoleStyle) -> String {
+        console_output_of(style, || {
+            let _launch = tracing::info_span!("launch", instance = "Survival").entered();
+            tracing::info!(
+                target: "licht_launcher::commands::launch",
+                pid = 18432,
+                "Game started"
+            );
+        })
+    }
+
+    fn console_output_of(style: ConsoleStyle, emit: impl FnOnce()) -> String {
+        let root = TempDir::new("logging-test");
+        let path = root.path().join("console.log");
+        let file = fs::File::create(&path).expect("the console file should be created");
+        let console = tracing_subscriber::registry().with(console_layer(style, file));
+        tracing::subscriber::with_default(console, emit);
+        fs::read_to_string(path).expect("the console output should be readable")
+    }
+
+    #[test]
+    fn listed_fields_include_the_span_fields_after_the_event_fields() {
+        let output = console_output_of(ConsoleStyle::for_build(true, false, true), || {
+            let _launch = tracing::info_span!("launch", instance = "Survival").entered();
+            tracing::info!(
+                target: "licht_launcher::commands::launch",
+                version = "1.21.4",
+                java_major = 21,
+                java_source = "Managed",
+                max_memory_mb = 4096,
+                account = "Offline",
+                "Launching game"
+            );
+        });
+        let lines: Vec<_> = output.lines().collect();
+        let indent = " ".repeat(27);
+
+        assert!(
+            lines[0].ends_with(" INFO  [launch]    Launching game"),
+            "unexpected output: {output}"
+        );
+        assert_eq!(
+            lines[1..],
+            [
+                format!("{indent}version        1.21.4"),
+                format!("{indent}java_major     21"),
+                format!("{indent}java_source    Managed"),
+                format!("{indent}max_memory_mb  4096"),
+                format!("{indent}account        Offline"),
+                format!("{indent}instance       Survival"),
+            ]
+        );
+    }
+
+    #[test]
+    fn download_progress_is_drawn_as_a_bar_on_one_line() {
+        let output = console_output_of(ConsoleStyle::for_build(true, false, true), || {
+            let _job = tracing::info_span!("download_job", job_id = 7).entered();
+            tracing::info!(
+                target: licht_core::DOWNLOAD_PROGRESS_TARGET,
+                percent = 40,
+                finished = 824,
+                total = 2061,
+                bytes_done = 101_082_726_u64,
+                bytes_total = 252_706_816_u64,
+                component = "Minecraft",
+                "Download progress"
+            );
+        });
+
+        assert_eq!(output.lines().count(), 1, "unexpected output: {output}");
+        assert!(
+            output.ends_with(
+                " INFO  [download]  Minecraft  [████████░░░░░░░░░░░░]  40%  96.4/241.0 MB\n"
+            ),
+            "unexpected output: {output}"
+        );
+    }
+
+    fn emit_progress(percent: u64) {
+        tracing::info!(
+            target: licht_core::DOWNLOAD_PROGRESS_TARGET,
+            percent,
+            finished = percent,
+            total = 100,
+            "Download progress"
+        );
+    }
+
+    #[test]
+    fn colored_download_progress_redraws_one_line_below_other_events() {
+        let output = console_output_of(ConsoleStyle::for_build(true, false, false), || {
+            emit_progress(40);
+            tracing::info!("Game started");
+            emit_progress(100);
+        });
+        let lines: Vec<_> = output.split('\n').collect();
+
+        assert_eq!(lines.len(), 3, "unexpected output: {output:?}");
+        let (progress, event) = lines[0]
+            .rsplit_once("\r\u{1b}[2K")
+            .unwrap_or_else(|| panic!("the event did not clear the line: {output:?}"));
+        assert!(progress.contains(" 40%"), "unexpected output: {output:?}");
+        assert!(
+            event.contains("Game started"),
+            "unexpected output: {output:?}"
+        );
+        let (redrawn, finished) = lines[1]
+            .rsplit_once("\r\u{1b}[2K")
+            .unwrap_or_else(|| panic!("the update did not clear the line: {output:?}"));
+        assert!(redrawn.contains(" 40%"), "unexpected output: {output:?}");
+        assert!(finished.contains("100%"), "unexpected output: {output:?}");
+        assert_eq!(lines[2], "", "unexpected output: {output:?}");
+    }
+
+    #[test]
+    fn a_finished_job_drops_its_progress_line() {
+        let output = console_output_of(ConsoleStyle::for_build(true, false, false), || {
+            emit_progress(60);
+            tracing::info!("Download job completed");
+        });
+
+        assert!(
+            output.ends_with("Download job completed\u{1b}[0m\n"),
+            "unexpected output: {output:?}"
+        );
+    }
+
+    #[test]
+    fn span_fields_alone_keep_an_event_on_one_line() {
+        let output = console_output_of(ConsoleStyle::for_build(true, false, true), || {
+            let _job = tracing::info_span!(
+                "download_job",
+                job_id = 30,
+                operation = "Install",
+                instance = "Cobblemon",
+                version = "fabric-loader-0.20.1-1.21.1"
+            )
+            .entered();
+            tracing::warn!(
+                target: "licht_core::transfer::download",
+                attempt = 1,
+                "download attempt failed"
+            );
+        });
+
+        assert!(
+            output.ends_with(
+                " WARN  [download]  download attempt failed attempt=1 job_id=30 \
+                 operation=Install instance=Cobblemon version=fabric-loader-0.20.1-1.21.1\n"
+            ),
+            "unexpected output: {output}"
+        );
+    }
+
+    #[test]
+    fn download_job_lifecycle_events_list_their_details() {
+        let output = console_output_of(ConsoleStyle::for_build(true, false, true), || {
+            let _job = tracing::info_span!(
+                "download_job",
+                job_id = 30,
+                operation = "Install",
+                instance = "Cobblemon"
+            )
+            .entered();
+            tracing::info!(
+                target: "licht_core::transfer::manager::worker",
+                "Download job started"
+            );
+            tracing::info!(
+                target: "licht_core::transfer::manager::worker",
+                elapsed_seconds = 1,
+                "Download job completed"
+            );
+        });
+        let lines: Vec<_> = output.lines().collect();
+        let indent = " ".repeat(27);
+
+        assert_eq!(
+            lines[1..4],
+            [
+                format!("{indent}job_id     30"),
+                format!("{indent}operation  Install"),
+                format!("{indent}instance   Cobblemon"),
+            ],
+            "unexpected output: {output}"
+        );
+        assert!(
+            lines[0].ends_with(" INFO  [download]  Download job started"),
+            "unexpected output: {output}"
+        );
+        assert!(
+            lines[4].ends_with(" INFO  [download]  Download job completed"),
+            "unexpected output: {output}"
+        );
+        assert_eq!(
+            lines[5..],
+            [
+                format!("{indent}elapsed_seconds  1"),
+                format!("{indent}job_id           30"),
+                format!("{indent}operation        Install"),
+                format!("{indent}instance         Cobblemon"),
+            ],
+            "unexpected output: {output}"
+        );
+    }
+
+    #[test]
+    fn the_development_console_lists_many_fields_below_the_message() {
+        let output = console_output_of(ConsoleStyle::for_build(true, false, true), || {
+            tracing::info!(
+                target: "licht_launcher::logging",
+                version = "0.3.1",
+                os = "Windows 11 Pro",
+                debug = true,
+                system_architecture = "x86_64",
+                kernel = 26300,
+                "System information"
+            );
+        });
+        let lines: Vec<_> = output.lines().collect();
+        let indent = " ".repeat(27);
+
+        assert!(
+            lines[0].ends_with(" INFO  [startup]   System information"),
+            "unexpected output: {output}"
+        );
+        assert_eq!(
+            lines[1..],
+            [
+                format!("{indent}version              0.3.1"),
+                format!("{indent}os                   Windows 11 Pro"),
+                format!("{indent}debug                true"),
+                format!("{indent}system_architecture  x86_64"),
+                format!("{indent}kernel               26300"),
+            ]
+        );
+    }
+
+    #[test]
+    fn the_development_console_tags_events_with_their_area_in_color() {
+        let output = console_output(ConsoleStyle::for_build(true, false, false));
+
+        assert_eq!(output.lines().count(), 1, "unexpected output: {output}");
+        assert!(output.contains("[launch]"), "the area is missing: {output}");
+        assert!(
+            output.contains("Game started"),
+            "unexpected output: {output}"
+        );
+        assert!(output.contains("pid"), "unexpected output: {output}");
+        assert!(
+            output.contains("instance") && output.contains("Survival"),
+            "the span fields are missing: {output}"
+        );
+        assert!(output.contains('\u{1b}'), "colors are missing: {output}");
+    }
+
+    #[test]
+    fn the_development_console_has_no_escapes_without_colors() {
+        let output = console_output(ConsoleStyle::for_build(true, false, true));
+
+        assert_eq!(output.lines().count(), 1, "unexpected output: {output}");
+        assert!(
+            output.ends_with(" INFO  [launch]    Game started pid=18432 instance=Survival\n"),
+            "unexpected output: {output}"
+        );
+        assert!(!output.contains('\u{1b}'), "unexpected colors: {output}");
+    }
+
+    #[test]
+    fn the_release_console_keeps_one_plain_line_per_event() {
+        let output = console_output(ConsoleStyle::for_build(false, false, false));
+
+        assert_eq!(output.lines().count(), 1, "unexpected output: {output}");
+        assert!(!output.contains('\u{1b}'), "unexpected colors: {output}");
+        assert!(
+            output.contains("launch{instance=\"Survival\"}"),
+            "unexpected output: {output}"
+        );
+    }
+
+    #[test]
+    fn system_information_is_logged_on_one_line() {
+        let capture = LogCapture::start();
+        log_system_information(&licht_core::BuildDiagnostics {
+            host_version: "0.3.1".to_string(),
+            host_revision: Some("48520a7".to_string()),
+            debug: false,
+            tauri_version: "2.9.5".to_string(),
+            webview_version: None,
+            os_name: "Windows 11 Pro".to_string(),
+            os_version: Some("10.0.26300".to_string()),
+            kernel_version: Some("26300".to_string()),
+            system_architecture: "x86_64".to_string(),
+            process_architecture: "x86_64".to_string(),
+        });
+        let logs = capture.text();
+
+        assert_eq!(logs.lines().count(), 1, "unexpected logs: {logs}");
+        assert!(logs.contains("INFO"), "unexpected logs: {logs}");
+        assert!(
+            logs.contains("System information"),
+            "unexpected logs: {logs}"
+        );
+        for field in [
+            "version=0.3.1",
+            "revision=\"48520a7\"",
+            "os=Windows 11 Pro",
+            "os_version=\"10.0.26300\"",
+            "process_architecture=x86_64",
+        ] {
+            assert!(logs.contains(field), "missing {field}: {logs}");
+        }
+        assert!(!logs.contains("webview="), "unexpected logs: {logs}");
+    }
 
     fn capture_logs_while(directives: Option<&str>, emit: impl FnOnce()) -> String {
         let capture =
@@ -209,6 +641,33 @@ mod tests {
     }
 
     #[test]
+    fn download_progress_stays_out_of_the_log_file() {
+        let root = TempDir::new("logging-test");
+        let file = open_log_file(root.path(), "2026-11-24T10-00-00Z").expect("log file");
+        let filter = parse_filter(None).expect("the filter should be valid");
+        let console = ConsoleStyle::for_build(false, false, true);
+        tracing::subscriber::with_default(subscriber(filter, console, Some(file)), || {
+            tracing::info!(
+                target: licht_core::DOWNLOAD_PROGRESS_TARGET,
+                percent = 40,
+                "Download progress"
+            );
+            tracing::info!("Download job completed");
+        });
+
+        let logs = fs::read_to_string(root.path().join("licht.2026-11-24T10-00-00Z.log"))
+            .expect("the log file should be readable");
+        assert!(
+            logs.contains("Download job completed"),
+            "unexpected logs: {logs}"
+        );
+        assert!(
+            !logs.contains("Download progress"),
+            "unexpected logs: {logs}"
+        );
+    }
+
+    #[test]
     fn each_launch_writes_its_own_file_in_a_created_directory() {
         let root = TempDir::new("logging-test");
         let directory = root.path().join("logs");
@@ -219,7 +678,8 @@ mod tests {
         ] {
             let file = open_log_file(&directory, stamp).expect("the log file should open");
             let filter = parse_filter(None).expect("the filter should be valid");
-            tracing::subscriber::with_default(subscriber(filter, Some(file)), || {
+            let console = ConsoleStyle::for_build(false, false, true);
+            tracing::subscriber::with_default(subscriber(filter, console, Some(file)), || {
                 tracing::debug!("debug event");
                 tracing::info!(launch = message, "startup event");
             });
