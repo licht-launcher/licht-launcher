@@ -82,10 +82,12 @@ named after its UTC start time, and startup keeps the 30 most recent; **Settings
 Troubleshooting** shows the folder and opens it. If the log directory cannot be
 opened, the app keeps logging to stderr and records a warning instead of failing
 to start. Panics are logged as errors before the default panic output.
-Development builds print colored, multi-line events with their source location on
-stderr, since `tauri dev` pipes it; other builds color stderr only when it is a
-terminal, and `NO_COLOR` turns colors off. The log file always keeps one plain line
-per event.
+In development builds, stderr shows each event colored and tagged with the
+launcher area that logged it (`[launch]`, `[download]`, `[update]`, and so on; see
+`logging/console.rs`), with its fields, source location and spans on indented
+lines below in the style of the standard pretty format. Colors stay on even though `tauri dev` pipes stderr. Other
+builds color stderr only when it is a terminal, and `NO_COLOR` turns colors off.
+The log file always keeps the standard format without colors.
 Download jobs run inside a `download_job` span (job id, operation, instance,
 version, Java major) and game launches inside a `launch` span (instance folder),
 so their events can be told apart in the log. Player names are never span fields.

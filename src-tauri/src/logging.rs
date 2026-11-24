@@ -13,6 +13,8 @@ use tracing_subscriber::registry::LookupSpan;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{EnvFilter, Layer, filter::LevelFilter, fmt};
 
+mod console;
+
 const LOG_DIRECTORY: &str = "logs";
 const LOG_FILE_PREFIX: &str = "licht";
 const LOG_FILE_SUFFIX: &str = "log";
@@ -119,11 +121,11 @@ fn prune_old_logs(directory: &Path, keep: usize) -> io::Result<()> {
     Ok(())
 }
 
-/// How stderr shows events. The log file always keeps one plain line per event.
+/// How stderr shows events. The log file always keeps the standard format.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct ConsoleStyle {
-    /// Multi-line events with their source location, for development builds.
-    pretty: bool,
+    /// Events tagged by launcher area, for development builds.
+    development: bool,
     colors: bool,
 }
 
@@ -140,7 +142,7 @@ impl ConsoleStyle {
     /// builds use colors even when stderr is not a terminal. `NO_COLOR` always wins.
     fn for_build(debug: bool, terminal: bool, no_color: bool) -> Self {
         Self {
-            pretty: debug,
+            development: debug,
             colors: !no_color && (debug || terminal),
         }
     }
@@ -154,8 +156,11 @@ where
     S: Subscriber + for<'span> LookupSpan<'span>,
 {
     let layer = fmt::layer().with_writer(writer).with_ansi(style.colors);
-    if style.pretty {
-        layer.pretty().boxed()
+    if style.development {
+        layer
+            .fmt_fields(fmt::format::PrettyFields::new())
+            .event_format(console::DevelopmentFormat)
+            .boxed()
     } else {
         layer.boxed()
     }
@@ -200,21 +205,21 @@ mod tests {
         assert_eq!(
             ConsoleStyle::for_build(true, false, false),
             ConsoleStyle {
-                pretty: true,
+                development: true,
                 colors: true
             }
         );
         assert_eq!(
             ConsoleStyle::for_build(false, true, false),
             ConsoleStyle {
-                pretty: false,
+                development: false,
                 colors: true
             }
         );
         assert_eq!(
             ConsoleStyle::for_build(false, false, false),
             ConsoleStyle {
-                pretty: false,
+                development: false,
                 colors: false
             }
         );
@@ -234,26 +239,55 @@ mod tests {
         let console = tracing_subscriber::registry().with(console_layer(style, file));
         tracing::subscriber::with_default(console, || {
             let _launch = tracing::info_span!("launch", instance = "Survival").entered();
-            tracing::info!(pid = 18432, "Game started");
+            tracing::info!(
+                target: "licht_launcher::commands::launch",
+                pid = 18432,
+                "Game started"
+            );
         });
         fs::read_to_string(path).expect("the console output should be readable")
     }
 
     #[test]
-    fn the_development_console_prints_readable_colored_events() {
+    fn the_development_console_tags_events_with_their_area_in_color() {
         let output = console_output(ConsoleStyle::for_build(true, false, false));
 
+        assert_eq!(output.lines().count(), 4, "unexpected output: {output}");
+        assert!(output.contains("[launch]"), "the area is missing: {output}");
         assert!(
             output.contains("Game started"),
             "unexpected output: {output}"
         );
-        assert!(output.contains('\u{1b}'), "colors are missing: {output}");
+        assert!(output.contains("pid"), "unexpected output: {output}");
         assert!(
-            output.contains("logging.rs:"),
-            "the location is missing: {output}"
+            output.contains("instance") && output.contains("\"Survival\""),
+            "the span fields are missing: {output}"
         );
-        assert!(output.contains("Survival"), "the span is missing: {output}");
-        assert!(output.lines().count() > 1, "unexpected output: {output}");
+        assert!(output.contains('\u{1b}'), "colors are missing: {output}");
+    }
+
+    #[test]
+    fn the_development_console_puts_fields_and_spans_below_the_message() {
+        let output = console_output(ConsoleStyle::for_build(true, false, true));
+        let lines: Vec<_> = output.lines().collect();
+
+        assert_eq!(lines.len(), 4, "unexpected output: {output}");
+        assert!(
+            lines[0].ends_with(" INFO  [launch]    Game started"),
+            "unexpected output: {output}"
+        );
+        let indent = " ".repeat(27);
+        assert_eq!(lines[1], format!("{indent}pid: 18432"));
+        assert!(
+            lines[2].starts_with(&format!("{indent}at src-tauri"))
+                && lines[2].contains("logging.rs:"),
+            "unexpected output: {output}"
+        );
+        assert_eq!(
+            lines[3],
+            format!("{indent}in launch with instance: \"Survival\"")
+        );
+        assert!(!output.contains('\u{1b}'), "unexpected colors: {output}");
     }
 
     #[test]
