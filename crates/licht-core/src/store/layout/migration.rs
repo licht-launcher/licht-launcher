@@ -3,7 +3,9 @@ use std::path::{Path, PathBuf};
 
 use super::progress::{StartupPhase, StartupReporter};
 use super::{Relocation, database, files, relocate};
-use crate::settings::{Settings, load_settings_at, store_settings};
+use crate::settings::{
+    Settings, StartupPreferences, load_settings_at, load_startup_preferences, store_settings,
+};
 use crate::store::db::Database;
 use crate::{CoreError, Result, SharedCache};
 
@@ -176,8 +178,11 @@ pub(super) async fn migrate(
     let settings_file = home.root().join("settings.json");
     if settings_file.exists() && settings_file != legacy.root().join("settings.json") {
         // An interrupted attempt may already have published this same file.
-        let published =
-            read_json(&settings_file)? == read_json(&staging.root().join("settings.json"))?;
+        let published = already_published(
+            home,
+            &staging.root().join("settings.json"),
+            &staged_settings,
+        )?;
         if !published && load_settings_at(home).await? != staged_settings {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::AlreadyExists,
@@ -198,6 +203,25 @@ pub(super) async fn migrate(
     fs::remove_dir_all(staging.root())?;
     tracing::info!("Launcher storage migration completed");
     Ok(())
+}
+
+/// Whether the profile's `settings.json` holds the staged startup preferences. A file
+/// published by an older version may lack a newer preference, but a key the staged
+/// file does not have means another settings file is in the way.
+fn already_published(home: &SharedCache, staged_file: &Path, staged: &Settings) -> Result<bool> {
+    let published = read_json(&home.root().join("settings.json"))?;
+    let staged_file = read_json(staged_file)?;
+    let (Some(published), Some(staged_file)) = (published.as_object(), staged_file.as_object())
+    else {
+        return Ok(false);
+    };
+    if !published.keys().all(|key| staged_file.contains_key(key)) {
+        return Ok(false);
+    }
+    Ok(matches!(
+        load_startup_preferences(home),
+        Ok(preferences) if preferences == StartupPreferences::from(staged)
+    ))
 }
 
 fn read_json(path: &Path) -> Result<serde_json::Value> {
