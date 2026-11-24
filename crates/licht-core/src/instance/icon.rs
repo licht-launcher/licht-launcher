@@ -119,6 +119,8 @@ pub async fn download_instance_icon(client: &Client, dir: &Path, url: &str) -> R
 
 #[cfg(test)]
 mod tests {
+    use licht_testkit::temp::TempDir;
+
     use super::*;
 
     #[test]
@@ -135,25 +137,18 @@ mod tests {
 
     #[tokio::test]
     async fn download_rejects_disallowed_urls_without_writing() {
-        let dir = std::env::temp_dir().join(format!("licht-icon-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).expect("dir");
+        let temp = TempDir::new("icon");
+        let dir = temp.path();
         let client = Client::new();
-        let result = download_instance_icon(&client, &dir, "http://example.com/icon.png").await;
+        let result = download_instance_icon(&client, dir, "http://example.com/icon.png").await;
         assert!(result.is_err());
         assert!(!dir.join(ICON_FILE).exists());
-        let _ = fs::remove_dir_all(&dir);
     }
 
     #[tokio::test]
     async fn cached_icons_are_shared_by_url_and_reused_without_network() {
-        let root = std::env::temp_dir().join(format!(
-            "licht-icon-cache-{}",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("time")
-                .as_nanos()
-        ));
+        let temp = TempDir::new("icon-cache");
+        let root = temp.path().to_path_buf();
         let first = root.join("instances").join("First");
         let second = root.join("instances").join("Second");
         let url = "https://cdn.modrinth.com/data/fixture/icon.png";
@@ -181,13 +176,8 @@ mod tests {
 
     #[tokio::test]
     async fn duplication_skips_install_workspace_and_preserves_cached_instance_icons() {
-        let root = std::env::temp_dir().join(format!(
-            "licht-icon-duplicate-{}",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("time")
-                .as_nanos()
-        ));
+        let temp = TempDir::new("icon-duplicate");
+        let root = temp.path().to_path_buf();
         let instances = root.join("instances");
         let settings = crate::settings::load_settings_at(&crate::SharedCache::at(&root))
             .await
@@ -237,6 +227,5 @@ mod tests {
         );
         assert!(cached.is_file());
         service.shutdown().await.expect("shutdown");
-        fs::remove_dir_all(root).expect("cleanup");
     }
 }

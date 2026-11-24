@@ -170,7 +170,7 @@ async fn concurrent_content_propagates_lookup_errors_without_losing_published_re
 
 #[tokio::test]
 async fn concurrent_content_preserves_cached_metadata_for_each_original_file() {
-    let cache = cache("concurrent-cache");
+    let (_temp, cache) = cache("concurrent-cache");
     let root = instance(&cache);
     for index in 0..8 {
         let body = format!("cached file {index}");

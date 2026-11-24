@@ -51,6 +51,8 @@ pub fn msa_client_id() -> Result<String> {
 mod tests {
     use std::sync::Mutex;
 
+    use licht_testkit::temp::TempDir;
+
     use super::*;
 
     static ENV_LOCK: Mutex<()> = Mutex::new(());
@@ -95,16 +97,8 @@ mod tests {
     #[test]
     fn dotenv_file_can_override_the_embedded_client_id() {
         let _guard = ENV_LOCK.lock().expect("env lock");
-        let dir = std::env::temp_dir().join(format!(
-            "licht-dotenv-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("time")
-                .as_nanos()
-        ));
-        std::fs::create_dir_all(&dir).expect("dir");
-        let path = dir.join(".env");
+        let dir = TempDir::new("dotenv");
+        let path = dir.path().join(".env");
         std::fs::write(&path, format!("{MSA_CLIENT_ID_ENV}=from-dotenv-file\n")).expect("write");
         unsafe {
             std::env::remove_var(MSA_CLIENT_ID_ENV);
@@ -115,6 +109,5 @@ mod tests {
         unsafe {
             std::env::remove_var(MSA_CLIENT_ID_ENV);
         }
-        let _ = std::fs::remove_dir_all(&dir);
     }
 }

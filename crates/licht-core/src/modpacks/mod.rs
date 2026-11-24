@@ -218,18 +218,17 @@ pub(crate) async fn restore_instance_icon(
 
 #[cfg(test)]
 mod tests {
+    use licht_testkit::temp::TempDir;
+
     use super::*;
 
     #[test]
     fn a_legacy_index_already_removed_by_another_run_counts_as_removed() {
-        let directory =
-            std::env::temp_dir().join(format!("licht-legacy-index-remove-{}", std::process::id()));
-        std::fs::create_dir_all(&directory).expect("directory");
-        let file = directory.join(MODPACK_INDEX_FILE);
+        let directory = TempDir::new("legacy-index-remove");
+        let file = directory.path().join(MODPACK_INDEX_FILE);
         std::fs::write(&file, "{}").expect("index");
         remove_legacy_index(&file).expect("removed");
         assert!(!file.exists());
         remove_legacy_index(&file).expect("already gone");
-        std::fs::remove_dir_all(directory).expect("cleanup");
     }
 }

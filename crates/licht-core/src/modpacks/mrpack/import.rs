@@ -60,8 +60,8 @@ mod tests {
             zip.finish().unwrap();
         }
         let bytes = buffer.into_inner();
-        let root = std::env::temp_dir().join(format!("licht-mrpack-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&root);
+        let temp = TempDir::new("mrpack");
+        let root = temp.path().to_path_buf();
         let instances = root.join("instances");
         fs::create_dir_all(&instances).unwrap();
         let service = crate::DatabaseService::start(
@@ -100,7 +100,6 @@ mod tests {
             [("minecraft".to_string(), "1.20.1".to_string())]
         );
         service.shutdown().await.expect("shutdown");
-        let _ = fs::remove_dir_all(&root);
     }
 
     #[tokio::test]

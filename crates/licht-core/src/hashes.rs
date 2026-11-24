@@ -45,6 +45,8 @@ pub(crate) fn file_matches_sha1(path: &Path, expected_sha1: &str) -> Result<bool
 
 #[cfg(test)]
 mod tests {
+    use licht_testkit::temp::TempDir;
+
     use super::*;
 
     #[test]
@@ -54,14 +56,10 @@ mod tests {
 
     #[test]
     fn an_empty_sha1_does_not_treat_an_existing_file_as_verified() {
-        let directory =
-            std::env::temp_dir().join(format!("licht-hashes-empty-sha-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&directory);
-        std::fs::create_dir_all(&directory).unwrap();
-        let path = directory.join("file.bin");
+        let directory = TempDir::new("hashes-empty-sha");
+        let path = directory.path().join("file.bin");
         std::fs::write(&path, b"hello").unwrap();
         assert!(!file_matches_sha1(&path, "").expect("match"));
-        let _ = std::fs::remove_dir_all(&directory);
     }
 
     #[test]

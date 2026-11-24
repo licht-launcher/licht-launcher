@@ -106,6 +106,8 @@ pub async fn fetch_asset_index(client: &reqwest::Client, url: &str) -> Result<As
 mod tests {
     use std::collections::BTreeMap;
 
+    use licht_testkit::temp::TempDir;
+
     use super::{AssetIndexFile, AssetObject, reconstruct_assets};
     use crate::{CoreError, SharedCache};
 
@@ -113,7 +115,7 @@ mod tests {
 
     #[test]
     fn map_to_resources_copies_the_logical_name_and_skips_the_same_size() {
-        let (cache, game) = dirs("resources");
+        let (_temp, cache, game) = dirs("resources");
         write_object(&cache, b"click");
         let index = index(true, false, b"click".len() as u64);
         let assets = reconstruct_assets(&cache, &index, "pre-1.6", &game)
@@ -135,7 +137,7 @@ mod tests {
 
     #[test]
     fn virtual_assets_go_to_the_shared_cache() {
-        let (cache, game) = dirs("virtual");
+        let (_temp, cache, game) = dirs("virtual");
         write_object(&cache, b"music");
         let index = index(false, true, b"music".len() as u64);
         let assets = reconstruct_assets(&cache, &index, "legacy", &game)
@@ -149,7 +151,7 @@ mod tests {
 
     #[test]
     fn both_flags_copy_twice_and_the_argument_is_the_virtual_folder() {
-        let (cache, game) = dirs("both");
+        let (_temp, cache, game) = dirs("both");
         write_object(&cache, b"both!");
         let index = index(true, true, b"both!".len() as u64);
         let assets = reconstruct_assets(&cache, &index, "legacy", &game)
@@ -168,7 +170,7 @@ mod tests {
 
     #[test]
     fn a_modern_index_copies_nothing() {
-        let (cache, game) = dirs("modern");
+        let (_temp, cache, game) = dirs("modern");
         write_object(&cache, b"click");
         let index = index(false, false, b"click".len() as u64);
         let assets = reconstruct_assets(&cache, &index, "1.8", &game).expect("no copy");
@@ -185,7 +187,7 @@ mod tests {
 
     #[test]
     fn a_path_that_escapes_the_folder_is_rejected() {
-        let (cache, game) = dirs("escape");
+        let (_temp, cache, game) = dirs("escape");
         write_object(&cache, b"click");
         for logical in [
             "",
@@ -214,19 +216,18 @@ mod tests {
 
     #[test]
     fn a_missing_object_fails() {
-        let (cache, game) = dirs("missing");
+        let (_temp, cache, game) = dirs("missing");
         let error = reconstruct_assets(&cache, &index(true, false, 5), "pre-1.6", &game)
             .expect_err("missing object");
         assert!(matches!(error, CoreError::Io(_)));
     }
 
-    fn dirs(name: &str) -> (SharedCache, std::path::PathBuf) {
-        let root = std::env::temp_dir().join(format!("licht-assets-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
-        let cache = SharedCache::at(root.join("data"));
-        let game = root.join("game");
+    fn dirs(name: &str) -> (TempDir, SharedCache, std::path::PathBuf) {
+        let temp = TempDir::new(&format!("assets-{name}"));
+        let cache = SharedCache::at(temp.path().join("data"));
+        let game = temp.path().join("game");
         std::fs::create_dir_all(&game).expect("game dir");
-        (cache, game)
+        (temp, cache, game)
     }
 
     fn write_object(cache: &SharedCache, bytes: &[u8]) {

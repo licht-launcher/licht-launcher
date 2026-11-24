@@ -1,35 +1,36 @@
 use std::collections::BTreeMap;
 use std::io::Write;
 
+use licht_testkit::temp::TempDir;
+
 use super::*;
 use crate::{DatabaseService, OsName};
 
 const VERSION: &str = "native-fixture";
 
 struct Fixture {
-    root: PathBuf,
     game: SharedCache,
     home: SharedCache,
     database: Option<DatabaseService>,
+    // Last, so the database is closed before the folder is removed.
+    root: TempDir,
 }
 
 impl Fixture {
     async fn new() -> Self {
-        let mut nonce = [0_u8; 16];
-        getrandom::fill(&mut nonce).expect("nonce");
-        let root = std::env::temp_dir().join(format!("licht-native-cache-{}", hex_encode(&nonce)));
-        let game = SharedCache::at(root.join("data"));
-        let home = SharedCache::at(root.join("settings"));
+        let root = TempDir::new("native-cache");
+        let game = SharedCache::at(root.path().join("data"));
+        let home = SharedCache::at(root.path().join("settings"));
         let database = Some(
             DatabaseService::start(crate::Database::open(&home).await.expect("database"))
                 .await
                 .expect("database"),
         );
         Self {
-            root,
             game,
             home,
             database,
+            root,
         }
     }
 
@@ -85,7 +86,6 @@ impl Fixture {
             .shutdown()
             .await
             .expect("shutdown");
-        fs::remove_dir_all(self.root).expect("cleanup");
     }
 }
 
@@ -383,7 +383,7 @@ async fn platform_architecture_and_data_directory_select_independent_caches() {
         fs::read(linux.join("libnative.so")).expect("Linux output"),
         b"linux"
     );
-    let other = SharedCache::at(fixture.root.join("other-data"));
+    let other = SharedCache::at(fixture.root.path().join("other-data"));
     for native in native_libraries(&version, &windows()) {
         let source = fixture.game.library(&native.artifact.path).expect("source");
         let destination = other.library(&native.artifact.path).expect("destination");
@@ -437,7 +437,7 @@ async fn failed_extraction_does_not_publish_partial_data_or_a_cache_record() {
             .expect("type")
             .is_dir())
     );
-    assert!(!fixture.root.join("escape.dll").exists());
+    assert!(!fixture.root.path().join("escape.dll").exists());
     fixture.close().await;
 }
 
@@ -618,7 +618,7 @@ async fn offline_and_microsoft_launches_share_the_verified_generation() {
         &version,
         &windows(),
         &crate::offline_account("FixturePlayer").expect("offline account"),
-        &fixture.root.join("offline"),
+        &fixture.root.path().join("offline"),
         &global,
     )
     .await
@@ -650,7 +650,7 @@ async fn offline_and_microsoft_launches_share_the_verified_generation() {
         &version,
         &windows(),
         &session,
-        &fixture.root.join("microsoft"),
+        &fixture.root.path().join("microsoft"),
         &global,
     )
     .await
@@ -715,7 +715,7 @@ async fn invalid_database_paths_are_rebuilt_without_escaping_the_cache() {
     .await
     .expect("rebuild invalid output metadata");
     assert_ne!(rebuilt, rebuilt_again);
-    assert!(!fixture.root.join("outside.dll").exists());
+    assert!(!fixture.root.path().join("outside.dll").exists());
     sqlx::Connection::close(connection).await.expect("close");
     fixture.close().await;
 }
