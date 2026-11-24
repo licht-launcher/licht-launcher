@@ -4,6 +4,7 @@ use licht_core::{
     Arch, CoreError, LaunchEnvironment, OsName, SharedCache, installed_java, parse_version,
     parse_version_manifest, version_lines,
 };
+use licht_testkit::temp::TempDir;
 
 #[test]
 fn the_saved_manifest_names_its_latest_release() {
@@ -20,8 +21,8 @@ fn the_saved_manifest_names_its_latest_release() {
 
 #[test]
 fn an_installed_runtime_is_used_when_launch_omits_java() {
-    let root = std::env::temp_dir().join(format!("licht-runtime-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&root);
+    let temp = TempDir::new("runtime");
+    let root = temp.path().to_path_buf();
     let cache = SharedCache::at(&root);
     let version = parse_version(
         r#"{"minecraftArguments":"","libraries":[],"assetIndex":{"id":"t","sha1":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","size":1,"totalSize":1,"url":"https://example.invalid/i"},"mainClass":"a.B","downloads":{"client":{"sha1":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","size":1,"url":"https://example.invalid/c"}},"javaVersion":{"component":"java-runtime-epsilon","majorVersion":21}}"#,
@@ -50,5 +51,4 @@ fn an_installed_runtime_is_used_when_launch_omits_java() {
         installed_java(&cache, "1.21.11", &version, &environment).expect("found"),
         java
     );
-    let _ = std::fs::remove_dir_all(root);
 }

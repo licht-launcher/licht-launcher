@@ -3,6 +3,7 @@ use licht_core::{
     DownloadControl, DownloadOptions, DownloadProgress, DownloadTask, Retry, TransferLimits,
     download_all_with_control, download_file_with_control,
 };
+use licht_testkit::temp::TempDir;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -96,14 +97,14 @@ pub(super) fn retry(attempts: u32) -> Retry {
 
 pub(super) struct Destination {
     pub(super) path: PathBuf,
+    _directory: TempDir,
 }
 impl Destination {
     pub(super) fn new(name: &str) -> Self {
-        let directory =
-            std::env::temp_dir().join(format!("licht-resume-{name}-{}", std::process::id()));
-        std::fs::create_dir_all(&directory).expect("test directory");
+        let directory = TempDir::new(&format!("resume-{name}"));
         Self {
-            path: directory.join("file.jar"),
+            path: directory.path().join("file.jar"),
+            _directory: directory,
         }
     }
     pub(super) fn part(&self) -> PathBuf {
@@ -129,11 +130,6 @@ impl Destination {
                 "partial file did not reach {length} bytes within {STEP_TIMEOUT:?} (now {current})"
             );
         }
-    }
-}
-impl Drop for Destination {
-    fn drop(&mut self) {
-        std::fs::remove_dir_all(self.path.parent().expect("directory")).expect("cleanup");
     }
 }
 

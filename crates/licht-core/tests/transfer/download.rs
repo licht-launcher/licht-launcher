@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use licht_core::{CoreError, Retry, download_file};
+use licht_testkit::temp::TempDir;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
@@ -12,7 +13,7 @@ const SHA1: &str = "2aae6c35c94fcfb415dbe95f408b9ce91ee846ed";
 
 #[tokio::test]
 async fn a_matching_download_lands_on_the_destination() {
-    let destination = temporary_destination("success");
+    let (_directory, destination) = temporary_destination("success");
     let url = serve(vec![200]).await;
 
     download_file(&client(), &url, &destination, SHA1, retry(1))
@@ -24,12 +25,11 @@ async fn a_matching_download_lands_on_the_destination() {
         BODY
     );
     assert!(!part_path(&destination).exists());
-    cleanup(&destination);
 }
 
 #[tokio::test]
 async fn a_wrong_sha1_leaves_neither_the_destination_nor_the_part() {
-    let destination = temporary_destination("mismatch");
+    let (_directory, destination) = temporary_destination("mismatch");
     let url = serve(vec![200]).await;
     let expected = "a".repeat(40);
 
@@ -46,12 +46,11 @@ async fn a_wrong_sha1_leaves_neither_the_destination_nor_the_part() {
     }
     assert!(!destination.exists());
     assert!(!part_path(&destination).exists());
-    cleanup(&destination);
 }
 
 #[tokio::test]
 async fn a_failed_attempt_is_retried() {
-    let destination = temporary_destination("retry");
+    let (_directory, destination) = temporary_destination("retry");
     let url = serve(vec![500, 200]).await;
 
     download_file(&client(), &url, &destination, SHA1, retry(2))
@@ -63,12 +62,11 @@ async fn a_failed_attempt_is_retried() {
         BODY
     );
     assert!(!part_path(&destination).exists());
-    cleanup(&destination);
 }
 
 #[tokio::test]
 async fn exhausted_attempts_leave_no_destination() {
-    let destination = temporary_destination("exhausted");
+    let (_directory, destination) = temporary_destination("exhausted");
     let url = serve(vec![500, 500]).await;
 
     let error = download_file(&client(), &url, &destination, SHA1, retry(2))
@@ -78,12 +76,11 @@ async fn exhausted_attempts_leave_no_destination() {
     assert!(matches!(error, CoreError::Http(_)));
     assert!(!destination.exists());
     assert!(!part_path(&destination).exists());
-    cleanup(&destination);
 }
 
 #[tokio::test]
 async fn an_empty_sha1_does_not_keep_an_existing_file() {
-    let destination = temporary_destination("empty-sha");
+    let (_directory, destination) = temporary_destination("empty-sha");
     std::fs::write(&destination, b"stale").expect("the stale file should be written");
     let url = serve(vec![200]).await;
 
@@ -96,12 +93,11 @@ async fn an_empty_sha1_does_not_keep_an_existing_file() {
         BODY
     );
     assert!(!part_path(&destination).exists());
-    cleanup(&destination);
 }
 
 #[tokio::test]
 async fn an_existing_destination_is_replaced() {
-    let destination = temporary_destination("replace");
+    let (_directory, destination) = temporary_destination("replace");
     std::fs::write(&destination, b"old").expect("the old file should be written");
     let url = serve(vec![200]).await;
 
@@ -114,7 +110,6 @@ async fn an_existing_destination_is_replaced() {
         BODY
     );
     assert!(!part_path(&destination).exists());
-    cleanup(&destination);
 }
 
 fn client() -> reqwest::Client {
@@ -128,11 +123,10 @@ fn retry(attempts: u32) -> Retry {
     }
 }
 
-fn temporary_destination(name: &str) -> PathBuf {
-    let directory =
-        std::env::temp_dir().join(format!("licht-download-{name}-{}", std::process::id()));
-    std::fs::create_dir_all(&directory).expect("the temp directory should exist");
-    directory.join("client.jar")
+fn temporary_destination(name: &str) -> (TempDir, PathBuf) {
+    let directory = TempDir::new(&format!("download-{name}"));
+    let destination = directory.path().join("client.jar");
+    (directory, destination)
 }
 
 fn part_path(destination: &Path) -> PathBuf {
@@ -142,12 +136,6 @@ fn part_path(destination: &Path) -> PathBuf {
         .to_os_string();
     name.push(".part");
     destination.with_file_name(name)
-}
-
-fn cleanup(destination: &Path) {
-    if let Some(directory) = destination.parent() {
-        let _ = std::fs::remove_dir_all(directory);
-    }
 }
 
 async fn serve(statuses: Vec<u16>) -> String {

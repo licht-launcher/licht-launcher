@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
@@ -7,6 +7,7 @@ use licht_core::{
     CoreError, DEFAULT_CONCURRENCY, DEFAULT_RETRY, DownloadProgress, DownloadTask, Retry,
     TransferLimits, download_all, download_file,
 };
+use licht_testkit::temp::TempDir;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::sync::{mpsc, watch};
@@ -23,7 +24,8 @@ fn default_queue_limits_are_eight_workers_and_three_attempts() {
 
 #[tokio::test]
 async fn every_file_is_reported_when_the_queue_finishes() {
-    let directory = temporary_directory("finished");
+    let temp = temporary_directory("finished");
+    let directory = temp.path().to_path_buf();
     let url = serve(ServeMode::Ok).await;
     let tasks = tasks(&directory, &url, 4);
     let (progress, mut incoming) = mpsc::channel(64);
@@ -47,12 +49,12 @@ async fn every_file_is_reported_when_the_queue_finishes() {
     for task in &tasks {
         assert_eq!(std::fs::read(&task.destination).expect("file"), BODY);
     }
-    cleanup(&directory);
 }
 
 #[tokio::test]
 async fn the_download_limit_caps_open_connections() {
-    let directory = temporary_directory("limit");
+    let temp = temporary_directory("limit");
+    let directory = temp.path().to_path_buf();
     let gate = Arc::new(Gate::new());
     let url = serve(ServeMode::Hold(Arc::clone(&gate))).await;
     let tasks = tasks(&directory, &url, 4);
@@ -78,12 +80,12 @@ async fn the_download_limit_caps_open_connections() {
         .await
         .expect("the queue task should finish")
         .expect("every download should succeed");
-    cleanup(&directory);
 }
 
 #[tokio::test]
 async fn two_queues_share_the_global_download_limit() {
-    let directory = temporary_directory("shared");
+    let temp = temporary_directory("shared");
+    let directory = temp.path().to_path_buf();
     let gate = Arc::new(Gate::new());
     let url = serve(ServeMode::Hold(Arc::clone(&gate))).await;
     let limits = Arc::new(TransferLimits::new());
@@ -127,12 +129,12 @@ async fn two_queues_share_the_global_download_limit() {
         .await
         .expect("join")
         .expect("right queue should succeed");
-    cleanup(&directory);
 }
 
 #[tokio::test]
 async fn zero_write_concurrency_is_rejected() {
-    let directory = temporary_directory("write-zero");
+    let temp = temporary_directory("write-zero");
+    let directory = temp.path().to_path_buf();
     let url = serve(ServeMode::Ok).await;
     let tasks = tasks(&directory, &url, 1);
     let (progress, _) = mpsc::channel(8);
@@ -148,12 +150,12 @@ async fn zero_write_concurrency_is_rejected() {
     .await
     .expect_err("write concurrency zero");
     assert!(matches!(error, CoreError::WriteConcurrency));
-    cleanup(&directory);
 }
 
 #[tokio::test]
 async fn skips_when_the_destination_already_matches_sha1() {
-    let directory = temporary_directory("skip");
+    let temp = temporary_directory("skip");
+    let directory = temp.path().to_path_buf();
     let destination = directory.join("cached.jar");
     std::fs::write(&destination, BODY).expect("seed");
     let gate = Arc::new(Gate::new());
@@ -166,12 +168,12 @@ async fn skips_when_the_destination_already_matches_sha1() {
     assert_eq!(gate.active.load(Ordering::SeqCst), 0);
     assert_eq!(gate.max_active.load(Ordering::SeqCst), 0);
     assert_eq!(std::fs::read(&destination).expect("file"), BODY);
-    cleanup(&directory);
 }
 
 #[tokio::test]
 async fn two_parallel_downloads_to_the_same_path_do_not_corrupt() {
-    let directory = temporary_directory("race");
+    let temp = temporary_directory("race");
+    let directory = temp.path().to_path_buf();
     let destination = directory.join("shared.jar");
     let url = serve(ServeMode::Ok).await;
     let client = client();
@@ -196,12 +198,12 @@ async fn two_parallel_downloads_to_the_same_path_do_not_corrupt() {
     second.await.expect("join").expect("second download");
     assert_eq!(std::fs::read(&destination).expect("file"), BODY);
     assert!(!directory.join("shared.jar.part").exists());
-    cleanup(&directory);
 }
 
 #[tokio::test]
 async fn one_failure_is_reported_after_the_other_files_land() {
-    let directory = temporary_directory("partial");
+    let temp = temporary_directory("partial");
+    let directory = temp.path().to_path_buf();
     let url = serve(ServeMode::FailPath).await;
     let mut tasks = tasks(&directory, &format!("{url}/ok"), 2);
     tasks.push(DownloadTask {
@@ -239,7 +241,6 @@ async fn one_failure_is_reported_after_the_other_files_land() {
     assert_eq!(std::fs::read(directory.join("0.jar")).expect("file"), BODY);
     assert_eq!(std::fs::read(directory.join("1.jar")).expect("file"), BODY);
     assert!(!directory.join("failed.jar").exists());
-    cleanup(&directory);
 }
 
 struct Gate {
@@ -287,14 +288,8 @@ fn tasks(directory: &Path, url: &str, count: usize) -> Vec<DownloadTask> {
         .collect()
 }
 
-fn temporary_directory(name: &str) -> PathBuf {
-    let directory = std::env::temp_dir().join(format!("licht-queue-{name}-{}", std::process::id()));
-    std::fs::create_dir_all(&directory).expect("the temp directory should exist");
-    directory
-}
-
-fn cleanup(directory: &Path) {
-    let _ = std::fs::remove_dir_all(directory);
+fn temporary_directory(name: &str) -> TempDir {
+    TempDir::new(&format!("queue-{name}"))
 }
 
 async fn collect(incoming: &mut mpsc::Receiver<DownloadProgress>) -> Vec<DownloadProgress> {

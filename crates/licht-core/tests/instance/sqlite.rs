@@ -22,7 +22,8 @@ fn settings() -> InstanceSettings {
 
 #[tokio::test]
 async fn profiles_are_isolated_by_directory_and_ignore_obsolete_json() {
-    let root = scratch("sqlite-isolation");
+    let temp = scratch("sqlite-isolation");
+    let root = temp.path().to_path_buf();
     let service = database(&root).await;
     let client = service.client();
     let first = root.join("instances");
@@ -73,12 +74,12 @@ async fn profiles_are_isolated_by_directory_and_ignore_obsolete_json() {
         .expect("recreate");
     assert_eq!(recreated.name, "World");
     service.shutdown().await.expect("shutdown");
-    fs::remove_dir_all(root).expect("cleanup");
 }
 
 #[tokio::test]
 async fn settings_and_preparation_updates_preserve_each_other() {
-    let root = scratch("sqlite-concurrent");
+    let temp = scratch("sqlite-concurrent");
+    let root = temp.path().to_path_buf();
     let service = database(&root).await;
     let client = service.client();
     let instances = root.join("instances");
@@ -122,12 +123,12 @@ async fn settings_and_preparation_updates_preserve_each_other() {
         profile
     );
     service.shutdown().await.expect("shutdown");
-    fs::remove_dir_all(root).expect("cleanup");
 }
 
 #[tokio::test]
 async fn rejected_database_writes_preserve_profiles_and_clean_incomplete_folders() {
-    let root = scratch("sqlite-rejected-writes");
+    let temp = scratch("sqlite-rejected-writes");
+    let root = temp.path().to_path_buf();
     let cache = SharedCache::at(&root);
     let service = database(&root).await;
     let client = service.client();
@@ -205,12 +206,12 @@ async fn rejected_database_writes_preserve_profiles_and_clean_incomplete_folders
     );
     connection.close().await.expect("close");
     service.shutdown().await.expect("shutdown");
-    fs::remove_dir_all(root).expect("cleanup");
 }
 
 #[tokio::test]
 async fn deleting_a_profile_and_its_modpack_index_is_transactional() {
-    let root = scratch("sqlite-delete-transaction");
+    let temp = scratch("sqlite-delete-transaction");
+    let root = temp.path().to_path_buf();
     let service = database(&root).await;
     let client = service.client();
     let instances = root.join("instances");
@@ -253,12 +254,12 @@ async fn deleting_a_profile_and_its_modpack_index_is_transactional() {
     assert_eq!((profiles, indexes), (0, 0));
     connection.close().await.expect("close");
     service.shutdown().await.expect("shutdown");
-    fs::remove_dir_all(root).expect("cleanup");
 }
 
 #[tokio::test]
 async fn version_six_gains_an_empty_instances_table_and_preserves_existing_data() {
-    let root = scratch("sqlite-schema-six");
+    let temp = scratch("sqlite-schema-six");
+    let root = temp.path().to_path_buf();
     let cache = SharedCache::at(&root);
     let mut connection = open_migrated(&cache).await.expect("database");
     sqlx::raw_sql("DROP TABLE settings; DROP TABLE native_outputs; DROP TABLE native_generations; DROP TABLE download_job_checkpoints; DROP TABLE instances; DROP TABLE curseforge_files; INSERT INTO meta VALUES ('fixture', 'preserved'); PRAGMA user_version = 6;")
@@ -290,12 +291,12 @@ async fn version_six_gains_an_empty_instances_table_and_preserves_existing_data(
         "invalid obsolete JSON"
     );
     connection.close().await.expect("close");
-    fs::remove_dir_all(root).expect("cleanup");
 }
 
 #[tokio::test]
 async fn corrupted_database_profiles_are_reported_instead_of_reset() {
-    let root = scratch("sqlite-corrupted-profile");
+    let temp = scratch("sqlite-corrupted-profile");
+    let root = temp.path().to_path_buf();
     let service = database(&root).await;
     let client = service.client();
     let instances = root.join("instances");
@@ -329,5 +330,4 @@ async fn corrupted_database_profiles_are_reported_instead_of_reset() {
     ));
     connection.close().await.expect("close");
     service.shutdown().await.expect("shutdown");
-    fs::remove_dir_all(root).expect("cleanup");
 }

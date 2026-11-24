@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use licht_core::{
     CoreError, GlobalLaunch, InstanceSettings, create_instance, delete_instance,
@@ -7,12 +7,10 @@ use licht_core::{
     rename_instance, resolved_java_path, resolved_launch, touch_last_opened, update_instance,
     update_instance_version,
 };
+use licht_testkit::temp::TempDir;
 
-fn scratch(name: &str) -> PathBuf {
-    let root = std::env::temp_dir().join(format!("licht-instance-{name}-{}", std::process::id()));
-    let _ = fs::remove_dir_all(&root);
-    fs::create_dir_all(&root).expect("scratch directory");
-    root
+fn scratch(name: &str) -> TempDir {
+    TempDir::new(&format!("instance-{name}"))
 }
 
 fn plain_template() -> GlobalLaunch {
@@ -32,7 +30,8 @@ fn write(dir: &Path, name: &str, body: &str) {
 
 #[tokio::test]
 async fn unregistered_folders_are_not_initialized_or_imported() {
-    let root = scratch("migrate");
+    let temp = scratch("migrate");
+    let root = temp.path().to_path_buf();
     let dir = root.join("instances").join("1.20.1");
     fs::create_dir_all(&dir).expect("instance folder");
 
@@ -56,12 +55,12 @@ async fn unregistered_folders_are_not_initialized_or_imported() {
         body
     );
     service.shutdown().await.expect("shutdown");
-    let _ = fs::remove_dir_all(root);
 }
 
 #[test]
 fn schema_one_is_read_back_unchanged() {
-    let root = scratch("read");
+    let temp = scratch("read");
+    let root = temp.path().to_path_buf();
     let dir = root.join("Survival");
     write(
         &dir,
@@ -91,12 +90,12 @@ fn schema_one_is_read_back_unchanged() {
         fs::read_to_string(dir.join("instance.json")).expect("untouched"),
         before
     );
-    let _ = fs::remove_dir_all(root);
 }
 
 #[test]
 fn a_broken_file_and_a_newer_schema_are_left_in_place() {
-    let root = scratch("reject");
+    let temp = scratch("reject");
+    let root = temp.path().to_path_buf();
     let broken = root.join("broken");
     write(&broken, "instance.json", "{ not json");
     let broken_body = fs::read_to_string(broken.join("instance.json")).expect("broken");
@@ -124,7 +123,6 @@ fn a_broken_file_and_a_newer_schema_are_left_in_place() {
         fs::read_to_string(future.join("instance.json")).expect("still future"),
         future_body
     );
-    let _ = fs::remove_dir_all(root);
 }
 
 #[test]
@@ -147,7 +145,8 @@ fn memory_must_be_a_positive_range() {
 
 #[tokio::test]
 async fn a_minecraft_child_is_not_its_own_instance() {
-    let root = scratch("list");
+    let temp = scratch("list");
+    let root = temp.path().to_path_buf();
     let instances = root.join("instances");
     let legacy = instances.join("1.5.2");
     let service = database(&root).await;
@@ -175,12 +174,12 @@ async fn a_minecraft_child_is_not_its_own_instance() {
             .is_empty()
     );
     service.shutdown().await.expect("shutdown");
-    let _ = fs::remove_dir_all(root);
 }
 
 #[tokio::test]
 async fn create_rename_duplicate_and_delete_keep_the_folder_stable() {
-    let root = scratch("crud");
+    let temp = scratch("crud");
+    let root = temp.path().to_path_buf();
     let instances = root.join("instances");
     let service = database(&root).await;
     let client = service.client();
@@ -276,12 +275,12 @@ async fn create_rename_duplicate_and_delete_keep_the_folder_stable() {
     assert!(!instances.join("Survival-copy").exists());
     assert!(instances.join("My-World").is_dir());
     service.shutdown().await.expect("shutdown");
-    let _ = fs::remove_dir_all(root);
 }
 
 #[tokio::test]
 async fn a_new_instance_copies_the_template_and_leaves_an_older_one_alone() {
-    let root = scratch("template");
+    let temp = scratch("template");
+    let root = temp.path().to_path_buf();
     let instances = root.join("instances");
     let service = database(&root).await;
     let template = GlobalLaunch {
@@ -332,12 +331,12 @@ async fn a_new_instance_copies_the_template_and_leaves_an_older_one_alone() {
         before
     );
     service.shutdown().await.expect("shutdown");
-    let _ = fs::remove_dir_all(root);
 }
 
 #[test]
 fn older_files_default_overrides_to_off() {
-    let root = scratch("overrides-default");
+    let temp = scratch("overrides-default");
+    let root = temp.path().to_path_buf();
     let dir = root.join("Survival");
     write(
         &dir,
@@ -363,13 +362,13 @@ fn older_files_default_overrides_to_off() {
     assert_eq!(instance.java_path, None);
     assert!(instance.fullscreen);
     assert_eq!(instance.max_memory_mb, 4096);
-    let _ = fs::remove_dir_all(root);
 }
 
 #[test]
 fn resolved_launch_uses_global_until_overrides_turn_on() {
     let instance = parse_instance(&{
-        let root = scratch("resolve");
+        let temp = scratch("resolve");
+        let root = temp.path().to_path_buf();
         let dir = root.join("Game");
         write(
             &dir,
@@ -423,7 +422,8 @@ fn resolved_launch_uses_global_until_overrides_turn_on() {
 
 #[tokio::test]
 async fn a_custom_java_must_be_a_java_executable() {
-    let root = scratch("custom-java-name");
+    let temp = scratch("custom-java-name");
+    let root = temp.path().to_path_buf();
     let instances = root.join("instances");
     let service = database(&root).await;
     let client = service.client();
@@ -459,7 +459,8 @@ async fn a_custom_java_must_be_a_java_executable() {
 
 #[tokio::test]
 async fn update_instance_persists_overrides_and_keeps_name() {
-    let root = scratch("update");
+    let temp = scratch("update");
+    let root = temp.path().to_path_buf();
     let instances = root.join("instances");
     let service = database(&root).await;
     let client = service.client();
@@ -507,12 +508,12 @@ async fn update_instance_persists_overrides_and_keeps_name() {
         vec![updated]
     );
     service.shutdown().await.expect("shutdown");
-    let _ = fs::remove_dir_all(root);
 }
 
 #[tokio::test]
 async fn memory_overrides_accept_exact_values_and_reject_out_of_range_allocations() {
-    let root = scratch("memory-limits");
+    let temp = scratch("memory-limits");
+    let root = temp.path().to_path_buf();
     let instances = root.join("instances");
     let service = database(&root).await;
     let client = service.client();
@@ -556,12 +557,12 @@ async fn memory_overrides_accept_exact_values_and_reject_out_of_range_allocation
         513
     );
     service.shutdown().await.expect("shutdown");
-    let _ = fs::remove_dir_all(root);
 }
 
 #[tokio::test]
 async fn update_instance_version_changes_only_the_game_version() {
-    let root = scratch("version");
+    let temp = scratch("version");
+    let root = temp.path().to_path_buf();
     let instances = root.join("instances");
     let service = database(&root).await;
     let client = service.client();
@@ -576,12 +577,12 @@ async fn update_instance_version_changes_only_the_game_version() {
     assert_eq!(updated.version_id.as_deref(), Some("1.21.1"));
     assert_eq!(updated.max_memory_mb, created.max_memory_mb);
     service.shutdown().await.expect("shutdown");
-    let _ = fs::remove_dir_all(root);
 }
 
 #[tokio::test]
 async fn touch_last_opened_writes_rfc3339_and_duplicate_clears_it() {
-    let root = scratch("opened");
+    let temp = scratch("opened");
+    let root = temp.path().to_path_buf();
     let instances = root.join("instances");
     let service = database(&root).await;
     let client = service.client();
@@ -613,12 +614,12 @@ async fn touch_last_opened_writes_rfc3339_and_duplicate_clears_it() {
     .expect("dup");
     service.shutdown().await.expect("shutdown");
     assert_eq!(copy.last_opened_at, None);
-    let _ = fs::remove_dir_all(root);
 }
 
 #[test]
 fn missing_last_opened_at_defaults_to_none() {
-    let root = scratch("legacy-opened");
+    let temp = scratch("legacy-opened");
+    let root = temp.path().to_path_buf();
     let dir = root.join("Legacy");
     write(
         &dir,
@@ -635,7 +636,6 @@ fn missing_last_opened_at_defaults_to_none() {
     let instance = parse_instance(&fs::read_to_string(dir.join("instance.json")).expect("json"))
         .expect("load");
     assert_eq!(instance.last_opened_at, None);
-    let _ = fs::remove_dir_all(root);
 }
 async fn database(root: &Path) -> licht_core::DatabaseService {
     licht_core::DatabaseService::start(
@@ -652,7 +652,8 @@ mod sqlite;
 
 #[tokio::test]
 async fn every_instance_gets_its_own_folder_whatever_its_name() {
-    let root = scratch("punctuation");
+    let temp = scratch("punctuation");
+    let root = temp.path().to_path_buf();
     let instances = root.join("instances");
     let service = database(&root).await;
     let client = service.client();
@@ -690,12 +691,12 @@ async fn every_instance_gets_its_own_folder_whatever_its_name() {
     distinct.dedup();
     assert_eq!(distinct.len(), folders.len());
     service.shutdown().await.expect("shutdown");
-    let _ = fs::remove_dir_all(root);
 }
 
 #[tokio::test]
 async fn a_name_without_letters_still_gets_a_folder() {
-    let root = scratch("symbols");
+    let temp = scratch("symbols");
+    let root = temp.path().to_path_buf();
     let instances = root.join("instances");
     let service = database(&root).await;
     let client = service.client();
@@ -711,12 +712,12 @@ async fn a_name_without_letters_still_gets_a_folder() {
     assert_eq!(first.folder, "instance");
     assert_eq!(second.folder, "instance-1");
     service.shutdown().await.expect("shutdown");
-    let _ = fs::remove_dir_all(root);
 }
 
 #[tokio::test]
 async fn duplicating_into_a_taken_folder_numbers_it() {
-    let root = scratch("duplicate-taken");
+    let temp = scratch("duplicate-taken");
+    let root = temp.path().to_path_buf();
     let instances = root.join("instances");
     let service = database(&root).await;
     let client = service.client();
@@ -736,12 +737,12 @@ async fn duplicating_into_a_taken_folder_numbers_it() {
     assert_eq!(copy.name, "Pack!");
     assert_eq!(copy.folder, "Pack-2");
     service.shutdown().await.expect("shutdown");
-    let _ = fs::remove_dir_all(root);
 }
 
 #[tokio::test]
 async fn renaming_may_take_the_name_of_another_instance() {
-    let root = scratch("rename-taken");
+    let temp = scratch("rename-taken");
+    let root = temp.path().to_path_buf();
     let instances = root.join("instances");
     let service = database(&root).await;
     let client = service.client();
@@ -765,7 +766,6 @@ async fn renaming_may_take_the_name_of_another_instance() {
         .expect("a different name is free");
     assert_eq!(punctuated.name, "Pack!");
     service.shutdown().await.expect("shutdown");
-    let _ = fs::remove_dir_all(root);
 }
 
 /// Migrates the profile database as startup does, then returns a plain connection apart
