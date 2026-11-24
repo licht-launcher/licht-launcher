@@ -5,17 +5,12 @@ export const modpackContentCardStyles = {
   iconFallback:
     "flex size-12 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground [&_svg]:size-6",
   heading: "flex min-w-0 flex-1 flex-col gap-3",
-  title: "flex min-w-0 items-center gap-1.5 text-base",
-  lock: "size-3.5 shrink-0 text-muted-foreground",
-  titleName: "min-w-0 truncate font-semibold",
+  title: "truncate text-base font-semibold",
   facts: "flex flex-wrap gap-x-10 gap-y-3",
   fact: "flex min-w-0 flex-col gap-1.5",
-  includedFact: "flex min-w-0 flex-col gap-1.5",
   value: "text-sm font-medium",
   versionFact: "flex min-w-0 max-w-48 flex-col gap-1.5",
   version: "truncate text-sm font-medium",
   unknown: "text-sm text-muted-foreground",
   label: "text-xs font-medium uppercase tracking-wide text-muted-foreground",
-  counts: "flex flex-wrap items-center gap-x-4 gap-y-1 text-sm font-medium",
-  count: "flex items-center gap-2 tabular-nums",
 } as const;

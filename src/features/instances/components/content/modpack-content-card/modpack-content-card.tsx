@@ -1,14 +1,11 @@
-import { EyeIcon, LockIcon, PackageIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import { EyeIcon, PackageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SOURCE_LABELS } from "@/features/discover/lib/discover-search";
-import { ContentKindIcon } from "@/features/instances/components/content/content-kind-icon";
 import { useStoreModpackSummary } from "@/features/instances/hooks/use-modpack-summary";
-import {
-  countContent,
-  type FileModpackOrigin,
-  type ModpackOrigin,
-  type StoreModpackOrigin,
+import type {
+  FileModpackOrigin,
+  ModpackOrigin,
+  StoreModpackOrigin,
 } from "@/features/instances/lib/modpack-content";
 import type { InstanceContentEntry } from "@/lib/generated/InstanceContentEntry";
 
@@ -20,8 +17,8 @@ type CardProps = {
 };
 
 /**
- * Which pack provides an instance's content and how much it ships. It heads the
- * content panel; the pack's author and release age live in the content dialog.
+ * The modpack an instance is linked to, with its version and release age. It
+ * heads the content panel; what the pack ships is listed in the content dialog.
  */
 export function ModpackContentCard({
   origin,
@@ -42,12 +39,7 @@ function StoreModpackCard({
   return (
     <ModpackCard
       iconUrl={summary.iconUrl}
-      title={
-        <>
-          <LockIcon aria-hidden className={styles.lock} />
-          <span className={styles.titleName}>{summary.name}</span>
-        </>
-      }
+      title={summary.name}
       version={summary.version}
       updated={summary.updated}
       {...props}
@@ -62,11 +54,7 @@ function FileModpackCard({
   return (
     <ModpackCard
       iconUrl={null}
-      title={
-        <span className={styles.titleName}>
-          Imported from a {SOURCE_LABELS[origin.source]} file
-        </span>
-      }
+      title={`Imported from a ${SOURCE_LABELS[origin.source]} file`}
       {...props}
     />
   );
@@ -81,13 +69,12 @@ function ModpackCard({
   onView,
 }: CardProps & {
   iconUrl: string | null;
-  title: ReactNode;
+  title: string;
   /** The installed pack version; `null` when unknown, left out for packs from a file. */
   version?: string | null;
   /** When that version was released; `null` when unknown, left out for packs from a file. */
   updated?: string | null;
 }) {
-  const counts = countContent(entries);
   return (
     <section aria-label="Modpack content" className={styles.root}>
       {iconUrl ? (
@@ -99,41 +86,26 @@ function ModpackCard({
       )}
       <div className={styles.heading}>
         <h3 className={styles.title}>{title}</h3>
-        <dl className={styles.facts}>
-          {version !== undefined ? (
-            <div className={styles.versionFact}>
-              <dt className={styles.label}>Version</dt>
-              <dd className={version ? styles.version : styles.unknown}>
-                {version ?? "Unknown"}
-              </dd>
-            </div>
-          ) : null}
-          {updated !== undefined ? (
-            <div className={styles.fact}>
-              <dt className={styles.label}>Updated</dt>
-              <dd className={updated ? styles.value : styles.unknown}>
-                {updated ?? "Unknown"}
-              </dd>
-            </div>
-          ) : null}
-          <div className={styles.includedFact}>
-            <dt className={styles.label}>Included</dt>
-            <dd className={styles.counts}>
-              {counts.length === 0
-                ? "No content"
-                : counts.map((count) => (
-                    <span key={count.kind} className={styles.count}>
-                      <ContentKindIcon
-                        kind={count.kind}
-                        size="sm"
-                        tone="muted"
-                      />
-                      {count.label}
-                    </span>
-                  ))}
-            </dd>
-          </div>
-        </dl>
+        {version !== undefined || updated !== undefined ? (
+          <dl className={styles.facts}>
+            {version !== undefined ? (
+              <div className={styles.versionFact}>
+                <dt className={styles.label}>Version</dt>
+                <dd className={version ? styles.version : styles.unknown}>
+                  {version ?? "Unknown"}
+                </dd>
+              </div>
+            ) : null}
+            {updated !== undefined ? (
+              <div className={styles.fact}>
+                <dt className={styles.label}>Updated</dt>
+                <dd className={updated ? styles.value : styles.unknown}>
+                  {updated ?? "Unknown"}
+                </dd>
+              </div>
+            ) : null}
+          </dl>
+        ) : null}
       </div>
       <Button
         type="button"

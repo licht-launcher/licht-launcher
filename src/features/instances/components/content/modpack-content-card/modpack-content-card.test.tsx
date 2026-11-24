@@ -79,7 +79,7 @@ describe("ModpackContentCard", () => {
     listModpackVersions.mockReset();
   });
 
-  it("names the pack that provides the content and what it includes", async () => {
+  it("names the pack with its version and release age", async () => {
     mockStore();
 
     renderCard(STORE);
@@ -91,14 +91,11 @@ describe("ModpackContentCard", () => {
     expect(screen.getByText("Version").nextElementSibling).toHaveTextContent(
       "15.0.0-beta.3",
     );
-    expect(screen.getByText("Included")).toBeInTheDocument();
-    expect(screen.getByText("2 mods")).toBeInTheDocument();
-    expect(screen.getByText("1 resource pack")).toBeInTheDocument();
     expect(screen.getByText("Updated").nextElementSibling).toHaveTextContent(
       /ago$/,
     );
     expect(screen.getAllByRole("term").map((term) => term.textContent)).toEqual(
-      ["Version", "Updated", "Included"],
+      ["Version", "Updated"],
     );
     // The pack name is not a link, and the author lives in the dialog.
     expect(
@@ -110,14 +107,13 @@ describe("ModpackContentCard", () => {
     expect(getModpack).toHaveBeenCalledWith("modrinth", "fo");
   });
 
-  it("still shows what the pack ships when the store cannot be reached", async () => {
+  it("still opens its content when the store cannot be reached", async () => {
     getModpack.mockRejectedValue(new Error("offline"));
     listModpackVersions.mockRejectedValue(new Error("offline"));
 
     renderCard(STORE);
 
     await waitFor(() => expect(getModpack).toHaveBeenCalled());
-    expect(screen.getByText("2 mods")).toBeInTheDocument();
     expect(screen.getByText("Version").nextElementSibling).toHaveTextContent(
       "Unknown",
     );

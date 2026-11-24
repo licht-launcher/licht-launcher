@@ -551,8 +551,10 @@ describe("ContentSection", () => {
       expect(await screen.findByText("Extra")).toBeInTheDocument();
       expect(screen.queryByText("Sodium")).not.toBeInTheDocument();
       expect(
-        screen.getByRole("region", { name: "Modpack content" }),
-      ).toHaveTextContent("1 mod");
+        within(
+          screen.getByRole("region", { name: "Modpack content" }),
+        ).getByRole("heading", { name: "Imported from a Modrinth file" }),
+      ).toBeInTheDocument();
       expect(
         screen.getByRole("heading", { name: "Extra content 1" }),
       ).toBeInTheDocument();
