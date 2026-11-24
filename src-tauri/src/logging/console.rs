@@ -1,14 +1,16 @@
 //! The console format of development builds: one line per event, tagged by the area
 //! of the launcher that logged it. Events with many fields list them on the lines
-//! below instead.
+//! below instead. Span fields are shown like the event's own fields.
 
 use std::fmt;
 
 use tracing::field::{Field, Visit};
+use tracing::span::{Attributes, Id, Record};
 use tracing::{Event, Level, Subscriber};
+use tracing_subscriber::fmt::FmtContext;
 use tracing_subscriber::fmt::format::{self, FormatEvent, FormatFields};
 use tracing_subscriber::fmt::time::{FormatTime, SystemTime};
-use tracing_subscriber::fmt::{FmtContext, FormattedFields};
+use tracing_subscriber::layer::{Context, Layer};
 use tracing_subscriber::registry::LookupSpan;
 
 /// Module prefixes and the area they log for, most specific first.
@@ -54,13 +56,15 @@ const INLINE_FIELDS: usize = 4;
 
 /// Muted colors from the terminal's 256-color palette, so the console stays calm.
 mod colors {
-    pub(super) const INFO: u8 = 71;
+    pub(super) const INFO: u8 = 114;
     pub(super) const WARN: u8 = 178;
     pub(super) const ERROR: u8 = 167;
     pub(super) const DEBUG: u8 = 67;
     pub(super) const TRACE: u8 = 139;
+    /// Something started or finished well.
     pub(super) const STARTED: u8 = 108;
     pub(super) const STOPPED: u8 = 173;
+    pub(super) const EXITED: u8 = 167;
     pub(super) const LIBRARY: u8 = 242;
 }
 
@@ -141,26 +145,22 @@ fn level_style(level: Level) -> Style {
 }
 
 /// Warnings and errors take their level's color; otherwise only messages about
-/// something starting or stopping stand out.
+/// something starting, completing, stopping or exiting stand out.
 fn message_style(level: Level, message: &str) -> Style {
     match level {
         Level::ERROR => return Style::Color(colors::ERROR),
         Level::WARN => return Style::Color(colors::WARN),
         _ => {}
     }
-    let mut words = message
+    message
         .split(|character: char| !character.is_alphanumeric())
-        .map(str::to_ascii_lowercase);
-    match words.find(|word| {
-        matches!(
-            word.as_str(),
-            "started" | "starting" | "stopped" | "stopping"
-        )
-    }) {
-        Some(word) if word.starts_with("start") => Style::Color(colors::STARTED),
-        Some(_) => Style::Color(colors::STOPPED),
-        None => Style::Plain,
-    }
+        .find_map(|word| match word.to_ascii_lowercase().as_str() {
+            "started" | "starting" | "completed" => Some(Style::Color(colors::STARTED)),
+            "stopped" | "stopping" => Some(Style::Color(colors::STOPPED)),
+            "exited" => Some(Style::Color(colors::EXITED)),
+            _ => None,
+        })
+        .unwrap_or(Style::Plain)
 }
 
 /// Writes `text` in `style` when the writer accepts escapes.
@@ -201,8 +201,40 @@ impl Visit for EventFields {
     }
 }
 
-/// `HH:MM:SS level [area] message fields span-fields`, with the UTC time of the log
-/// file. Events with many fields put each field on its own line instead.
+/// The fields of a span, recorded by [`SpanFieldsLayer`] so events can show them.
+struct SpanFields(Vec<(&'static str, String)>);
+
+/// Records span fields the same way as event fields, unquoted and by name.
+pub(super) struct SpanFieldsLayer;
+
+impl<S> Layer<S> for SpanFieldsLayer
+where
+    S: Subscriber + for<'span> LookupSpan<'span>,
+{
+    fn on_new_span(&self, attributes: &Attributes<'_>, id: &Id, context: Context<'_, S>) {
+        let Some(span) = context.span(id) else {
+            return;
+        };
+        let mut fields = EventFields::default();
+        attributes.record(&mut fields);
+        span.extensions_mut().insert(SpanFields(fields.fields));
+    }
+
+    fn on_record(&self, id: &Id, values: &Record<'_>, context: Context<'_, S>) {
+        let Some(span) = context.span(id) else {
+            return;
+        };
+        let mut fields = EventFields::default();
+        values.record(&mut fields);
+        if let Some(recorded) = span.extensions_mut().get_mut::<SpanFields>() {
+            recorded.0.extend(fields.fields);
+        }
+    }
+}
+
+/// `HH:MM:SS level [area] message fields`, with the UTC time of the log file. The
+/// fields of the event's spans follow its own. Events with many fields put each
+/// field on its own line instead.
 pub(super) struct DevelopmentFormat;
 
 impl<S, N> FormatEvent<S, N> for DevelopmentFormat
@@ -239,39 +271,32 @@ where
             message_style(level, &fields.message),
             &fields.message,
         )?;
-        let listed = fields.fields.len() > INLINE_FIELDS;
-        if !listed {
-            for (name, value) in &fields.fields {
+        let mut all_fields = fields.fields;
+        if let Some(scope) = context.event_scope() {
+            for span in scope.from_root() {
+                if let Some(span_fields) = span.extensions().get::<SpanFields>() {
+                    all_fields.extend(span_fields.0.iter().cloned());
+                }
+            }
+        }
+        if all_fields.len() <= INLINE_FIELDS {
+            for (name, value) in &all_fields {
                 write!(writer, " ")?;
                 paint(&mut writer, Style::Dim, &format!("{name}="))?;
                 writer.write_str(value)?;
             }
-        }
-        if let Some(scope) = context.event_scope() {
-            for span in scope.from_root() {
-                let extensions = span.extensions();
-                if let Some(span_fields) = extensions
-                    .get::<FormattedFields<N>>()
-                    .filter(|span_fields| !span_fields.is_empty())
-                {
-                    write!(writer, " ")?;
-                    paint(&mut writer, Style::Dim, span_fields)?;
-                }
-            }
+            return writeln!(writer);
         }
         writeln!(writer)?;
-        if listed {
-            let width = fields
-                .fields
-                .iter()
-                .map(|(name, _)| name.len())
-                .max()
-                .unwrap_or_default();
-            for (name, value) in &fields.fields {
-                write!(writer, "{:MESSAGE_COLUMN$}", "")?;
-                paint(&mut writer, Style::Dim, &format!("{name:<width$}"))?;
-                writeln!(writer, "  {value}")?;
-            }
+        let width = all_fields
+            .iter()
+            .map(|(name, _)| name.len())
+            .max()
+            .unwrap_or_default();
+        for (name, value) in &all_fields {
+            write!(writer, "{:MESSAGE_COLUMN$}", "")?;
+            paint(&mut writer, Style::Dim, &format!("{name:<width$}"))?;
+            writeln!(writer, "  {value}")?;
         }
         Ok(())
     }
@@ -350,6 +375,14 @@ mod tests {
                 "{message}"
             );
         }
+        assert_eq!(
+            message_style(Level::INFO, "Download job completed"),
+            Style::Color(colors::STARTED)
+        );
+        assert_eq!(
+            message_style(Level::INFO, "Game exited"),
+            Style::Color(colors::EXITED)
+        );
         assert_eq!(
             message_style(Level::INFO, "Launcher is up to date"),
             Style::Plain

@@ -177,7 +177,10 @@ where
 {
     let layer = fmt::layer().with_writer(writer).with_ansi(style.colors);
     if style.development {
-        layer.event_format(console::DevelopmentFormat).boxed()
+        layer
+            .event_format(console::DevelopmentFormat)
+            .and_then(console::SpanFieldsLayer)
+            .boxed()
     } else {
         layer.boxed()
     }
@@ -270,6 +273,38 @@ mod tests {
     }
 
     #[test]
+    fn listed_fields_include_the_span_fields_after_the_event_fields() {
+        let output = console_output_of(ConsoleStyle::for_build(true, false, true), || {
+            let _launch = tracing::info_span!("launch", instance = "Survival").entered();
+            tracing::info!(
+                target: "licht_launcher::commands::launch",
+                version = "1.21.4",
+                java_major = 21,
+                java_source = "Managed",
+                max_memory_mb = 4096,
+                "Launching game"
+            );
+        });
+        let lines: Vec<_> = output.lines().collect();
+        let indent = " ".repeat(27);
+
+        assert!(
+            lines[0].ends_with(" INFO  [launch]    Launching game"),
+            "unexpected output: {output}"
+        );
+        assert_eq!(
+            lines[1..],
+            [
+                format!("{indent}version        1.21.4"),
+                format!("{indent}java_major     21"),
+                format!("{indent}java_source    Managed"),
+                format!("{indent}max_memory_mb  4096"),
+                format!("{indent}instance       Survival"),
+            ]
+        );
+    }
+
+    #[test]
     fn the_development_console_lists_many_fields_below_the_message() {
         let output = console_output_of(ConsoleStyle::for_build(true, false, true), || {
             tracing::info!(
@@ -313,7 +348,7 @@ mod tests {
         );
         assert!(output.contains("pid"), "unexpected output: {output}");
         assert!(
-            output.contains("instance") && output.contains("\"Survival\""),
+            output.contains("instance") && output.contains("Survival"),
             "the span fields are missing: {output}"
         );
         assert!(output.contains('\u{1b}'), "colors are missing: {output}");
@@ -325,7 +360,7 @@ mod tests {
 
         assert_eq!(output.lines().count(), 1, "unexpected output: {output}");
         assert!(
-            output.ends_with(" INFO  [launch]    Game started pid=18432 instance=\"Survival\"\n"),
+            output.ends_with(" INFO  [launch]    Game started pid=18432 instance=Survival\n"),
             "unexpected output: {output}"
         );
         assert!(!output.contains('\u{1b}'), "unexpected colors: {output}");
