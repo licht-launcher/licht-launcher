@@ -85,9 +85,7 @@ describe("ModpackContentCard", () => {
     renderCard(STORE);
 
     expect(
-      await screen.findByRole("heading", {
-        name: "Provided by Fabulously Optimized",
-      }),
+      await screen.findByRole("heading", { name: "Fabulously Optimized" }),
     ).toBeInTheDocument();
     expect(await screen.findByText("15.0.0-beta.3")).toBeInTheDocument();
     expect(screen.getByText("Version").nextElementSibling).toHaveTextContent(

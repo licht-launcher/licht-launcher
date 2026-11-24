@@ -45,7 +45,6 @@ function StoreModpackCard({
       title={
         <>
           <LockIcon aria-hidden className={styles.lock} />
-          <span className={styles.titlePrefix}>Provided by</span>{" "}
           <span className={styles.titleName}>{summary.name}</span>
         </>
       }
