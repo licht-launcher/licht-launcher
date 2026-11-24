@@ -331,8 +331,7 @@ mod tests {
         assert_eq!(output.lines().count(), 1, "unexpected output: {output}");
         assert!(
             output.ends_with(
-                " INFO  [download]  Download progress [████████░░░░░░░░░░░░]  40%  \
-                 824/2061 files  96.4/241.0 MB component=Minecraft job_id=7\n"
+                " INFO  [download]  Minecraft  [████████░░░░░░░░░░░░]  40%  96.4/241.0 MB\n"
             ),
             "unexpected output: {output}"
         );

@@ -245,8 +245,8 @@ impl Progress {
         progress
     }
 
-    /// `[████░░░░]  40%  824/2061 files  96.4/241.0 MB`; counts appear when known.
-    fn write(&self, out: &mut impl fmt::Write, ansi: bool, color: u8) -> fmt::Result {
+    /// `[████░░░░]  40%`, always `PROGRESS_BAR_WIDTH + 7` columns wide.
+    fn write_bar(&self, out: &mut impl fmt::Write, ansi: bool, color: u8) -> fmt::Result {
         let percent = self.percent.min(100);
         let filled = percent * PROGRESS_BAR_WIDTH / 100;
         let filled_width = usize::try_from(filled).unwrap_or_default();
@@ -254,18 +254,75 @@ impl Progress {
         out.write_str("[")?;
         paint(out, ansi, Style::Color(color), &"█".repeat(filled_width))?;
         paint(out, ansi, Style::Dim, &"░".repeat(empty_width))?;
-        write!(out, "] {percent:>3}%")?;
-        if self.total > 0 {
-            write!(out, "  {}/{} files", self.finished, self.total)?;
-        }
+        write!(out, "] {percent:>3}%")
+    }
+
+    /// Megabytes when the size is known, files otherwise.
+    fn counts(&self) -> Option<String> {
         if self.bytes_total > 0 {
             // Display only, so the precision lost converting to f64 does not matter.
             let done = self.bytes_done as f64 / BYTES_PER_MB;
             let total = self.bytes_total as f64 / BYTES_PER_MB;
-            write!(out, "  {done:.1}/{total:.1} MB")?;
+            Some(format!("{done:.1}/{total:.1} MB"))
+        } else if self.total > 0 {
+            Some(format!("{}/{} files", self.finished, self.total))
+        } else {
+            None
         }
-        Ok(())
     }
+}
+
+/// A redrawn line must fit on one terminal row: a longer line wraps, and returning
+/// to its start would only clear the last row, leaving the rest behind.
+const PROGRESS_LINE_LIMIT: usize = 100;
+
+/// `component phase [bar] percent counts instance` after the usual prefix. Counts and
+/// the instance are left out when the line would grow past `PROGRESS_LINE_LIMIT`.
+fn progress_line(
+    prefix: &str,
+    progress: &Progress,
+    fields: &[(&'static str, String)],
+    ansi: bool,
+    color: u8,
+) -> Result<String, fmt::Error> {
+    let field = |wanted: &str| {
+        fields
+            .iter()
+            .find(|(name, _)| *name == wanted)
+            .map(|(_, value)| value.as_str())
+    };
+    let mut line = prefix.to_string();
+    let mut width = MESSAGE_COLUMN - 1;
+    if let Some(component) = field("component") {
+        write!(line, " {component}")?;
+        width += 1 + component.chars().count();
+    }
+    if let Some(phase) = field("phase") {
+        let phase = phase.to_ascii_lowercase();
+        line.push(' ');
+        paint(&mut line, ansi, Style::Dim, &phase)?;
+        width += 1 + phase.chars().count();
+    }
+    line.push_str("  ");
+    progress.write_bar(&mut line, ansi, color)?;
+    width += 2 + usize::try_from(PROGRESS_BAR_WIDTH).unwrap_or_default() + 7;
+    let optional = [
+        (progress.counts(), Style::Plain),
+        (field("instance").map(str::to_string), Style::Dim),
+    ];
+    for (text, style) in optional {
+        let Some(text) = text else {
+            continue;
+        };
+        let text_width = 2 + text.chars().count();
+        if width + text_width > PROGRESS_LINE_LIMIT {
+            break;
+        }
+        line.push_str("  ");
+        paint(&mut line, ansi, style, &text)?;
+        width += text_width;
+    }
+    Ok(line)
 }
 
 fn write_inline(
@@ -366,6 +423,7 @@ where
             Style::Color(area.color),
             &format!("{tag:<width$}", width = AREA_WIDTH + 2),
         )?;
+        let prefix = line.clone();
         let mut fields = EventFields::default();
         event.record(&mut fields);
         line.push(' ');
@@ -387,9 +445,7 @@ where
         let mut pinned = self.pinned.lock().unwrap_or_else(PoisonError::into_inner);
         if metadata.target() == licht_core::DOWNLOAD_PROGRESS_TARGET {
             let progress = Progress::from_fields(&mut all_fields);
-            line.push(' ');
-            progress.write(&mut line, ansi, area.color)?;
-            write_inline(&mut line, ansi, &all_fields)?;
+            let line = progress_line(&prefix, &progress, &all_fields, ansi, area.color)?;
             if !ansi {
                 return writeln!(writer, "{line}");
             }
@@ -436,7 +492,40 @@ where
 mod tests {
     use tracing::Level;
 
-    use super::{AREAS, Progress, Style, area, colors, ends_progress, library_name, message_style};
+    use super::{
+        AREAS, PROGRESS_LINE_LIMIT, Progress, Style, area, colors, ends_progress, library_name,
+        message_style, progress_line,
+    };
+
+    #[test]
+    fn the_progress_line_leaves_out_what_does_not_fit() {
+        let progress = Progress {
+            percent: 39,
+            finished: 2048,
+            total: 5214,
+            ..Progress::default()
+        };
+        let prefix = "19:50:38 INFO  [download] ";
+        let fields = |instance: &str| {
+            vec![
+                ("component", "Minecraft".to_string()),
+                ("phase", "Verifying".to_string()),
+                ("instance", instance.to_string()),
+            ]
+        };
+
+        let short = progress_line(prefix, &progress, &fields("S1"), false, 67)
+            .expect("the line should format");
+        assert_eq!(
+            short,
+            "19:50:38 INFO  [download]  Minecraft verifying  [███████░░░░░░░░░░░░░]  39%  2048/5214 files  S1"
+        );
+
+        let long = progress_line(prefix, &progress, &fields(&"x".repeat(40)), false, 67)
+            .expect("the line should format");
+        assert!(long.ends_with("2048/5214 files"), "{long}");
+        assert!(long.chars().count() <= PROGRESS_LINE_LIMIT, "{long}");
+    }
 
     #[test]
     fn job_endings_stop_the_pinned_progress_line() {
