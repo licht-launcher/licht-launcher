@@ -90,23 +90,23 @@ function ModpackCard({
           <dl className={styles.facts}>
             {version !== undefined ? (
               <div className={styles.versionFact}>
-                <dt className={styles.label}>
-                  <TagIcon aria-hidden />
-                  Version
-                </dt>
+                <dt className={styles.label}>Version</dt>
                 <dd className={version ? styles.version : styles.unknown}>
-                  {version ?? "Unknown"}
+                  <TagIcon aria-hidden />
+                  <span className={styles.valueText}>
+                    {version ?? "Unknown"}
+                  </span>
                 </dd>
               </div>
             ) : null}
             {updated !== undefined ? (
               <div className={styles.fact}>
-                <dt className={styles.label}>
-                  <ClockIcon aria-hidden />
-                  Updated
-                </dt>
+                <dt className={styles.label}>Updated</dt>
                 <dd className={updated ? styles.value : styles.unknown}>
-                  {updated ?? "Unknown"}
+                  <ClockIcon aria-hidden />
+                  <span className={styles.valueText}>
+                    {updated ?? "Unknown"}
+                  </span>
                 </dd>
               </div>
             ) : null}
