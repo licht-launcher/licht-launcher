@@ -90,6 +90,9 @@ describe("ModpackContentCard", () => {
       }),
     ).toBeInTheDocument();
     expect(await screen.findByText("15.0.0-beta.3")).toBeInTheDocument();
+    expect(screen.getByText("Version").nextElementSibling).toHaveTextContent(
+      "15.0.0-beta.3",
+    );
     expect(screen.getByText("Included")).toBeInTheDocument();
     expect(screen.getByText("2 mods")).toBeInTheDocument();
     expect(screen.getByText("1 resource pack")).toBeInTheDocument();
@@ -111,6 +114,9 @@ describe("ModpackContentCard", () => {
 
     await waitFor(() => expect(getModpack).toHaveBeenCalled());
     expect(screen.getByText("2 mods")).toBeInTheDocument();
+    expect(screen.getByText("Version").nextElementSibling).toHaveTextContent(
+      "Unknown",
+    );
     expect(screen.getByRole("button", { name: "View content" })).toBeEnabled();
   });
 
@@ -120,6 +126,7 @@ describe("ModpackContentCard", () => {
     expect(
       screen.getByRole("heading", { name: "Imported from a Modrinth file" }),
     ).toBeInTheDocument();
+    expect(screen.queryByText("Version")).not.toBeInTheDocument();
     expect(getModpack).not.toHaveBeenCalled();
   });
 

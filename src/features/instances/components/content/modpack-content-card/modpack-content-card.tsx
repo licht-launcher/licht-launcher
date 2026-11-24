@@ -67,7 +67,6 @@ function FileModpackCard({
           Imported from a {SOURCE_LABELS[origin.source]} file
         </span>
       }
-      version={null}
       {...props}
     />
   );
@@ -82,7 +81,8 @@ function ModpackCard({
 }: CardProps & {
   iconUrl: string | null;
   title: ReactNode;
-  version: string | null;
+  /** The installed pack version; `null` when unknown, left out for packs from a file. */
+  version?: string | null;
 }) {
   const counts = countContent(entries);
   return (
@@ -95,22 +95,33 @@ function ModpackCard({
         </span>
       )}
       <div className={styles.heading}>
-        <div className={styles.titleLine}>
-          <h3 className={styles.title}>{title}</h3>
-          {version ? <span className={styles.version}>{version}</span> : null}
-        </div>
-        <dl className={styles.included}>
-          <dt className={styles.label}>Included</dt>
-          <dd className={styles.counts}>
-            {counts.length === 0
-              ? "No content"
-              : counts.map((count) => (
-                  <span key={count.kind} className={styles.count}>
-                    <ContentKindIcon kind={count.kind} size="sm" tone="muted" />
-                    {count.label}
-                  </span>
-                ))}
-          </dd>
+        <h3 className={styles.title}>{title}</h3>
+        <dl className={styles.facts}>
+          <div className={styles.fact}>
+            <dt className={styles.label}>Included</dt>
+            <dd className={styles.counts}>
+              {counts.length === 0
+                ? "No content"
+                : counts.map((count) => (
+                    <span key={count.kind} className={styles.count}>
+                      <ContentKindIcon
+                        kind={count.kind}
+                        size="sm"
+                        tone="muted"
+                      />
+                      {count.label}
+                    </span>
+                  ))}
+            </dd>
+          </div>
+          {version !== undefined ? (
+            <div className={styles.versionFact}>
+              <dt className={styles.label}>Version</dt>
+              <dd className={version ? styles.version : styles.unknown}>
+                {version ?? "Unknown"}
+              </dd>
+            </div>
+          ) : null}
         </dl>
       </div>
       <Button
