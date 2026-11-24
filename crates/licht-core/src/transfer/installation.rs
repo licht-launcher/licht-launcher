@@ -205,18 +205,78 @@ impl InstallationContext {
             cleanup,
             self.size_policy,
         );
+        self.forward_progress(download, &mut incoming).await
+    }
+
+    /// Forwards download progress while `download` runs, then drains what is left.
+    /// The download is polled first so progress it reports in a poll is forwarded in
+    /// that same poll: a paused job stops polling once its transfers go idle.
+    async fn forward_progress<T>(
+        &self,
+        download: impl Future<Output = Result<T>>,
+        incoming: &mut mpsc::Receiver<DownloadProgress>,
+    ) -> Result<T> {
         tokio::pin!(download);
         let mut observing = true;
         loop {
             tokio::select! {
-                progress = incoming.recv(), if observing => match progress {
-                    Some(progress) => self.send(progress).await?,
-                    None => observing = false,
-                },
+                biased;
                 result = &mut download => {
                     while let Ok(progress) = incoming.try_recv() { self.send(progress).await?; }
                     return result;
                 }
+                progress = incoming.recv(), if observing => match progress {
+                    Some(progress) => self.send(progress).await?,
+                    None => observing = false,
+                },
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use futures_util::FutureExt;
+    use tokio::sync::mpsc;
+
+    use super::{InstallationContext, InstallationEvent};
+    use crate::{DownloadProgress, Result};
+
+    fn progress(bytes_done: u64) -> DownloadProgress {
+        DownloadProgress {
+            finished: 0,
+            failed: 0,
+            total: 1,
+            bytes_done,
+            bytes_total: 11,
+        }
+    }
+
+    #[test]
+    fn progress_reported_while_polling_the_download_is_forwarded_in_that_poll() {
+        // A paused job stops polling right after its transfers go idle, so progress
+        // left behind in this poll would not reach the job until resume.
+        // tokio::select! picks its branch order at random; repeat to cover both orders.
+        for _ in 0..64 {
+            let (events, mut job_events) = mpsc::channel(4);
+            let context = InstallationContext {
+                events: Some(events),
+                ..InstallationContext::default()
+            };
+            let (sender, mut incoming) = mpsc::channel(4);
+            let download = async move {
+                sender.try_send(progress(5)).expect("the channel has room");
+                std::future::pending::<Result<()>>().await
+            };
+
+            let outcome = context
+                .forward_progress(download, &mut incoming)
+                .now_or_never();
+
+            assert!(outcome.is_none(), "the download is still running");
+            match job_events.try_recv() {
+                Ok(InstallationEvent::Progress(forwarded)) => assert_eq!(forwarded.bytes_done, 5),
+                other => panic!("progress was not forwarded in the same poll: {other:?}"),
             }
         }
     }
