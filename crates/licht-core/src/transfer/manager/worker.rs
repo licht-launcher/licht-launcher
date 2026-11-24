@@ -103,8 +103,10 @@ impl DownloadManager {
     }
 
     async fn drive(self: &Arc<Self>, id: String, slot: Arc<ActiveJob>) -> Result<()> {
+        tracing::info!("Download job started");
+        let started = Instant::now();
         let result = self.execute_job(&id, &slot).await;
-        self.finish_job(&id, &slot, result).await
+        self.finish_job(&id, &slot, result, started.elapsed()).await
     }
 
     async fn execute_job(self: &Arc<Self>, id: &str, slot: &Arc<ActiveJob>) -> Result<()> {
@@ -190,9 +192,16 @@ impl DownloadManager {
         result
     }
 
-    async fn finish_job(&self, id: &str, slot: &ActiveJob, result: Result<()>) -> Result<()> {
+    async fn finish_job(
+        &self,
+        id: &str,
+        slot: &ActiveJob,
+        result: Result<()>,
+        elapsed: Duration,
+    ) -> Result<()> {
         let mut snapshot = slot.snapshot.lock().await;
         if slot.restarting.load(Ordering::SeqCst) {
+            tracing::info!("Download job restarted as a full repair");
             slot.completion
                 .send_replace(Some(Err("download restarted as a full repair".to_string())));
             self.active.lock().await.remove(id);
@@ -221,6 +230,16 @@ impl DownloadManager {
             Err(CoreError::DownloadCancelled) => DownloadJobStatus::Cancelled,
             Err(_) => DownloadJobStatus::Failed,
         };
+        let elapsed_seconds = elapsed.as_secs();
+        match snapshot.status {
+            DownloadJobStatus::Completed => {
+                tracing::info!(elapsed_seconds, "Download job completed");
+            }
+            DownloadJobStatus::Cancelled | DownloadJobStatus::Cancelling => {
+                tracing::info!(elapsed_seconds, "Download job cancelled");
+            }
+            _ => {}
+        }
         if let Err(error) = &result
             && !matches!(error, CoreError::DownloadCancelled)
         {
