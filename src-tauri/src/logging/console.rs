@@ -1,5 +1,6 @@
-//! The console format of development builds: one line per event, tagged and colored
-//! by the area of the launcher that logged it.
+//! The console format of development builds: one line per event, tagged by the area
+//! of the launcher that logged it. Events with many fields list them on the lines
+//! below instead.
 
 use std::fmt;
 
@@ -25,6 +26,8 @@ const AREAS: &[(&str, Area)] = &[
     ("licht_launcher::commands", Area::COMMAND),
     ("licht_launcher::app_updates", Area::UPDATE),
     ("licht_launcher::startup::updates", Area::UPDATE),
+    ("licht_launcher::startup", Area::STARTUP),
+    ("licht_launcher::logging", Area::STARTUP),
     ("licht_core::game", Area::LAUNCH),
     ("licht_core::transfer", Area::DOWNLOAD),
     ("licht_core::runtime", Area::JAVA),
@@ -43,29 +46,46 @@ const AREAS: &[(&str, Area)] = &[
 /// Wide enough for the longest area label.
 const AREA_WIDTH: usize = 9;
 
+/// Where the message starts: time, level and area tag, each followed by a space.
+const MESSAGE_COLUMN: usize = 8 + 1 + 5 + 1 + AREA_WIDTH + 2 + 1;
+
+/// Events with more fields than this list them one per line below the message.
+const INLINE_FIELDS: usize = 4;
+
+/// Muted colors from the terminal's 256-color palette, so the console stays calm.
+mod colors {
+    pub(super) const INFO: u8 = 71;
+    pub(super) const WARN: u8 = 178;
+    pub(super) const ERROR: u8 = 167;
+    pub(super) const DEBUG: u8 = 67;
+    pub(super) const TRACE: u8 = 139;
+    pub(super) const STARTED: u8 = 108;
+    pub(super) const STOPPED: u8 = 173;
+    pub(super) const LIBRARY: u8 = 242;
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct Area {
     pub(super) label: &'static str,
-    /// A color from the terminal's 256-color palette.
     color: u8,
 }
 
 impl Area {
-    const LAUNCH: Self = Self::new("launch", 44);
-    const DOWNLOAD: Self = Self::new("download", 33);
-    const JAVA: Self = Self::new("java", 172);
-    const UPDATE: Self = Self::new("update", 170);
-    const ACCOUNT: Self = Self::new("account", 214);
-    const MODPACK: Self = Self::new("modpack", 141);
-    const LOADER: Self = Self::new("loader", 135);
-    const INSTANCE: Self = Self::new("instance", 79);
+    const STARTUP: Self = Self::new("startup", 109);
+    const LAUNCH: Self = Self::new("launch", 73);
+    const DOWNLOAD: Self = Self::new("download", 67);
+    const JAVA: Self = Self::new("java", 137);
+    const UPDATE: Self = Self::new("update", 139);
+    const ACCOUNT: Self = Self::new("account", 179);
+    const MODPACK: Self = Self::new("modpack", 103);
+    const LOADER: Self = Self::new("loader", 97);
+    const INSTANCE: Self = Self::new("instance", 72);
     const VERSION: Self = Self::new("version", 110);
-    const SETTINGS: Self = Self::new("settings", 180);
-    const INTERFACE: Self = Self::new("interface", 204);
-    const STORAGE: Self = Self::new("storage", 109);
+    const SETTINGS: Self = Self::new("settings", 144);
+    const INTERFACE: Self = Self::new("interface", 168);
+    const STORAGE: Self = Self::new("storage", 102);
     const COMMAND: Self = Self::new("command", 247);
-    const LAUNCHER: Self = Self::new("launcher", 245);
-    const LIBRARY_COLOR: u8 = 240;
+    const LAUNCHER: Self = Self::new("launcher", 247);
 
     const fn new(label: &'static str, color: u8) -> Self {
         Self { label, color }
@@ -84,7 +104,7 @@ pub(super) fn area(target: &str) -> Area {
         .map(|(_, area)| *area)
         .unwrap_or_else(|| Area {
             label: library_name(target),
-            color: Area::LIBRARY_COLOR,
+            color: colors::LIBRARY,
         })
 }
 
@@ -101,68 +121,31 @@ fn library_name(target: &str) -> &'static str {
     }
 }
 
-/// An ANSI SGR style, such as `1` (bold) or `38;5;44` (a 256-color foreground).
+/// An ANSI text style. `Plain` keeps the terminal's own text color.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Style {
-    Bold,
+    Plain,
     Dim,
-    /// What the standard format uses for field names.
-    DimItalic,
-    Red,
-    BoldRed,
-    Green,
-    Yellow,
-    Blue,
-    Magenta,
-    Palette(u8),
-}
-
-impl fmt::Display for Style {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Bold => formatter.write_str("1"),
-            Self::Dim => formatter.write_str("2"),
-            Self::DimItalic => formatter.write_str("2;3"),
-            Self::Red => formatter.write_str("31"),
-            Self::BoldRed => formatter.write_str("1;31"),
-            Self::Green => formatter.write_str("32"),
-            Self::Yellow => formatter.write_str("33"),
-            Self::Blue => formatter.write_str("34"),
-            Self::Magenta => formatter.write_str("35"),
-            Self::Palette(color) => write!(formatter, "38;5;{color}"),
-        }
-    }
+    Color(u8),
+    BoldColor(u8),
 }
 
 fn level_style(level: Level) -> Style {
     match level {
-        Level::ERROR => Style::BoldRed,
-        Level::WARN => Style::Yellow,
-        Level::INFO => Style::Green,
-        Level::DEBUG => Style::Blue,
-        Level::TRACE => Style::Magenta,
+        Level::ERROR => Style::BoldColor(colors::ERROR),
+        Level::WARN => Style::Color(colors::WARN),
+        Level::INFO => Style::Color(colors::INFO),
+        Level::DEBUG => Style::Color(colors::DEBUG),
+        Level::TRACE => Style::Color(colors::TRACE),
     }
 }
 
-/// Writes `text` in `style` when the writer accepts escapes.
-fn paint(writer: &mut format::Writer<'_>, style: Style, text: &str) -> fmt::Result {
-    if writer.has_ansi_escapes() {
-        write!(writer, "\u{1b}[{style}m{text}\u{1b}[0m")
-    } else {
-        writer.write_str(text)
-    }
-}
-
-const FIELD_VALUE: Style = Style::Palette(117);
-const STARTED: Style = Style::Palette(78);
-const STOPPED: Style = Style::Palette(208);
-
-/// Warnings and errors keep their level's color; otherwise messages about something
-/// starting or stopping stand out from the rest.
+/// Warnings and errors take their level's color; otherwise only messages about
+/// something starting or stopping stand out.
 fn message_style(level: Level, message: &str) -> Style {
     match level {
-        Level::ERROR => return Style::Red,
-        Level::WARN => return Style::Yellow,
+        Level::ERROR => return Style::Color(colors::ERROR),
+        Level::WARN => return Style::Color(colors::WARN),
         _ => {}
     }
     let mut words = message
@@ -174,13 +157,26 @@ fn message_style(level: Level, message: &str) -> Style {
             "started" | "starting" | "stopped" | "stopping"
         )
     }) {
-        Some(word) if word.starts_with("start") => STARTED,
-        Some(_) => STOPPED,
-        None => Style::Bold,
+        Some(word) if word.starts_with("start") => Style::Color(colors::STARTED),
+        Some(_) => Style::Color(colors::STOPPED),
+        None => Style::Plain,
     }
 }
 
-/// The message apart from the other fields, which follow it on the same line.
+/// Writes `text` in `style` when the writer accepts escapes.
+fn paint(writer: &mut format::Writer<'_>, style: Style, text: &str) -> fmt::Result {
+    let code = match style {
+        Style::Plain => return writer.write_str(text),
+        _ if !writer.has_ansi_escapes() => return writer.write_str(text),
+        Style::Dim => "2".to_string(),
+        Style::Color(color) => format!("38;5;{color}"),
+        Style::BoldColor(color) => format!("1;38;5;{color}"),
+    };
+    write!(writer, "\u{1b}[{code}m{text}\u{1b}[0m")
+}
+
+/// The message apart from the other fields. Strings keep no quotes, so values read
+/// as plain text.
 #[derive(Default)]
 struct EventFields {
     message: String,
@@ -192,7 +188,7 @@ impl Visit for EventFields {
         if field.name() == "message" {
             self.message = value.to_string();
         } else {
-            self.record_debug(field, &value);
+            self.fields.push((field.name(), value.to_string()));
         }
     }
 
@@ -205,8 +201,8 @@ impl Visit for EventFields {
     }
 }
 
-/// `HH:MM:SS level [area] message fields span-fields` on one line, with the UTC time
-/// of the log file.
+/// `HH:MM:SS level [area] message fields span-fields`, with the UTC time of the log
+/// file. Events with many fields put each field on its own line instead.
 pub(super) struct DevelopmentFormat;
 
 impl<S, N> FormatEvent<S, N> for DevelopmentFormat
@@ -232,7 +228,7 @@ where
         let tag = format!("[{}]", area.label);
         paint(
             &mut writer,
-            Style::Palette(area.color),
+            Style::Color(area.color),
             &format!("{tag:<width$}", width = AREA_WIDTH + 2),
         )?;
         let mut fields = EventFields::default();
@@ -243,11 +239,13 @@ where
             message_style(level, &fields.message),
             &fields.message,
         )?;
-        for (name, value) in &fields.fields {
-            write!(writer, " ")?;
-            paint(&mut writer, Style::DimItalic, name)?;
-            write!(writer, "=")?;
-            paint(&mut writer, FIELD_VALUE, value)?;
+        let listed = fields.fields.len() > INLINE_FIELDS;
+        if !listed {
+            for (name, value) in &fields.fields {
+                write!(writer, " ")?;
+                paint(&mut writer, Style::Dim, &format!("{name}="))?;
+                writer.write_str(value)?;
+            }
         }
         if let Some(scope) = context.event_scope() {
             for span in scope.from_root() {
@@ -261,7 +259,21 @@ where
                 }
             }
         }
-        writeln!(writer)
+        writeln!(writer)?;
+        if listed {
+            let width = fields
+                .fields
+                .iter()
+                .map(|(name, _)| name.len())
+                .max()
+                .unwrap_or_default();
+            for (name, value) in &fields.fields {
+                write!(writer, "{:MESSAGE_COLUMN$}", "")?;
+                paint(&mut writer, Style::Dim, &format!("{name:<width$}"))?;
+                writeln!(writer, "  {value}")?;
+            }
+        }
+        Ok(())
     }
 }
 
@@ -269,45 +281,7 @@ where
 mod tests {
     use tracing::Level;
 
-    use super::{AREAS, Area, STARTED, STOPPED, Style, area, message_style};
-
-    #[test]
-    fn starting_and_stopping_messages_get_their_own_colors() {
-        for message in [
-            "Game started",
-            "Download job started",
-            "Starting Licht Launcher",
-        ] {
-            assert_eq!(message_style(Level::INFO, message), STARTED, "{message}");
-        }
-        for message in ["Game stopped by the launcher", "Stopping downloads"] {
-            assert_eq!(message_style(Level::INFO, message), STOPPED, "{message}");
-        }
-        assert_eq!(
-            message_style(Level::INFO, "Launcher is up to date"),
-            Style::Bold
-        );
-    }
-
-    #[test]
-    fn only_whole_words_mark_a_start_or_stop() {
-        assert_eq!(
-            message_style(Level::INFO, "Download job restarted as a full repair"),
-            Style::Bold
-        );
-    }
-
-    #[test]
-    fn warnings_and_errors_keep_their_level_color() {
-        assert_eq!(
-            message_style(Level::WARN, "Game stopped unexpectedly"),
-            Style::Yellow
-        );
-        assert_eq!(
-            message_style(Level::ERROR, "Startup worker stopped"),
-            Style::Red
-        );
-    }
+    use super::{AREAS, Style, area, colors, library_name, message_style};
 
     #[test]
     fn modules_are_tagged_with_the_area_they_log_for() {
@@ -316,12 +290,15 @@ mod tests {
             ("licht_core::game::run", "launch"),
             ("licht_core::transfer::manager::worker", "download"),
             ("licht_launcher::app_updates", "update"),
+            ("licht_launcher::startup::updates", "update"),
+            ("licht_launcher::startup::state", "startup"),
+            ("licht_launcher::logging", "startup"),
             ("licht_core::store::settings", "settings"),
             ("licht_core::store::layout::migration", "storage"),
             ("licht_launcher::commands", "command"),
             ("licht_launcher::commands::frontend_log", "interface"),
             ("licht_launcher", "launcher"),
-            ("licht_launcher::logging", "launcher"),
+            ("licht_launcher::desktop", "launcher"),
         ] {
             assert_eq!(area(target).label, label, "{target}");
         }
@@ -337,8 +314,8 @@ mod tests {
     fn libraries_are_labeled_with_their_crate() {
         assert_eq!(area("hyper_util::client::legacy").label, "hyper");
         assert_eq!(area("sqlx::query").label, "sqlx");
-        assert_eq!(area("mio::poll").label, "library");
-        assert_eq!(area("mio::poll").color, Area::LIBRARY_COLOR);
+        assert_eq!(library_name("mio::poll"), "library");
+        assert_eq!(area("mio::poll").color, colors::LIBRARY);
     }
 
     #[test]
@@ -351,5 +328,51 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn starting_and_stopping_messages_get_their_own_colors() {
+        for message in [
+            "Game started",
+            "Download job started",
+            "Starting Licht Launcher",
+        ] {
+            assert_eq!(
+                message_style(Level::INFO, message),
+                Style::Color(colors::STARTED),
+                "{message}"
+            );
+        }
+        for message in ["Game stopped by the launcher", "Stopping downloads"] {
+            assert_eq!(
+                message_style(Level::INFO, message),
+                Style::Color(colors::STOPPED),
+                "{message}"
+            );
+        }
+        assert_eq!(
+            message_style(Level::INFO, "Launcher is up to date"),
+            Style::Plain
+        );
+    }
+
+    #[test]
+    fn only_whole_words_mark_a_start_or_stop() {
+        assert_eq!(
+            message_style(Level::INFO, "Download job restarted as a full repair"),
+            Style::Plain
+        );
+    }
+
+    #[test]
+    fn warnings_and_errors_keep_their_level_color() {
+        assert_eq!(
+            message_style(Level::WARN, "Game stopped unexpectedly"),
+            Style::Color(colors::WARN)
+        );
+        assert_eq!(
+            message_style(Level::ERROR, "Startup worker stopped"),
+            Style::Color(colors::ERROR)
+        );
     }
 }

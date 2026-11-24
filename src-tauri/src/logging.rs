@@ -40,6 +40,10 @@ pub(crate) fn init() -> Result<()> {
     subscriber(filter, ConsoleStyle::detect(), file)
         .try_init()
         .context("Failed to initialize logging")?;
+    tracing::info!(
+        version = env!("CARGO_PKG_VERSION"),
+        "Starting Licht Launcher"
+    );
 
     if let Some(error) = file_error {
         tracing::warn!(
@@ -54,6 +58,22 @@ pub(crate) fn init() -> Result<()> {
     }
     install_panic_hook();
     Ok(())
+}
+
+pub(crate) fn log_system_information(diagnostics: &licht_core::BuildDiagnostics) {
+    tracing::info!(
+        version = %diagnostics.host_version,
+        revision = diagnostics.host_revision.as_deref(),
+        debug = diagnostics.debug,
+        tauri = %diagnostics.tauri_version,
+        webview = diagnostics.webview_version.as_deref(),
+        os = %diagnostics.os_name,
+        os_version = diagnostics.os_version.as_deref(),
+        kernel = diagnostics.kernel_version.as_deref(),
+        system_architecture = %diagnostics.system_architecture,
+        process_architecture = %diagnostics.process_architecture,
+        "System information"
+    );
 }
 
 /// The folder holding the launcher log files, inside the profile directory.
@@ -193,8 +213,8 @@ mod tests {
     use tracing_subscriber::layer::SubscriberExt;
 
     use super::{
-        ConsoleStyle, console_layer, install_panic_hook, launch_stamp, open_log_file, parse_filter,
-        prune_old_logs, subscriber,
+        ConsoleStyle, console_layer, install_panic_hook, launch_stamp, log_system_information,
+        open_log_file, parse_filter, prune_old_logs, subscriber,
     };
 
     #[test]
@@ -230,19 +250,55 @@ mod tests {
     }
 
     fn console_output(style: ConsoleStyle) -> String {
-        let root = TempDir::new("logging-test");
-        let path = root.path().join("console.log");
-        let file = fs::File::create(&path).expect("the console file should be created");
-        let console = tracing_subscriber::registry().with(console_layer(style, file));
-        tracing::subscriber::with_default(console, || {
+        console_output_of(style, || {
             let _launch = tracing::info_span!("launch", instance = "Survival").entered();
             tracing::info!(
                 target: "licht_launcher::commands::launch",
                 pid = 18432,
                 "Game started"
             );
-        });
+        })
+    }
+
+    fn console_output_of(style: ConsoleStyle, emit: impl FnOnce()) -> String {
+        let root = TempDir::new("logging-test");
+        let path = root.path().join("console.log");
+        let file = fs::File::create(&path).expect("the console file should be created");
+        let console = tracing_subscriber::registry().with(console_layer(style, file));
+        tracing::subscriber::with_default(console, emit);
         fs::read_to_string(path).expect("the console output should be readable")
+    }
+
+    #[test]
+    fn the_development_console_lists_many_fields_below_the_message() {
+        let output = console_output_of(ConsoleStyle::for_build(true, false, true), || {
+            tracing::info!(
+                target: "licht_launcher::logging",
+                version = "0.3.1",
+                os = "Windows 11 Pro",
+                debug = true,
+                system_architecture = "x86_64",
+                kernel = 26300,
+                "System information"
+            );
+        });
+        let lines: Vec<_> = output.lines().collect();
+        let indent = " ".repeat(27);
+
+        assert!(
+            lines[0].ends_with(" INFO  [startup]   System information"),
+            "unexpected output: {output}"
+        );
+        assert_eq!(
+            lines[1..],
+            [
+                format!("{indent}version              0.3.1"),
+                format!("{indent}os                   Windows 11 Pro"),
+                format!("{indent}debug                true"),
+                format!("{indent}system_architecture  x86_64"),
+                format!("{indent}kernel               26300"),
+            ]
+        );
     }
 
     #[test]
@@ -285,6 +341,41 @@ mod tests {
             output.contains("launch{instance=\"Survival\"}"),
             "unexpected output: {output}"
         );
+    }
+
+    #[test]
+    fn system_information_is_logged_on_one_line() {
+        let capture = LogCapture::start();
+        log_system_information(&licht_core::BuildDiagnostics {
+            host_version: "0.3.1".to_string(),
+            host_revision: Some("48520a7".to_string()),
+            debug: false,
+            tauri_version: "2.9.5".to_string(),
+            webview_version: None,
+            os_name: "Windows 11 Pro".to_string(),
+            os_version: Some("10.0.26300".to_string()),
+            kernel_version: Some("26300".to_string()),
+            system_architecture: "x86_64".to_string(),
+            process_architecture: "x86_64".to_string(),
+        });
+        let logs = capture.text();
+
+        assert_eq!(logs.lines().count(), 1, "unexpected logs: {logs}");
+        assert!(logs.contains("INFO"), "unexpected logs: {logs}");
+        assert!(
+            logs.contains("System information"),
+            "unexpected logs: {logs}"
+        );
+        for field in [
+            "version=0.3.1",
+            "revision=\"48520a7\"",
+            "os=Windows 11 Pro",
+            "os_version=\"10.0.26300\"",
+            "process_architecture=x86_64",
+        ] {
+            assert!(logs.contains(field), "missing {field}: {logs}");
+        }
+        assert!(!logs.contains("webview="), "unexpected logs: {logs}");
     }
 
     fn capture_logs_while(directives: Option<&str>, emit: impl FnOnce()) -> String {

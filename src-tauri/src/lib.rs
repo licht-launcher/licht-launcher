@@ -16,14 +16,10 @@ const TITLE_BAR_HEIGHT: u32 = 36;
 pub fn run() -> anyhow::Result<()> {
     licht_core::load_env_files();
     logging::init()?;
-    tracing::info!(
-        version = env!("CARGO_PKG_VERSION"),
-        "Starting Licht Launcher"
-    );
 
     // Querying the operating system can take a moment, so it must not delay the window.
     tauri::async_runtime::spawn_blocking(|| {
-        commands::shell::log_system_information(&commands::shell::collect_build_diagnostics());
+        logging::log_system_information(&commands::shell::collect_build_diagnostics());
     });
 
     let runtime = startup::state::StartupRuntime::new();
