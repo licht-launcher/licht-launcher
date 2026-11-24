@@ -15,7 +15,12 @@ const TITLE_BAR_HEIGHT: u32 = 36;
 
 pub fn run() -> anyhow::Result<()> {
     licht_core::load_env_files();
-    logging::init()?;
+    let preferences = licht_core::startup_preferences();
+    let log_level = logging::init(
+        preferences
+            .as_ref()
+            .is_ok_and(|preferences| preferences.verbose_logging),
+    )?;
     tracing::info!(
         version = env!("CARGO_PKG_VERSION"),
         "Starting Licht Launcher"
@@ -24,7 +29,7 @@ pub fn run() -> anyhow::Result<()> {
     let runtime = startup::state::StartupRuntime::new();
     let updates = app_updates::Runtime::new();
     let startup_runtime = std::sync::Arc::clone(&runtime);
-    let (hardware_acceleration, initial_theme) = licht_core::startup_preferences()
+    let (hardware_acceleration, initial_theme) = preferences
         .map(|preferences| (preferences.hardware_acceleration, preferences.theme))
         .unwrap_or_else(|error| {
             tracing::warn!(%error, "Could not read startup appearance preferences; using defaults until settings can be loaded");
@@ -45,6 +50,7 @@ pub fn run() -> anyhow::Result<()> {
         .manage(updates)
         .manage(commands::LaunchSessions::new())
         .manage(commands::frontend_log::FrontendLogLimiter::default())
+        .manage(log_level)
         .manage(desktop::Runtime::new(hardware_acceleration, initial_theme))
         .setup(move |app| {
             startup::start(app.handle().clone(), startup_runtime)?;

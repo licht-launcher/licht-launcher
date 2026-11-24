@@ -55,8 +55,8 @@ file that cannot be read is logged and left in place.
 ## Settings storage
 
 `settings.json` holds only what the launcher reads before the database opens:
-theme, language, hardware acceleration, window behavior, and automatic
-updates. Every other setting is a single row in the `settings` table of
+theme, language, hardware acceleration, window behavior, automatic updates,
+and verbose logging. Every other setting is a single row in the `settings` table of
 `licht.db`. That row also records the chosen application directory, the content
 root currently in use, and any move in progress. An older `settings.json` that
 still holds those values is read until the next startup moves them into the

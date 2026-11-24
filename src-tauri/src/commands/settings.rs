@@ -19,6 +19,7 @@ pub async fn save_settings(
     app: AppHandle,
     updates: State<'_, std::sync::Arc<crate::app_updates::Runtime>>,
     paths: State<'_, LauncherPaths>,
+    log_level: State<'_, crate::logging::LogLevel>,
     settings: Settings,
 ) -> Result<Settings, String> {
     let saved = licht_core::save_settings(&paths.settings, &settings)
@@ -32,6 +33,14 @@ pub async fn save_settings(
     crate::desktop::apply_preferences(&app, &saved).map_err(|error| {
         format!("Settings were saved, but launcher behavior could not be applied: {error}")
     })?;
+    log_level
+        .set_verbose(saved.verbose_logging)
+        .map_err(|error| {
+            crate::commands::command_failure(
+                "Settings were saved, but the log level could not be changed.",
+                error.as_ref(),
+            )
+        })?;
     Ok(saved)
 }
 

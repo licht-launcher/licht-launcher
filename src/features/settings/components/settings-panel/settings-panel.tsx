@@ -69,7 +69,9 @@ export function SettingsPanel({
             {section === "updater" ? (
               <UpdaterSection draft={draft} onChange={onChange} />
             ) : null}
-            {section === "troubleshooting" ? <TroubleshootingSection /> : null}
+            {section === "troubleshooting" ? (
+              <TroubleshootingSection draft={draft} onChange={onChange} />
+            ) : null}
           </div>
         </PageTransition>
       </ScrollArea>

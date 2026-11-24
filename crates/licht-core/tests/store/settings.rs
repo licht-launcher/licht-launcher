@@ -43,6 +43,7 @@ fn sample(download_concurrency: u32) -> Settings {
         hardware_acceleration: true,
         minimize_on_game_start: false,
         restore_on_game_exit: false,
+        verbose_logging: false,
     }
 }
 
@@ -96,6 +97,7 @@ async fn a_missing_file_returns_defaults_and_is_not_written() {
     assert!(settings.hardware_acceleration);
     assert!(!settings.minimize_on_game_start);
     assert!(!settings.restore_on_game_exit);
+    assert!(!settings.verbose_logging);
     assert_eq!(settings.theme, licht_core::LauncherTheme::Dark);
     assert!(!settings.fullscreen);
     assert_eq!(settings.width, Some(854));
@@ -136,9 +138,11 @@ async fn general_preferences_roundtrip_and_legacy_files_use_defaults() {
     assert!(settings.hardware_acceleration);
     assert!(!settings.minimize_on_game_start);
     assert!(!settings.restore_on_game_exit);
+    assert!(!settings.verbose_logging);
     settings.hardware_acceleration = false;
     settings.minimize_on_game_start = true;
     settings.restore_on_game_exit = true;
+    settings.verbose_logging = true;
     save_settings(&cache, &settings)
         .await
         .expect("save preferences");
@@ -373,7 +377,8 @@ async fn the_file_keeps_only_startup_preferences_and_the_rest_roundtrips() {
             "minimizeOnGameStart",
             "restoreOnGameExit",
             "schema",
-            "theme"
+            "theme",
+            "verboseLogging"
         ]
     );
     assert_eq!(load_settings(&cache).await.expect("reload"), saved);

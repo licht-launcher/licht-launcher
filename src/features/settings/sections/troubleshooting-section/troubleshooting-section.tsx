@@ -19,6 +19,8 @@ import {
 } from "@/api/commands";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
+import type { Draft } from "@/features/settings/model/draft";
 import { friendlyError, messageOf } from "@/lib/errors";
 
 import { troubleshootingSectionStyles as styles } from "./troubleshooting-section.styles";
@@ -27,7 +29,13 @@ function reportFailure(error: unknown) {
   toast.error(friendlyError(messageOf(error)));
 }
 
-export function TroubleshootingSection() {
+export function TroubleshootingSection({
+  draft,
+  onChange,
+}: {
+  draft: Draft;
+  onChange: (patch: Partial<Draft>) => void;
+}) {
   const logsFolder = useQuery({
     queryKey: ["logs-folder"],
     queryFn: getLogsFolder,
@@ -111,6 +119,24 @@ export function TroubleshootingSection() {
             <FolderOpen data-icon="inline-start" aria-hidden />
             Open logs folder
           </Button>
+        </div>
+        <div className={styles.row}>
+          <div className={styles.rowText}>
+            <label htmlFor="verboseLogging" className={styles.rowLabel}>
+              Verbose logging
+            </label>
+            <p id="verboseLogging-hint" className={styles.rowDescription}>
+              Records extra detail to help diagnose problems. Log files grow
+              faster.
+            </p>
+          </div>
+          <Switch
+            id="verboseLogging"
+            className={styles.control}
+            aria-describedby="verboseLogging-hint"
+            checked={draft.verboseLogging}
+            onCheckedChange={(checked) => onChange({ verboseLogging: checked })}
+          />
         </div>
       </Card>
       <Card title="Build and system">

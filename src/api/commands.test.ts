@@ -591,6 +591,7 @@ describe("launcher commands", () => {
       hardwareAcceleration: true,
       minimizeOnGameStart: false,
       restoreOnGameExit: false,
+      verboseLogging: false,
     };
     await saveSettings(settings);
     expect(invoke).toHaveBeenCalledWith("save_settings", { settings });

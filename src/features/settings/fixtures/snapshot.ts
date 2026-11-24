@@ -24,6 +24,7 @@ export const snapshot = {
     hardwareAcceleration: true,
     minimizeOnGameStart: false,
     restoreOnGameExit: false,
+    verboseLogging: false,
   },
   applicationDirectory: "C:\\Users\\Mateus\\AppData\\Roaming\\Licht",
   memoryTotalMb: 16384,

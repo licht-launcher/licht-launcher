@@ -2,6 +2,7 @@ use std::env;
 use std::fs::{self, File, OpenOptions};
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use anyhow::{Context, Result};
 use tracing::Subscriber;
@@ -9,21 +10,46 @@ use tracing_subscriber::fmt::format::Writer;
 use tracing_subscriber::fmt::time::{FormatTime, SystemTime};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::{EnvFilter, filter::LevelFilter, fmt};
+use tracing_subscriber::{EnvFilter, Layer, Registry, filter::LevelFilter, fmt, reload};
 
 const LOG_DIRECTORY: &str = "logs";
 const LOG_FILE_PREFIX: &str = "licht";
 const LOG_FILE_SUFFIX: &str = "log";
 const RETAINED_LOG_FILES: usize = 30;
+/// Debug events from the launcher's own crates; libraries stay at INFO.
+const VERBOSE_DIRECTIVES: &str = "info,licht_core=debug,licht_launcher=debug";
 
-pub(crate) fn init() -> Result<()> {
+/// Switches verbose logging while the launcher runs. A `RUST_LOG` filter, when set,
+/// always wins.
+pub(crate) struct LogLevel {
+    filter: Option<reload::Handle<EnvFilter, Registry>>,
+    verbose: AtomicBool,
+}
+
+impl LogLevel {
+    pub(crate) fn set_verbose(&self, verbose: bool) -> Result<()> {
+        let Some(filter) = &self.filter else {
+            return Ok(());
+        };
+        if self.verbose.swap(verbose, Ordering::SeqCst) == verbose {
+            return Ok(());
+        }
+        filter
+            .reload(level_filter(None, verbose)?)
+            .context("Could not change the log level")?;
+        tracing::info!(verbose, "Verbose logging changed");
+        Ok(())
+    }
+}
+
+pub(crate) fn init(verbose: bool) -> Result<LogLevel> {
     let directives = match env::var("RUST_LOG") {
         Ok(value) => Some(value),
         Err(env::VarError::NotPresent) => None,
         Err(error) => return Err(error).context("RUST_LOG must contain valid Unicode"),
     };
 
-    let filter = parse_filter(directives.as_deref())?;
+    let (filter, handle) = reload::Layer::new(level_filter(directives.as_deref(), verbose)?);
     let opened = log_directory().and_then(|directory| {
         let file = open_log_file(&directory, &launch_stamp()?)?;
         Ok((directory, file))
@@ -49,7 +75,10 @@ pub(crate) fn init() -> Result<()> {
         tracing::warn!(%error, "Could not remove old launcher log files");
     }
     install_panic_hook();
-    Ok(())
+    Ok(LogLevel {
+        filter: directives.is_none().then_some(handle),
+        verbose: AtomicBool::new(verbose),
+    })
 }
 
 /// The folder holding the launcher log files, inside the profile directory.
@@ -65,6 +94,10 @@ fn parse_filter(directives: Option<&str>) -> Result<EnvFilter> {
         .with_default_directive(LevelFilter::INFO.into())
         .parse(directives.unwrap_or(""))
         .context("Invalid RUST_LOG filter")
+}
+
+fn level_filter(directives: Option<&str>, verbose: bool) -> Result<EnvFilter> {
+    parse_filter(directives.or(verbose.then_some(VERBOSE_DIRECTIVES)))
 }
 
 /// UTC launch time such as `2026-11-23T15-30-12Z`: sortable and valid in file names.
@@ -117,7 +150,10 @@ fn prune_old_logs(directory: &Path, keep: usize) -> io::Result<()> {
     Ok(())
 }
 
-fn subscriber(filter: EnvFilter, file: Option<File>) -> impl Subscriber + Send + Sync {
+fn subscriber(
+    filter: impl Layer<Registry> + Send + Sync,
+    file: Option<File>,
+) -> impl Subscriber + Send + Sync {
     tracing_subscriber::registry()
         .with(filter)
         .with(fmt::layer().with_writer(std::io::stderr).with_ansi(false))
@@ -140,8 +176,13 @@ mod tests {
     use licht_testkit::logs::LogCapture;
     use licht_testkit::temp::TempDir;
 
+    use std::sync::atomic::AtomicBool;
+
+    use tracing_subscriber::reload;
+
     use super::{
-        install_panic_hook, launch_stamp, open_log_file, parse_filter, prune_old_logs, subscriber,
+        LogLevel, install_panic_hook, launch_stamp, level_filter, open_log_file, parse_filter,
+        prune_old_logs, subscriber,
     };
 
     fn capture_logs_while(directives: Option<&str>, emit: impl FnOnce()) -> String {
@@ -192,6 +233,84 @@ mod tests {
 
         assert_eq!(error.to_string(), "Invalid RUST_LOG filter");
         assert!(error.source().is_some());
+    }
+
+    fn emit_levels() {
+        tracing::debug!("launcher debug event");
+        tracing::debug!(target: "hyper::client", "library debug event");
+        tracing::info!(target: "hyper::client", "library info event");
+    }
+
+    #[test]
+    fn verbose_logging_adds_debug_events_from_the_launcher_only() {
+        let capture = LogCapture::filtered(level_filter(None, true).expect("verbose filter"));
+        emit_levels();
+        let logs = capture.text();
+
+        assert!(
+            logs.contains("launcher debug event"),
+            "unexpected logs: {logs}"
+        );
+        assert!(
+            logs.contains("library info event"),
+            "unexpected logs: {logs}"
+        );
+        assert!(
+            !logs.contains("library debug event"),
+            "unexpected logs: {logs}"
+        );
+    }
+
+    #[test]
+    fn rust_log_wins_over_verbose_logging() {
+        let capture =
+            LogCapture::filtered(level_filter(Some("warn"), true).expect("configured filter"));
+        emit_levels();
+        let logs = capture.text();
+
+        assert!(logs.is_empty(), "unexpected logs: {logs}");
+    }
+
+    #[test]
+    fn verbose_logging_can_be_switched_while_running() {
+        let root = TempDir::new("logging-test");
+        let file = open_log_file(root.path(), "2026-11-24T10-00-00Z").expect("log file");
+        let (filter, handle) =
+            reload::Layer::new(level_filter(None, false).expect("default filter"));
+        let level = LogLevel {
+            filter: Some(handle),
+            verbose: AtomicBool::new(false),
+        };
+        // Callsite interest is shared between threads; see `LogCapture` in licht-testkit.
+        let _registered = tracing::Dispatch::new(tracing::subscriber::NoSubscriber::default());
+
+        tracing::subscriber::with_default(subscriber(filter, Some(file)), || {
+            tracing::debug!("before switching");
+            level.set_verbose(true).expect("enable verbose logging");
+            tracing::debug!("while verbose");
+            level
+                .set_verbose(true)
+                .expect("enable verbose logging again");
+            level.set_verbose(false).expect("disable verbose logging");
+            tracing::debug!("after switching back");
+        });
+
+        let logs = fs::read_to_string(root.path().join("licht.2026-11-24T10-00-00Z.log"))
+            .expect("the log file should be readable");
+        assert!(
+            !logs.contains("before switching"),
+            "unexpected logs: {logs}"
+        );
+        assert!(logs.contains("while verbose"), "unexpected logs: {logs}");
+        assert!(
+            !logs.contains("after switching back"),
+            "unexpected logs: {logs}"
+        );
+        assert_eq!(
+            logs.matches("Verbose logging changed").count(),
+            2,
+            "unexpected logs: {logs}"
+        );
     }
 
     fn file_names(directory: &Path) -> Vec<String> {

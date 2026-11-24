@@ -331,7 +331,8 @@ async fn migration_retries_after_its_settings_file_was_published_without_the_dat
         serde_json::to_vec(&legacy_file).expect("legacy JSON"),
     )
     .expect("legacy settings");
-    // An earlier attempt stopped after publishing settings.json and before licht.db.
+    // An earlier attempt, by a version without verbose logging, stopped after
+    // publishing settings.json and before licht.db.
     let published = legacy_file
         .as_object()
         .expect("object")
@@ -863,11 +864,13 @@ async fn startup_reads_update_preferences_before_migration_and_prefers_the_curre
         .await
         .expect("defaults");
     old.automatic_updates = false;
+    old.verbose_logging = true;
     crate::settings::testing::save_settings_at(&legacy, &old)
         .await
         .expect("legacy preferences");
     let loaded = super::startup_preferences_at(&home, &legacy).expect("legacy fallback");
     assert!(!loaded.automatic_updates);
+    assert!(loaded.verbose_logging);
     assert!(
         !home.root().exists(),
         "reading preferences must not start migration"
@@ -880,6 +883,7 @@ async fn startup_reads_update_preferences_before_migration_and_prefers_the_curre
         .expect("current preferences");
     let loaded = super::startup_preferences_at(&home, &legacy).expect("current settings");
     assert!(loaded.automatic_updates);
+    assert!(!loaded.verbose_logging);
 }
 
 /// A connection that has used the WAL keeps a shared lock on the database file, so an

@@ -62,6 +62,7 @@ pub struct Settings {
     pub hardware_acceleration: bool,
     pub minimize_on_game_start: bool,
     pub restore_on_game_exit: bool,
+    pub verbose_logging: bool,
 }
 
 /// What the settings screen shows. `application_directory` is filled even when
@@ -138,6 +139,8 @@ struct StoredSettings {
     minimize_on_game_start: bool,
     #[serde(default)]
     restore_on_game_exit: bool,
+    #[serde(default)]
+    verbose_logging: bool,
 }
 
 fn default_true() -> bool {
@@ -329,6 +332,7 @@ pub(super) fn validated(
         hardware_acceleration: settings.hardware_acceleration,
         minimize_on_game_start: settings.minimize_on_game_start,
         restore_on_game_exit: settings.restore_on_game_exit,
+        verbose_logging: settings.verbose_logging,
     })
 }
 
@@ -377,6 +381,7 @@ fn from_stored(cache: &SharedCache, stored: StoredSettings, total: u32) -> Resul
             hardware_acceleration: stored.hardware_acceleration,
             minimize_on_game_start: stored.minimize_on_game_start,
             restore_on_game_exit: stored.restore_on_game_exit,
+            verbose_logging: stored.verbose_logging,
         },
         total,
     )
@@ -397,6 +402,7 @@ pub struct StartupPreferences {
     pub minimize_on_game_start: bool,
     pub restore_on_game_exit: bool,
     pub automatic_updates: bool,
+    pub verbose_logging: bool,
 }
 
 impl From<&Settings> for StartupPreferences {
@@ -408,6 +414,7 @@ impl From<&Settings> for StartupPreferences {
             minimize_on_game_start: settings.minimize_on_game_start,
             restore_on_game_exit: settings.restore_on_game_exit,
             automatic_updates: settings.automatic_updates,
+            verbose_logging: settings.verbose_logging,
         }
     }
 }
@@ -533,6 +540,7 @@ fn load_file_settings(cache: &SharedCache, total: u32) -> Result<Settings> {
                 hardware_acceleration: true,
                 minimize_on_game_start: false,
                 restore_on_game_exit: false,
+                verbose_logging: false,
             },
             total,
         );

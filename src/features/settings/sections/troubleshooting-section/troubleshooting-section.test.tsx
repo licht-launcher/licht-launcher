@@ -11,6 +11,7 @@ import {
   logsFolder,
   mockSettingsCommands,
   renderSettings,
+  snapshot,
 } from "@/features/settings/fixtures/render-settings";
 
 vi.mock("@tauri-apps/api/core", async () => {
@@ -109,6 +110,52 @@ describe("TroubleshootingSection", () => {
         "Log folder unavailable: Could not resolve the launcher data directory",
       ),
     ).toBeVisible();
+  });
+
+  it("saves verbose logging when it is switched on and off", async () => {
+    mockSettingsCommands((command, args) =>
+      command === "save_settings" &&
+      typeof args === "object" &&
+      args !== null &&
+      "settings" in args
+        ? Promise.resolve(args.settings)
+        : undefined,
+    );
+    await openTroubleshooting();
+    const verbose = screen.getByRole("switch", { name: "Verbose logging" });
+    expect(verbose).not.toBeChecked();
+    expect(verbose).toHaveAccessibleDescription(
+      "Records extra detail to help diagnose problems. Log files grow faster.",
+    );
+
+    fireEvent.click(verbose);
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("save_settings", {
+        settings: expect.objectContaining({ verboseLogging: true }),
+      }),
+    );
+    fireEvent.click(verbose);
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("save_settings", {
+        settings: expect.objectContaining({ verboseLogging: false }),
+      }),
+    );
+  });
+
+  it("shows verbose logging as saved", async () => {
+    mockSettingsCommands((command) =>
+      command === "get_settings"
+        ? Promise.resolve({
+            ...snapshot,
+            settings: { ...snapshot.settings, verboseLogging: true },
+          })
+        : undefined,
+    );
+    await openTroubleshooting();
+
+    expect(
+      screen.getByRole("switch", { name: "Verbose logging" }),
+    ).toBeChecked();
   });
 
   it("shows and copies the build and system information", async () => {

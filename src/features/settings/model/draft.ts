@@ -28,6 +28,7 @@ export type Draft = {
   hardwareAcceleration: boolean;
   minimizeOnGameStart: boolean;
   restoreOnGameExit: boolean;
+  verboseLogging: boolean;
 };
 
 function installedPath(
@@ -71,6 +72,7 @@ export function fromSnapshot(
     hardwareAcceleration: settings.hardwareAcceleration,
     minimizeOnGameStart: settings.minimizeOnGameStart,
     restoreOnGameExit: settings.restoreOnGameExit,
+    verboseLogging: settings.verboseLogging,
   };
 }
 
@@ -125,5 +127,6 @@ export function toSettings(
     hardwareAcceleration: draft.hardwareAcceleration,
     minimizeOnGameStart: draft.minimizeOnGameStart,
     restoreOnGameExit: draft.restoreOnGameExit,
+    verboseLogging: draft.verboseLogging,
   };
 }
