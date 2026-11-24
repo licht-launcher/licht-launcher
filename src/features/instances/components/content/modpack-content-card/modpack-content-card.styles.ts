@@ -10,6 +10,8 @@ export const modpackContentCardStyles = {
     "flex min-w-0 items-center gap-1.5 truncate text-sm text-muted-foreground [&_svg]:size-3.5 [&_svg]:shrink-0",
   facts: "flex flex-wrap gap-x-10 gap-y-3 border-t border-border/60 px-5 py-4",
   fact: "flex min-w-0 flex-col gap-1.5",
+  /** Included never shrinks or wraps, so its counts stay on one line. */
+  pinnedFact: "flex shrink-0 flex-col gap-1.5",
   factLabel:
     "text-xs font-medium uppercase tracking-wide text-muted-foreground",
   factValue: "flex items-center gap-x-3 whitespace-nowrap text-sm font-medium",
