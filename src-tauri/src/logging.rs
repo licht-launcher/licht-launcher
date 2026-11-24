@@ -157,10 +157,7 @@ where
 {
     let layer = fmt::layer().with_writer(writer).with_ansi(style.colors);
     if style.development {
-        layer
-            .fmt_fields(fmt::format::PrettyFields::new())
-            .event_format(console::DevelopmentFormat)
-            .boxed()
+        layer.event_format(console::DevelopmentFormat).boxed()
     } else {
         layer.boxed()
     }
@@ -252,7 +249,7 @@ mod tests {
     fn the_development_console_tags_events_with_their_area_in_color() {
         let output = console_output(ConsoleStyle::for_build(true, false, false));
 
-        assert_eq!(output.lines().count(), 4, "unexpected output: {output}");
+        assert_eq!(output.lines().count(), 1, "unexpected output: {output}");
         assert!(output.contains("[launch]"), "the area is missing: {output}");
         assert!(
             output.contains("Game started"),
@@ -267,25 +264,13 @@ mod tests {
     }
 
     #[test]
-    fn the_development_console_puts_fields_and_spans_below_the_message() {
+    fn the_development_console_has_no_escapes_without_colors() {
         let output = console_output(ConsoleStyle::for_build(true, false, true));
-        let lines: Vec<_> = output.lines().collect();
 
-        assert_eq!(lines.len(), 4, "unexpected output: {output}");
+        assert_eq!(output.lines().count(), 1, "unexpected output: {output}");
         assert!(
-            lines[0].ends_with(" INFO  [launch]    Game started"),
+            output.ends_with(" INFO  [launch]    Game started pid=18432 instance=\"Survival\"\n"),
             "unexpected output: {output}"
-        );
-        let indent = " ".repeat(27);
-        assert_eq!(lines[1], format!("{indent}pid: 18432"));
-        assert!(
-            lines[2].starts_with(&format!("{indent}at src-tauri"))
-                && lines[2].contains("logging.rs:"),
-            "unexpected output: {output}"
-        );
-        assert_eq!(
-            lines[3],
-            format!("{indent}in launch with instance: \"Survival\"")
         );
         assert!(!output.contains('\u{1b}'), "unexpected colors: {output}");
     }

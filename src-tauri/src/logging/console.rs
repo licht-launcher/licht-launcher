@@ -1,5 +1,5 @@
-//! The console format of development builds: each event is tagged and colored by the
-//! area of the launcher that logged it, with its fields and spans on the lines below.
+//! The console format of development builds: one line per event, tagged and colored
+//! by the area of the launcher that logged it.
 
 use std::fmt;
 
@@ -106,7 +106,7 @@ fn library_name(target: &str) -> &'static str {
 enum Style {
     Bold,
     Dim,
-    /// What the standard pretty format uses for `at`, `in` and `with`.
+    /// What the standard format uses for field names.
     DimItalic,
     Red,
     BoldRed,
@@ -153,10 +153,7 @@ fn paint(writer: &mut format::Writer<'_>, style: Style, text: &str) -> fmt::Resu
     }
 }
 
-/// Where the message starts, so the lines below it line up: time, level and area.
-const DETAIL_INDENT: usize = 8 + 1 + 5 + 1 + AREA_WIDTH + 2 + 1;
-
-/// The message apart from the other fields, which go on their own lines.
+/// The message apart from the other fields, which follow it on the same line.
 #[derive(Default)]
 struct EventFields {
     message: String,
@@ -181,10 +178,8 @@ impl Visit for EventFields {
     }
 }
 
-/// `HH:MM:SS level [area] message` in UTC, like the log file, then indented lines in
-/// the style of the standard pretty format: one per field, the source location, and
-/// one per span. Span fields come from the layer's field formatter, which development
-/// builds set to `PrettyFields`.
+/// `HH:MM:SS level [area] message fields span-fields` on one line, with the UTC time
+/// of the log file.
 pub(super) struct DevelopmentFormat;
 
 impl<S, N> FormatEvent<S, N> for DevelopmentFormat
@@ -222,37 +217,24 @@ where
         };
         write!(writer, " ")?;
         paint(&mut writer, message_style, &fields.message)?;
-        writeln!(writer)?;
-        let indent = " ".repeat(DETAIL_INDENT);
         for (name, value) in &fields.fields {
-            write!(writer, "{indent}")?;
-            paint(&mut writer, Style::Bold, name)?;
-            writeln!(writer, ": {value}")?;
-        }
-        if let (Some(file), Some(line)) = (metadata.file(), metadata.line()) {
-            write!(writer, "{indent}")?;
-            paint(&mut writer, Style::DimItalic, "at")?;
-            writeln!(writer, " {file}:{line}")?;
+            write!(writer, " ")?;
+            paint(&mut writer, Style::DimItalic, name)?;
+            write!(writer, "={value}")?;
         }
         if let Some(scope) = context.event_scope() {
             for span in scope.from_root() {
-                write!(writer, "{indent}")?;
-                paint(&mut writer, Style::DimItalic, "in")?;
-                write!(writer, " ")?;
-                paint(&mut writer, Style::Bold, span.name())?;
                 let extensions = span.extensions();
                 if let Some(span_fields) = extensions
                     .get::<FormattedFields<N>>()
                     .filter(|span_fields| !span_fields.is_empty())
                 {
                     write!(writer, " ")?;
-                    paint(&mut writer, Style::DimItalic, "with")?;
-                    write!(writer, " {span_fields}")?;
+                    paint(&mut writer, Style::Dim, span_fields)?;
                 }
-                writeln!(writer)?;
             }
         }
-        Ok(())
+        writeln!(writer)
     }
 }
 
