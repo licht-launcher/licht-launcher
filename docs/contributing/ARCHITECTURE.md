@@ -77,7 +77,7 @@ Application update steps that fail log `Application update failed` with the
 summary the interface shows and the full cause chain.
 
 Logging uses `tracing` and `tracing-subscriber`, with structured text on stderr
-and in `<profile>/logs/licht.<launch time>.log`. Each launch writes its own file,
+(colored when stderr is a terminal) and in `<profile>/logs/licht.<launch time>.log`. Each launch writes its own file,
 named after its UTC start time, and startup keeps the 30 most recent; **Settings →
 Troubleshooting** shows the folder and opens it. If the log directory cannot be
 opened, the app keeps logging to stderr and records a warning instead of failing

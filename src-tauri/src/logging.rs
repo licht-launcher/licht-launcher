@@ -1,6 +1,6 @@
 use std::env;
 use std::fs::{self, File, OpenOptions};
-use std::io;
+use std::io::{self, IsTerminal};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
@@ -120,7 +120,12 @@ fn prune_old_logs(directory: &Path, keep: usize) -> io::Result<()> {
 fn subscriber(filter: EnvFilter, file: Option<File>) -> impl Subscriber + Send + Sync {
     tracing_subscriber::registry()
         .with(filter)
-        .with(fmt::layer().with_writer(std::io::stderr).with_ansi(false))
+        // Colors only when a terminal shows stderr; the file stays plain text.
+        .with(
+            fmt::layer()
+                .with_writer(std::io::stderr)
+                .with_ansi(std::io::stderr().is_terminal()),
+        )
         .with(file.map(|file| fmt::layer().with_writer(file).with_ansi(false)))
 }
 
