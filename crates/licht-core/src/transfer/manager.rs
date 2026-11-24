@@ -247,6 +247,7 @@ impl DownloadManager {
         self.persist(&mut snapshot).await?;
         self.emit(snapshot.clone());
         drop(snapshot);
+        tracing::info!(job_id = %id, "Download job paused");
         slot.control.wait_for_idle().await?;
         if was_running {
             let others_active = self.stored_jobs().await?.iter().any(|job| {
@@ -331,6 +332,7 @@ impl DownloadManager {
             snapshot.error = None;
             self.persist(&mut snapshot).await?;
             self.emit(snapshot.clone());
+            tracing::info!(job_id = %id, "Download job resumed");
             if instance_job {
                 self.installations
                     .lock()

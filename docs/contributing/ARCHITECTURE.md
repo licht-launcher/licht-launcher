@@ -86,7 +86,9 @@ Download jobs run inside a `download_job` span (job id, operation, instance,
 version, Java major) and game launches inside a `launch` span (instance folder),
 so their events can be told apart in the log. Player names are never span fields.
 A failed job is logged as `Download job failed` with its full cause chain
-(`licht_core::error_chain`), which `commands::failure` also uses.
+(`licht_core::error_chain`), which `commands::failure` also uses. Jobs also log
+when they start, complete (with the elapsed time), are cancelled, restart as a
+repair, pause and resume, as do Pause all and Resume all.
 In the native app, the interface sends React render errors, uncaught errors and
 unhandled rejections to `log_frontend_error`, which logs them as `Interface error`
 (at most 20 per minute, messages truncated to 8,000 characters). Query and

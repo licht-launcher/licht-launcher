@@ -58,6 +58,7 @@ impl DownloadManager {
         }
         self.all_paused.store(true, Ordering::SeqCst);
         drop(queue);
+        tracing::info!("All downloads paused");
         let slots: Vec<_> = self.active.lock().await.values().cloned().collect();
         for slot in slots {
             let snapshot = slot.snapshot.lock().await;
@@ -104,6 +105,7 @@ impl DownloadManager {
                 }
             }
             self.restore_waiting_order(&order).await?;
+            tracing::info!("All downloads resumed");
             Ok(())
         }
         .await;
