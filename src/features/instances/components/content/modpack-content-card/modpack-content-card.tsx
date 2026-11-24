@@ -1,5 +1,4 @@
-import { EyeIcon, FileArchiveIcon, LockIcon, PackageIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import { EyeIcon, PackageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SOURCE_LABELS } from "@/features/discover/lib/discover-search";
 import { ContentKindIcon } from "@/features/instances/components/content/content-kind-icon";
@@ -20,24 +19,15 @@ type CardProps = {
 };
 
 /**
- * The content an instance's modpack ships and which pack provides it. It heads
- * the content panel; the pack's author and release age live in the content dialog.
+ * Which pack provides an instance's content and how much it ships. It heads the
+ * content panel; the pack's author and release age live in the content dialog.
  */
 export function ModpackContentCard({
   origin,
-  onOpenModpack,
   ...props
-}: CardProps & {
-  origin: ModpackOrigin;
-  /** Opens the pack's store page; without it the pack name is plain text. */
-  onOpenModpack?: () => void;
-}) {
+}: CardProps & { origin: ModpackOrigin }) {
   return origin.type === "modpack" ? (
-    <StoreModpackCard
-      origin={origin}
-      onOpenModpack={onOpenModpack}
-      {...props}
-    />
+    <StoreModpackCard origin={origin} {...props} />
   ) : (
     <FileModpackCard origin={origin} {...props} />
   );
@@ -45,34 +35,14 @@ export function ModpackContentCard({
 
 function StoreModpackCard({
   origin,
-  onOpenModpack,
   ...props
-}: CardProps & { origin: StoreModpackOrigin; onOpenModpack?: () => void }) {
+}: CardProps & { origin: StoreModpackOrigin }) {
   const summary = useStoreModpackSummary(origin);
   return (
     <ModpackCard
       iconUrl={summary.iconUrl}
-      provider={
-        <>
-          <LockIcon aria-hidden />
-          Provided by
-          {onOpenModpack ? (
-            <Button
-              type="button"
-              variant="link"
-              className={styles.providerLink}
-              onClick={onOpenModpack}
-            >
-              {summary.name}
-            </Button>
-          ) : (
-            <span className={styles.providerName}>{summary.name}</span>
-          )}
-          {summary.version ? (
-            <span className={styles.version}>· {summary.version}</span>
-          ) : null}
-        </>
-      }
+      title={`Provided by ${summary.name}`}
+      version={summary.version}
       {...props}
     />
   );
@@ -85,12 +55,8 @@ function FileModpackCard({
   return (
     <ModpackCard
       iconUrl={null}
-      provider={
-        <>
-          <FileArchiveIcon aria-hidden />
-          Imported from a {SOURCE_LABELS[origin.source]} file
-        </>
-      }
+      title={`Imported from a ${SOURCE_LABELS[origin.source]} file`}
+      version={null}
       {...props}
     />
   );
@@ -98,10 +64,15 @@ function FileModpackCard({
 
 function ModpackCard({
   iconUrl,
-  provider,
+  title,
+  version,
   entries,
   onView,
-}: CardProps & { iconUrl: string | null; provider: ReactNode }) {
+}: CardProps & {
+  iconUrl: string | null;
+  title: string;
+  version: string | null;
+}) {
   const counts = countContent(entries);
   return (
     <section aria-label="Modpack content" className={styles.root}>
@@ -113,18 +84,23 @@ function ModpackCard({
         </span>
       )}
       <div className={styles.heading}>
-        <h3 className={styles.title}>Modpack content</h3>
-        <p className={styles.counts}>
-          {counts.length === 0
-            ? "No content"
-            : counts.map((count) => (
-                <span key={count.kind} className={styles.count}>
-                  <ContentKindIcon kind={count.kind} size="sm" tone="muted" />
-                  {count.label}
-                </span>
-              ))}
-        </p>
-        <p className={styles.provider}>{provider}</p>
+        <div className={styles.titleLine}>
+          <h3 className={styles.title}>{title}</h3>
+          {version ? <span className={styles.version}>{version}</span> : null}
+        </div>
+        <dl className={styles.included}>
+          <dt className={styles.label}>Included</dt>
+          <dd className={styles.counts}>
+            {counts.length === 0
+              ? "No content"
+              : counts.map((count) => (
+                  <span key={count.kind} className={styles.count}>
+                    <ContentKindIcon kind={count.kind} size="sm" tone="muted" />
+                    {count.label}
+                  </span>
+                ))}
+          </dd>
+        </dl>
       </div>
       <Button
         type="button"

@@ -43,7 +43,6 @@ export function ContentSection({
   search,
   modpack = null,
   toolbar = null,
-  onOpenModpack,
 }: {
   folder: string | null;
   filter: ContentFilter;
@@ -51,8 +50,6 @@ export function ContentSection({
   modpack?: ModpackOrigin | null;
   /** Search, filter and refresh controls, shown right above the list. */
   toolbar?: ReactNode;
-  /** Opens the store page of the modpack the instance is linked to. */
-  onOpenModpack?: () => void;
 }) {
   const queryClient = useQueryClient();
   const [pendingRemoval, setPendingRemoval] =
@@ -160,7 +157,6 @@ export function ContentSection({
           origin={modpack}
           entries={modpackEntries}
           onView={() => setModpackOpenFor(folder)}
-          onOpenModpack={onOpenModpack}
         />
       ) : null}
       {noExtraContent ? null : (

@@ -48,24 +48,17 @@ const ENTRIES = [
 function renderCard(
   origin: ModpackOrigin,
   entries: InstanceContentEntry[] = ENTRIES,
-  linked = false,
 ) {
   const onView = vi.fn();
-  const onOpenModpack = vi.fn();
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   render(
     <QueryClientProvider client={client}>
-      <ModpackContentCard
-        origin={origin}
-        entries={entries}
-        onView={onView}
-        onOpenModpack={linked ? onOpenModpack : undefined}
-      />
+      <ModpackContentCard origin={origin} entries={entries} onView={onView} />
     </QueryClientProvider>,
   );
-  return { onView, onOpenModpack };
+  return { onView };
 }
 
 function mockStore() {
@@ -86,36 +79,28 @@ describe("ModpackContentCard", () => {
     listModpackVersions.mockReset();
   });
 
-  it("shows what the modpack ships and which pack and version provide it", async () => {
+  it("names the pack that provides the content and what it includes", async () => {
     mockStore();
 
     renderCard(STORE);
 
-    const card = screen.getByRole("region", { name: "Modpack content" });
     expect(
-      screen.getByRole("heading", { name: "Modpack content" }),
+      await screen.findByRole("heading", {
+        name: "Provided by Fabulously Optimized",
+      }),
     ).toBeInTheDocument();
+    expect(await screen.findByText("15.0.0-beta.3")).toBeInTheDocument();
+    expect(screen.getByText("Included")).toBeInTheDocument();
     expect(screen.getByText("2 mods")).toBeInTheDocument();
     expect(screen.getByText("1 resource pack")).toBeInTheDocument();
-    await waitFor(() =>
-      expect(card).toHaveTextContent(
-        "Provided byFabulously Optimized· 15.0.0-beta.3",
-      ),
-    );
-    // Author and release age are shown in the content dialog instead.
-    expect(card).not.toHaveTextContent(/robotkoer|Updated/);
+    // The pack name is not a link, and author and release age live in the dialog.
+    expect(
+      screen.queryByRole("button", { name: "Fabulously Optimized" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("region", { name: "Modpack content" }),
+    ).not.toHaveTextContent(/robotkoer|Updated/);
     expect(getModpack).toHaveBeenCalledWith("modrinth", "fo");
-  });
-
-  it("opens the pack's page from its name", async () => {
-    mockStore();
-    const { onOpenModpack } = renderCard(STORE, ENTRIES, true);
-
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Fabulously Optimized" }),
-    );
-
-    expect(onOpenModpack).toHaveBeenCalledOnce();
   });
 
   it("still shows what the pack ships when the store cannot be reached", async () => {
@@ -130,14 +115,11 @@ describe("ModpackContentCard", () => {
   });
 
   it("says a pack imported from disk came from a file, without asking a store", () => {
-    renderCard({ type: "modpackFile", source: "modrinth" }, ENTRIES, true);
+    renderCard({ type: "modpackFile", source: "modrinth" });
 
     expect(
-      screen.getByText("Imported from a Modrinth file"),
+      screen.getByRole("heading", { name: "Imported from a Modrinth file" }),
     ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: /Provided/ }),
-    ).not.toBeInTheDocument();
     expect(getModpack).not.toHaveBeenCalled();
   });
 
