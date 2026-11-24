@@ -101,7 +101,8 @@ A failed job is logged as `Download job failed` with its full cause chain
 when they start, complete (with the elapsed time), are cancelled, restart as a
 repair, pause and resume, as do Pause all and Resume all. Each stage of a job also
 logs `Download progress` once per tenth, under `licht_core::DOWNLOAD_PROGRESS_TARGET`;
-the development console draws it as a bar, and the log file leaves it out.
+the development console draws it as a single bar line that redraws in place below
+other events, and the log file leaves it out.
 In the native app, the interface sends React render errors, uncaught errors and
 unhandled rejections to `log_frontend_error`, which logs them as `Interface error`
 (at most 20 per minute, messages truncated to 8,000 characters). Query and

@@ -178,7 +178,7 @@ where
     let layer = fmt::layer().with_writer(writer).with_ansi(style.colors);
     if style.development {
         layer
-            .event_format(console::DevelopmentFormat)
+            .event_format(console::DevelopmentFormat::default())
             .and_then(console::SpanFieldsLayer)
             .boxed()
     } else {
@@ -335,6 +335,55 @@ mod tests {
                  824/2061 files  96.4/241.0 MB component=Minecraft job_id=7\n"
             ),
             "unexpected output: {output}"
+        );
+    }
+
+    fn emit_progress(percent: u64) {
+        tracing::info!(
+            target: licht_core::DOWNLOAD_PROGRESS_TARGET,
+            percent,
+            finished = percent,
+            total = 100,
+            "Download progress"
+        );
+    }
+
+    #[test]
+    fn colored_download_progress_redraws_one_line_below_other_events() {
+        let output = console_output_of(ConsoleStyle::for_build(true, false, false), || {
+            emit_progress(40);
+            tracing::info!("Game started");
+            emit_progress(100);
+        });
+        let lines: Vec<_> = output.split('\n').collect();
+
+        assert_eq!(lines.len(), 3, "unexpected output: {output:?}");
+        let (progress, event) = lines[0]
+            .rsplit_once("\r\u{1b}[2K")
+            .unwrap_or_else(|| panic!("the event did not clear the line: {output:?}"));
+        assert!(progress.contains(" 40%"), "unexpected output: {output:?}");
+        assert!(
+            event.contains("Game started"),
+            "unexpected output: {output:?}"
+        );
+        let (redrawn, finished) = lines[1]
+            .rsplit_once("\r\u{1b}[2K")
+            .unwrap_or_else(|| panic!("the update did not clear the line: {output:?}"));
+        assert!(redrawn.contains(" 40%"), "unexpected output: {output:?}");
+        assert!(finished.contains("100%"), "unexpected output: {output:?}");
+        assert_eq!(lines[2], "", "unexpected output: {output:?}");
+    }
+
+    #[test]
+    fn a_finished_job_drops_its_progress_line() {
+        let output = console_output_of(ConsoleStyle::for_build(true, false, false), || {
+            emit_progress(60);
+            tracing::info!("Download job completed");
+        });
+
+        assert!(
+            output.ends_with("Download job completed\u{1b}[0m\n"),
+            "unexpected output: {output:?}"
         );
     }
 

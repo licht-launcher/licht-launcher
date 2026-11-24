@@ -2,7 +2,8 @@
 //! of the launcher that logged it. Events with many fields list them on the lines
 //! below instead. Span fields are shown like the event's own fields.
 
-use std::fmt;
+use std::fmt::{self, Write as _};
+use std::sync::{Mutex, PoisonError};
 
 use tracing::field::{Field, Visit};
 use tracing::span::{Attributes, Id, Record};
@@ -166,17 +167,20 @@ fn message_style(level: Level, message: &str) -> Style {
         .unwrap_or(Style::Plain)
 }
 
-/// Writes `text` in `style` when the writer accepts escapes.
-fn paint(writer: &mut format::Writer<'_>, style: Style, text: &str) -> fmt::Result {
+/// Writes `text` in `style`, with escapes only when `ansi` is set.
+fn paint(out: &mut impl fmt::Write, ansi: bool, style: Style, text: &str) -> fmt::Result {
     let code = match style {
-        Style::Plain => return writer.write_str(text),
-        _ if !writer.has_ansi_escapes() => return writer.write_str(text),
+        Style::Plain => return out.write_str(text),
+        _ if !ansi => return out.write_str(text),
         Style::Dim => "2".to_string(),
         Style::Color(color) => format!("38;5;{color}"),
         Style::BoldColor(color) => format!("1;38;5;{color}"),
     };
-    write!(writer, "\u{1b}[{code}m{text}\u{1b}[0m")
+    write!(out, "\u{1b}[{code}m{text}\u{1b}[0m")
 }
+
+/// Returns the cursor to the start of the line and erases it.
+const CLEAR_LINE: &str = "\r\u{1b}[2K";
 
 /// The message apart from the other fields. Strings keep no quotes, so values read
 /// as plain text.
@@ -242,35 +246,47 @@ impl Progress {
     }
 
     /// `[████░░░░]  40%  824/2061 files  96.4/241.0 MB`; counts appear when known.
-    fn write(&self, writer: &mut format::Writer<'_>, color: u8) -> fmt::Result {
+    fn write(&self, out: &mut impl fmt::Write, ansi: bool, color: u8) -> fmt::Result {
         let percent = self.percent.min(100);
         let filled = percent * PROGRESS_BAR_WIDTH / 100;
         let filled_width = usize::try_from(filled).unwrap_or_default();
         let empty_width = usize::try_from(PROGRESS_BAR_WIDTH - filled).unwrap_or_default();
-        writer.write_str("[")?;
-        paint(writer, Style::Color(color), &"█".repeat(filled_width))?;
-        paint(writer, Style::Dim, &"░".repeat(empty_width))?;
-        write!(writer, "] {percent:>3}%")?;
+        out.write_str("[")?;
+        paint(out, ansi, Style::Color(color), &"█".repeat(filled_width))?;
+        paint(out, ansi, Style::Dim, &"░".repeat(empty_width))?;
+        write!(out, "] {percent:>3}%")?;
         if self.total > 0 {
-            write!(writer, "  {}/{} files", self.finished, self.total)?;
+            write!(out, "  {}/{} files", self.finished, self.total)?;
         }
         if self.bytes_total > 0 {
             // Display only, so the precision lost converting to f64 does not matter.
             let done = self.bytes_done as f64 / BYTES_PER_MB;
             let total = self.bytes_total as f64 / BYTES_PER_MB;
-            write!(writer, "  {done:.1}/{total:.1} MB")?;
+            write!(out, "  {done:.1}/{total:.1} MB")?;
         }
         Ok(())
     }
 }
 
-fn write_inline(writer: &mut format::Writer<'_>, fields: &[(&'static str, String)]) -> fmt::Result {
+fn write_inline(
+    out: &mut impl fmt::Write,
+    ansi: bool,
+    fields: &[(&'static str, String)],
+) -> fmt::Result {
     for (name, value) in fields {
-        write!(writer, " ")?;
-        paint(writer, Style::Dim, &format!("{name}="))?;
-        writer.write_str(value)?;
+        out.write_str(" ")?;
+        paint(out, ansi, Style::Dim, &format!("{name}="))?;
+        out.write_str(value)?;
     }
     Ok(())
+}
+
+/// Whether a download message means its job no longer reports progress.
+fn ends_progress(message: &str) -> bool {
+    match message.strip_prefix("Download job ") {
+        Some(rest) => !matches!(rest, "started" | "resumed"),
+        None => message == "All downloads paused",
+    }
 }
 
 /// The fields of a span, recorded by [`SpanFieldsLayer`] so events can show them.
@@ -307,7 +323,14 @@ where
 /// `HH:MM:SS level [area] message fields`, with the UTC time of the log file. The
 /// fields of the event's spans follow its own. Events with many fields put each
 /// field on its own line instead.
-pub(super) struct DevelopmentFormat;
+///
+/// With colors on, download progress stays on one line at the bottom: each update
+/// redraws it, and other events are printed above it.
+#[derive(Default)]
+pub(super) struct DevelopmentFormat {
+    /// The progress line currently drawn at the bottom of the console.
+    pinned: Mutex<Option<String>>,
+}
 
 impl<S, N> FormatEvent<S, N> for DevelopmentFormat
 where
@@ -320,26 +343,35 @@ where
         mut writer: format::Writer<'_>,
         event: &Event<'_>,
     ) -> fmt::Result {
+        let ansi = writer.has_ansi_escapes();
         let metadata = event.metadata();
+        let mut line = String::new();
         let mut stamp = String::new();
         SystemTime.format_time(&mut format::Writer::new(&mut stamp))?;
-        paint(&mut writer, Style::Dim, stamp.get(11..19).unwrap_or(&stamp))?;
-        write!(writer, " ")?;
+        paint(
+            &mut line,
+            ansi,
+            Style::Dim,
+            stamp.get(11..19).unwrap_or(&stamp),
+        )?;
+        line.push(' ');
         let level = *metadata.level();
-        paint(&mut writer, level_style(level), &format!("{level:<5}"))?;
-        write!(writer, " ")?;
+        paint(&mut line, ansi, level_style(level), &format!("{level:<5}"))?;
+        line.push(' ');
         let area = area(metadata.target());
         let tag = format!("[{}]", area.label);
         paint(
-            &mut writer,
+            &mut line,
+            ansi,
             Style::Color(area.color),
             &format!("{tag:<width$}", width = AREA_WIDTH + 2),
         )?;
         let mut fields = EventFields::default();
         event.record(&mut fields);
-        write!(writer, " ")?;
+        line.push(' ');
         paint(
-            &mut writer,
+            &mut line,
+            ansi,
             message_style(level, &fields.message),
             &fields.message,
         )?;
@@ -351,31 +383,50 @@ where
                 }
             }
         }
+
+        let mut pinned = self.pinned.lock().unwrap_or_else(PoisonError::into_inner);
         if metadata.target() == licht_core::DOWNLOAD_PROGRESS_TARGET {
             let progress = Progress::from_fields(&mut all_fields);
-            write!(writer, " ")?;
-            progress.write(&mut writer, area.color)?;
-            write_inline(&mut writer, &all_fields)?;
-            return writeln!(writer);
-        }
-        if all_fields.len() <= INLINE_FIELDS {
-            for (name, value) in &all_fields {
-                write!(writer, " ")?;
-                paint(&mut writer, Style::Dim, &format!("{name}="))?;
-                writer.write_str(value)?;
+            line.push(' ');
+            progress.write(&mut line, ansi, area.color)?;
+            write_inline(&mut line, ansi, &all_fields)?;
+            if !ansi {
+                return writeln!(writer, "{line}");
             }
-            return writeln!(writer);
+            write!(writer, "{CLEAR_LINE}{line}")?;
+            if progress.percent >= 100 {
+                *pinned = None;
+                return writeln!(writer);
+            }
+            *pinned = Some(line);
+            return Ok(());
         }
-        writeln!(writer)?;
-        let width = all_fields
-            .iter()
-            .map(|(name, _)| name.len())
-            .max()
-            .unwrap_or_default();
-        for (name, value) in &all_fields {
-            write!(writer, "{:MESSAGE_COLUMN$}", "")?;
-            paint(&mut writer, Style::Dim, &format!("{name:<width$}"))?;
-            writeln!(writer, "  {value}")?;
+
+        if all_fields.len() <= INLINE_FIELDS {
+            write_inline(&mut line, ansi, &all_fields)?;
+            line.push('\n');
+        } else {
+            line.push('\n');
+            let width = all_fields
+                .iter()
+                .map(|(name, _)| name.len())
+                .max()
+                .unwrap_or_default();
+            for (name, value) in &all_fields {
+                write!(line, "{:MESSAGE_COLUMN$}", "")?;
+                paint(&mut line, ansi, Style::Dim, &format!("{name:<width$}"))?;
+                writeln!(line, "  {value}")?;
+            }
+        }
+        if pinned.is_some() {
+            writer.write_str(CLEAR_LINE)?;
+        }
+        writer.write_str(&line)?;
+        if ends_progress(&fields.message) {
+            *pinned = None;
+        }
+        if let Some(progress) = pinned.as_deref() {
+            writer.write_str(progress)?;
         }
         Ok(())
     }
@@ -385,7 +436,27 @@ where
 mod tests {
     use tracing::Level;
 
-    use super::{AREAS, Progress, Style, area, colors, library_name, message_style};
+    use super::{AREAS, Progress, Style, area, colors, ends_progress, library_name, message_style};
+
+    #[test]
+    fn job_endings_stop_the_pinned_progress_line() {
+        for message in [
+            "Download job completed",
+            "Download job failed",
+            "Download job cancelled",
+            "Download job paused",
+            "All downloads paused",
+        ] {
+            assert!(ends_progress(message), "{message}");
+        }
+        for message in [
+            "Download job started",
+            "Download job resumed",
+            "Game started",
+        ] {
+            assert!(!ends_progress(message), "{message}");
+        }
+    }
 
     #[test]
     fn progress_numbers_are_taken_out_of_the_fields() {
