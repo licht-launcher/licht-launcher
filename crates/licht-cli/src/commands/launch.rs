@@ -189,6 +189,7 @@ fn require_installed_version(
 mod tests {
     use super::require_installed_version;
     use licht_core::{Arch, LaunchEnvironment, OsName, SharedCache};
+    use licht_testkit::temp::TempDir;
     use std::collections::BTreeMap;
 
     fn environment() -> LaunchEnvironment {
@@ -202,11 +203,8 @@ mod tests {
 
     #[test]
     fn rejects_a_version_that_is_not_installed() {
-        let root =
-            std::env::temp_dir().join(format!("licht-cli-launch-missing-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).expect("temp cache");
-        let cache = SharedCache::at(&root);
+        let root = TempDir::new("cli-launch-missing");
+        let cache = SharedCache::at(root.path());
 
         let error = require_installed_version(&cache, "1.20.1", &environment())
             .expect_err("missing install");
@@ -216,7 +214,5 @@ mod tests {
         };
         assert!(message.contains("version `1.20.1` is not installed"));
         assert!(message.contains("licht-cli install --version 1.20.1"));
-
-        let _ = std::fs::remove_dir_all(&root);
     }
 }
