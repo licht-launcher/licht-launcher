@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { ContentFilterSelect } from "@/features/instances/components/content/content-filter-select";
 import { ContentKindIcon } from "@/features/instances/components/content/content-kind-icon";
 import type { ContentActions } from "@/features/instances/components/content/content-row";
 import { ContentTable } from "@/features/instances/components/content/content-table";
@@ -26,15 +27,8 @@ import {
 } from "@/features/instances/lib/content-table";
 import { countContent } from "@/features/instances/lib/modpack-content";
 import type { InstanceContentEntry } from "@/lib/generated/InstanceContentEntry";
-import type { InstanceContentKind } from "@/lib/generated/InstanceContentKind";
 
 import { modpackContentDialogStyles as styles } from "./modpack-content-dialog.styles";
-
-const FILTER_LABELS: Record<InstanceContentKind, string> = {
-  mods: "Mods",
-  resourcePacks: "Resource Packs",
-  shaderPacks: "Shader Packs",
-};
 
 type ModpackContent = {
   folder: string;
@@ -111,35 +105,26 @@ function ModpackContentBrowser({ folder, entries, actions }: ModpackContent) {
     disabled: actions.disabled,
     removalOpen: false,
   });
-  const filters: ContentFilter[] = [
-    "all",
-    ...counts.map((count) => count.kind),
-  ];
   return (
     <>
+      <p className={styles.summary}>
+        {counts.map((count) => (
+          <span key={count.kind} className={styles.count}>
+            <ContentKindIcon kind={count.kind} size="sm" />
+            {count.label}
+          </span>
+        ))}
+      </p>
       <div className={styles.toolbar}>
         <Input
           aria-label="Search modpack content"
+          className={styles.searchInput}
           placeholder={`Search ${entries.length} files`}
           value={search}
           startIcon={<SearchIcon aria-hidden />}
           onChange={(event) => setSearch(event.target.value)}
         />
-        <fieldset className={styles.filters}>
-          <legend className={styles.legend}>Filter by type</legend>
-          {filters.map((option) => (
-            <Button
-              key={option}
-              type="button"
-              size="sm"
-              variant={filter === option ? "secondary" : "outline"}
-              aria-pressed={filter === option}
-              onClick={() => setFilter(option)}
-            >
-              {option === "all" ? "All" : FILTER_LABELS[option]}
-            </Button>
-          ))}
-        </fieldset>
+        <ContentFilterSelect value={filter} onValueChange={setFilter} />
       </div>
       <div className={styles.list}>
         <table className={styles.headTable}>
@@ -157,14 +142,6 @@ function ModpackContentBrowser({ folder, entries, actions }: ModpackContent) {
           actions={actions}
         />
       </div>
-      <p className={styles.footer}>
-        {counts.map((count) => (
-          <span key={count.kind} className={styles.count}>
-            <ContentKindIcon kind={count.kind} size="sm" />
-            {count.label}
-          </span>
-        ))}
-      </p>
     </>
   );
 }

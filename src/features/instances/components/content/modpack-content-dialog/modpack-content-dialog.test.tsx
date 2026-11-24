@@ -87,16 +87,11 @@ describe("ModpackContentDialog", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("filters by kind and search", () => {
+  it("filters by kind and search", async () => {
     renderDialog();
-    const filters = screen.getByRole("group", { name: "Filter by type" });
-    expect(
-      within(filters)
-        .getAllByRole("button")
-        .map((button) => button.textContent),
-    ).toEqual(["All", "Mods", "Resource Packs"]);
 
-    fireEvent.click(within(filters).getByRole("button", { name: "Mods" }));
+    fireEvent.click(screen.getByRole("combobox", { name: "Filter content" }));
+    fireEvent.click(await screen.findByRole("option", { name: "Mods" }));
     expect(listedTitles()).toEqual(["Iris", "Sodium"]);
 
     fireEvent.change(

@@ -4,10 +4,8 @@ import {
   EraserIcon,
   FolderIcon,
   FolderOpenIcon,
-  ImageIcon,
   RefreshCwIcon,
   SearchIcon,
-  SparklesIcon,
   SquareTerminalIcon,
 } from "lucide-react";
 import { useState } from "react";
@@ -16,14 +14,8 @@ import { openInstanceFolder } from "@/api/commands";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PageTransition } from "@/components/ui/page-transition";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ContentFilterSelect } from "@/features/instances/components/content/content-filter-select";
 import type { PlayPhase } from "@/features/instances/hooks/use-play-session";
 import { instanceContentQuery } from "@/features/instances/lib/content-query";
 import type { LogLevelSelection } from "@/features/instances/lib/log-level";
@@ -202,37 +194,10 @@ export function HomePanel({
                   startIcon={<SearchIcon aria-hidden />}
                   onChange={(event) => setContentSearch(event.target.value)}
                 />
-                <Select
+                <ContentFilterSelect
                   value={contentFilter}
-                  onValueChange={(value) =>
-                    setContentFilter(value as ContentFilter)
-                  }
-                >
-                  <SelectTrigger
-                    aria-label="Filter content"
-                    className={homePanelStyles.filterSelect}
-                  >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">
-                      <BlocksIcon aria-hidden />
-                      All content
-                    </SelectItem>
-                    <SelectItem value="mods">
-                      <BlocksIcon aria-hidden />
-                      Mods
-                    </SelectItem>
-                    <SelectItem value="resourcePacks">
-                      <ImageIcon aria-hidden />
-                      Resource Packs
-                    </SelectItem>
-                    <SelectItem value="shaderPacks">
-                      <SparklesIcon aria-hidden />
-                      Shader Packs
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+                  onValueChange={setContentFilter}
+                />
                 <Button
                   type="button"
                   variant="outline"
