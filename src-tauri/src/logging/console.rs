@@ -57,18 +57,19 @@ const MESSAGE_COLUMN: usize = 8 + 1 + 5 + 1 + AREA_WIDTH + 2 + 1;
 /// download job lifecycle events, which always list their job's details.
 const INLINE_FIELDS: usize = 4;
 
-/// Muted colors from the terminal's 256-color palette, so the console stays calm.
+/// Standard ANSI foreground colors (30-37 and their bright 90-97 variants), so the
+/// console follows the terminal theme like Vite, Node and the Tauri CLI do.
 mod colors {
-    pub(super) const INFO: u8 = 114;
-    pub(super) const WARN: u8 = 178;
-    pub(super) const ERROR: u8 = 167;
-    pub(super) const DEBUG: u8 = 67;
-    pub(super) const TRACE: u8 = 139;
-    /// Something started or finished well.
-    pub(super) const STARTED: u8 = 108;
-    pub(super) const STOPPED: u8 = 173;
-    pub(super) const EXITED: u8 = 167;
-    pub(super) const LIBRARY: u8 = 242;
+    pub(super) const INFO: u8 = 32;
+    pub(super) const WARN: u8 = 33;
+    pub(super) const ERROR: u8 = 31;
+    pub(super) const DEBUG: u8 = 34;
+    pub(super) const TRACE: u8 = 35;
+    /// Something launched, started or finished well.
+    pub(super) const STARTED: u8 = 32;
+    pub(super) const STOPPED: u8 = 33;
+    pub(super) const EXITED: u8 = 31;
+    pub(super) const LIBRARY: u8 = 90;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -78,21 +79,21 @@ pub(super) struct Area {
 }
 
 impl Area {
-    const STARTUP: Self = Self::new("startup", 109);
-    const LAUNCH: Self = Self::new("launch", 73);
-    const DOWNLOAD: Self = Self::new("download", 67);
-    const JAVA: Self = Self::new("java", 137);
-    const UPDATE: Self = Self::new("update", 139);
-    const ACCOUNT: Self = Self::new("account", 179);
-    const MODPACK: Self = Self::new("modpack", 103);
-    const LOADER: Self = Self::new("loader", 97);
-    const INSTANCE: Self = Self::new("instance", 72);
-    const VERSION: Self = Self::new("version", 110);
-    const SETTINGS: Self = Self::new("settings", 144);
-    const INTERFACE: Self = Self::new("interface", 168);
-    const STORAGE: Self = Self::new("storage", 102);
-    const COMMAND: Self = Self::new("command", 247);
-    const LAUNCHER: Self = Self::new("launcher", 247);
+    const STARTUP: Self = Self::new("startup", 36);
+    const LAUNCH: Self = Self::new("launch", 96);
+    const DOWNLOAD: Self = Self::new("download", 94);
+    const JAVA: Self = Self::new("java", 93);
+    const UPDATE: Self = Self::new("update", 95);
+    const ACCOUNT: Self = Self::new("account", 33);
+    const MODPACK: Self = Self::new("modpack", 35);
+    const LOADER: Self = Self::new("loader", 34);
+    const INSTANCE: Self = Self::new("instance", 32);
+    const VERSION: Self = Self::new("version", 36);
+    const SETTINGS: Self = Self::new("settings", 37);
+    const INTERFACE: Self = Self::new("interface", 91);
+    const STORAGE: Self = Self::new("storage", 34);
+    const COMMAND: Self = Self::new("command", 90);
+    const LAUNCHER: Self = Self::new("launcher", 90);
 
     const fn new(label: &'static str, color: u8) -> Self {
         Self { label, color }
@@ -133,6 +134,7 @@ fn library_name(target: &str) -> &'static str {
 enum Style {
     Plain,
     Dim,
+    /// A standard ANSI foreground code from [`colors`] or an [`Area`].
     Color(u8),
     BoldColor(u8),
 }
@@ -174,8 +176,8 @@ fn paint(out: &mut impl fmt::Write, ansi: bool, style: Style, text: &str) -> fmt
         Style::Plain => return out.write_str(text),
         _ if !ansi => return out.write_str(text),
         Style::Dim => "2".to_string(),
-        Style::Color(color) => format!("38;5;{color}"),
-        Style::BoldColor(color) => format!("1;38;5;{color}"),
+        Style::Color(color) => color.to_string(),
+        Style::BoldColor(color) => format!("1;{color}"),
     };
     write!(out, "\u{1b}[{code}m{text}\u{1b}[0m")
 }

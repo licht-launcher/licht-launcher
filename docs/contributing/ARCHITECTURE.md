@@ -82,7 +82,7 @@ named after its UTC start time, and startup keeps the 30 most recent; **Settings
 Troubleshooting** shows the folder and opens it. If the log directory cannot be
 opened, the app keeps logging to stderr and records a warning instead of failing
 to start. Panics are logged as errors before the default panic output.
-In development builds, stderr shows one line per event in muted colors, tagged
+In development builds, stderr shows one line per event in standard ANSI colors, tagged
 with the launcher area that logged it (`[startup]`, `[launch]`, `[download]`,
 `[update]`, and so on; see `logging/console.rs`). Events with more than four
 fields of their own, such as `System information`, list them with their span fields
