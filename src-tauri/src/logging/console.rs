@@ -5,12 +5,12 @@
 use std::fmt::{self, Write as _};
 use std::sync::{Mutex, PoisonError};
 
+use time::{OffsetDateTime, UtcOffset};
 use tracing::field::{Field, Visit};
 use tracing::span::{Attributes, Id, Record};
 use tracing::{Event, Level, Subscriber};
 use tracing_subscriber::fmt::FmtContext;
 use tracing_subscriber::fmt::format::{self, FormatEvent, FormatFields};
-use tracing_subscriber::fmt::time::{FormatTime, SystemTime};
 use tracing_subscriber::layer::{Context, Layer};
 use tracing_subscriber::registry::LookupSpan;
 
@@ -380,16 +380,37 @@ where
     }
 }
 
-/// `HH:MM:SS level [area] message fields`, with the UTC time of the log file. The
+/// `HH:MM:SS level [area] message fields`, with the local time of day. The
 /// fields of the event's spans follow its own. Events with many fields put each
 /// field on its own line instead.
 ///
 /// With colors on, download progress stays on one line at the bottom: each update
 /// redraws it, and other events are printed above it.
-#[derive(Default)]
 pub(super) struct DevelopmentFormat {
     /// The progress line currently drawn at the bottom of the console.
     pinned: Mutex<Option<String>>,
+    utc_offset: UtcOffset,
+}
+
+impl DevelopmentFormat {
+    /// Shows the time with `utc_offset`, normally the machine's local offset.
+    pub(super) fn new(utc_offset: UtcOffset) -> Self {
+        Self {
+            pinned: Mutex::default(),
+            utc_offset,
+        }
+    }
+}
+
+/// `HH:MM:SS` of `now` at `utc_offset`.
+fn clock(now: OffsetDateTime, utc_offset: UtcOffset) -> String {
+    let local = now.to_offset(utc_offset);
+    format!(
+        "{:02}:{:02}:{:02}",
+        local.hour(),
+        local.minute(),
+        local.second()
+    )
 }
 
 impl<S, N> FormatEvent<S, N> for DevelopmentFormat
@@ -406,14 +427,8 @@ where
         let ansi = writer.has_ansi_escapes();
         let metadata = event.metadata();
         let mut line = String::new();
-        let mut stamp = String::new();
-        SystemTime.format_time(&mut format::Writer::new(&mut stamp))?;
-        paint(
-            &mut line,
-            ansi,
-            Style::Dim,
-            stamp.get(11..19).unwrap_or(&stamp),
-        )?;
+        let stamp = clock(OffsetDateTime::now_utc(), self.utc_offset);
+        paint(&mut line, ansi, Style::Dim, &stamp)?;
         line.push(' ');
         let level = *metadata.level();
         paint(&mut line, ansi, level_style(level), &format!("{level:<5}"))?;
@@ -497,10 +512,25 @@ where
 mod tests {
     use tracing::Level;
 
+    use time::{OffsetDateTime, UtcOffset};
+
     use super::{
-        AREAS, PROGRESS_LINE_LIMIT, Progress, Style, area, colors, ends_progress, library_name,
-        message_style, progress_line,
+        AREAS, PROGRESS_LINE_LIMIT, Progress, Style, area, clock, colors, ends_progress,
+        library_name, message_style, progress_line,
     };
+
+    #[test]
+    fn the_clock_shows_the_given_offset() {
+        let utc = |seconds| {
+            OffsetDateTime::from_unix_timestamp(seconds).expect("the timestamp should be valid")
+        };
+        let brasilia = UtcOffset::from_hms(-3, 0, 0).expect("the offset should be valid");
+
+        // 2026-11-24T19:50:38Z and 2026-11-24T01:05:09Z.
+        assert_eq!(clock(utc(1_795_549_838), UtcOffset::UTC), "19:50:38");
+        assert_eq!(clock(utc(1_795_549_838), brasilia), "16:50:38");
+        assert_eq!(clock(utc(1_795_482_309), brasilia), "22:05:09");
+    }
 
     #[test]
     fn the_progress_line_leaves_out_what_does_not_fit() {

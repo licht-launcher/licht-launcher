@@ -27,6 +27,8 @@ tauri-plugin-process = "=2.4.0"
 tauri-plugin-updater = "=2.13.3"
 tauri-plugin-window-controls = "=0.2.1"
 tauri-plugin-wdio = { version = "=1.5.1", optional = true }
+# Already in the build through Tauri; `local-offset` gives the console local time.
+time = { version = "=0.3.55", features = ["local-offset"] }
 tokio = { version = "=1.53.2", features = ["macros", "sync", "time"] }
 tracing = "=0.1.44"
 tracing-subscriber = { version = "=0.3.23", features = ["env-filter"] }
