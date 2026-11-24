@@ -282,6 +282,7 @@ mod tests {
                 java_major = 21,
                 java_source = "Managed",
                 max_memory_mb = 4096,
+                account = "Offline",
                 "Launching game"
             );
         });
@@ -299,8 +300,36 @@ mod tests {
                 format!("{indent}java_major     21"),
                 format!("{indent}java_source    Managed"),
                 format!("{indent}max_memory_mb  4096"),
+                format!("{indent}account        Offline"),
                 format!("{indent}instance       Survival"),
             ]
+        );
+    }
+
+    #[test]
+    fn span_fields_alone_keep_an_event_on_one_line() {
+        let output = console_output_of(ConsoleStyle::for_build(true, false, true), || {
+            let _job = tracing::info_span!(
+                "download_job",
+                job_id = 30,
+                operation = "Install",
+                instance = "Cobblemon",
+                version = "fabric-loader-0.20.1-1.21.1"
+            )
+            .entered();
+            tracing::info!(
+                target: "licht_core::transfer::manager::worker",
+                elapsed_seconds = 1,
+                "Download job completed"
+            );
+        });
+
+        assert!(
+            output.ends_with(
+                " INFO  [download]  Download job completed elapsed_seconds=1 job_id=30 \
+                 operation=Install instance=Cobblemon version=fabric-loader-0.20.1-1.21.1\n"
+            ),
+            "unexpected output: {output}"
         );
     }
 
