@@ -153,6 +153,33 @@ fn paint(writer: &mut format::Writer<'_>, style: Style, text: &str) -> fmt::Resu
     }
 }
 
+const FIELD_VALUE: Style = Style::Palette(117);
+const STARTED: Style = Style::Palette(78);
+const STOPPED: Style = Style::Palette(208);
+
+/// Warnings and errors keep their level's color; otherwise messages about something
+/// starting or stopping stand out from the rest.
+fn message_style(level: Level, message: &str) -> Style {
+    match level {
+        Level::ERROR => return Style::Red,
+        Level::WARN => return Style::Yellow,
+        _ => {}
+    }
+    let mut words = message
+        .split(|character: char| !character.is_alphanumeric())
+        .map(str::to_ascii_lowercase);
+    match words.find(|word| {
+        matches!(
+            word.as_str(),
+            "started" | "starting" | "stopped" | "stopping"
+        )
+    }) {
+        Some(word) if word.starts_with("start") => STARTED,
+        Some(_) => STOPPED,
+        None => Style::Bold,
+    }
+}
+
 /// The message apart from the other fields, which follow it on the same line.
 #[derive(Default)]
 struct EventFields {
@@ -210,17 +237,17 @@ where
         )?;
         let mut fields = EventFields::default();
         event.record(&mut fields);
-        let message_style = match level {
-            Level::ERROR => Style::Red,
-            Level::WARN => Style::Yellow,
-            _ => Style::Bold,
-        };
         write!(writer, " ")?;
-        paint(&mut writer, message_style, &fields.message)?;
+        paint(
+            &mut writer,
+            message_style(level, &fields.message),
+            &fields.message,
+        )?;
         for (name, value) in &fields.fields {
             write!(writer, " ")?;
             paint(&mut writer, Style::DimItalic, name)?;
-            write!(writer, "={value}")?;
+            write!(writer, "=")?;
+            paint(&mut writer, FIELD_VALUE, value)?;
         }
         if let Some(scope) = context.event_scope() {
             for span in scope.from_root() {
@@ -240,7 +267,47 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{AREAS, Area, area};
+    use tracing::Level;
+
+    use super::{AREAS, Area, STARTED, STOPPED, Style, area, message_style};
+
+    #[test]
+    fn starting_and_stopping_messages_get_their_own_colors() {
+        for message in [
+            "Game started",
+            "Download job started",
+            "Starting Licht Launcher",
+        ] {
+            assert_eq!(message_style(Level::INFO, message), STARTED, "{message}");
+        }
+        for message in ["Game stopped by the launcher", "Stopping downloads"] {
+            assert_eq!(message_style(Level::INFO, message), STOPPED, "{message}");
+        }
+        assert_eq!(
+            message_style(Level::INFO, "Launcher is up to date"),
+            Style::Bold
+        );
+    }
+
+    #[test]
+    fn only_whole_words_mark_a_start_or_stop() {
+        assert_eq!(
+            message_style(Level::INFO, "Download job restarted as a full repair"),
+            Style::Bold
+        );
+    }
+
+    #[test]
+    fn warnings_and_errors_keep_their_level_color() {
+        assert_eq!(
+            message_style(Level::WARN, "Game stopped unexpectedly"),
+            Style::Yellow
+        );
+        assert_eq!(
+            message_style(Level::ERROR, "Startup worker stopped"),
+            Style::Red
+        );
+    }
 
     #[test]
     fn modules_are_tagged_with_the_area_they_log_for() {
