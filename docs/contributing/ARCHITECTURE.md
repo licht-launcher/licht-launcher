@@ -87,6 +87,8 @@ launcher area that logged it (`[launch]`, `[download]`, `[update]`, and so on; s
 `logging/console.rs`). Colors stay on even though `tauri dev` pipes stderr. Other
 builds color stderr only when it is a terminal, and `NO_COLOR` turns colors off.
 The log file always keeps the standard format without colors.
+Each launch logs `System information` (the build diagnostics shown in
+Troubleshooting), and application update checks and downloads log their result.
 Download jobs run inside a `download_job` span (job id, operation, instance,
 version, Java major) and game launches inside a `launch` span (instance folder),
 so their events can be told apart in the log. Player names are never span fields.
@@ -94,7 +96,9 @@ A launch logs `Launching game` (version, Java path, major and source, maximum
 memory, and account kind), `Game started` with the process id, and how the game
 ended with the time played; a non-zero exit code is a warning.
 A failed job is logged as `Download job failed` with its full cause chain
-(`licht_core::error_chain`), which `commands::failure` also uses.
+(`licht_core::error_chain`), which `commands::failure` also uses. Jobs also log
+when they start, complete (with the elapsed time), are cancelled, restart as a
+repair, pause and resume, as do Pause all and Resume all.
 In the native app, the interface sends React render errors, uncaught errors and
 unhandled rejections to `log_frontend_error`, which logs them as `Interface error`
 (at most 20 per minute, messages truncated to 8,000 characters). Query and
