@@ -7,7 +7,7 @@ use crate::{
 use futures_util::future::BoxFuture;
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use tokio::sync::{Mutex, Notify, broadcast, watch};
 
 mod bulk;
@@ -38,6 +38,8 @@ struct ActiveJob {
     restarting: AtomicBool,
     dirty: AtomicBool,
     enabled: watch::Sender<bool>,
+    /// The tenth of the current stage last logged as download progress.
+    logged_progress: AtomicU8,
 }
 #[derive(Default)]
 struct InstallationQueue {
@@ -45,6 +47,10 @@ struct InstallationQueue {
     current: Option<String>,
     last_active: Option<String>,
 }
+/// The target of `Download progress` events, which the launcher keeps out of its
+/// log file.
+pub const DOWNLOAD_PROGRESS_TARGET: &str = "licht_core::transfer::progress";
+
 pub struct DownloadManager {
     runtime: DownloadRuntime,
     executor: Executor,

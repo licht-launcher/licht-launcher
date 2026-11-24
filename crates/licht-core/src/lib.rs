@@ -142,7 +142,7 @@ pub use transfer::jobs::{
     DownloadJobUpdate, DownloadPhase, create_download_job, create_pending_download_job,
     get_download_job, list_download_jobs, recover_download_jobs, update_download_job,
 };
-pub use transfer::manager::DownloadManager;
+pub use transfer::manager::{DOWNLOAD_PROGRESS_TARGET, DownloadManager};
 pub use version::{
     Arch, Argument, ArgumentValue, Artifact, AssetIndex, Download, GameArguments, JavaVersion,
     LaunchEnvironment, Library, LibraryDownloads, LibraryExtract, OsName, OsRule, Rule, RuleAction,

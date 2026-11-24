@@ -151,3 +151,70 @@ async fn pausing_and_resuming_a_job_are_logged() {
         );
     }
 }
+
+#[test]
+fn progress_counts_bytes_when_the_size_is_known_and_files_otherwise() {
+    use super::progress::progress_percent;
+    let progress = |finished, total, bytes_done, bytes_total| crate::DownloadProgress {
+        finished,
+        failed: 0,
+        total,
+        bytes_done,
+        bytes_total,
+    };
+
+    assert_eq!(progress_percent(&progress(1, 4, 750, 1000)), Some(75));
+    assert_eq!(progress_percent(&progress(1, 4, 0, 0)), Some(25));
+    assert_eq!(progress_percent(&progress(0, 0, 0, 0)), None);
+    assert_eq!(progress_percent(&progress(5, 4, 1200, 1000)), Some(100));
+}
+
+#[tokio::test]
+async fn a_job_logs_each_tenth_of_its_progress_once() {
+    let capture = LogCapture::start();
+    let mut server = Server::new().await;
+    let fixture = Fixture::new(&server.url).await;
+    let entry = fixture.instance("Progress").await;
+    let manager = fixture.manager();
+    let job = manager
+        .start(&entry.folder, DownloadJobOperation::Install)
+        .await
+        .expect("start");
+    server.request().await.reply(200, "", b"hello world", 11);
+    finish(manager.wait(&job.id)).await.expect("completion");
+    fixture.close().await;
+    let logs = capture.text();
+
+    let lines: Vec<_> = logs
+        .lines()
+        .filter(|line| line.contains("Download progress"))
+        .collect();
+    assert!(!lines.is_empty(), "no progress was logged: {logs}");
+    for line in &lines {
+        assert!(
+            line.contains(crate::DOWNLOAD_PROGRESS_TARGET),
+            "unexpected log line: {line}"
+        );
+        assert!(
+            line.contains(&format!("job_id={}", job.id)),
+            "unexpected log line: {line}"
+        );
+    }
+    let tenths: Vec<u8> = lines
+        .iter()
+        .map(|line| {
+            let percent = line
+                .split("percent=")
+                .nth(1)
+                .and_then(|rest| rest.split_whitespace().next())
+                .and_then(|value| value.parse::<u8>().ok())
+                .unwrap_or_else(|| panic!("no percent in {line}"));
+            percent / 10
+        })
+        .collect();
+    assert!(
+        tenths.windows(2).all(|pair| pair[0] < pair[1]),
+        "a tenth was logged twice: {logs}"
+    );
+    assert_eq!(tenths.last(), Some(&10), "unexpected logs: {logs}");
+}

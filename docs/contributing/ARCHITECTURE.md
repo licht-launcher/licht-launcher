@@ -82,6 +82,14 @@ named after its UTC start time, and startup keeps the 30 most recent; **Settings
 Troubleshooting** shows the folder and opens it. If the log directory cannot be
 opened, the app keeps logging to stderr and records a warning instead of failing
 to start. Panics are logged as errors before the default panic output.
+In development builds, stderr shows one line per event in standard ANSI colors, tagged
+with the launcher area that logged it (`[startup]`, `[launch]`, `[download]`,
+`[update]`, and so on; see `logging/console.rs`). Events with more than four
+fields of their own, such as `System information`, list them with their span fields
+on aligned lines below, as do download job lifecycle events; otherwise span fields
+alone keep an event on one line. Colors stay on even though `tauri dev` pipes stderr. Other
+builds color stderr only when it is a terminal, and `NO_COLOR` turns colors off.
+The log file always keeps the standard format without colors.
 Each launch logs `System information` (the build diagnostics shown in
 Troubleshooting), and application update checks and downloads log their result.
 Download jobs run inside a `download_job` span (job id, operation, instance,
@@ -93,7 +101,10 @@ ended with the time played; a non-zero exit code is a warning.
 A failed job is logged as `Download job failed` with its full cause chain
 (`licht_core::error_chain`), which `commands::failure` also uses. Jobs also log
 when they start, complete (with the elapsed time), are cancelled, restart as a
-repair, pause and resume, as do Pause all and Resume all.
+repair, pause and resume, as do Pause all and Resume all. Each stage of a job also
+logs `Download progress` once per tenth, under `licht_core::DOWNLOAD_PROGRESS_TARGET`;
+the development console draws it as a single bar line of at most 100 columns, so it
+never wraps, that redraws in place below other events; the log file leaves it out.
 In the native app, the interface sends React render errors, uncaught errors and
 unhandled rejections to `log_frontend_error`, which logs them as `Interface error`
 (at most 20 per minute, messages truncated to 8,000 characters). Query and
