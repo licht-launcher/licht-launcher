@@ -15,7 +15,9 @@ export type ModpackSummary = {
   name: string;
   iconUrl: string | null;
   version: string | null;
-  /** Provider, source and release age, in reading order. */
+  /** How long ago the installed version was released, e.g. `3 weeks ago`. */
+  updated: string | null;
+  /** Provider and source, in reading order. */
   details: readonly string[];
 };
 
@@ -37,12 +39,12 @@ export function useStoreModpackSummary(
           modpack.data.author
             ? `by ${modpack.data.author} · ${sourceLabel}`
             : sourceLabel,
-          ...(updated ? [`Updated ${updated}`] : []),
         ];
   return {
     name: modpack.data?.name ?? "Modpack",
     iconUrl: modpack.data?.iconUrl ?? origin.iconUrl,
     version: version?.name ?? null,
+    updated: modpack.isSuccess ? updated : null,
     details,
   };
 }
@@ -53,6 +55,7 @@ export function fileModpackSummary(origin: FileModpackOrigin): ModpackSummary {
     name: "Imported modpack",
     iconUrl: null,
     version: null,
+    updated: null,
     details: [`Installed from a ${SOURCE_LABELS[origin.source]} file`],
   };
 }

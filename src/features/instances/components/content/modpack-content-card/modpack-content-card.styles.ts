@@ -11,6 +11,8 @@ export const modpackContentCardStyles = {
   titleName: "min-w-0 truncate font-semibold",
   facts: "flex flex-wrap gap-x-10 gap-y-3",
   fact: "flex min-w-0 flex-col gap-1.5",
+  includedFact: "flex min-w-0 flex-col gap-1.5",
+  value: "text-sm font-medium",
   versionFact: "flex min-w-0 max-w-48 flex-col gap-1.5",
   version: "truncate text-sm font-medium",
   unknown: "text-sm text-muted-foreground",

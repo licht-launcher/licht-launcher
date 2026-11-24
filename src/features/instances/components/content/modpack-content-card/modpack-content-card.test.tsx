@@ -96,13 +96,19 @@ describe("ModpackContentCard", () => {
     expect(screen.getByText("Included")).toBeInTheDocument();
     expect(screen.getByText("2 mods")).toBeInTheDocument();
     expect(screen.getByText("1 resource pack")).toBeInTheDocument();
-    // The pack name is not a link, and author and release age live in the dialog.
+    expect(screen.getByText("Updated").nextElementSibling).toHaveTextContent(
+      /ago$/,
+    );
+    expect(screen.getAllByRole("term").map((term) => term.textContent)).toEqual(
+      ["Version", "Updated", "Included"],
+    );
+    // The pack name is not a link, and the author lives in the dialog.
     expect(
       screen.queryByRole("button", { name: "Fabulously Optimized" }),
     ).not.toBeInTheDocument();
     expect(
       screen.getByRole("region", { name: "Modpack content" }),
-    ).not.toHaveTextContent(/robotkoer|Updated/);
+    ).not.toHaveTextContent(/robotkoer/);
     expect(getModpack).toHaveBeenCalledWith("modrinth", "fo");
   });
 
@@ -127,6 +133,7 @@ describe("ModpackContentCard", () => {
       screen.getByRole("heading", { name: "Imported from a Modrinth file" }),
     ).toBeInTheDocument();
     expect(screen.queryByText("Version")).not.toBeInTheDocument();
+    expect(screen.queryByText("Updated")).not.toBeInTheDocument();
     expect(getModpack).not.toHaveBeenCalled();
   });
 

@@ -50,6 +50,7 @@ function StoreModpackCard({
         </>
       }
       version={summary.version}
+      updated={summary.updated}
       {...props}
     />
   );
@@ -76,6 +77,7 @@ function ModpackCard({
   iconUrl,
   title,
   version,
+  updated,
   entries,
   onView,
 }: CardProps & {
@@ -83,6 +85,8 @@ function ModpackCard({
   title: ReactNode;
   /** The installed pack version; `null` when unknown, left out for packs from a file. */
   version?: string | null;
+  /** When that version was released; `null` when unknown, left out for packs from a file. */
+  updated?: string | null;
 }) {
   const counts = countContent(entries);
   return (
@@ -97,7 +101,23 @@ function ModpackCard({
       <div className={styles.heading}>
         <h3 className={styles.title}>{title}</h3>
         <dl className={styles.facts}>
-          <div className={styles.fact}>
+          {version !== undefined ? (
+            <div className={styles.versionFact}>
+              <dt className={styles.label}>Version</dt>
+              <dd className={version ? styles.version : styles.unknown}>
+                {version ?? "Unknown"}
+              </dd>
+            </div>
+          ) : null}
+          {updated !== undefined ? (
+            <div className={styles.fact}>
+              <dt className={styles.label}>Updated</dt>
+              <dd className={updated ? styles.value : styles.unknown}>
+                {updated ?? "Unknown"}
+              </dd>
+            </div>
+          ) : null}
+          <div className={styles.includedFact}>
             <dt className={styles.label}>Included</dt>
             <dd className={styles.counts}>
               {counts.length === 0
@@ -114,14 +134,6 @@ function ModpackCard({
                   ))}
             </dd>
           </div>
-          {version !== undefined ? (
-            <div className={styles.versionFact}>
-              <dt className={styles.label}>Version</dt>
-              <dd className={version ? styles.version : styles.unknown}>
-                {version ?? "Unknown"}
-              </dd>
-            </div>
-          ) : null}
         </dl>
       </div>
       <Button

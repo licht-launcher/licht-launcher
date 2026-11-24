@@ -106,6 +106,7 @@ function ModpackHeading({ summary }: { summary: ModpackSummary }) {
               ? `${summary.name} ${summary.version}`
               : summary.name,
             ...summary.details,
+            ...(summary.updated ? [`Updated ${summary.updated}`] : []),
           ].join(" · ")}
         </DialogDescription>
       </div>
