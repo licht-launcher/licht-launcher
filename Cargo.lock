@@ -2483,6 +2483,7 @@ dependencies = [
  "futures-util",
  "getrandom 0.3.4",
  "keyring",
+ "licht-test-support",
  "md-5",
  "minisign-verify",
  "png 0.18.1",
@@ -2501,7 +2502,6 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
- "tracing-subscriber",
  "ts-rs",
  "url",
  "uuid",
@@ -2514,6 +2514,7 @@ version = "0.3.1"
 dependencies = [
  "anyhow",
  "licht-core",
+ "licht-test-support",
  "reqwest",
  "serde_json",
  "tauri",
@@ -2528,6 +2529,14 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "webkit2gtk",
+]
+
+[[package]]
+name = "licht-test-support"
+version = "0.3.1"
+dependencies = [
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

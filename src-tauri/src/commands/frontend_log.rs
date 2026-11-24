@@ -107,47 +107,14 @@ fn truncated(message: &str) -> std::borrow::Cow<'_, str> {
 
 #[cfg(test)]
 mod tests {
-    use std::io::{self, Write};
-    use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
+
+    use licht_test_support::capture_logs;
 
     use super::{
         FrontendErrorSource, FrontendLogLimiter, MAX_MESSAGE_CHARS, RATE_WINDOW,
         REPORTS_PER_WINDOW, record,
     };
-
-    struct TestWriter(Arc<Mutex<Vec<u8>>>);
-
-    impl Write for TestWriter {
-        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
-            self.0
-                .lock()
-                .expect("the log buffer lock should work")
-                .write(bytes)
-        }
-
-        fn flush(&mut self) -> io::Result<()> {
-            Ok(())
-        }
-    }
-
-    fn capture_logs(emit: impl FnOnce()) -> String {
-        let output = Arc::new(Mutex::new(Vec::new()));
-        let writer_output = Arc::clone(&output);
-        let subscriber = tracing_subscriber::fmt()
-            .with_writer(move || TestWriter(Arc::clone(&writer_output)))
-            .with_ansi(false)
-            .without_time()
-            .finish();
-
-        tracing::subscriber::with_default(subscriber, emit);
-
-        let bytes = output
-            .lock()
-            .expect("the log buffer lock should work")
-            .clone();
-        String::from_utf8(bytes).expect("logs should contain valid UTF-8")
-    }
 
     #[test]
     fn only_known_sources_are_accepted() {
@@ -171,7 +138,7 @@ mod tests {
     fn reported_errors_are_logged_on_one_line_with_their_source() {
         let limiter = FrontendLogLimiter::default();
 
-        let logs = capture_logs(|| {
+        let ((), logs) = capture_logs(|| {
             record(
                 &limiter,
                 Instant::now(),
@@ -195,7 +162,7 @@ mod tests {
         let limiter = FrontendLogLimiter::default();
         let message = "é".repeat(MAX_MESSAGE_CHARS + 50);
 
-        let logs = capture_logs(|| {
+        let ((), logs) = capture_logs(|| {
             record(
                 &limiter,
                 Instant::now(),
@@ -214,7 +181,7 @@ mod tests {
         let limiter = FrontendLogLimiter::default();
         let start = Instant::now();
 
-        let logs = capture_logs(|| {
+        let ((), logs) = capture_logs(|| {
             for index in 0..REPORTS_PER_WINDOW + 5 {
                 record(
                     &limiter,

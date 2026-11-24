@@ -405,41 +405,14 @@ async fn download(app: &AppHandle, runtime: &Arc<Runtime>, automatic: bool) -> a
 mod tests {
     use super::*;
 
-    struct TestWriter(Arc<std::sync::Mutex<Vec<u8>>>);
-
-    impl std::io::Write for TestWriter {
-        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-            self.0
-                .lock()
-                .expect("the log buffer lock should work")
-                .write(bytes)
-        }
-
-        fn flush(&mut self) -> std::io::Result<()> {
-            Ok(())
-        }
-    }
-
     #[test]
     fn update_failures_log_the_summary_and_every_cause() {
-        let output = Arc::new(std::sync::Mutex::new(Vec::new()));
-        let writer_output = Arc::clone(&output);
-        let subscriber = tracing_subscriber::fmt()
-            .with_writer(move || TestWriter(Arc::clone(&writer_output)))
-            .with_ansi(false)
-            .without_time()
-            .finish();
         let error = anyhow::anyhow!("connection reset").context("update manifest request failed");
 
-        tracing::subscriber::with_default(subscriber, || {
+        let ((), logs) = licht_test_support::capture_logs(|| {
             log_update_failure("Could not check for updates.", &error);
         });
 
-        let bytes = output
-            .lock()
-            .expect("the log buffer lock should work")
-            .clone();
-        let logs = String::from_utf8(bytes).expect("logs should contain valid UTF-8");
         assert!(logs.contains("WARN"), "unexpected logs: {logs}");
         assert!(
             logs.contains("Application update failed"),

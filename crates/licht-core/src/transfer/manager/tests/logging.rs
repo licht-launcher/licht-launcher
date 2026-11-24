@@ -1,22 +1,6 @@
-use std::io::{self, Write};
-use std::sync::{Arc, Mutex};
+use licht_test_support::LogCapture;
 
 use super::*;
-
-struct TestWriter(Arc<Mutex<Vec<u8>>>);
-
-impl Write for TestWriter {
-    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
-        self.0
-            .lock()
-            .expect("the log buffer lock should work")
-            .write(bytes)
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        Ok(())
-    }
-}
 
 struct FailedRepair {
     job: DownloadJobSnapshot,
@@ -27,19 +11,7 @@ struct FailedRepair {
 
 /// Runs a repair whose every attempt receives corrupt bytes and captures its logs.
 async fn failed_repair() -> FailedRepair {
-    let output = Arc::new(Mutex::new(Vec::new()));
-    let writer_output = Arc::clone(&output);
-    let subscriber = tracing_subscriber::fmt()
-        .with_writer(move || TestWriter(Arc::clone(&writer_output)))
-        .with_ansi(false)
-        .without_time()
-        .finish();
-    let _default = tracing::subscriber::set_default(subscriber);
-    // While only one dispatcher is registered, tracing-core computes callsite interest
-    // from the default of whichever thread hits a callsite first, so a parallel test
-    // could cache the job span as disabled. A second registered dispatcher makes every
-    // thread take this test's subscriber into account.
-    let _registered = tracing::Dispatch::new(tracing::subscriber::NoSubscriber::default());
+    let capture = LogCapture::start();
 
     let mut server = Server::new().await;
     let fixture = Fixture::new(&server.url).await;
@@ -58,15 +30,11 @@ async fn failed_repair() -> FailedRepair {
     assert_eq!(failed.status, DownloadJobStatus::Failed);
     fixture.close().await;
 
-    let bytes = output
-        .lock()
-        .expect("the log buffer lock should work")
-        .clone();
     FailedRepair {
         job,
         failed,
         folder: entry.folder,
-        logs: String::from_utf8(bytes).expect("logs should contain valid UTF-8"),
+        logs: capture.text(),
     }
 }
 

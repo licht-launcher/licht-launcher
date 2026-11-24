@@ -92,46 +92,12 @@ pub(crate) fn instances_root(paths: &LauncherPaths) -> Result<PathBuf, CoreError
 
 #[cfg(test)]
 mod tests {
-    use std::io::{self, Write};
-    use std::sync::{Arc, Mutex};
+    use std::io;
 
     use licht_core::CoreError;
+    use licht_test_support::capture_logs;
 
     use super::{command_error, command_failure, failure};
-
-    struct TestWriter(Arc<Mutex<Vec<u8>>>);
-
-    impl Write for TestWriter {
-        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
-            self.0
-                .lock()
-                .expect("the log buffer lock should work")
-                .write(bytes)
-        }
-
-        fn flush(&mut self) -> io::Result<()> {
-            Ok(())
-        }
-    }
-
-    fn capture_logs<T>(emit: impl FnOnce() -> T) -> (T, String) {
-        let output = Arc::new(Mutex::new(Vec::new()));
-        let writer_output = Arc::clone(&output);
-        let subscriber = tracing_subscriber::fmt()
-            .with_writer(move || TestWriter(Arc::clone(&writer_output)))
-            .with_ansi(false)
-            .without_time()
-            .finish();
-
-        let value = tracing::subscriber::with_default(subscriber, emit);
-
-        let bytes = output
-            .lock()
-            .expect("the log buffer lock should work")
-            .clone();
-        let logs = String::from_utf8(bytes).expect("logs should contain valid UTF-8");
-        (value, logs)
-    }
 
     fn nested_error() -> CoreError {
         let cause = io::Error::new(io::ErrorKind::PermissionDenied, "the folder is read-only");
