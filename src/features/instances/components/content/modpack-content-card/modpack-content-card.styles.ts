@@ -1,6 +1,6 @@
 export const modpackContentCardStyles = {
-  /** Part of the content panel: only a divider separates it from the extra content. */
-  root: "flex shrink-0 items-start gap-3 border-b border-border/60 px-3 py-4",
+  /** A box of its own above the content list. */
+  root: "flex shrink-0 items-start gap-3 rounded-lg border border-border/60 bg-black/20 p-4",
   icon: "size-12 shrink-0 rounded-md bg-muted object-cover",
   iconFallback:
     "flex size-12 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground [&_svg]:size-6",
