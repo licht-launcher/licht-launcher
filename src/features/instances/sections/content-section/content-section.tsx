@@ -13,6 +13,7 @@ import {
   ContentTableColumns,
   ContentTableHead,
 } from "@/features/instances/components/content/content-table-head";
+import { ModpackContentCard } from "@/features/instances/components/content/modpack-content-card";
 import { useContentVirtualizer } from "@/features/instances/hooks/use-content-virtualizer";
 import { instanceContentQuery } from "@/features/instances/lib/content-query";
 import {
@@ -22,6 +23,7 @@ import {
   sortContentEntries,
   toggleContentSort,
 } from "@/features/instances/lib/content-table";
+import type { ModpackOrigin } from "@/features/instances/lib/modpack-content";
 import { friendlyError, messageOf } from "@/lib/errors";
 import type { InstanceContentEntry } from "@/lib/generated/InstanceContentEntry";
 import type { InstanceContentKind } from "@/lib/generated/InstanceContentKind";
@@ -35,16 +37,21 @@ export function ContentSection({
   folder,
   filter,
   search,
+  modpack = null,
 }: {
   folder: string | null;
   filter: ContentFilter;
   search: string;
+  modpack?: ModpackOrigin | null;
 }) {
   const queryClient = useQueryClient();
   const [pendingRemoval, setPendingRemoval] =
     useState<InstanceContentEntry | null>(null);
   const [sortKey, setSortKey] = useState<ContentSortKey>("name");
   const [sortDir, setSortDir] = useState<ContentSortDir>("asc");
+  // Keyed by folder so switching instances goes back to the extra content.
+  const [viewingModpackOf, setViewingModpackOf] = useState<string | null>(null);
+  const viewingModpack = modpack !== null && viewingModpackOf === folder;
   const content = useQuery({
     ...instanceContentQuery(queryClient, folder ?? ""),
     enabled: folder !== null,
@@ -86,9 +93,20 @@ export function ContentSection({
     },
     onError: (error) => toast.error(friendlyError(messageOf(error))),
   });
+  const modpackEntries = useMemo(
+    () => (content.data ?? []).filter((entry) => entry.fromModpack),
+    [content.data],
+  );
+  const listedEntries = useMemo(
+    () =>
+      viewingModpack
+        ? modpackEntries
+        : (content.data ?? []).filter((entry) => !entry.fromModpack),
+    [content.data, modpackEntries, viewingModpack],
+  );
   const sortedEntries = useMemo(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase();
-    const entries = (content.data ?? []).filter(
+    const entries = listedEntries.filter(
       (entry) =>
         (filter === "all" || entry.kind === filter) &&
         (normalizedSearch === "" ||
@@ -97,7 +115,7 @@ export function ContentSection({
           )),
     );
     return sortContentEntries(entries, sortDir);
-  }, [content.data, filter, search, sortDir]);
+  }, [listedEntries, filter, search, sortDir]);
   const disabled = update.isPending || remove.isPending;
   const virtualization = useContentVirtualizer({
     entries: sortedEntries,
@@ -133,48 +151,65 @@ export function ContentSection({
   }
 
   return (
-    <div className={contentSectionStyles.root}>
-      {content.isError ? (
-        <p role="alert" className={contentSectionStyles.error}>
-          Some content metadata could not be loaded. Refresh to try again.
-        </p>
-      ) : null}
-      <table className={contentSectionStyles.headTable}>
-        <ContentTableColumns />
-        <ContentTableHead
-          sortKey={sortKey}
-          sortDir={sortDir}
-          onSort={onSort}
-          showBorder={!content.isFetching}
-        />
-      </table>
-      {content.isFetching ? (
-        <Progress
-          aria-label="Loading content metadata"
-          className={contentSectionStyles.progress}
+    <div className={contentSectionStyles.layout}>
+      {modpack !== null ? (
+        <ModpackContentCard
+          origin={modpack}
+          entries={modpackEntries}
+          viewing={viewingModpack}
+          onViewingChange={(viewing) =>
+            setViewingModpackOf(viewing ? folder : null)
+          }
         />
       ) : null}
-      <ContentTable
-        entries={sortedEntries}
-        totalEntries={content.data.length}
-        virtualization={virtualization}
-        disabled={disabled}
-        onToggle={(entry, enabled) =>
-          update.mutate({ kind: entry.kind, name: entry.name, enabled })
-        }
-        onRemove={setPendingRemoval}
-      />
-      <ContentRemovalDialog
-        entry={pendingRemoval}
-        pending={remove.isPending}
-        onOpenChange={(open) => {
-          if (!open) setPendingRemoval(null);
-        }}
-        onConfirm={(entry) =>
-          remove.mutate(entry, { onSuccess: () => setPendingRemoval(null) })
-        }
-        onCloseAutoFocus={virtualization.onCloseAutoFocus}
-      />
+      <div className={contentSectionStyles.root}>
+        {content.isError ? (
+          <p role="alert" className={contentSectionStyles.error}>
+            Some content metadata could not be loaded. Refresh to try again.
+          </p>
+        ) : null}
+        <table className={contentSectionStyles.headTable}>
+          <ContentTableColumns />
+          <ContentTableHead
+            sortKey={sortKey}
+            sortDir={sortDir}
+            onSort={onSort}
+            showBorder={!content.isFetching}
+          />
+        </table>
+        {content.isFetching ? (
+          <Progress
+            aria-label="Loading content metadata"
+            className={contentSectionStyles.progress}
+          />
+        ) : null}
+        <ContentTable
+          entries={sortedEntries}
+          totalEntries={listedEntries.length}
+          emptyLabel={
+            modpack !== null && !viewingModpack
+              ? "No extra content installed."
+              : undefined
+          }
+          virtualization={virtualization}
+          disabled={disabled}
+          onToggle={(entry, enabled) =>
+            update.mutate({ kind: entry.kind, name: entry.name, enabled })
+          }
+          onRemove={setPendingRemoval}
+        />
+        <ContentRemovalDialog
+          entry={pendingRemoval}
+          pending={remove.isPending}
+          onOpenChange={(open) => {
+            if (!open) setPendingRemoval(null);
+          }}
+          onConfirm={(entry) =>
+            remove.mutate(entry, { onSuccess: () => setPendingRemoval(null) })
+          }
+          onCloseAutoFocus={virtualization.onCloseAutoFocus}
+        />
+      </div>
     </div>
   );
 }

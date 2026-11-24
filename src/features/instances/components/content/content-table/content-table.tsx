@@ -12,6 +12,7 @@ import { contentTableStyles } from "./content-table.styles";
 export function ContentTable({
   entries,
   totalEntries,
+  emptyLabel = "No content installed.",
   virtualization,
   disabled,
   onToggle,
@@ -19,6 +20,8 @@ export function ContentTable({
 }: {
   entries: InstanceContentEntry[];
   totalEntries: number;
+  /** Shown when there is nothing to list before filters apply. */
+  emptyLabel?: string;
   virtualization: ReturnType<typeof useContentVirtualizer>;
   disabled: boolean;
   onToggle: (entry: InstanceContentEntry, enabled: boolean) => void;
@@ -51,7 +54,7 @@ export function ContentTable({
                     </span>
                     <p className={cn(contentTableStyles.emptyText)}>
                       {totalEntries === 0
-                        ? "No content installed."
+                        ? emptyLabel
                         : "No content matches your filters."}
                     </p>
                   </div>

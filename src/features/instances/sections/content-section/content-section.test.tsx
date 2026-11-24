@@ -9,6 +9,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { instanceContentQuery } from "@/features/instances/lib/content-query";
+import type { ModpackOrigin } from "@/features/instances/lib/modpack-content";
 import { ContentSection } from "@/features/instances/sections/content-section";
 import type { InstanceContentEntry } from "@/lib/generated/InstanceContentEntry";
 
@@ -22,19 +23,27 @@ vi.mock("@/api/commands", () => ({
   listInstanceContent,
   removeInstanceContent: vi.fn(),
   setInstanceContentEnabled: vi.fn(),
+  getModpack: vi.fn(),
+  listModpackVersions: vi.fn(),
 }));
 
 function renderContent(
   folder: string | null,
   filter: "all" | "mods" | "resourcePacks" | "shaderPacks" = "all",
   search = "",
+  modpack: ModpackOrigin | null = null,
 ) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   const view = render(
     <QueryClientProvider client={client}>
-      <ContentSection folder={folder} filter={filter} search={search} />
+      <ContentSection
+        folder={folder}
+        filter={filter}
+        search={search}
+        modpack={modpack}
+      />
     </QueryClientProvider>,
   );
   return { ...view, client };
@@ -117,6 +126,7 @@ describe("ContentSection", () => {
         title: "Sodium",
         version: "0.6.5",
         iconUrl: null,
+        fromModpack: false,
       },
       {
         name: "faithful-pack.zip",
@@ -126,6 +136,7 @@ describe("ContentSection", () => {
         title: "Faithful",
         version: null,
         iconUrl: null,
+        fromModpack: false,
       },
     ]);
 
@@ -148,6 +159,7 @@ describe("ContentSection", () => {
       title: "Sodium",
       version: "0.6.5",
       iconUrl: null,
+      fromModpack: false,
     };
     let completeRefresh: (entries: InstanceContentEntry[]) => void = () => {};
     listInstanceContent.mockResolvedValueOnce([entry]).mockImplementationOnce(
@@ -200,6 +212,7 @@ describe("ContentSection", () => {
         title: "Alpha",
         version: null,
         iconUrl: null,
+        fromModpack: false,
       },
       {
         name: "zeta.jar",
@@ -209,6 +222,7 @@ describe("ContentSection", () => {
         title: "Zeta",
         version: null,
         iconUrl: null,
+        fromModpack: false,
       },
     ];
     let publish:
@@ -258,6 +272,7 @@ describe("ContentSection", () => {
       title: "One",
       version: null,
       iconUrl: null,
+      fromModpack: false,
     };
     let publish:
       | ((entries: InstanceContentEntry[], initial: boolean) => void)
@@ -293,6 +308,7 @@ describe("ContentSection", () => {
         title: "Zeta",
         version: null,
         iconUrl: null,
+        fromModpack: false,
       },
       {
         name: "alpha.jar",
@@ -302,6 +318,7 @@ describe("ContentSection", () => {
         title: "Alpha",
         version: null,
         iconUrl: null,
+        fromModpack: false,
       },
     ]);
 
@@ -340,6 +357,7 @@ describe("ContentSection", () => {
         title: "Pack",
         version: null,
         iconUrl: null,
+        fromModpack: false,
       },
     ]);
 
@@ -361,6 +379,7 @@ describe("ContentSection", () => {
       title: `Mod ${String(index).padStart(4, "0")}`,
       version: null,
       iconUrl: null,
+      fromModpack: false,
     }));
   }
 
@@ -501,5 +520,76 @@ describe("ContentSection", () => {
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     await waitFor(() => expect(trigger).toHaveFocus());
     expect(screen.getAllByRole("switch").length).toBeLessThan(30);
+  });
+
+  describe("with a modpack", () => {
+    const imported: ModpackOrigin = { type: "modpackFile", source: "modrinth" };
+    const packed = (
+      title: string,
+      fromModpack: boolean,
+    ): InstanceContentEntry => ({
+      name: `${title.toLowerCase()}.jar`,
+      kind: "mods",
+      enabled: true,
+      size: 1,
+      title,
+      version: null,
+      iconUrl: null,
+      fromModpack,
+    });
+
+    it("lists only the content added on top of the modpack", async () => {
+      listInstanceContent.mockResolvedValue([
+        packed("Sodium", true),
+        packed("Extra", false),
+      ]);
+
+      renderContent("classic", "all", "", imported);
+
+      expect(await screen.findByText("Extra")).toBeInTheDocument();
+      expect(screen.queryByText("Sodium")).not.toBeInTheDocument();
+      expect(
+        screen.getByRole("region", { name: "Modpack content" }),
+      ).toHaveTextContent("1 mod");
+    });
+
+    it("says when nothing was added on top of the modpack", async () => {
+      listInstanceContent.mockResolvedValue([packed("Sodium", true)]);
+
+      renderContent("classic", "all", "", imported);
+
+      expect(
+        await screen.findByText("No extra content installed."),
+      ).toBeInTheDocument();
+    });
+
+    it("shows the modpack content when asked and hides it again", async () => {
+      listInstanceContent.mockResolvedValue([
+        packed("Sodium", true),
+        packed("Extra", false),
+      ]);
+      renderContent("classic", "all", "", imported);
+      await screen.findByText("Extra");
+
+      fireEvent.click(screen.getByRole("button", { name: "View content" }));
+
+      expect(await screen.findByText("Sodium")).toBeInTheDocument();
+      expect(screen.queryByText("Extra")).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "Hide content" }));
+
+      expect(await screen.findByText("Extra")).toBeInTheDocument();
+    });
+
+    it("lists everything without a modpack card for other instances", async () => {
+      listInstanceContent.mockResolvedValue([packed("Extra", false)]);
+
+      renderContent("classic");
+
+      expect(await screen.findByText("Extra")).toBeInTheDocument();
+      expect(
+        screen.queryByRole("region", { name: "Modpack content" }),
+      ).not.toBeInTheDocument();
+    });
   });
 });

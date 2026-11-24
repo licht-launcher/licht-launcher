@@ -27,6 +27,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { PlayPhase } from "@/features/instances/hooks/use-play-session";
 import { instanceContentQuery } from "@/features/instances/lib/content-query";
 import type { LogLevelSelection } from "@/features/instances/lib/log-level";
+import { modpackOrigin } from "@/features/instances/lib/modpack-content";
 import type { ConsoleLine } from "@/features/instances/model/console-line";
 import {
   ConsoleLogLevelFilter,
@@ -281,6 +282,7 @@ export function HomePanel({
               folder={folder}
               filter={contentFilter}
               search={contentSearch}
+              modpack={modpackOrigin(instance?.installation?.source)}
             />
           </PageTransition>
         </TabsContent>
