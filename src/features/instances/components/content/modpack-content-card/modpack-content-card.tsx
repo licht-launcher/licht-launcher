@@ -1,4 +1,4 @@
-import { EyeIcon, PackageIcon } from "lucide-react";
+import { ClockIcon, EyeIcon, PackageIcon, TagIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SOURCE_LABELS } from "@/features/discover/lib/discover-search";
 import { useStoreModpackSummary } from "@/features/instances/hooks/use-modpack-summary";
@@ -90,7 +90,10 @@ function ModpackCard({
           <dl className={styles.facts}>
             {version !== undefined ? (
               <div className={styles.versionFact}>
-                <dt className={styles.label}>Version</dt>
+                <dt className={styles.label}>
+                  <TagIcon aria-hidden />
+                  Version
+                </dt>
                 <dd className={version ? styles.version : styles.unknown}>
                   {version ?? "Unknown"}
                 </dd>
@@ -98,7 +101,10 @@ function ModpackCard({
             ) : null}
             {updated !== undefined ? (
               <div className={styles.fact}>
-                <dt className={styles.label}>Updated</dt>
+                <dt className={styles.label}>
+                  <ClockIcon aria-hidden />
+                  Updated
+                </dt>
                 <dd className={updated ? styles.value : styles.unknown}>
                   {updated ?? "Unknown"}
                 </dd>

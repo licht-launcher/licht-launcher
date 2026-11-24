@@ -12,5 +12,6 @@ export const modpackContentCardStyles = {
   versionFact: "flex min-w-0 max-w-48 flex-col gap-1.5",
   version: "truncate text-sm font-medium",
   unknown: "text-sm text-muted-foreground",
-  label: "text-xs font-medium uppercase tracking-wide text-muted-foreground",
+  label:
+    "flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground [&_svg]:size-3.5 [&_svg]:shrink-0",
 } as const;
