@@ -139,14 +139,15 @@ enum Style {
     BoldColor(u8),
 }
 
+/// Levels and area tags are bold, so the start of each line stands out.
 fn level_style(level: Level) -> Style {
-    match level {
-        Level::ERROR => Style::BoldColor(colors::ERROR),
-        Level::WARN => Style::Color(colors::WARN),
-        Level::INFO => Style::Color(colors::INFO),
-        Level::DEBUG => Style::Color(colors::DEBUG),
-        Level::TRACE => Style::Color(colors::TRACE),
-    }
+    Style::BoldColor(match level {
+        Level::ERROR => colors::ERROR,
+        Level::WARN => colors::WARN,
+        Level::INFO => colors::INFO,
+        Level::DEBUG => colors::DEBUG,
+        Level::TRACE => colors::TRACE,
+    })
 }
 
 /// Warnings and errors take their level's color; otherwise only messages about
@@ -438,7 +439,7 @@ where
         paint(
             &mut line,
             ansi,
-            Style::Color(area.color),
+            Style::BoldColor(area.color),
             &format!("{tag:<width$}", width = AREA_WIDTH + 2),
         )?;
         let prefix = line.clone();
@@ -516,8 +517,21 @@ mod tests {
 
     use super::{
         AREAS, PROGRESS_LINE_LIMIT, Progress, Style, area, clock, colors, ends_progress,
-        library_name, message_style, progress_line,
+        level_style, library_name, message_style, progress_line,
     };
+
+    #[test]
+    fn every_level_is_bold_in_its_color() {
+        for (level, color) in [
+            (Level::ERROR, colors::ERROR),
+            (Level::WARN, colors::WARN),
+            (Level::INFO, colors::INFO),
+            (Level::DEBUG, colors::DEBUG),
+            (Level::TRACE, colors::TRACE),
+        ] {
+            assert_eq!(level_style(level), Style::BoldColor(color), "{level}");
+        }
+    }
 
     #[test]
     fn the_clock_shows_the_given_offset() {
