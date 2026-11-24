@@ -1,9 +1,10 @@
 use super::super::*;
 use super::SHA1;
 use crate::{Arch, DownloadChecksum, DownloadComponent, OsName, VerifiedDownloadTask};
+use licht_testkit::temp::TempDir;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::sync::{mpsc, oneshot};
@@ -105,27 +106,19 @@ pub(super) fn wait_until(
 }
 
 pub(super) struct Fixture {
-    root: PathBuf,
     pub(super) settings: crate::Database,
     pub(super) game: SharedCache,
     database: Option<crate::DatabaseService>,
+    // Last, so the databases are dropped before the folder is removed.
+    _root: TempDir,
 }
-static FIXTURE_NUMBER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 impl Fixture {
     pub(super) async fn new(url: &str) -> Self {
-        let stamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos();
-        let sequence = FIXTURE_NUMBER.fetch_add(1, Ordering::SeqCst);
-        let root = std::env::temp_dir().join(format!(
-            "licht-functional-download-{}-{stamp}-{sequence}",
-            std::process::id()
-        ));
-        let settings = crate::Database::open(&SharedCache::at(root.join("settings")))
+        let root = TempDir::new("functional-download");
+        let settings = crate::Database::open(&SharedCache::at(root.path().join("settings")))
             .await
             .expect("database");
-        let game = SharedCache::at(root.join("game").join("data"));
+        let game = SharedCache::at(root.path().join("game").join("data"));
         let mut connection = settings.acquire().await.expect("connection");
         crate::set_meta(&mut connection, "test_download_url", url)
             .await
@@ -137,7 +130,7 @@ impl Fixture {
                 .expect("database service"),
         );
         Self {
-            root,
+            _root: root,
             settings,
             game,
             database,
@@ -216,17 +209,6 @@ impl Fixture {
         wait_until(move || std::fs::metadata(self.part()).is_ok_and(|file| file.len() == bytes))
     }
 }
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        // Do not mask an assertion failure with a secondary cleanup error.
-        if let Err(error) = std::fs::remove_dir_all(&self.root)
-            && !std::thread::panicking()
-        {
-            panic!("fixture cleanup failed: {error}");
-        }
-    }
-}
-
 pub(super) struct Request {
     pub(super) headers: String,
     response: oneshot::Sender<Reply>,

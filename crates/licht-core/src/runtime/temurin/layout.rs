@@ -110,6 +110,8 @@ fn temurin_rank(name: &str) -> (bool, Vec<u32>) {
 
 #[cfg(test)]
 mod tests {
+    use licht_testkit::temp::TempDir;
+
     use super::*;
 
     #[test]
@@ -126,8 +128,8 @@ mod tests {
 
     #[test]
     fn an_executable_from_an_interrupted_extraction_is_not_an_installed_runtime() {
-        let root =
-            std::env::temp_dir().join(format!("licht-runtime-incomplete-{}", std::process::id()));
+        let temp = TempDir::new("runtime-incomplete");
+        let root = temp.path().to_path_buf();
         let cache = SharedCache::at(&root);
         let runtime = root.join("runtime").join("temurin21-jre21.0.1-linux_x64");
         std::fs::create_dir_all(runtime.join("bin")).expect("runtime folder");
@@ -149,6 +151,5 @@ mod tests {
             find_temurin(&cache, 21, &environment).expect("ready"),
             Some(runtime)
         );
-        std::fs::remove_dir_all(root).expect("cleanup");
     }
 }

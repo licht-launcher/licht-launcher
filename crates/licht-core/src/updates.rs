@@ -265,29 +265,31 @@ impl AppUpdateCache {
 
 #[cfg(test)]
 mod tests {
+    use licht_testkit::temp::TempDir;
+
     use super::*;
 
     // Public verification vector from minisign-verify's MIT-licensed documentation.
     const KEY: &str = "untrusted comment: minisign public key E7620F1842B4E81F\nRWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3";
     const SIGNATURE: &str = "untrusted comment: signature from minisign secret key\nRUQf6LRCGA9i559r3g7V1qNyJDApGip8MfqcadIgT9CuhV3EMhHoN1mGTkUidF/z7SrlQgXdy8ofjb7bNJJylDOocrCo8KLzZwo=\ntrusted comment: timestamp:1633700835\tfile:test\tprehashed\nwLMDjy9FLAuxZ3q4NlEvkgtyhrr0gtTu6KC4KBJdITbbOeAi1zBIYo0v4iTgt8jJpIidRJnp94ABQkJAgAooBQ==";
 
-    fn cache(name: &str, current: &str, strict: bool) -> AppUpdateCache {
-        let path =
-            std::env::temp_dir().join(format!("licht-update-cache-{}-{name}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&path);
-        AppUpdateCache::new(
-            path,
+    /// The cache folder itself starts out missing, inside a folder removed on drop.
+    fn cache(name: &str, current: &str, strict: bool) -> (TempDir, AppUpdateCache) {
+        let temp = TempDir::new(&format!("update-cache-{name}"));
+        let cache = AppUpdateCache::new(
+            temp.path().join("updates"),
             current,
             "windows-x86_64",
             &STANDARD.encode(KEY),
             strict,
         )
-        .expect("cache")
+        .expect("cache");
+        (temp, cache)
     }
 
     #[test]
     fn verified_packages_survive_reopening_and_are_removed_after_installation() {
-        let cache = cache("reopen", "1.0.0", false);
+        let (_temp, cache) = cache("reopen", "1.0.0", false);
         let package = cache
             .store("1.1.0", &STANDARD.encode(SIGNATURE), b"test")
             .expect("store signed package");
@@ -316,12 +318,11 @@ mod tests {
         .expect("updated version");
         assert!(updated.load().expect("obsolete package").is_none());
         assert!(!cache.directory.join("package.bin").exists());
-        std::fs::remove_dir_all(cache.directory).expect("cleanup");
     }
 
     #[test]
     fn invalid_or_modified_packages_never_become_ready() {
-        let cache = cache("tampered", "1.0.0", false);
+        let (_temp, cache) = cache("tampered", "1.0.0", false);
         assert!(
             cache
                 .store("1.1.0", &STANDARD.encode(SIGNATURE), b"")
@@ -348,12 +349,11 @@ mod tests {
         assert!(cache.load().is_err());
         cache.clear().expect("clear");
         assert!(cache.load().expect("absent").is_none());
-        std::fs::remove_dir_all(cache.directory).expect("cleanup");
     }
 
     #[test]
     fn signature_version_policy_matches_the_updater_configuration() {
-        let cache = cache("strict", "1.0.0", true);
+        let (_temp, cache) = cache("strict", "1.0.0", true);
         assert!(
             cache
                 .store("1.1.0", &STANDARD.encode(SIGNATURE), b"test")
@@ -384,22 +384,18 @@ mod tests {
 
     #[test]
     fn detects_a_flatpak_sandbox_from_its_info_file() {
-        let directory =
-            std::env::temp_dir().join(format!("licht-flatpak-info-{}", std::process::id()));
-        std::fs::create_dir_all(&directory).expect("directory");
+        let temp = TempDir::new("flatpak-info");
+        let directory = temp.path().to_path_buf();
         let info_file = directory.join(".flatpak-info");
         assert!(!flatpak_sandbox(&info_file));
         std::fs::write(&info_file, "[Application]\nname=app.licht.launcher\n").expect("info");
         assert!(flatpak_sandbox(&info_file));
-        std::fs::remove_dir_all(directory).expect("cleanup");
     }
 
     #[test]
     fn a_directory_at_the_flatpak_info_path_is_not_a_sandbox() {
-        let directory =
-            std::env::temp_dir().join(format!("licht-flatpak-dir-{}", std::process::id()));
-        std::fs::create_dir_all(&directory).expect("directory");
+        let temp = TempDir::new("flatpak-dir");
+        let directory = temp.path().to_path_buf();
         assert!(!flatpak_sandbox(&directory));
-        std::fs::remove_dir_all(directory).expect("cleanup");
     }
 }
