@@ -284,6 +284,10 @@ async fn check(
         }
         Err(error) => return Err(error.into()),
     };
+    log_check_result(
+        automatic,
+        available.as_ref().map(|update| update.version.as_str()),
+    );
     let Some(available) = available else {
         let cache = cache(app)?;
         tauri::async_runtime::spawn_blocking(move || cache.clear()).await??;
@@ -333,6 +337,18 @@ async fn check(
         download(app, runtime, true).await?;
     }
     Ok(())
+}
+
+/// `version` is the release on offer, or `None` when the launcher is up to date.
+fn log_check_result(automatic: bool, version: Option<&str>) {
+    match version {
+        Some(version) => tracing::info!(automatic, version, "Launcher update available"),
+        None => tracing::info!(automatic, "Launcher is up to date"),
+    }
+}
+
+fn log_update_downloaded(version: &str, bytes: u64) {
+    tracing::info!(version, bytes, "Launcher update downloaded");
 }
 
 async fn download(app: &AppHandle, runtime: &Arc<Runtime>, automatic: bool) -> anyhow::Result<()> {
@@ -392,6 +408,7 @@ async fn download(app: &AppHandle, runtime: &Arc<Runtime>, automatic: bool) -> a
         cache.store(&available.version, &available.signature, &bytes)
     })
     .await??;
+    log_update_downloaded(&package.version, package.bytes);
     runtime.publish(app, |state| {
         state.phase = AppUpdatePhase::Ready;
         state.version = Some(package.version);
@@ -406,6 +423,35 @@ mod tests {
     use licht_testkit::logs::LogCapture;
 
     use super::*;
+
+    #[test]
+    fn check_results_say_whether_an_update_is_available() {
+        let capture = LogCapture::start();
+        log_check_result(true, Some("0.4.0"));
+        log_check_result(false, None);
+        let logs = capture.text();
+
+        assert!(
+            logs.contains("Launcher update available automatic=true version=\"0.4.0\""),
+            "unexpected logs: {logs}"
+        );
+        assert!(
+            logs.contains("Launcher is up to date automatic=false"),
+            "unexpected logs: {logs}"
+        );
+    }
+
+    #[test]
+    fn downloaded_updates_log_their_version_and_size() {
+        let capture = LogCapture::start();
+        log_update_downloaded("0.4.0", 12_345);
+        let logs = capture.text();
+
+        assert!(
+            logs.contains("Launcher update downloaded version=\"0.4.0\" bytes=12345"),
+            "unexpected logs: {logs}"
+        );
+    }
 
     #[test]
     fn update_failures_log_the_summary_and_every_cause() {

@@ -73,35 +73,90 @@ pub async fn get_build_diagnostics(
     if window.label() != "main" {
         return Err("Build information is only available in the launcher".to_string());
     }
-    tauri::async_runtime::spawn_blocking(|| {
-        let webview = match tauri::webview_version() {
-            Ok(version) => Some(version),
-            Err(_) => {
-                tracing::debug!("WebView runtime version is unavailable");
-                None
-            }
-        };
-        licht_core::build_diagnostics(
-            env!("CARGO_PKG_VERSION"),
-            option_env!("LICHT_BUILD_REVISION"),
-            tauri::VERSION,
-            webview,
-            cfg!(debug_assertions),
-        )
-    })
-    .await
-    .map_err(|error| {
-        super::command_failure("Could not collect build and runtime information", &error)
-    })
+    tauri::async_runtime::spawn_blocking(collect_build_diagnostics)
+        .await
+        .map_err(|error| {
+            super::command_failure("Could not collect build and runtime information", &error)
+        })
+}
+
+/// Blocks while it queries the operating system and the WebView runtime.
+pub(crate) fn collect_build_diagnostics() -> licht_core::BuildDiagnostics {
+    let webview = match tauri::webview_version() {
+        Ok(version) => Some(version),
+        Err(_) => {
+            tracing::debug!("WebView runtime version is unavailable");
+            None
+        }
+    };
+    licht_core::build_diagnostics(
+        env!("CARGO_PKG_VERSION"),
+        option_env!("LICHT_BUILD_REVISION"),
+        tauri::VERSION,
+        webview,
+        cfg!(debug_assertions),
+    )
+}
+
+pub(crate) fn log_system_information(diagnostics: &licht_core::BuildDiagnostics) {
+    tracing::info!(
+        version = %diagnostics.host_version,
+        revision = diagnostics.host_revision.as_deref(),
+        debug = diagnostics.debug,
+        tauri = %diagnostics.tauri_version,
+        webview = diagnostics.webview_version.as_deref(),
+        os = %diagnostics.os_name,
+        os_version = diagnostics.os_version.as_deref(),
+        kernel = diagnostics.kernel_version.as_deref(),
+        system_architecture = %diagnostics.system_architecture,
+        process_architecture = %diagnostics.process_architecture,
+        "System information"
+    );
 }
 
 #[cfg(test)]
 mod tests {
     use std::fs;
 
+    use licht_testkit::logs::LogCapture;
     use licht_testkit::temp::TempDir;
 
-    use super::{existing_log_folder, get_logs_folder};
+    use super::{existing_log_folder, get_logs_folder, log_system_information};
+
+    #[test]
+    fn system_information_is_logged_on_one_line() {
+        let capture = LogCapture::start();
+        log_system_information(&licht_core::BuildDiagnostics {
+            host_version: "0.3.1".to_string(),
+            host_revision: Some("48520a7".to_string()),
+            debug: false,
+            tauri_version: "2.9.5".to_string(),
+            webview_version: None,
+            os_name: "Windows 11 Pro".to_string(),
+            os_version: Some("10.0.26300".to_string()),
+            kernel_version: Some("26300".to_string()),
+            system_architecture: "x86_64".to_string(),
+            process_architecture: "x86_64".to_string(),
+        });
+        let logs = capture.text();
+
+        assert_eq!(logs.lines().count(), 1, "unexpected logs: {logs}");
+        assert!(logs.contains("INFO"), "unexpected logs: {logs}");
+        assert!(
+            logs.contains("System information"),
+            "unexpected logs: {logs}"
+        );
+        for field in [
+            "version=0.3.1",
+            "revision=\"48520a7\"",
+            "os=Windows 11 Pro",
+            "os_version=\"10.0.26300\"",
+            "process_architecture=x86_64",
+        ] {
+            assert!(logs.contains(field), "missing {field}: {logs}");
+        }
+        assert!(!logs.contains("webview="), "unexpected logs: {logs}");
+    }
 
     #[test]
     fn the_log_folder_opens_only_when_it_exists() {
