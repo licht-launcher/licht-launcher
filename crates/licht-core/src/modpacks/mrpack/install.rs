@@ -168,11 +168,8 @@ mod tests {
     #[tokio::test]
     async fn final_modrinth_verification_only_checks_new_downloads_and_enforces_sha512() {
         for valid_sha512 in [true, false] {
-            let stamp = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("clock")
-                .as_nanos();
-            let root = std::env::temp_dir().join(format!("licht-pack-verification-{stamp}"));
+            let temp = TempDir::new("pack-verification");
+            let root = temp.path().to_path_buf();
             let home = SharedCache::at(&root);
             let game = SharedCache::at(root.join("data"));
             let directory = game.instance_dir("Pack").expect("instance");
@@ -248,7 +245,6 @@ mod tests {
                 body
             );
             service.shutdown().await.expect("shutdown");
-            std::fs::remove_dir_all(root).expect("cleanup");
         }
     }
 

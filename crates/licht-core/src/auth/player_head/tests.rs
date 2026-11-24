@@ -1,4 +1,5 @@
 use super::*;
+use licht_testkit::temp::TempDir;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 fn texture(height: u32) -> Vec<u8> {
@@ -23,26 +24,17 @@ fn texture(height: u32) -> Vec<u8> {
     bytes
 }
 
-struct Fixture(SharedCache);
+/// A cache whose root does not exist yet, inside a folder removed on drop.
+struct Fixture {
+    cache: SharedCache,
+    _temp: TempDir,
+}
 impl Fixture {
     fn new(name: &str) -> Self {
-        let stamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos();
-        Self(SharedCache::at(std::env::temp_dir().join(format!(
-            "licht-player-head-{}-{name}-{stamp}",
-            std::process::id()
-        ))))
-    }
-}
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        if self.0.root().exists()
-            && let Err(error) = fs::remove_dir_all(self.0.root())
-            && !std::thread::panicking()
-        {
-            panic!("fixture cleanup failed: {error}");
+        let temp = TempDir::new(&format!("player-head-{name}"));
+        Self {
+            cache: SharedCache::at(temp.path().join("cache-root")),
+            _temp: temp,
         }
     }
 }
@@ -88,11 +80,11 @@ async fn cached_heads_survive_reopening_and_corruption_is_rebuilt() {
     let fixture = Fixture::new("reuse");
     let client = Client::new();
     let source = format!("https://textures.minecraft.net/texture/{}", "a".repeat(64));
-    let first = load_head(&fixture.0, &client, Some(&source), fetch)
+    let first = load_head(&fixture.cache, &client, Some(&source), fetch)
         .await
         .expect("initial head");
-    assert!(first.starts_with(fixture.0.root().join("cache").join("player-heads")));
-    let reopened = SharedCache::at(fixture.0.root().to_path_buf());
+    assert!(first.starts_with(fixture.cache.root().join("cache").join("player-heads")));
+    let reopened = SharedCache::at(fixture.cache.root().to_path_buf());
     assert_eq!(
         load_head(&reopened, &client, Some(&source), offline)
             .await
@@ -137,27 +129,27 @@ async fn player_skin_is_preferred_and_steve_is_cached_only_as_a_fallback() {
     let fixture = Fixture::new("fallback");
     let client = Client::new();
     let source = format!("https://textures.minecraft.net/texture/{}", "b".repeat(64));
-    let player = load_head(&fixture.0, &client, Some(&source), fetch)
+    let player = load_head(&fixture.cache, &client, Some(&source), fetch)
         .await
         .expect("player head");
     assert!(
-        !head_path(&fixture.0, DEFAULT_SKIN_URL).exists(),
+        !head_path(&fixture.cache, DEFAULT_SKIN_URL).exists(),
         "Steve must not be downloaded when the player skin is available"
     );
     let missing = format!("https://textures.minecraft.net/texture/{}", "c".repeat(64));
-    let steve = load_head(&fixture.0, &client, Some(&missing), fallback_only)
+    let steve = load_head(&fixture.cache, &client, Some(&missing), fallback_only)
         .await
         .expect("Steve fallback");
     assert_ne!(player, steve);
-    assert_eq!(steve, head_path(&fixture.0, DEFAULT_SKIN_URL));
+    assert_eq!(steve, head_path(&fixture.cache, DEFAULT_SKIN_URL));
     assert_eq!(
-        load_head(&fixture.0, &client, None, offline)
+        load_head(&fixture.cache, &client, None, offline)
             .await
             .expect("offline Steve cache"),
         steve
     );
     assert_eq!(
-        load_head(&fixture.0, &client, Some(&source), offline)
+        load_head(&fixture.cache, &client, Some(&source), offline)
             .await
             .expect("player cache still preferred"),
         player
@@ -173,11 +165,11 @@ async fn untrusted_skin_urls_are_rejected_without_network_or_cache_writes() {
         "https://textures.minecraft.net/texture/not-a-hash",
     ] {
         assert!(matches!(
-            load_head(&fixture.0, &Client::new(), Some(source), offline).await,
+            load_head(&fixture.cache, &Client::new(), Some(source), offline).await,
             Err(CoreError::SkinImage)
         ));
     }
-    assert!(!fixture.0.root().exists());
+    assert!(!fixture.cache.root().exists());
 }
 
 #[tokio::test]
@@ -194,8 +186,8 @@ async fn concurrent_requests_publish_one_complete_head() {
     let client = Client::new();
     let source = format!("https://textures.minecraft.net/texture/{}", "d".repeat(64));
     let (first, second) = tokio::join!(
-        load_head(&fixture.0, &client, Some(&source), fetch),
-        load_head(&fixture.0, &client, Some(&source), fetch)
+        load_head(&fixture.cache, &client, Some(&source), fetch),
+        load_head(&fixture.cache, &client, Some(&source), fetch)
     );
     assert_eq!(first.expect("first"), second.expect("second"));
     assert_eq!(FETCHES.load(Ordering::SeqCst), 1);

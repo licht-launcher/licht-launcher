@@ -1,6 +1,8 @@
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::UNIX_EPOCH;
+
+use licht_testkit::temp::TempDir;
 
 use super::metadata::{ContentMetadata, write_metadata_cache};
 use super::*;
@@ -13,16 +15,11 @@ mod fingerprints;
 mod progress;
 mod providers;
 
-fn cache(name: &str) -> SharedCache {
-    let root = std::env::temp_dir().join(format!(
-        "licht-content-{name}-{}",
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("time")
-            .as_nanos()
-    ));
-    fs::create_dir_all(root.join("data")).expect("cache root");
-    SharedCache::at(root.join("data"))
+fn cache(name: &str) -> (TempDir, SharedCache) {
+    let temp = TempDir::new(&format!("content-{name}"));
+    fs::create_dir_all(temp.path().join("data")).expect("cache root");
+    let cache = SharedCache::at(temp.path().join("data"));
+    (temp, cache)
 }
 
 fn instance(cache: &SharedCache) -> PathBuf {

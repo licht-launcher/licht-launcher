@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn lists_and_toggles_content() {
-    let cache = cache("list");
+    let (_temp, cache) = cache("list");
     let root = instance(&cache);
     fs::write(root.join("mods").join("sodium.jar"), b"mod").expect("mod");
     fs::write(
@@ -27,7 +27,7 @@ fn lists_and_toggles_content() {
 
 #[test]
 fn lists_only_zip_files_for_shader_packs() {
-    let cache = cache("shader-zips");
+    let (_temp, cache) = cache("shader-zips");
     let root = instance(&cache);
     let shaders = root.join("shaderpacks");
     fs::write(shaders.join("complementary.zip"), b"shader").expect("zip");
@@ -46,7 +46,7 @@ fn lists_only_zip_files_for_shader_packs() {
 
 #[test]
 fn rejects_unsafe_names_and_conflicts() {
-    let cache = cache("validation");
+    let (_temp, cache) = cache("validation");
     let root = instance(&cache);
     fs::write(root.join("mods").join("test.jar"), b"mod").expect("mod");
     fs::write(root.join("mods").join("test.jar.disabled"), b"mod").expect("disabled");

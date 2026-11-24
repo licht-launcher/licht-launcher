@@ -143,6 +143,7 @@ fn append_arg_list(target: &mut Map<String, Value>, source: &Map<String, Value>,
 #[cfg(test)]
 mod tests {
     use super::*;
+    use licht_testkit::temp::TempDir;
     use serde_json::json;
 
     #[test]
@@ -243,16 +244,9 @@ mod tests {
 
     #[test]
     fn loads_fabric_profile_merged_with_parent_on_disk() {
-        let root = std::env::temp_dir().join(format!(
-            "licht-resolve-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("time")
-                .as_nanos()
-        ));
-        let _ = std::fs::remove_dir_all(&root);
-        let cache = crate::SharedCache::at(&root);
+        let temp = TempDir::new("resolve");
+        let root = temp.path();
+        let cache = crate::SharedCache::at(root);
 
         let parent_dir = root.join("versions").join("1.20.1");
         let child_dir = root.join("versions").join("fabric-loader-0.16.0-1.20.1");
@@ -326,7 +320,5 @@ mod tests {
                 .and_then(|downloads| downloads.artifact.as_ref())
                 .is_some()
         );
-
-        let _ = std::fs::remove_dir_all(root);
     }
 }
