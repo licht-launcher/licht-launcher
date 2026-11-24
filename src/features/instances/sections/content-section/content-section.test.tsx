@@ -5,6 +5,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -563,7 +564,7 @@ describe("ContentSection", () => {
       ).toBeInTheDocument();
     });
 
-    it("shows the modpack content when asked and hides it again", async () => {
+    it("opens the modpack content in a dialog and closes it again", async () => {
       listInstanceContent.mockResolvedValue([
         packed("Sodium", true),
         packed("Extra", false),
@@ -573,12 +574,18 @@ describe("ContentSection", () => {
 
       fireEvent.click(screen.getByRole("button", { name: "View content" }));
 
-      expect(await screen.findByText("Sodium")).toBeInTheDocument();
-      expect(screen.queryByText("Extra")).not.toBeInTheDocument();
+      const dialog = await screen.findByRole("dialog", {
+        name: "Modpack content",
+      });
+      expect(within(dialog).getByText("Sodium")).toBeInTheDocument();
+      expect(within(dialog).queryByText("Extra")).not.toBeInTheDocument();
 
-      fireEvent.click(screen.getByRole("button", { name: "Hide content" }));
+      fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
 
-      expect(await screen.findByText("Extra")).toBeInTheDocument();
+      await waitFor(() =>
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+      );
+      expect(screen.getByText("Extra")).toBeInTheDocument();
     });
 
     it("lists everything without a modpack card for other instances", async () => {

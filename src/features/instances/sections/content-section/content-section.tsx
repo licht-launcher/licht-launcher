@@ -14,6 +14,7 @@ import {
   ContentTableHead,
 } from "@/features/instances/components/content/content-table-head";
 import { ModpackContentCard } from "@/features/instances/components/content/modpack-content-card";
+import { ModpackContentDialog } from "@/features/instances/components/content/modpack-content-dialog";
 import { useContentVirtualizer } from "@/features/instances/hooks/use-content-virtualizer";
 import { instanceContentQuery } from "@/features/instances/lib/content-query";
 import {
@@ -49,9 +50,10 @@ export function ContentSection({
     useState<InstanceContentEntry | null>(null);
   const [sortKey, setSortKey] = useState<ContentSortKey>("name");
   const [sortDir, setSortDir] = useState<ContentSortDir>("asc");
-  // Keyed by folder so switching instances goes back to the extra content.
-  const [viewingModpackOf, setViewingModpackOf] = useState<string | null>(null);
-  const viewingModpack = modpack !== null && viewingModpackOf === folder;
+  // Keyed by folder so switching instances closes the modpack content.
+  const [modpackOpenFor, setModpackOpenFor] = useState<string | null>(null);
+  const modpackOpen =
+    modpack !== null && folder !== null && modpackOpenFor === folder;
   const content = useQuery({
     ...instanceContentQuery(queryClient, folder ?? ""),
     enabled: folder !== null,
@@ -98,11 +100,8 @@ export function ContentSection({
     [content.data],
   );
   const listedEntries = useMemo(
-    () =>
-      viewingModpack
-        ? modpackEntries
-        : (content.data ?? []).filter((entry) => !entry.fromModpack),
-    [content.data, modpackEntries, viewingModpack],
+    () => (content.data ?? []).filter((entry) => !entry.fromModpack),
+    [content.data],
   );
   const sortedEntries = useMemo(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase();
@@ -156,10 +155,7 @@ export function ContentSection({
         <ModpackContentCard
           origin={modpack}
           entries={modpackEntries}
-          viewing={viewingModpack}
-          onViewingChange={(viewing) =>
-            setViewingModpackOf(viewing ? folder : null)
-          }
+          onView={() => setModpackOpenFor(folder)}
         />
       ) : null}
       <div className={contentSectionStyles.root}>
@@ -187,9 +183,7 @@ export function ContentSection({
           entries={sortedEntries}
           totalEntries={listedEntries.length}
           emptyLabel={
-            modpack !== null && !viewingModpack
-              ? "No extra content installed."
-              : undefined
+            modpack !== null ? "No extra content installed." : undefined
           }
           virtualization={virtualization}
           disabled={disabled}
@@ -198,6 +192,20 @@ export function ContentSection({
           }
           onRemove={setPendingRemoval}
         />
+        {modpack !== null ? (
+          <ModpackContentDialog
+            open={modpackOpen}
+            onOpenChange={(open) => setModpackOpenFor(open ? folder : null)}
+            folder={folder}
+            entries={modpackEntries}
+            disabled={disabled}
+            removalOpen={pendingRemoval !== null}
+            onToggle={(entry, enabled) =>
+              update.mutate({ kind: entry.kind, name: entry.name, enabled })
+            }
+            onRemove={setPendingRemoval}
+          />
+        ) : null}
         <ContentRemovalDialog
           entry={pendingRemoval}
           pending={remove.isPending}

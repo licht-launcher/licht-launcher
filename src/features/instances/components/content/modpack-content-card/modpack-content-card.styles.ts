@@ -1,9 +1,9 @@
 export const modpackContentCardStyles = {
   root: "flex shrink-0 flex-col rounded-lg border border-border/60 bg-card",
   header: "flex items-center gap-3 px-5 py-4",
-  icon: "size-10 shrink-0 rounded-lg object-cover",
+  icon: "size-10 shrink-0 rounded-md bg-muted object-cover",
   iconFallback:
-    "flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground [&_svg]:size-5",
+    "flex size-10 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground [&_svg]:size-5",
   heading: "flex min-w-0 flex-1 flex-col gap-1",
   titleLine: "flex min-w-0 items-baseline gap-2",
   title: "min-w-0 truncate text-lg font-semibold",
@@ -16,7 +16,6 @@ export const modpackContentCardStyles = {
   factLabel:
     "text-xs font-medium uppercase tracking-wide text-muted-foreground",
   factValue: "flex items-center gap-x-3 whitespace-nowrap text-sm font-medium",
-  count: "flex items-center gap-1.5 tabular-nums [&_svg]:size-4",
-  countIcon: "text-muted-foreground",
+  count: "flex items-center gap-2 tabular-nums",
   muted: "text-sm text-muted-foreground",
 } as const;

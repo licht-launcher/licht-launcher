@@ -1,13 +1,9 @@
 import {
-  BlocksIcon,
   ClockIcon,
   EyeIcon,
-  EyeOffIcon,
   FileArchiveIcon,
-  ImageIcon,
   LockIcon,
   PackageIcon,
-  SparklesIcon,
 } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -17,20 +13,14 @@ import {
 } from "@/features/discover/hooks/use-modpacks";
 import { SOURCE_LABELS } from "@/features/discover/lib/discover-search";
 import { formatTimeAgo } from "@/features/discover/lib/format";
+import { ContentKindIcon } from "@/features/instances/components/content/content-kind-icon";
 import {
   countContent,
   type ModpackOrigin,
 } from "@/features/instances/lib/modpack-content";
 import type { InstanceContentEntry } from "@/lib/generated/InstanceContentEntry";
-import type { InstanceContentKind } from "@/lib/generated/InstanceContentKind";
 
 import { modpackContentCardStyles as styles } from "./modpack-content-card.styles";
-
-const KIND_ICONS: Record<InstanceContentKind, ReactNode> = {
-  mods: <BlocksIcon aria-hidden className={styles.countIcon} />,
-  resourcePacks: <ImageIcon aria-hidden className={styles.countIcon} />,
-  shaderPacks: <SparklesIcon aria-hidden className={styles.countIcon} />,
-};
 
 type StoreOrigin = Extract<ModpackOrigin, { type: "modpack" }>;
 
@@ -38,29 +28,23 @@ type StoreOrigin = Extract<ModpackOrigin, { type: "modpack" }>;
 export function ModpackContentCard({
   origin,
   entries,
-  viewing,
-  onViewingChange,
+  onView,
 }: {
   origin: ModpackOrigin;
   entries: readonly InstanceContentEntry[];
-  viewing: boolean;
-  onViewingChange: (viewing: boolean) => void;
+  onView: () => void;
 }) {
   const included = <IncludedContent entries={entries} />;
   const action = (
     <Button
       type="button"
       variant="outline"
-      aria-pressed={viewing}
+      aria-haspopup="dialog"
       disabled={entries.length === 0}
-      onClick={() => onViewingChange(!viewing)}
+      onClick={onView}
     >
-      {viewing ? (
-        <EyeOffIcon data-icon="inline-start" aria-hidden />
-      ) : (
-        <EyeIcon data-icon="inline-start" aria-hidden />
-      )}
-      {viewing ? "Hide content" : "View content"}
+      <EyeIcon data-icon="inline-start" aria-hidden />
+      View content
     </Button>
   );
   return (
@@ -205,7 +189,7 @@ function IncludedContent({
     return <span className={styles.muted}>No content</span>;
   return counts.map((count) => (
     <span key={count.kind} className={styles.count}>
-      {KIND_ICONS[count.kind]}
+      <ContentKindIcon kind={count.kind} size="sm" />
       {count.label}
     </span>
   ));

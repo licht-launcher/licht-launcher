@@ -1,10 +1,10 @@
-import { BlocksIcon, ImageIcon, SparklesIcon, Trash2Icon } from "lucide-react";
+import { Trash2Icon } from "lucide-react";
 import type { Ref } from "react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { ContentKindIcon } from "@/features/instances/components/content/content-kind-icon";
 import { formatContentTitle } from "@/features/instances/lib/content-table";
 import type { InstanceContentEntry } from "@/lib/generated/InstanceContentEntry";
-import type { InstanceContentKind } from "@/lib/generated/InstanceContentKind";
 import { cn } from "@/lib/utils";
 
 import { contentRowStyles } from "./content-row.styles";
@@ -46,7 +46,7 @@ export function ContentRow({
               className={contentRowStyles.image}
             />
           ) : (
-            <ContentIcon kind={entry.kind} />
+            <ContentKindIcon kind={entry.kind} />
           )}
           <div className={contentRowStyles.text}>
             <p className={contentRowStyles.name} title={entry.title}>
@@ -83,29 +83,5 @@ export function ContentRow({
         </div>
       </td>
     </tr>
-  );
-}
-
-function ContentIcon({ kind }: { kind: InstanceContentKind }) {
-  const contentIcon =
-    kind === "mods"
-      ? {
-          Icon: BlocksIcon,
-          ...contentRowStyles.kinds.mods,
-        }
-      : kind === "resourcePacks"
-        ? {
-            Icon: ImageIcon,
-            ...contentRowStyles.kinds.resourcePacks,
-          }
-        : {
-            Icon: SparklesIcon,
-            ...contentRowStyles.kinds.shaders,
-          };
-  const { Icon, wrapper, icon } = contentIcon;
-  return (
-    <span className={cn(contentRowStyles.iconWell, wrapper)}>
-      <Icon aria-hidden className={cn(contentRowStyles.icon, icon)} />
-    </span>
   );
 }

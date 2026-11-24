@@ -12,13 +12,4 @@ export const contentRowStyles = {
   removeButton:
     "text-muted-foreground opacity-60 hover:text-destructive hover:opacity-100",
   icon: "size-4",
-  iconWell: "flex size-8 shrink-0 items-center justify-center rounded-md",
-  kinds: {
-    mods: { wrapper: "bg-accent-violet/15", icon: "text-accent-violet" },
-    resourcePacks: {
-      wrapper: "bg-accent-orange/15",
-      icon: "text-accent-orange",
-    },
-    shaders: { wrapper: "bg-accent-teal/15", icon: "text-accent-teal" },
-  },
 } as const;

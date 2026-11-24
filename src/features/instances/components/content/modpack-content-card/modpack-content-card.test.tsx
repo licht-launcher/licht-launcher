@@ -48,23 +48,17 @@ const ENTRIES = [
 function renderCard(
   origin: ModpackOrigin,
   entries: InstanceContentEntry[] = ENTRIES,
-  viewing = false,
 ) {
-  const onViewingChange = vi.fn();
+  const onView = vi.fn();
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   render(
     <QueryClientProvider client={client}>
-      <ModpackContentCard
-        origin={origin}
-        entries={entries}
-        viewing={viewing}
-        onViewingChange={onViewingChange}
-      />
+      <ModpackContentCard origin={origin} entries={entries} onView={onView} />
     </QueryClientProvider>,
   );
-  return { onViewingChange };
+  return { onView };
 }
 
 describe("ModpackContentCard", () => {
@@ -122,16 +116,15 @@ describe("ModpackContentCard", () => {
     expect(getModpack).not.toHaveBeenCalled();
   });
 
-  it("toggles between viewing and hiding the modpack content", () => {
-    const { onViewingChange } = renderCard({
+  it("asks to view the modpack content", () => {
+    const { onView } = renderCard({
       type: "modpackFile",
       source: "modrinth",
     });
 
-    const button = screen.getByRole("button", { name: "View content" });
-    expect(button).toHaveAttribute("aria-pressed", "false");
-    fireEvent.click(button);
-    expect(onViewingChange).toHaveBeenCalledWith(true);
+    fireEvent.click(screen.getByRole("button", { name: "View content" }));
+
+    expect(onView).toHaveBeenCalledOnce();
   });
 
   it("cannot view content when the modpack ships none", () => {
