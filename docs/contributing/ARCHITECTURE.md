@@ -85,6 +85,9 @@ to start. Panics are logged as errors before the default panic output.
 Download jobs run inside a `download_job` span (job id, operation, instance,
 version, Java major) and game launches inside a `launch` span (instance folder),
 so their events can be told apart in the log. Player names are never span fields.
+A launch logs `Launching game` (version, Java path, major and source, maximum
+memory, and account kind), `Game started` with the process id, and how the game
+ended with the time played; a non-zero exit code is a warning.
 A failed job is logged as `Download job failed` with its full cause chain
 (`licht_core::error_chain`), which `commands::failure` also uses. Jobs also log
 when they start, complete (with the elapsed time), are cancelled, restart as a

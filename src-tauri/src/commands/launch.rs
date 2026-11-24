@@ -5,6 +5,9 @@ use licht_core::{
     probe_java_major, required_java_major, resolved_java_path, resolved_launch, run_game,
     session_for_launch, write_launch_lock_for_pid,
 };
+use std::path::Path;
+use std::time::{Duration, Instant};
+
 use tauri::{AppHandle, Emitter, State};
 use tokio::sync::{mpsc, oneshot};
 use tracing::Instrument;
@@ -15,6 +18,53 @@ use super::{LauncherPaths, failure, host_environment, http_client};
 /// Every event a launch emits carries the instance folder. The player name stays out of logs.
 fn launch_span(folder: &str) -> tracing::Span {
     tracing::info_span!("launch", instance = folder)
+}
+
+/// Where the Java used for a launch came from.
+#[derive(Debug, Clone, Copy)]
+enum JavaSource {
+    Instance,
+    Settings,
+    Managed,
+}
+
+/// Only the kind of account reaches the log, never the player name.
+#[derive(Debug, Clone, Copy)]
+enum AccountKind {
+    Microsoft,
+    Offline,
+}
+
+struct LaunchPlan<'a> {
+    version: &'a str,
+    java: &'a Path,
+    java_major: u32,
+    java_source: JavaSource,
+    max_memory_mb: u32,
+    account: AccountKind,
+}
+
+fn log_launch_plan(plan: &LaunchPlan<'_>) {
+    tracing::info!(
+        version = plan.version,
+        java = %plan.java.display(),
+        java_major = plan.java_major,
+        java_source = ?plan.java_source,
+        max_memory_mb = plan.max_memory_mb,
+        account = ?plan.account,
+        "Launching game"
+    );
+}
+
+/// `None` means the launcher stopped the game.
+fn log_game_exit(exit: Option<GameExit>, played: Duration) {
+    let played_seconds = played.as_secs();
+    match exit.map(|exit| exit.code) {
+        Some(Some(0)) => tracing::info!(played_seconds, "Game exited"),
+        Some(Some(code)) => tracing::warn!(code, played_seconds, "Game exited with an error"),
+        Some(None) => tracing::warn!(played_seconds, "Game ended without an exit code"),
+        None => tracing::info!(played_seconds, "Game stopped by the launcher"),
+    }
 }
 
 #[tauri::command]
@@ -92,11 +142,14 @@ async fn launch_one(
     let environment = host_environment()?;
     let required = required_java_major(&version_id, &version);
     let custom_java = resolved_java_path(&profile);
-    let java = match &custom_java {
-        Some(path) => path.clone(),
+    let (java, java_source) = match &custom_java {
+        Some(path) => (path.clone(), JavaSource::Instance),
         None => match configured_java(&settings, required) {
-            Some(path) => path,
-            None => installed_java(&cache, &version_id, &version, &environment)?,
+            Some(path) => (path, JavaSource::Settings),
+            None => (
+                installed_java(&cache, &version_id, &version, &environment)?,
+                JavaSource::Managed,
+            ),
         },
     };
     let major = if custom_java.is_some() {
@@ -107,8 +160,25 @@ async fn launch_one(
     let codec = log_codec(major);
     let launch = resolved_launch(&profile, &global_launch(&settings));
     let http = http_client()?;
-    let prepared = match session_for_launch(&http, settings_home.cache()).await {
-        Ok(session) => {
+    let session = match session_for_launch(&http, settings_home.cache()).await {
+        Ok(session) => Some(session),
+        Err(CoreError::AuthNotSignedIn) => None,
+        Err(error) => return Err(error),
+    };
+    log_launch_plan(&LaunchPlan {
+        version: &version_id,
+        java: &java,
+        java_major: major,
+        java_source,
+        max_memory_mb: launch.max_memory_mb,
+        account: if session.is_some() {
+            AccountKind::Microsoft
+        } else {
+            AccountKind::Offline
+        },
+    });
+    let prepared = match session {
+        Some(session) => {
             prepare_microsoft_launch(
                 database,
                 &java,
@@ -122,7 +192,7 @@ async fn launch_one(
             )
             .await?
         }
-        Err(CoreError::AuthNotSignedIn) => {
+        None => {
             let account = offline_account(username)?;
             prepare_offline_launch(
                 database,
@@ -137,7 +207,6 @@ async fn launch_one(
             )
             .await?
         }
-        Err(error) => return Err(error),
     };
 
     let (output, mut incoming) = mpsc::channel(32);
@@ -145,6 +214,7 @@ async fn launch_one(
     let appdata = prepared.appdata.map(|path| path.display().to_string());
     let command = prepared.command;
     let game_directory = prepared.game_directory;
+    let started = Instant::now();
     // tokio::spawn exposes AbortHandle; tauri::async_runtime::JoinHandle does not.
     let running = tokio::spawn(async move {
         let mut env = Vec::new();
@@ -165,6 +235,7 @@ async fn launch_one(
         .attach_live(folder, running.abort_handle())
         .map_err(|message| CoreError::Io(std::io::Error::other(message)))?;
     if let Ok(pid) = pid_rx.await {
+        tracing::info!(pid, "Game started");
         if let Err(error) = write_launch_lock_for_pid(&dir, pid) {
             tracing::warn!(error = %error, folder, "could not write launch lock");
         }
@@ -184,8 +255,15 @@ async fn launch_one(
         );
     }
     let exit = match running.await {
-        Ok(result) => result?,
-        Err(join_error) if join_error.is_cancelled() => GameExit { code: None },
+        Ok(result) => {
+            let exit = result?;
+            log_game_exit(Some(exit), started.elapsed());
+            exit
+        }
+        Err(join_error) if join_error.is_cancelled() => {
+            log_game_exit(None, started.elapsed());
+            GameExit { code: None }
+        }
         Err(_) => {
             return Err(CoreError::Io(std::io::Error::other("launch task failed")));
         }
@@ -196,9 +274,19 @@ async fn launch_one(
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+    use std::time::Duration;
+
+    use licht_core::GameExit;
     use licht_testkit::logs::LogCapture;
 
-    use super::launch_span;
+    use super::{AccountKind, JavaSource, LaunchPlan, launch_span, log_game_exit, log_launch_plan};
+
+    fn exit_log(exit: Option<GameExit>) -> String {
+        let capture = LogCapture::start();
+        log_game_exit(exit, Duration::from_secs(754));
+        capture.text()
+    }
 
     #[test]
     fn launch_logs_carry_the_instance_folder() {
@@ -213,6 +301,79 @@ mod tests {
         );
         assert!(
             logs.contains("event inside the launch"),
+            "unexpected logs: {logs}"
+        );
+    }
+
+    #[test]
+    fn the_launch_plan_names_the_version_java_and_account_kind() {
+        let capture = LogCapture::start();
+        log_launch_plan(&LaunchPlan {
+            version: "fabric-loader-0.16.14-1.21.4",
+            java: Path::new("runtime/java-21/bin/java"),
+            java_major: 21,
+            java_source: JavaSource::Managed,
+            max_memory_mb: 4096,
+            account: AccountKind::Offline,
+        });
+        let logs = capture.text();
+
+        assert!(logs.contains("INFO"), "unexpected logs: {logs}");
+        assert!(logs.contains("Launching game"), "unexpected logs: {logs}");
+        for field in [
+            "version=\"fabric-loader-0.16.14-1.21.4\"",
+            "java=runtime/java-21/bin/java",
+            "java_major=21",
+            "java_source=Managed",
+            "max_memory_mb=4096",
+            "account=Offline",
+        ] {
+            assert!(logs.contains(field), "missing {field}: {logs}");
+        }
+    }
+
+    #[test]
+    fn a_clean_exit_is_logged_with_the_time_played() {
+        let logs = exit_log(Some(GameExit { code: Some(0) }));
+
+        assert!(logs.contains("INFO"), "unexpected logs: {logs}");
+        assert!(logs.contains("Game exited"), "unexpected logs: {logs}");
+        assert!(
+            logs.contains("played_seconds=754"),
+            "unexpected logs: {logs}"
+        );
+    }
+
+    #[test]
+    fn a_failed_exit_is_a_warning_with_its_code() {
+        let logs = exit_log(Some(GameExit { code: Some(-1) }));
+
+        assert!(logs.contains("WARN"), "unexpected logs: {logs}");
+        assert!(
+            logs.contains("Game exited with an error"),
+            "unexpected logs: {logs}"
+        );
+        assert!(logs.contains("code=-1"), "unexpected logs: {logs}");
+    }
+
+    #[test]
+    fn an_exit_without_a_code_is_a_warning() {
+        let logs = exit_log(Some(GameExit { code: None }));
+
+        assert!(logs.contains("WARN"), "unexpected logs: {logs}");
+        assert!(
+            logs.contains("Game ended without an exit code"),
+            "unexpected logs: {logs}"
+        );
+    }
+
+    #[test]
+    fn a_game_stopped_by_the_launcher_is_not_a_warning() {
+        let logs = exit_log(None);
+
+        assert!(logs.contains("INFO"), "unexpected logs: {logs}");
+        assert!(
+            logs.contains("Game stopped by the launcher"),
             "unexpected logs: {logs}"
         );
     }
