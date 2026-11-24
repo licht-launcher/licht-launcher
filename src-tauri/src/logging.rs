@@ -4,6 +4,7 @@ use std::io::{self, IsTerminal};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
+use time::UtcOffset;
 use tracing::Subscriber;
 use tracing_subscriber::field::RecordFields;
 use tracing_subscriber::fmt::FormatFields;
@@ -149,15 +150,23 @@ struct ConsoleStyle {
     /// Events tagged by launcher area, for development builds.
     development: bool,
     colors: bool,
+    /// The offset of the clock development builds show; the log file stays in UTC.
+    utc_offset: UtcOffset,
 }
 
 impl ConsoleStyle {
     fn detect() -> Self {
-        Self::for_build(
-            cfg!(debug_assertions),
-            io::stderr().is_terminal(),
-            env::var_os("NO_COLOR").is_some_and(|value| !value.is_empty()),
-        )
+        Self {
+            // Read while the process has a single thread: on Unix the offset is only
+            // available then. It is not refreshed, so a daylight saving change during
+            // a session keeps the earlier offset. UTC is the fallback.
+            utc_offset: UtcOffset::current_local_offset().unwrap_or(UtcOffset::UTC),
+            ..Self::for_build(
+                cfg!(debug_assertions),
+                io::stderr().is_terminal(),
+                env::var_os("NO_COLOR").is_some_and(|value| !value.is_empty()),
+            )
+        }
     }
 
     /// `tauri dev` pipes the app's stderr into its own terminal, so development
@@ -166,6 +175,7 @@ impl ConsoleStyle {
         Self {
             development: debug,
             colors: !no_color && (debug || terminal),
+            utc_offset: UtcOffset::UTC,
         }
     }
 }
@@ -180,7 +190,7 @@ where
     let layer = fmt::layer().with_writer(writer).with_ansi(style.colors);
     if style.development {
         layer
-            .event_format(console::DevelopmentFormat::default())
+            .event_format(console::DevelopmentFormat::new(style.utc_offset))
             .and_then(console::SpanFieldsLayer)
             .boxed()
     } else {
@@ -253,21 +263,24 @@ mod tests {
             ConsoleStyle::for_build(true, false, false),
             ConsoleStyle {
                 development: true,
-                colors: true
+                colors: true,
+                utc_offset: time::UtcOffset::UTC
             }
         );
         assert_eq!(
             ConsoleStyle::for_build(false, true, false),
             ConsoleStyle {
                 development: false,
-                colors: true
+                colors: true,
+                utc_offset: time::UtcOffset::UTC
             }
         );
         assert_eq!(
             ConsoleStyle::for_build(false, false, false),
             ConsoleStyle {
                 development: false,
-                colors: false
+                colors: false,
+                utc_offset: time::UtcOffset::UTC
             }
         );
     }

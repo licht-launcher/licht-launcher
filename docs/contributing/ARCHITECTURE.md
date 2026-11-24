@@ -89,7 +89,8 @@ fields of their own, such as `System information`, list them with their span fie
 on aligned lines below, as do download job lifecycle events; otherwise span fields
 alone keep an event on one line. Colors stay on even though `tauri dev` pipes stderr. Other
 builds color stderr only when it is a terminal, and `NO_COLOR` turns colors off.
-The log file always keeps the standard format without colors.
+The development console shows local time; the log file always keeps the standard
+format, in UTC and without colors.
 Each launch logs `System information` (the build diagnostics shown in
 Troubleshooting), and application update checks and downloads log their result.
 Download jobs run inside a `download_job` span (job id, operation, instance,
