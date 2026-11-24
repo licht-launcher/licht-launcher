@@ -91,7 +91,9 @@ A launch logs `Launching game` (version, Java path, major and source, maximum
 memory, and account kind), `Game started` with the process id, and how the game
 ended with the time played; a non-zero exit code is a warning.
 A failed job is logged as `Download job failed` with its full cause chain
-(`licht_core::error_chain`), which `commands::failure` also uses.
+(`licht_core::error_chain`), which `commands::failure` also uses. Jobs also log
+when they start, complete (with the elapsed time), are cancelled, restart as a
+repair, pause and resume, as do Pause all and Resume all.
 In the native app, the interface sends React render errors, uncaught errors and
 unhandled rejections to `log_frontend_error`, which logs them as `Interface error`
 (at most 20 per minute, messages truncated to 8,000 characters). Query and
