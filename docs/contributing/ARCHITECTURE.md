@@ -77,11 +77,15 @@ Application update steps that fail log `Application update failed` with the
 summary the interface shows and the full cause chain.
 
 Logging uses `tracing` and `tracing-subscriber`, with structured text on stderr
-(colored when stderr is a terminal) and in `<profile>/logs/licht.<launch time>.log`. Each launch writes its own file,
+and in `<profile>/logs/licht.<launch time>.log`. Each launch writes its own file,
 named after its UTC start time, and startup keeps the 30 most recent; **Settings →
 Troubleshooting** shows the folder and opens it. If the log directory cannot be
 opened, the app keeps logging to stderr and records a warning instead of failing
 to start. Panics are logged as errors before the default panic output.
+Development builds print colored, multi-line events with their source location on
+stderr, since `tauri dev` pipes it; other builds color stderr only when it is a
+terminal, and `NO_COLOR` turns colors off. The log file always keeps one plain line
+per event.
 Download jobs run inside a `download_job` span (job id, operation, instance,
 version, Java major) and game launches inside a `launch` span (instance folder),
 so their events can be told apart in the log. Player names are never span fields.

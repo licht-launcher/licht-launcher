@@ -5,11 +5,13 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use tracing::Subscriber;
+use tracing_subscriber::fmt::MakeWriter;
 use tracing_subscriber::fmt::format::Writer;
 use tracing_subscriber::fmt::time::{FormatTime, SystemTime};
 use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::registry::LookupSpan;
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::{EnvFilter, filter::LevelFilter, fmt};
+use tracing_subscriber::{EnvFilter, Layer, filter::LevelFilter, fmt};
 
 const LOG_DIRECTORY: &str = "logs";
 const LOG_FILE_PREFIX: &str = "licht";
@@ -33,7 +35,7 @@ pub(crate) fn init() -> Result<()> {
         Err(error) => (None, None, Some(error)),
     };
 
-    subscriber(filter, file)
+    subscriber(filter, ConsoleStyle::detect(), file)
         .try_init()
         .context("Failed to initialize logging")?;
 
@@ -117,15 +119,56 @@ fn prune_old_logs(directory: &Path, keep: usize) -> io::Result<()> {
     Ok(())
 }
 
-fn subscriber(filter: EnvFilter, file: Option<File>) -> impl Subscriber + Send + Sync {
+/// How stderr shows events. The log file always keeps one plain line per event.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ConsoleStyle {
+    /// Multi-line events with their source location, for development builds.
+    pretty: bool,
+    colors: bool,
+}
+
+impl ConsoleStyle {
+    fn detect() -> Self {
+        Self::for_build(
+            cfg!(debug_assertions),
+            io::stderr().is_terminal(),
+            env::var_os("NO_COLOR").is_some_and(|value| !value.is_empty()),
+        )
+    }
+
+    /// `tauri dev` pipes the app's stderr into its own terminal, so development
+    /// builds use colors even when stderr is not a terminal. `NO_COLOR` always wins.
+    fn for_build(debug: bool, terminal: bool, no_color: bool) -> Self {
+        Self {
+            pretty: debug,
+            colors: !no_color && (debug || terminal),
+        }
+    }
+}
+
+fn console_layer<S>(
+    style: ConsoleStyle,
+    writer: impl for<'writer> MakeWriter<'writer> + Send + Sync + 'static,
+) -> Box<dyn Layer<S> + Send + Sync>
+where
+    S: Subscriber + for<'span> LookupSpan<'span>,
+{
+    let layer = fmt::layer().with_writer(writer).with_ansi(style.colors);
+    if style.pretty {
+        layer.pretty().boxed()
+    } else {
+        layer.boxed()
+    }
+}
+
+fn subscriber(
+    filter: EnvFilter,
+    console: ConsoleStyle,
+    file: Option<File>,
+) -> impl Subscriber + Send + Sync {
     tracing_subscriber::registry()
         .with(filter)
-        // Colors only when a terminal shows stderr; the file stays plain text.
-        .with(
-            fmt::layer()
-                .with_writer(std::io::stderr)
-                .with_ansi(std::io::stderr().is_terminal()),
-        )
+        .with(console_layer(console, std::io::stderr))
         .with(file.map(|file| fmt::layer().with_writer(file).with_ansi(false)))
 }
 
@@ -145,9 +188,85 @@ mod tests {
     use licht_testkit::logs::LogCapture;
     use licht_testkit::temp::TempDir;
 
+    use tracing_subscriber::layer::SubscriberExt;
+
     use super::{
-        install_panic_hook, launch_stamp, open_log_file, parse_filter, prune_old_logs, subscriber,
+        ConsoleStyle, console_layer, install_panic_hook, launch_stamp, open_log_file, parse_filter,
+        prune_old_logs, subscriber,
     };
+
+    #[test]
+    fn development_builds_color_the_console_even_through_a_pipe() {
+        assert_eq!(
+            ConsoleStyle::for_build(true, false, false),
+            ConsoleStyle {
+                pretty: true,
+                colors: true
+            }
+        );
+        assert_eq!(
+            ConsoleStyle::for_build(false, true, false),
+            ConsoleStyle {
+                pretty: false,
+                colors: true
+            }
+        );
+        assert_eq!(
+            ConsoleStyle::for_build(false, false, false),
+            ConsoleStyle {
+                pretty: false,
+                colors: false
+            }
+        );
+    }
+
+    #[test]
+    fn no_color_turns_colors_off_in_every_build() {
+        for (debug, terminal) in [(true, true), (true, false), (false, true)] {
+            assert!(!ConsoleStyle::for_build(debug, terminal, true).colors);
+        }
+    }
+
+    fn console_output(style: ConsoleStyle) -> String {
+        let root = TempDir::new("logging-test");
+        let path = root.path().join("console.log");
+        let file = fs::File::create(&path).expect("the console file should be created");
+        let console = tracing_subscriber::registry().with(console_layer(style, file));
+        tracing::subscriber::with_default(console, || {
+            let _launch = tracing::info_span!("launch", instance = "Survival").entered();
+            tracing::info!(pid = 18432, "Game started");
+        });
+        fs::read_to_string(path).expect("the console output should be readable")
+    }
+
+    #[test]
+    fn the_development_console_prints_readable_colored_events() {
+        let output = console_output(ConsoleStyle::for_build(true, false, false));
+
+        assert!(
+            output.contains("Game started"),
+            "unexpected output: {output}"
+        );
+        assert!(output.contains('\u{1b}'), "colors are missing: {output}");
+        assert!(
+            output.contains("logging.rs:"),
+            "the location is missing: {output}"
+        );
+        assert!(output.contains("Survival"), "the span is missing: {output}");
+        assert!(output.lines().count() > 1, "unexpected output: {output}");
+    }
+
+    #[test]
+    fn the_release_console_keeps_one_plain_line_per_event() {
+        let output = console_output(ConsoleStyle::for_build(false, false, false));
+
+        assert_eq!(output.lines().count(), 1, "unexpected output: {output}");
+        assert!(!output.contains('\u{1b}'), "unexpected colors: {output}");
+        assert!(
+            output.contains("launch{instance=\"Survival\"}"),
+            "unexpected output: {output}"
+        );
+    }
 
     fn capture_logs_while(directives: Option<&str>, emit: impl FnOnce()) -> String {
         let capture =
@@ -224,7 +343,8 @@ mod tests {
         ] {
             let file = open_log_file(&directory, stamp).expect("the log file should open");
             let filter = parse_filter(None).expect("the filter should be valid");
-            tracing::subscriber::with_default(subscriber(filter, Some(file)), || {
+            let console = ConsoleStyle::for_build(false, false, true);
+            tracing::subscriber::with_default(subscriber(filter, console, Some(file)), || {
                 tracing::debug!("debug event");
                 tracing::info!(launch = message, "startup event");
             });
