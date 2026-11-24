@@ -91,6 +91,46 @@ export function HomePanel({
     setTab("content");
   }
 
+  const contentToolbar = (
+    <>
+      <Input
+        aria-label="Search content"
+        className={homePanelStyles.searchInput}
+        placeholder="Search content"
+        value={contentSearch}
+        startIcon={<SearchIcon aria-hidden />}
+        onChange={(event) => setContentSearch(event.target.value)}
+      />
+      <ContentFilterSelect
+        value={contentFilter}
+        onValueChange={setContentFilter}
+      />
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        aria-label="Refresh content"
+        disabled={folder === null || refreshingContent}
+        onClick={() => {
+          if (folder === null) return;
+          void queryClient
+            .fetchQuery({
+              ...instanceContentQuery(queryClient, folder, true),
+              staleTime: 0,
+            })
+            .catch((error: unknown) =>
+              toast.error(friendlyError(messageOf(error))),
+            );
+        }}
+      >
+        <RefreshCwIcon
+          aria-hidden
+          className={refreshingContent ? homePanelStyles.refreshing : undefined}
+        />
+      </Button>
+    </>
+  );
+
   return (
     <div className={homePanelStyles.root}>
       <div className={homePanelStyles.header}>
@@ -184,47 +224,7 @@ export function HomePanel({
                   Open folder
                 </Button>
               </>
-            ) : (
-              <>
-                <Input
-                  aria-label="Search content"
-                  className={homePanelStyles.searchInput}
-                  placeholder="Search content"
-                  value={contentSearch}
-                  startIcon={<SearchIcon aria-hidden />}
-                  onChange={(event) => setContentSearch(event.target.value)}
-                />
-                <ContentFilterSelect
-                  value={contentFilter}
-                  onValueChange={setContentFilter}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  aria-label="Refresh content"
-                  disabled={folder === null || refreshingContent}
-                  onClick={() => {
-                    if (folder === null) return;
-                    void queryClient
-                      .fetchQuery({
-                        ...instanceContentQuery(queryClient, folder, true),
-                        staleTime: 0,
-                      })
-                      .catch((error: unknown) =>
-                        toast.error(friendlyError(messageOf(error))),
-                      );
-                  }}
-                >
-                  <RefreshCwIcon
-                    aria-hidden
-                    className={
-                      refreshingContent ? homePanelStyles.refreshing : undefined
-                    }
-                  />
-                </Button>
-              </>
-            )}
+            ) : null}
           </div>
         </div>
         <TabsContent value="files" className={homePanelStyles.tabContent}>
@@ -248,6 +248,7 @@ export function HomePanel({
               filter={contentFilter}
               search={contentSearch}
               modpack={modpackOrigin(instance?.installation?.source)}
+              toolbar={contentToolbar}
             />
           </PageTransition>
         </TabsContent>

@@ -15,14 +15,11 @@ import { contentTableStyles } from "./content-table.styles";
 export function ContentTable({
   entries,
   totalEntries,
-  emptyLabel = "No content installed.",
   virtualization,
   actions,
 }: {
   entries: InstanceContentEntry[];
   totalEntries: number;
-  /** Shown when there is nothing to list before filters apply. */
-  emptyLabel?: string;
   virtualization: ReturnType<typeof useContentVirtualizer>;
   /** Omitted for read-only lists, such as content a modpack manages. */
   actions?: ContentActions;
@@ -55,7 +52,7 @@ export function ContentTable({
                     </span>
                     <p className={cn(contentTableStyles.emptyText)}>
                       {totalEntries === 0
-                        ? emptyLabel
+                        ? "No content installed."
                         : "No content matches your filters."}
                     </p>
                   </div>

@@ -24,7 +24,10 @@ import { modpackContentCardStyles as styles } from "./modpack-content-card.style
 
 type StoreOrigin = Extract<ModpackOrigin, { type: "modpack" }>;
 
-/** Summary of the modpack an instance was created from and the content it ships. */
+/**
+ * Summary of the modpack an instance was created from and the content it ships.
+ * It sits at the top of the content panel, above the content the user added.
+ */
 export function ModpackContentCard({
   origin,
   entries,
@@ -52,24 +55,18 @@ export function ModpackContentCard({
       {origin.type === "modpack" ? (
         <StoreModpack origin={origin} included={included} action={action} />
       ) : (
-        <>
-          <CardHeader
-            iconUrl={null}
-            title="Imported modpack"
-            subtitle={
-              <span className={styles.subtitlePart}>
-                <FileArchiveIcon aria-hidden />
-                Installed from a {SOURCE_LABELS[origin.source]} file
-              </span>
-            }
-            action={action}
-          />
-          <dl className={styles.facts}>
-            <Fact label="Included" className={styles.includedFact}>
-              {included}
-            </Fact>
-          </dl>
-        </>
+        <CardHeader
+          iconUrl={null}
+          title="Imported modpack"
+          subtitle={
+            <span className={styles.subtitlePart}>
+              <FileArchiveIcon aria-hidden />
+              Installed from a {SOURCE_LABELS[origin.source]} file
+            </span>
+          }
+          included={included}
+          action={action}
+        />
       )}
     </section>
   );
@@ -98,33 +95,27 @@ function StoreModpack({
         ? `by ${modpack.data.author} · ${sourceLabel}`
         : sourceLabel;
   return (
-    <>
-      <CardHeader
-        iconUrl={modpack.data?.iconUrl ?? origin.iconUrl}
-        title={modpack.data?.name ?? "Modpack"}
-        version={version?.name ?? null}
-        subtitle={
-          <>
+    <CardHeader
+      iconUrl={modpack.data?.iconUrl ?? origin.iconUrl}
+      title={modpack.data?.name ?? "Modpack"}
+      version={version?.name ?? null}
+      subtitle={
+        <>
+          <span className={styles.subtitlePart}>
+            <LockIcon aria-hidden />
+            {provider}
+          </span>
+          {updated && modpack.isSuccess ? (
             <span className={styles.subtitlePart}>
-              <LockIcon aria-hidden />
-              {provider}
+              <ClockIcon aria-hidden />
+              Updated {updated}
             </span>
-            {updated && modpack.isSuccess ? (
-              <span className={styles.subtitlePart}>
-                <ClockIcon aria-hidden />
-                Updated {updated}
-              </span>
-            ) : null}
-          </>
-        }
-        action={action}
-      />
-      <dl className={styles.facts}>
-        <Fact label="Included" className={styles.includedFact}>
-          {included}
-        </Fact>
-      </dl>
-    </>
+          ) : null}
+        </>
+      }
+      included={included}
+      action={action}
+    />
   );
 }
 
@@ -133,12 +124,14 @@ function CardHeader({
   title,
   version = null,
   subtitle,
+  included,
   action,
 }: {
   iconUrl: string | null;
   title: string;
   version?: string | null;
   subtitle: ReactNode;
+  included: ReactNode;
   action: ReactNode;
 }) {
   return (
@@ -156,25 +149,9 @@ function CardHeader({
           {version ? <span className={styles.version}>{version}</span> : null}
         </div>
         <p className={styles.subtitle}>{subtitle}</p>
+        <p className={styles.counts}>{included}</p>
       </div>
       {action}
-    </div>
-  );
-}
-
-function Fact({
-  label,
-  className,
-  children,
-}: {
-  label: string;
-  className: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className={className}>
-      <dt className={styles.factLabel}>{label}</dt>
-      <dd className={styles.factValue}>{children}</dd>
     </div>
   );
 }
@@ -185,8 +162,7 @@ function IncludedContent({
   entries: readonly InstanceContentEntry[];
 }) {
   const counts = countContent(entries);
-  if (counts.length === 0)
-    return <span className={styles.muted}>No content</span>;
+  if (counts.length === 0) return "No content";
   return counts.map((count) => (
     <span key={count.kind} className={styles.count}>
       <ContentKindIcon kind={count.kind} size="sm" />

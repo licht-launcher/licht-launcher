@@ -560,7 +560,13 @@ describe("ContentSection", () => {
       renderContent("classic", "all", "", imported);
 
       expect(
-        await screen.findByText("No extra content installed."),
+        await screen.findByRole("status", {
+          name: "No extra content installed",
+        }),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole("columnheader")).not.toBeInTheDocument();
+      expect(
+        screen.getByRole("heading", { name: "Extra content 0" }),
       ).toBeInTheDocument();
     });
 

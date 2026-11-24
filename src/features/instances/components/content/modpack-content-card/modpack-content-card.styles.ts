@@ -1,21 +1,18 @@
 export const modpackContentCardStyles = {
-  root: "flex shrink-0 flex-col rounded-lg border border-border/60 bg-card",
-  header: "flex items-center gap-3 px-5 py-4",
-  icon: "size-10 shrink-0 rounded-md bg-muted object-cover",
+  /** Part of the content panel: only a divider separates it from the extra content. */
+  root: "flex shrink-0 flex-col border-b border-border/60",
+  header: "flex items-start gap-3 px-3 py-4",
+  icon: "size-12 shrink-0 rounded-md bg-muted object-cover",
   iconFallback:
-    "flex size-10 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground [&_svg]:size-5",
-  heading: "flex min-w-0 flex-1 flex-col gap-1",
+    "flex size-12 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground [&_svg]:size-6",
+  heading: "flex min-w-0 flex-1 flex-col gap-1.5",
   titleLine: "flex min-w-0 items-baseline gap-2",
-  title: "min-w-0 truncate text-lg font-semibold",
+  title: "min-w-0 truncate text-base font-semibold",
   version: "max-w-40 shrink-0 truncate text-sm text-muted-foreground",
   subtitle:
     "flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground [&_svg]:size-3.5 [&_svg]:shrink-0",
   subtitlePart: "flex min-w-0 items-center gap-1.5",
-  facts: "flex border-t border-border/60 px-5 py-4",
-  includedFact: "flex min-w-0 flex-1 flex-col gap-1.5 overflow-hidden",
-  factLabel:
-    "text-xs font-medium uppercase tracking-wide text-muted-foreground",
-  factValue: "flex items-center gap-x-3 whitespace-nowrap text-sm font-medium",
-  count: "flex items-center gap-2 tabular-nums",
-  muted: "text-sm text-muted-foreground",
+  counts:
+    "flex flex-wrap items-center gap-x-4 gap-y-1 text-sm font-medium text-muted-foreground",
+  count: "flex items-center gap-2 tabular-nums text-foreground",
 } as const;

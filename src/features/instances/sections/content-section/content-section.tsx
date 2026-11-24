@@ -1,10 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { PackagePlusIcon } from "lucide-react";
+import { type ReactNode, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   removeInstanceContent,
   setInstanceContentEnabled,
 } from "@/api/commands";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Progress } from "@/components/ui/progress";
 import { ContentLoading } from "@/features/instances/components/content/content-loading";
 import { ContentRemovalDialog } from "@/features/instances/components/content/content-removal-dialog";
@@ -40,11 +42,14 @@ export function ContentSection({
   filter,
   search,
   modpack = null,
+  toolbar = null,
 }: {
   folder: string | null;
   filter: ContentFilter;
   search: string;
   modpack?: ModpackOrigin | null;
+  /** Search, filter and refresh controls, shown right above the list. */
+  toolbar?: ReactNode;
 }) {
   const queryClient = useQueryClient();
   const [pendingRemoval, setPendingRemoval] =
@@ -133,86 +138,110 @@ export function ContentSection({
         Select an instance to manage its content.
       </p>
     );
-  if (content.isPending)
-    return <ContentLoading sortKey={sortKey} sortDir={sortDir} />;
-  if (content.isError && content.data === undefined)
-    return (
-      <p className={contentSectionStyles.error}>
-        Could not list instance content.
-      </p>
-    );
-
   function onSort(nextKey: ContentSortKey) {
     const next = toggleContentSort(sortKey, sortDir, nextKey);
     setSortKey(next.key);
     setSortDir(next.dir);
   }
 
+  const noExtraContent =
+    modpack !== null &&
+    content.data !== undefined &&
+    listedEntries.length === 0;
+
   return (
-    <div className={contentSectionStyles.layout}>
-      {modpack !== null ? (
+    <div className={contentSectionStyles.root}>
+      {modpack !== null && content.data !== undefined ? (
         <ModpackContentCard
           origin={modpack}
           entries={modpackEntries}
           onView={() => setModpackOpenFor(folder)}
         />
       ) : null}
-      <div className={contentSectionStyles.root}>
-        {content.isError ? (
-          <p role="alert" className={contentSectionStyles.error}>
-            Some content metadata could not be loaded. Refresh to try again.
-          </p>
-        ) : null}
-        <table className={contentSectionStyles.headTable}>
-          <ContentTableColumns />
-          <ContentTableHead
-            sortKey={sortKey}
-            sortDir={sortDir}
-            onSort={onSort}
-            showBorder={!content.isFetching}
-          />
-        </table>
-        {content.isFetching ? (
-          <Progress
-            aria-label="Loading content metadata"
-            className={contentSectionStyles.progress}
-          />
-        ) : null}
-        <ContentTable
-          entries={sortedEntries}
-          totalEntries={listedEntries.length}
-          emptyLabel={
-            modpack !== null ? "No extra content installed." : undefined
-          }
-          virtualization={virtualization}
-          actions={{
-            disabled,
-            onToggle: toggleContent,
-            onRemove: setPendingRemoval,
-          }}
-        />
+      <div className={contentSectionStyles.toolbar}>
         {modpack !== null ? (
-          <ModpackContentDialog
-            open={modpackOpen}
-            onOpenChange={(open) => setModpackOpenFor(open ? folder : null)}
-            iconUrl={modpack.type === "modpack" ? modpack.iconUrl : null}
-            folder={folder}
-            entries={modpackEntries}
-            actions={{ disabled, onToggle: toggleContent }}
-          />
+          <h3 className={contentSectionStyles.extraTitle}>
+            Extra content{" "}
+            {content.data !== undefined ? (
+              <span className={contentSectionStyles.extraCount}>
+                {listedEntries.length}
+              </span>
+            ) : null}
+          </h3>
         ) : null}
-        <ContentRemovalDialog
-          entry={pendingRemoval}
-          pending={remove.isPending}
-          onOpenChange={(open) => {
-            if (!open) setPendingRemoval(null);
-          }}
-          onConfirm={(entry) =>
-            remove.mutate(entry, { onSuccess: () => setPendingRemoval(null) })
-          }
-          onCloseAutoFocus={virtualization.onCloseAutoFocus}
-        />
+        {toolbar}
       </div>
+      {content.isPending ? (
+        <ContentLoading sortKey={sortKey} sortDir={sortDir} />
+      ) : content.isError && content.data === undefined ? (
+        <p className={contentSectionStyles.error}>
+          Could not list instance content.
+        </p>
+      ) : (
+        <>
+          {content.isError ? (
+            <p role="alert" className={contentSectionStyles.error}>
+              Some content metadata could not be loaded. Refresh to try again.
+            </p>
+          ) : null}
+          {noExtraContent ? (
+            <EmptyState
+              icon={<PackagePlusIcon />}
+              title="No extra content installed"
+              description="Mods and packs you add on top of the modpack appear here."
+            />
+          ) : (
+            <>
+              <table className={contentSectionStyles.headTable}>
+                <ContentTableColumns />
+                <ContentTableHead
+                  sortKey={sortKey}
+                  sortDir={sortDir}
+                  onSort={onSort}
+                  showBorder={!content.isFetching}
+                />
+              </table>
+              {content.isFetching ? (
+                <Progress
+                  aria-label="Loading content metadata"
+                  className={contentSectionStyles.progress}
+                />
+              ) : null}
+              <ContentTable
+                entries={sortedEntries}
+                totalEntries={listedEntries.length}
+                virtualization={virtualization}
+                actions={{
+                  disabled,
+                  onToggle: toggleContent,
+                  onRemove: setPendingRemoval,
+                }}
+              />
+            </>
+          )}
+          {modpack !== null ? (
+            <ModpackContentDialog
+              open={modpackOpen}
+              onOpenChange={(open) => setModpackOpenFor(open ? folder : null)}
+              iconUrl={modpack.type === "modpack" ? modpack.iconUrl : null}
+              folder={folder}
+              entries={modpackEntries}
+              actions={{ disabled, onToggle: toggleContent }}
+            />
+          ) : null}
+          <ContentRemovalDialog
+            entry={pendingRemoval}
+            pending={remove.isPending}
+            onOpenChange={(open) => {
+              if (!open) setPendingRemoval(null);
+            }}
+            onConfirm={(entry) =>
+              remove.mutate(entry, { onSuccess: () => setPendingRemoval(null) })
+            }
+            onCloseAutoFocus={virtualization.onCloseAutoFocus}
+          />
+        </>
+      )}
     </div>
   );
 }
