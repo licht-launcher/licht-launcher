@@ -714,14 +714,14 @@ pub(crate) mod testing {
 
 #[cfg(test)]
 mod folder_tests {
+    use licht_testkit::temp::TempDir;
+
     use super::*;
 
     #[tokio::test]
     async fn reading_a_folder_without_a_database_creates_nothing() {
-        let cache = SharedCache::at(
-            std::env::temp_dir().join(format!("licht-settings-read-{}", std::process::id())),
-        );
-        let _ = std::fs::remove_dir_all(cache.root());
+        let temp = TempDir::new("settings-read");
+        let cache = SharedCache::at(temp.path().join("profile"));
 
         let settings = load_settings_at(&cache).await.expect("defaults");
 

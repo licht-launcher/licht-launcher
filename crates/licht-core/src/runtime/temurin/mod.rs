@@ -109,6 +109,7 @@ pub async fn install_temurin(
 mod tests {
     use std::io::Write;
 
+    use licht_testkit::temp::TempDir;
     use sha2::{Digest, Sha256};
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -122,11 +123,8 @@ mod tests {
 
     #[tokio::test]
     async fn an_existing_java_runtime_does_not_announce_preparation() {
-        let stamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos();
-        let root = std::env::temp_dir().join(format!("licht-java-cached-{stamp}"));
+        let temp = TempDir::new("java-cached");
+        let root = temp.path().to_path_buf();
         let cache = SharedCache::at(root.join("data"));
         let home = SharedCache::at(root.join("settings"));
         let runtime = super::layout::runtime_folder(
@@ -172,17 +170,14 @@ mod tests {
             "cached Java must not emit preparation or download events"
         );
         service.shutdown().await.expect("shutdown");
-        std::fs::remove_dir_all(root).expect("cleanup");
     }
 
     #[tokio::test]
     async fn a_paused_java_installation_does_not_block_other_runtime_directories() {
         let _guard = crate::test_http::lock_local_http().await;
         for already_installed in [false, true] {
-            let directory = std::env::temp_dir().join(format!(
-                "licht-temurin-independent-{}-{already_installed}",
-                std::process::id()
-            ));
+            let temp = TempDir::new(&format!("temurin-independent-{already_installed}"));
+            let directory = temp.path().to_path_buf();
             let cache = SharedCache::at(directory.join("data"));
             let settings = SharedCache::at(directory.join("settings"));
             let zip = sample_zip();
@@ -280,16 +275,14 @@ mod tests {
             );
             assert_eq!(std::fs::read(expected).expect("Java bytes"), b"temurin");
             database.shutdown().await.expect("close database");
-            std::fs::remove_dir_all(directory).expect("cleanup");
         }
     }
 
     #[tokio::test]
     async fn temurin_is_stored_under_its_major_version() {
         let _guard = crate::test_http::lock_local_http().await;
-        let directory =
-            std::env::temp_dir().join(format!("licht-temurin-zip-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&directory);
+        let temp = TempDir::new("temurin-zip");
+        let directory = temp.path().to_path_buf();
         let cache = SharedCache::at(&directory);
         let zip = sample_zip();
         let checksum = hex_encode(Sha256::digest(&zip).as_slice());
@@ -328,14 +321,13 @@ mod tests {
                 .join("jdk-21")
                 .exists()
         );
-        let _ = std::fs::remove_dir_all(directory);
     }
 
     #[tokio::test]
     async fn concurrent_installations_of_the_same_runtime_download_only_once() {
         let _guard = crate::test_http::lock_local_http().await;
-        let directory =
-            std::env::temp_dir().join(format!("licht-temurin-shared-{}", std::process::id()));
+        let temp = TempDir::new("temurin-shared");
+        let directory = temp.path().to_path_buf();
         let cache = SharedCache::at(&directory);
         let zip = sample_zip();
         let checksum = hex_encode(Sha256::digest(&zip).as_slice());
@@ -364,15 +356,13 @@ mod tests {
         assert_eq!(second.expect("second install"), first);
         assert_eq!(downloads.load(std::sync::atomic::Ordering::SeqCst), 1);
         assert_eq!(std::fs::read(first).expect("Java"), b"temurin");
-        std::fs::remove_dir_all(directory).expect("cleanup");
     }
 
     #[tokio::test]
     async fn a_missing_jre_falls_back_to_the_jdk() {
         let _guard = crate::test_http::lock_local_http().await;
-        let directory =
-            std::env::temp_dir().join(format!("licht-temurin-jdk-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&directory);
+        let temp = TempDir::new("temurin-jdk");
+        let directory = temp.path().to_path_buf();
         let cache = SharedCache::at(&directory);
         let zip = sample_zip();
         let checksum = hex_encode(Sha256::digest(&zip).as_slice());
@@ -398,15 +388,13 @@ mod tests {
             .join("bin")
             .join(if cfg!(windows) { "java.exe" } else { "java" });
         assert_eq!(executable, expected);
-        let _ = std::fs::remove_dir_all(directory);
     }
 
     #[tokio::test]
     async fn a_wrong_checksum_is_rejected() {
         let _guard = crate::test_http::lock_local_http().await;
-        let directory =
-            std::env::temp_dir().join(format!("licht-temurin-bad-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&directory);
+        let temp = TempDir::new("temurin-bad");
+        let directory = temp.path().to_path_buf();
         let cache = SharedCache::at(&directory);
         let server = serve(sample_zip(), &"ab".repeat(32), false, "21.0.4+7").await;
         let error = install_temurin(
@@ -420,7 +408,6 @@ mod tests {
         .await
         .expect_err("checksum");
         assert!(matches!(error, CoreError::Sha256Mismatch { .. }));
-        let _ = std::fs::remove_dir_all(directory);
     }
 
     fn environment() -> LaunchEnvironment {

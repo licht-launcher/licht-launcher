@@ -139,7 +139,7 @@ mod tests {
 
     #[tokio::test]
     async fn pending_packs_get_independent_workspaces_and_shared_cached_icons() {
-        let (legacy, home) = fixture("installation-assets");
+        let (_temp, legacy, home) = fixture("installation-assets");
         let game = SharedCache::at(home.root().join("data"));
         let instances = game.instances_dir().expect("instances");
         let settings = crate::settings::load_settings_at(&home)
@@ -312,7 +312,7 @@ mod tests {
 
     #[test]
     fn legacy_archive_cleanup_preserves_unknown_files() {
-        let (_, home) = fixture("unknown-cache-file");
+        let (_temp, _, home) = fixture("unknown-cache-file");
         let directory = home.root().join("data").join("modpacks");
         fs::create_dir_all(&directory).expect("directory");
         fs::write(directory.join("pack.zip"), b"cache").expect("archive");

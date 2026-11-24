@@ -257,14 +257,15 @@ fn unavailable() -> CoreError {
 mod tests {
     use std::time::Duration;
 
+    use licht_testkit::temp::TempDir;
+
     use super::*;
     use crate::SharedCache;
 
     #[tokio::test]
     async fn dropping_the_owner_stops_the_worker_even_when_a_client_survives() {
-        let cache = SharedCache::at(
-            std::env::temp_dir().join(format!("licht-database-owner-drop-{}", std::process::id())),
-        );
+        let temp = TempDir::new("database-owner-drop");
+        let cache = SharedCache::at(temp.path());
         let mut service =
             DatabaseService::start(crate::Database::open(&cache).await.expect("database"))
                 .await
@@ -281,14 +282,12 @@ mod tests {
             .expect("join task")
             .expect("connection close");
         assert!(matches!(closed, Err(CoreError::DatabaseService { .. })));
-        std::fs::remove_dir_all(cache.root()).expect("fixture cleanup");
     }
 
     #[tokio::test]
     async fn shutdown_closes_the_pool_even_after_the_worker_panicked() {
-        let cache = SharedCache::at(
-            std::env::temp_dir().join(format!("licht-database-panic-{}", std::process::id())),
-        );
+        let temp = TempDir::new("database-panic");
+        let cache = SharedCache::at(temp.path());
         let database = Database::open(&cache).await.expect("database");
         let service = DatabaseService::start(database.clone())
             .await
@@ -297,6 +296,5 @@ mod tests {
 
         assert!(service.shutdown().await.is_err());
         assert!(database.acquire().await.is_err(), "the pool must be closed");
-        std::fs::remove_dir_all(cache.root()).expect("fixture cleanup");
     }
 }

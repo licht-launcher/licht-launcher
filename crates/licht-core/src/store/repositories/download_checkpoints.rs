@@ -56,14 +56,12 @@ impl DownloadCheckpointRepository {
 mod tests {
     use super::*;
     use crate::{DatabaseService, DownloadJobOperation};
+    use licht_testkit::temp::TempDir;
 
     #[tokio::test]
     async fn checkpoints_survive_reopening_and_are_scoped_to_job_directory_and_version() {
-        let stamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos();
-        let root = std::env::temp_dir().join(format!("licht-job-checkpoints-{stamp}"));
+        let temp = TempDir::new("job-checkpoints");
+        let root = temp.path().to_path_buf();
         let home = SharedCache::at(&root);
         let game = SharedCache::at(root.join("data"));
         let service = DatabaseService::start(crate::Database::open(&home).await.expect("database"))
@@ -139,6 +137,5 @@ mod tests {
                 .expect("invalidated checkpoint")
         );
         service.shutdown().await.expect("shutdown");
-        std::fs::remove_dir_all(root).expect("cleanup");
     }
 }

@@ -191,6 +191,7 @@ mod tests {
     use std::io::Write;
 
     use super::{archive_relative, extract_java_archive, resolve_symlink_target};
+    use licht_testkit::temp::TempDir;
 
     #[test]
     fn an_archive_path_outside_the_runtime_is_rejected() {
@@ -199,10 +200,8 @@ mod tests {
 
     #[test]
     fn a_gzip_archive_drops_its_top_directory() {
-        let directory =
-            std::env::temp_dir().join(format!("licht-temurin-tar-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&directory);
-        std::fs::create_dir_all(&directory).expect("directory");
+        let temp = TempDir::new("temurin-tar");
+        let directory = temp.path().to_path_buf();
         let archive = directory.join("temurin.tar.gz");
         std::fs::write(&archive, sample_tar_gz()).expect("archive");
         extract_java_archive(&archive, &directory).expect("extract");
@@ -210,7 +209,6 @@ mod tests {
             std::fs::read(directory.join("bin").join("java")).expect("java"),
             b"temurin"
         );
-        let _ = std::fs::remove_dir_all(directory);
     }
 
     #[test]
@@ -243,15 +241,12 @@ mod tests {
 
     #[test]
     fn a_gzip_archive_with_an_escaping_symlink_is_rejected() {
-        let directory =
-            std::env::temp_dir().join(format!("licht-temurin-link-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&directory);
-        std::fs::create_dir_all(&directory).expect("directory");
+        let temp = TempDir::new("temurin-link");
+        let directory = temp.path().to_path_buf();
         let archive = directory.join("temurin.tar.gz");
         std::fs::write(&archive, sample_tar_gz_with_bad_symlink()).expect("archive");
         let error = extract_java_archive(&archive, &directory).expect_err("escape");
         assert!(matches!(error, crate::CoreError::CachePath));
-        let _ = std::fs::remove_dir_all(directory);
     }
 
     fn sample_tar_gz() -> Vec<u8> {

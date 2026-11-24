@@ -215,6 +215,8 @@ pub(crate) fn managed_size_where(directory: &Path, include: impl Fn(&Path) -> bo
 
 #[cfg(test)]
 mod tests {
+    use licht_testkit::temp::TempDir;
+
     use super::*;
 
     #[test]
@@ -255,7 +257,8 @@ mod tests {
 
     #[test]
     fn natives_have_their_own_category_without_double_counting() {
-        let launcher = fixture_directory();
+        let temp = TempDir::new("storage");
+        let launcher = temp.path().to_path_buf();
         let directory = launcher.join("data");
         for (folder, bytes) in [("natives", 19), ("assets", 11)] {
             let folder = directory.join(folder);
@@ -263,7 +266,6 @@ mod tests {
             std::fs::write(folder.join("payload"), vec![0; bytes]).expect("managed file");
         }
         let summary = storage_summary(&SharedCache::at(&directory)).expect("storage");
-        std::fs::remove_dir_all(launcher).expect("cleanup");
         let serialized = serde_json::to_value(&summary).expect("storage json");
         let categories = serialized["categories"].as_array().expect("categories");
         assert!(
@@ -285,7 +287,8 @@ mod tests {
 
     #[test]
     fn managed_consumption_includes_sibling_instances_and_cache() {
-        let launcher = fixture_directory();
+        let temp = TempDir::new("storage");
+        let launcher = temp.path().to_path_buf();
         for (relative, bytes) in [
             ("instances/first", 3),
             ("cache/icons", 5),
@@ -302,7 +305,6 @@ mod tests {
         }
         std::fs::write(launcher.join("settings.json"), b"not game data").expect("settings");
         let summary = storage_summary(&SharedCache::at(launcher.join("data"))).expect("storage");
-        std::fs::remove_dir_all(launcher).expect("cleanup");
         assert_eq!(summary.managed_bytes, 98);
         assert_eq!(
             summary.categories,
@@ -337,7 +339,8 @@ mod tests {
 
     #[test]
     fn managed_files_are_measured_on_their_actual_volume() {
-        let launcher = fixture_directory();
+        let temp = TempDir::new("storage");
+        let launcher = temp.path().to_path_buf();
         let directory = launcher.join("data");
         for (folder, bytes) in [("instances", 3), ("cache", 5), ("data/runtime", 7)] {
             let folder = launcher.join(folder);
@@ -349,7 +352,6 @@ mod tests {
         assert_eq!(summary.managed_bytes, 15);
         assert!(!summary.disk_name.is_empty());
         assert!(!summary.disk_name.contains(r"\\?\"));
-        std::fs::remove_dir_all(launcher).expect("cleanup");
     }
 
     #[test]
@@ -360,19 +362,20 @@ mod tests {
 
     #[test]
     fn an_empty_managed_directory_has_zero_consumption() {
-        let launcher = fixture_directory();
+        let temp = TempDir::new("storage");
+        let launcher = temp.path().to_path_buf();
         let directory = launcher.join("data");
         std::fs::create_dir(&directory).expect("data directory");
         let summary = storage_summary(&SharedCache::at(&directory)).expect("empty directory");
         assert_eq!(summary.managed_bytes, 0);
         assert_eq!(summary.categories.len(), 6);
         assert!(summary.categories.iter().all(|usage| usage.bytes == 0));
-        std::fs::remove_dir_all(launcher).expect("cleanup");
     }
 
     #[test]
     fn loose_data_files_are_counted_as_other_and_match_the_category_sum() {
-        let launcher = fixture_directory();
+        let temp = TempDir::new("storage");
+        let launcher = temp.path().to_path_buf();
         let directory = launcher.join("data");
         std::fs::create_dir(&directory).expect("data directory");
         std::fs::write(directory.join("metadata.json"), b"metadata").expect("metadata");
@@ -391,32 +394,20 @@ mod tests {
             StorageCategory::Other
         );
         assert_eq!(summary.categories.last().expect("other").bytes, 8);
-        std::fs::remove_dir_all(launcher).expect("cleanup");
     }
 
     #[cfg(unix)]
     #[test]
     fn links_do_not_count_external_files_or_create_directory_cycles() {
-        let directory = fixture_directory();
-        let outside = fixture_directory();
+        let directory_temp = TempDir::new("storage");
+        let directory = directory_temp.path().to_path_buf();
+        let outside_temp = TempDir::new("storage-outside");
+        let outside = outside_temp.path().to_path_buf();
         std::fs::write(outside.join("external"), b"outside").expect("external file");
         std::fs::write(directory.join("managed"), b"data").expect("managed file");
         std::os::unix::fs::symlink(&outside, directory.join("linked")).expect("external link");
         std::os::unix::fs::symlink(&directory, directory.join("cycle")).expect("cycle");
         assert_eq!(managed_size(&directory).expect("managed size"), 4);
-        std::fs::remove_dir_all(directory).expect("cleanup");
-        std::fs::remove_dir_all(outside).expect("cleanup external");
-    }
-
-    fn fixture_directory() -> PathBuf {
-        let stamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos();
-        let directory =
-            std::env::temp_dir().join(format!("licht-storage-{}-{stamp}", std::process::id()));
-        std::fs::create_dir(&directory).expect("fixture directory");
-        directory
     }
 
     #[test]
