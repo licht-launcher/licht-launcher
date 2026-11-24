@@ -47,6 +47,9 @@ describe("ModpackContentDialog", () => {
     renderDialog(true);
 
     const dialog = screen.getByRole("dialog", { name: "Modpack content" });
+    expect(dialog).toHaveAccessibleDescription(
+      "2 files are managed by this instance's modpack and cannot be changed here.",
+    );
     const titles = within(dialog)
       .getAllByRole("row")
       .map((row) => row.textContent);

@@ -36,10 +36,15 @@ export function ModpackContentDialog({
         <DialogHeader className={styles.header}>
           <DialogTitle>Modpack content</DialogTitle>
           <DialogDescription>
-            Content installed by this instance's modpack.
+            {list.entries.length === 1
+              ? "1 file is"
+              : `${list.entries.length} files are`}{" "}
+            managed by this instance's modpack and cannot be changed here.
           </DialogDescription>
         </DialogHeader>
-        <ModpackContentList {...list} />
+        <div className={styles.list}>
+          <ModpackContentList {...list} />
+        </div>
       </DialogContent>
     </Dialog>
   );
