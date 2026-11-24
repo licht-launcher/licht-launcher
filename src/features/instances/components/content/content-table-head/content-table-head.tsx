@@ -13,11 +13,13 @@ import { cn } from "@/lib/utils";
 
 import { contentTableHeadStyles } from "./content-table-head.styles";
 
-export function ContentTableColumns() {
+export function ContentTableColumns({ actions = true }: { actions?: boolean }) {
   return (
     <colgroup>
       <col />
-      <col className={contentTableHeadStyles.actionsColumn} />
+      {actions ? (
+        <col className={contentTableHeadStyles.actionsColumn} />
+      ) : null}
     </colgroup>
   );
 }

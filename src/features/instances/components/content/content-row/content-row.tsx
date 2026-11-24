@@ -14,17 +14,14 @@ export function ContentRow({
   index,
   last,
   rowRef,
-  disabled,
-  onToggle,
-  onRemove,
+  actions,
 }: {
   entry: InstanceContentEntry;
   index: number;
   last: boolean;
   rowRef: Ref<HTMLTableRowElement>;
-  disabled: boolean;
-  onToggle: (entry: InstanceContentEntry, enabled: boolean) => void;
-  onRemove: (entry: InstanceContentEntry) => void;
+  /** Omitted for read-only lists, such as content a modpack manages. */
+  actions?: ContentActions;
 }) {
   return (
     <tr
@@ -59,29 +56,46 @@ export function ContentRow({
           </div>
         </div>
       </td>
-      <td className={contentRowStyles.cell}>
-        <div className={contentRowStyles.actions}>
-          <Switch
-            data-content-action="toggle"
-            checked={entry.enabled}
-            disabled={disabled}
-            aria-label={`${entry.enabled ? "Disable" : "Enable"} ${entry.title}`}
-            onCheckedChange={(enabled) => onToggle(entry, enabled)}
-          />
-          <Button
-            data-content-action="remove"
-            type="button"
-            size="icon"
-            variant="ghost"
-            className={contentRowStyles.removeButton}
-            aria-label={`Remove ${formatContentTitle(entry.name)}`}
-            disabled={disabled}
-            onClick={() => onRemove(entry)}
-          >
-            <Trash2Icon aria-hidden className={contentRowStyles.icon} />
-          </Button>
-        </div>
-      </td>
+      {actions ? <ContentRowActions entry={entry} {...actions} /> : null}
     </tr>
+  );
+}
+
+export type ContentActions = {
+  disabled: boolean;
+  onToggle: (entry: InstanceContentEntry, enabled: boolean) => void;
+  onRemove: (entry: InstanceContentEntry) => void;
+};
+
+function ContentRowActions({
+  entry,
+  disabled,
+  onToggle,
+  onRemove,
+}: ContentActions & { entry: InstanceContentEntry }) {
+  return (
+    <td className={contentRowStyles.cell}>
+      <div className={contentRowStyles.actions}>
+        <Switch
+          data-content-action="toggle"
+          checked={entry.enabled}
+          disabled={disabled}
+          aria-label={`${entry.enabled ? "Disable" : "Enable"} ${entry.title}`}
+          onCheckedChange={(enabled) => onToggle(entry, enabled)}
+        />
+        <Button
+          data-content-action="remove"
+          type="button"
+          size="icon"
+          variant="ghost"
+          className={contentRowStyles.removeButton}
+          aria-label={`Remove ${formatContentTitle(entry.name)}`}
+          disabled={disabled}
+          onClick={() => onRemove(entry)}
+        >
+          <Trash2Icon aria-hidden className={contentRowStyles.icon} />
+        </Button>
+      </div>
+    </td>
   );
 }

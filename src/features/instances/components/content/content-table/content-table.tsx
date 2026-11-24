@@ -1,7 +1,10 @@
 import { PackageIcon } from "lucide-react";
 import { Fragment } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ContentRow } from "@/features/instances/components/content/content-row";
+import {
+  type ContentActions,
+  ContentRow,
+} from "@/features/instances/components/content/content-row";
 import { ContentTableColumns } from "@/features/instances/components/content/content-table-head";
 import type { useContentVirtualizer } from "@/features/instances/hooks/use-content-virtualizer";
 import type { InstanceContentEntry } from "@/lib/generated/InstanceContentEntry";
@@ -14,20 +17,18 @@ export function ContentTable({
   totalEntries,
   emptyLabel = "No content installed.",
   virtualization,
-  disabled,
-  onToggle,
-  onRemove,
+  actions,
 }: {
   entries: InstanceContentEntry[];
   totalEntries: number;
   /** Shown when there is nothing to list before filters apply. */
   emptyLabel?: string;
   virtualization: ReturnType<typeof useContentVirtualizer>;
-  disabled: boolean;
-  onToggle: (entry: InstanceContentEntry, enabled: boolean) => void;
-  onRemove: (entry: InstanceContentEntry) => void;
+  /** Omitted for read-only lists, such as content a modpack manages. */
+  actions?: ContentActions;
 }) {
   const { viewportRef, virtualizer, virtualRows, tableEvents } = virtualization;
+  const columns = actions ? 2 : 1;
   return (
     <ScrollArea
       className={contentTableStyles.scrollArea}
@@ -40,11 +41,11 @@ export function ContentTable({
           aria-rowcount={entries.length || undefined}
           {...tableEvents}
         >
-          <ContentTableColumns />
+          <ContentTableColumns actions={actions !== undefined} />
           <tbody>
             {entries.length === 0 ? (
               <tr>
-                <td colSpan={2}>
+                <td colSpan={columns}>
                   <div className={contentTableStyles.empty}>
                     <span className={contentTableStyles.emptyIconWell}>
                       <PackageIcon
@@ -70,7 +71,7 @@ export function ContentTable({
                     {gap > 0 ? (
                       <tr aria-hidden="true" tabIndex={-1}>
                         <td
-                          colSpan={2}
+                          colSpan={columns}
                           className={contentTableStyles.emptyCell}
                           style={{ height: gap }}
                         />
@@ -81,9 +82,7 @@ export function ContentTable({
                       index={virtualRow.index}
                       last={virtualRow.index === entries.length - 1}
                       rowRef={virtualizer.measureElement}
-                      disabled={disabled}
-                      onToggle={onToggle}
-                      onRemove={onRemove}
+                      actions={actions}
                     />
                   </Fragment>
                 );
@@ -94,7 +93,7 @@ export function ContentTable({
               virtualRows[virtualRows.length - 1].end ? (
               <tr aria-hidden="true" tabIndex={-1}>
                 <td
-                  colSpan={2}
+                  colSpan={columns}
                   className={contentTableStyles.emptyCell}
                   style={{
                     height:

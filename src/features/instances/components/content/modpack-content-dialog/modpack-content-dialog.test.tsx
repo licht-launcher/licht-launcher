@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { InstanceContentEntry } from "@/lib/generated/InstanceContentEntry";
@@ -19,22 +19,14 @@ function entry(title: string): InstanceContentEntry {
 }
 
 function renderDialog(open: boolean) {
-  const handlers = {
-    onOpenChange: vi.fn(),
-    onToggle: vi.fn(),
-    onRemove: vi.fn(),
-  };
   render(
     <ModpackContentDialog
       open={open}
+      onOpenChange={vi.fn()}
       folder="classic"
       entries={[entry("Sodium"), entry("Iris")]}
-      disabled={false}
-      removalOpen={false}
-      {...handlers}
     />,
   );
-  return handlers;
 }
 
 describe("ModpackContentDialog", () => {
@@ -62,19 +54,15 @@ describe("ModpackContentDialog", () => {
     expect(titles[1]).toContain("Sodium");
   });
 
-  it("toggles and removes modpack content like the content list", () => {
-    const { onToggle, onRemove } = renderDialog(true);
+  it("cannot disable or remove content the modpack manages", () => {
+    renderDialog(true);
 
-    fireEvent.click(screen.getByRole("switch", { name: "Disable Sodium" }));
-    fireEvent.click(screen.getByRole("button", { name: "Remove Iris" }));
-
-    expect(onToggle).toHaveBeenCalledWith(
-      expect.objectContaining({ title: "Sodium" }),
-      false,
-    );
-    expect(onRemove).toHaveBeenCalledWith(
-      expect.objectContaining({ title: "Iris" }),
-    );
+    const dialog = screen.getByRole("dialog", { name: "Modpack content" });
+    expect(within(dialog).getByText("Sodium")).toBeInTheDocument();
+    expect(within(dialog).queryByRole("switch")).not.toBeInTheDocument();
+    expect(
+      within(dialog).queryByRole("button", { name: /^Remove / }),
+    ).not.toBeInTheDocument();
   });
 
   it("renders nothing while closed", () => {

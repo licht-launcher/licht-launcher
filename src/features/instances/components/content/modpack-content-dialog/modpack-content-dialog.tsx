@@ -13,21 +13,20 @@ import type { InstanceContentEntry } from "@/lib/generated/InstanceContentEntry"
 
 import { modpackContentDialogStyles as styles } from "./modpack-content-dialog.styles";
 
-type ContentActions = {
+type ModpackContent = {
   folder: string;
   entries: InstanceContentEntry[];
-  disabled: boolean;
-  removalOpen: boolean;
-  onToggle: (entry: InstanceContentEntry, enabled: boolean) => void;
-  onRemove: (entry: InstanceContentEntry) => void;
 };
 
-/** Lists the files the instance's modpack installed, with the same controls as the content list. */
+/**
+ * Lists the files the instance's modpack installed. They are read-only: the
+ * modpack manages them while the instance is linked to it.
+ */
 export function ModpackContentDialog({
   open,
   onOpenChange,
   ...list
-}: ContentActions & {
+}: ModpackContent & {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -46,14 +45,7 @@ export function ModpackContentDialog({
   );
 }
 
-function ModpackContentList({
-  folder,
-  entries,
-  disabled,
-  removalOpen,
-  onToggle,
-  onRemove,
-}: ContentActions) {
+function ModpackContentList({ folder, entries }: ModpackContent) {
   const sorted = useMemo(() => sortContentEntries(entries, "asc"), [entries]);
   const virtualization = useContentVirtualizer({
     entries: sorted,
@@ -63,17 +55,14 @@ function ModpackContentList({
     sortKey: "name",
     sortDir: "asc",
     enabled: true,
-    disabled,
-    removalOpen,
+    disabled: false,
+    removalOpen: false,
   });
   return (
     <ContentTable
       entries={sorted}
       totalEntries={sorted.length}
       virtualization={virtualization}
-      disabled={disabled}
-      onToggle={onToggle}
-      onRemove={onRemove}
     />
   );
 }

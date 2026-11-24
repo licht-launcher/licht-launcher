@@ -186,11 +186,12 @@ export function ContentSection({
             modpack !== null ? "No extra content installed." : undefined
           }
           virtualization={virtualization}
-          disabled={disabled}
-          onToggle={(entry, enabled) =>
-            update.mutate({ kind: entry.kind, name: entry.name, enabled })
-          }
-          onRemove={setPendingRemoval}
+          actions={{
+            disabled,
+            onToggle: (entry, enabled) =>
+              update.mutate({ kind: entry.kind, name: entry.name, enabled }),
+            onRemove: setPendingRemoval,
+          }}
         />
         {modpack !== null ? (
           <ModpackContentDialog
@@ -198,12 +199,6 @@ export function ContentSection({
             onOpenChange={(open) => setModpackOpenFor(open ? folder : null)}
             folder={folder}
             entries={modpackEntries}
-            disabled={disabled}
-            removalOpen={pendingRemoval !== null}
-            onToggle={(entry, enabled) =>
-              update.mutate({ kind: entry.kind, name: entry.name, enabled })
-            }
-            onRemove={setPendingRemoval}
           />
         ) : null}
         <ContentRemovalDialog
