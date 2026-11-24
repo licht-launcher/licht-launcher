@@ -65,6 +65,8 @@ mod colors {
     pub(super) const STARTED: u8 = 108;
     pub(super) const STOPPED: u8 = 173;
     pub(super) const EXITED: u8 = 167;
+    /// Something about to happen, such as a game launch.
+    pub(super) const LAUNCHING: u8 = 222;
     pub(super) const LIBRARY: u8 = 242;
 }
 
@@ -145,7 +147,7 @@ fn level_style(level: Level) -> Style {
 }
 
 /// Warnings and errors take their level's color; otherwise only messages about
-/// something starting, completing, stopping or exiting stand out.
+/// something launching, starting, completing, stopping or exiting stand out.
 fn message_style(level: Level, message: &str) -> Style {
     match level {
         Level::ERROR => return Style::Color(colors::ERROR),
@@ -158,6 +160,7 @@ fn message_style(level: Level, message: &str) -> Style {
             "started" | "starting" | "completed" => Some(Style::Color(colors::STARTED)),
             "stopped" | "stopping" => Some(Style::Color(colors::STOPPED)),
             "exited" => Some(Style::Color(colors::EXITED)),
+            "launching" => Some(Style::Color(colors::LAUNCHING)),
             _ => None,
         })
         .unwrap_or(Style::Plain)
@@ -382,6 +385,10 @@ mod tests {
         assert_eq!(
             message_style(Level::INFO, "Game exited"),
             Style::Color(colors::EXITED)
+        );
+        assert_eq!(
+            message_style(Level::INFO, "Launching game"),
+            Style::Color(colors::LAUNCHING)
         );
         assert_eq!(
             message_style(Level::INFO, "Launcher is up to date"),
