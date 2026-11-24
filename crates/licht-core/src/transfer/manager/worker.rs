@@ -4,7 +4,7 @@ use crate::{
     InstallationContext, Result,
 };
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::time::{Duration, Instant};
 use tokio::sync::{Mutex, mpsc, watch};
 use tracing::Instrument;
@@ -35,6 +35,7 @@ impl DownloadManager {
             suspending: AtomicBool::new(false),
             restarting: AtomicBool::new(false),
             dirty: AtomicBool::new(false),
+            logged_progress: AtomicU8::new(super::progress::NO_PROGRESS_LOGGED),
             enabled,
         });
         if self.all_paused.load(Ordering::SeqCst) {
