@@ -17,6 +17,7 @@ export function InstanceSettingsDialog({
   open,
   busy,
   versionBusy,
+  instanceActive = false,
   onOpenChange,
   onOpenGlobalSettings,
   onRename,
@@ -29,6 +30,8 @@ export function InstanceSettingsDialog({
   open: boolean;
   busy: boolean;
   versionBusy: boolean;
+  /** The instance's game or a download for it is running. */
+  instanceActive?: boolean;
   onOpenChange: (open: boolean) => void;
   onOpenGlobalSettings: () => void;
   onRename: (name: string) => void;
@@ -84,6 +87,7 @@ export function InstanceSettingsDialog({
             }
             busy={busy}
             versionBusy={versionBusy}
+            instanceActive={instanceActive}
             onChange={update}
             onRename={onRename}
             onChangeVersion={onChangeVersion}

@@ -26,6 +26,7 @@ type DialogMutations = {
 
 export function InstanceDialogs({
   configuring,
+  configuringActive,
   busy,
   mutations,
   configuringOpen,
@@ -42,6 +43,8 @@ export function InstanceDialogs({
   onOpenDelete,
 }: {
   configuring: InstanceEntry | null;
+  /** The configured instance's game or a download for it is running. */
+  configuringActive: boolean;
   busy: boolean;
   mutations: DialogMutations;
   configuringOpen: boolean;
@@ -87,6 +90,7 @@ export function InstanceDialogs({
         open={configuringOpen}
         busy={busy}
         versionBusy={mutations.changeVersion.isPending}
+        instanceActive={configuringActive}
         onOpenChange={onConfiguringOpenChange}
         onOpenGlobalSettings={() => onOpenGlobalSettings("instances")}
         onRename={(name) => {

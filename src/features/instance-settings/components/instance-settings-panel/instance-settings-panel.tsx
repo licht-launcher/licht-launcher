@@ -22,6 +22,7 @@ export function InstanceSettingsPanel({
   versionId,
   busy,
   versionBusy,
+  instanceActive = false,
   preparing = false,
   modpack = null,
   onChange,
@@ -42,6 +43,7 @@ export function InstanceSettingsPanel({
   modpack?: { origin: ModpackOrigin; linked: LinkedModpack | null } | null;
   busy: boolean;
   versionBusy: boolean;
+  instanceActive?: boolean;
   onChange: (patch: Partial<InstanceDraft>) => void;
   onRename: (name: string) => void;
   onChangeVersion: (versionId: string, installed: boolean) => void;
@@ -80,6 +82,7 @@ export function InstanceSettingsPanel({
               versionId={versionId}
               preparing={preparing}
               modpack={modpack}
+              instanceActive={instanceActive}
               busy={busy}
               versionBusy={versionBusy}
               onChangeVersion={onChangeVersion}

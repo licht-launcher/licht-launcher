@@ -344,6 +344,20 @@ describe("InstanceSettingsDialog", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("holds the modpack actions while the game or a download runs", async () => {
+    renderDialog({ entry: linkedEntry, instanceActive: true });
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Instance base" }),
+    );
+
+    expect(
+      await screen.findByRole("button", { name: "Reinstall" }),
+    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Unlink" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Repair" })).toBeEnabled();
+  });
+
   it("unlinks the modpack after the user confirms", async () => {
     const success = vi.spyOn(toast, "success");
     renderDialog({ entry: linkedEntry });

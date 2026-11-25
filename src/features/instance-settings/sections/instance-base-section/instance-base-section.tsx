@@ -40,6 +40,7 @@ export function InstanceBaseSection({
   versionBusy,
   preparing = false,
   modpack = null,
+  instanceActive = false,
   onChangeVersion,
 }: {
   folder: string;
@@ -50,6 +51,8 @@ export function InstanceBaseSection({
    * change while the instance is linked.
    */
   modpack?: { origin: ModpackOrigin; linked: LinkedModpack | null } | null;
+  /** The game or a download is running, so the modpack must not change under it. */
+  instanceActive?: boolean;
   busy: boolean;
   versionBusy: boolean;
   onChangeVersion: (versionId: string, installed: boolean) => void;
@@ -134,7 +137,7 @@ export function InstanceBaseSection({
           origin={modpack.origin}
           linked={modpack.linked}
           preparing={preparing}
-          busy={busy || versionBusy}
+          busy={busy || versionBusy || instanceActive}
         />
       ) : null}
 
