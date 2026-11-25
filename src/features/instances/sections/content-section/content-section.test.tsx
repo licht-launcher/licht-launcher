@@ -48,7 +48,8 @@ function renderContent(
         filter={filter}
         search={search}
         modpack={modpack}
-        toolbar={<button type="button">Refresh content</button>}
+        onFilterChange={vi.fn()}
+        onSearchChange={vi.fn()}
       />
     </QueryClientProvider>,
   );
@@ -423,7 +424,13 @@ describe("ContentSection", () => {
     fireEvent.scroll(viewport, { target: { scrollTop: 1500 * 56 } });
     rerender(
       <QueryClientProvider client={client}>
-        <ContentSection folder="classic" filter="all" search="2999" />
+        <ContentSection
+          folder="classic"
+          filter="all"
+          onFilterChange={vi.fn()}
+          search="2999"
+          onSearchChange={vi.fn()}
+        />
       </QueryClientProvider>,
     );
     expect(await screen.findByText("Mod 2999")).toBeVisible();
@@ -431,14 +438,26 @@ describe("ContentSection", () => {
     expect(screen.getAllByRole("switch")).toHaveLength(1);
     rerender(
       <QueryClientProvider client={client}>
-        <ContentSection folder="classic" filter="resourcePacks" search="" />
+        <ContentSection
+          folder="classic"
+          filter="resourcePacks"
+          onFilterChange={vi.fn()}
+          search=""
+          onSearchChange={vi.fn()}
+        />
       </QueryClientProvider>,
     );
     expect(screen.getByText("Mod 2999")).toBeVisible();
     expect(screen.getAllByRole("switch")).toHaveLength(1);
     rerender(
       <QueryClientProvider client={client}>
-        <ContentSection folder="classic" filter="all" search="" />
+        <ContentSection
+          folder="classic"
+          filter="all"
+          onFilterChange={vi.fn()}
+          search=""
+          onSearchChange={vi.fn()}
+        />
       </QueryClientProvider>,
     );
     fireEvent.click(screen.getByRole("button", { name: "Content" }));

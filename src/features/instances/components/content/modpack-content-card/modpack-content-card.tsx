@@ -39,6 +39,14 @@ export function ModpackContentCard({
   );
 }
 
+/** One column of the card; `value` is `null` when it is not known. */
+type CardFact = { kind: "version" | "updated"; value: string | null };
+
+const FACTS = {
+  version: { label: "Version", icon: <TagIcon aria-hidden /> },
+  updated: { label: "Updated", icon: <ClockIcon aria-hidden /> },
+} as const;
+
 function StoreModpackCard({
   origin,
   linked,
@@ -48,8 +56,10 @@ function StoreModpackCard({
   return (
     <ModpackCard
       title={summary.name}
-      version={summary.version}
-      updated={summary.updated}
+      facts={[
+        { kind: "version", value: summary.version },
+        { kind: "updated", value: summary.updated },
+      ]}
       {...props}
     />
   );
@@ -65,59 +75,52 @@ function FileModpackCard({
     return (
       <ModpackCard
         title={`Imported from a ${SOURCE_LABELS[origin.source]} file`}
+        facts={[]}
         {...props}
       />
     );
   }
   const summary = fileModpackSummary(origin, linked);
+  // An archive carries no release date, so there is no Updated column.
   return (
-    <ModpackCard title={summary.name} version={summary.version} {...props} />
+    <ModpackCard
+      title={summary.name}
+      facts={[{ kind: "version", value: summary.version }]}
+      {...props}
+    />
   );
 }
 
 function ModpackCard({
   iconPath,
   title,
-  version,
-  updated,
+  facts,
   entries,
   onView,
-}: CardProps & {
-  title: string;
-  /** The installed pack version; `null` when unknown, left out for packs from a file. */
-  version?: string | null;
-  /** When that version was released; `null` when unknown, left out for packs from a file. */
-  updated?: string | null;
-}) {
+}: CardProps & { title: string; facts: readonly CardFact[] }) {
   return (
     <section aria-label="Modpack content" className={styles.root}>
       <InstanceIcon iconPath={iconPath} size="md" className={styles.icon} />
       <div className={styles.heading}>
         <h3 className={styles.title}>{title}</h3>
-        {version !== undefined || updated !== undefined ? (
+        {facts.length > 0 ? (
           <dl className={styles.facts}>
-            {version !== undefined ? (
-              <div className={styles.versionFact}>
-                <dt className={styles.label}>Version</dt>
-                <dd className={version ? styles.version : styles.unknown}>
-                  <TagIcon aria-hidden />
+            {facts.map((fact) => (
+              <div
+                key={fact.kind}
+                className={
+                  fact.kind === "version" ? styles.versionFact : styles.fact
+                }
+              >
+                <dt className={styles.label}>{FACTS[fact.kind].label}</dt>
+                <dd className={fact.value ? styles.value : styles.unknown}>
+                  {FACTS[fact.kind].icon}
                   <span className={styles.valueText}>
-                    {version ?? "Unknown"}
+                    {fact.value ?? "Unknown"}
                   </span>
                 </dd>
               </div>
-            ) : null}
-            {updated !== undefined ? (
-              <div className={styles.fact}>
-                <dt className={styles.label}>Updated</dt>
-                <dd className={updated ? styles.value : styles.unknown}>
-                  <ClockIcon aria-hidden />
-                  <span className={styles.valueText}>
-                    {updated ?? "Unknown"}
-                  </span>
-                </dd>
-              </div>
-            ) : null}
+            ))}
           </dl>
         ) : null}
       </div>
