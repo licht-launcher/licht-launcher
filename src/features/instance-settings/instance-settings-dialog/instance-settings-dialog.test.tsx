@@ -198,6 +198,34 @@ describe("InstanceSettingsDialog", () => {
     expect(onChangeVersion).toHaveBeenCalledWith("1.21.1", false);
   });
 
+  it("keeps the game version of an instance linked to a modpack", async () => {
+    renderDialog({
+      entry: {
+        ...entry,
+        installation: {
+          source: {
+            type: "modpack",
+            source: "modrinth",
+            projectId: "fo",
+            versionId: "v15",
+            iconUrl: null,
+          },
+          state: "ready",
+        },
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Instance base" }));
+
+    expect(
+      await screen.findByText(
+        "The linked modpack sets this instance's game version.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit base" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Repair" })).toBeEnabled();
+  });
+
   it("repairs the instance from the base section", async () => {
     invoke.mockImplementation((command: string) => {
       if (command === "get_settings") {
