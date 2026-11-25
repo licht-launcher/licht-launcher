@@ -3,8 +3,8 @@ use std::path::{Path, PathBuf};
 use licht_core::{
     AccountProfile, DownloadJobSnapshot, DownloadProgress, GameExit, GameLine, GameLogEvent,
     InstallProgress, InstanceContentEntry, InstanceContentUpdate, InstanceEntry, InstanceFsEntry,
-    InstanceSettings, JavaDetections, JavaPaths, JavaStatus, Settings, SettingsSnapshot,
-    VersionSummary,
+    InstancePlatform, InstanceSettings, JavaDetections, JavaPaths, JavaStatus, Settings,
+    SettingsSnapshot, VersionSummary,
 };
 use licht_core::{StartupPreviewScenario, StartupProgress};
 use ts_rs::TS;
@@ -45,6 +45,7 @@ fn the_committed_bindings_match_ts_rs() {
     InstanceEntry::export_all(&config).expect("instance entry");
     InstanceFsEntry::export_all(&config).expect("instance fs entry");
     InstanceContentEntry::export_all(&config).expect("instance content entry");
+    InstancePlatform::export_all(&config).expect("instance platform");
     InstanceContentUpdate::export_all(&config).expect("instance content update");
     InstanceSettings::export_all(&config).expect("instance settings");
     DownloadProgress::export_all(&config).expect("progress");
