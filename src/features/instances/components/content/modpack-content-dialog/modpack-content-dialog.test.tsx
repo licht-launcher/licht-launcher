@@ -184,6 +184,21 @@ describe("ModpackContentDialog", () => {
     expect(getModpack).not.toHaveBeenCalled();
   });
 
+  it("describes an imported pack from what its archive declared", () => {
+    renderDialog(true, IMPORTED, {
+      name: "All the Mods",
+      author: "ATM Team",
+      versionName: "1.0",
+      publishedAt: null,
+    });
+
+    expect(
+      screen.getByRole("dialog", { name: "Modpack content" }),
+    ).toHaveAccessibleDescription(
+      "All the Mods 1.0 · by ATM Team · Installed from a Modrinth file",
+    );
+  });
+
   it("says where an imported pack came from", () => {
     renderDialog();
 
