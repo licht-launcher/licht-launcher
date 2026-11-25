@@ -21,6 +21,7 @@ export function InstanceSettingsPanel({
   busy,
   versionBusy,
   preparing = false,
+  linkedModpack = false,
   onChange,
   onRename,
   onChangeVersion,
@@ -35,6 +36,7 @@ export function InstanceSettingsPanel({
   folder: string;
   versionId: string | null;
   preparing?: boolean;
+  linkedModpack?: boolean;
   busy: boolean;
   versionBusy: boolean;
   onChange: (patch: Partial<InstanceDraft>) => void;
@@ -74,6 +76,7 @@ export function InstanceSettingsPanel({
               folder={folder}
               versionId={versionId}
               preparing={preparing}
+              linkedModpack={linkedModpack}
               busy={busy}
               versionBusy={versionBusy}
               onChangeVersion={onChangeVersion}

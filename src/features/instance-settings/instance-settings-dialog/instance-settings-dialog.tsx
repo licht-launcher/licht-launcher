@@ -7,6 +7,7 @@ import { InstanceSettingsPanel } from "@/features/instance-settings/components/i
 import { InstanceSettingsSidebar } from "@/features/instance-settings/components/instance-settings-sidebar";
 import { useInstanceDraft } from "@/features/instance-settings/hooks/use-instance-draft";
 import type { InstanceSectionId } from "@/features/instance-settings/model/sections";
+import { modpackOrigin } from "@/features/instances/lib/modpack-content";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 
 import { instanceSettingsDialogStyles } from "./instance-settings-dialog.styles";
@@ -75,6 +76,7 @@ export function InstanceSettingsDialog({
               entry.installation !== undefined &&
               entry.installation.state !== "ready"
             }
+            linkedModpack={modpackOrigin(entry.installation?.source) !== null}
             busy={busy}
             versionBusy={versionBusy}
             onChange={update}
