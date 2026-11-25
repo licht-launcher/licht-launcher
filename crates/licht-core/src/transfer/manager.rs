@@ -361,14 +361,15 @@ impl DownloadManager {
         // A change left without its job, by a crash or a failed cancel, is finished
         // or cancelled as a change: never as a first install, whose cancel removes
         // the instance.
-        let operation = if profile
-            .installation
-            .as_ref()
-            .is_some_and(|installation| installation.previous_base.is_some())
-        {
-            DownloadJobOperation::ChangeBase
-        } else {
-            operation
+        let operation = match &profile.installation {
+            Some(installation) if installation.previous_base.is_some() => {
+                if matches!(installation.source, InstanceSource::Modpack { .. }) {
+                    DownloadJobOperation::ChangeVersion
+                } else {
+                    DownloadJobOperation::ChangeBase
+                }
+            }
+            _ => operation,
         };
         let job = self
             .runtime

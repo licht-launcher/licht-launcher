@@ -162,9 +162,17 @@ never removes the instance. Until then a failed change waits to be retried or
 cancelled, and the instance cannot launch.
 
 Changing a linked store pack's version works the same way with a `changeVersion`
-job, except that the instance stays `ready`: the new version id goes into the
-installation source, and `previousBase` also keeps the pack's `modpack` details.
-Cancelling puts the previous version, source and details back.
+job: the new version id goes into the installation source, the instance waits in
+the `installing` state, and `previousBase` also keeps the pack's `modpack` details.
+Cancelling puts the previous version, source and details back, but only until the
+job starts replacing content. Just before it removes the previous version's files,
+it records in `previousBase.disabledContent` the pack files the user had disabled;
+from then on a cancel leaves the change waiting for Play to finish it, and the
+finished change disables those files again in the new version.
+
+A job started for an instance with a change waiting (after a crash, or a failed
+restore) always runs as that change, never as a first install, so cancelling it can
+never remove the instance.
 
 Deleting a profile and its modpack index is one database transaction after
 filesystem cleanup succeeds. Missing registered directories are omitted from the

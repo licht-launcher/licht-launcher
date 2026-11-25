@@ -166,7 +166,7 @@ export function InstanceBaseSection({
           type="button"
           variant="outline"
           className={instanceBaseSectionStyles.action}
-          disabled={busy || versionBusy || repair.isPending}
+          disabled={busy || versionBusy || preparing || repair.isPending}
           onClick={() => {
             repair.mutate();
           }}

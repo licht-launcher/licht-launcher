@@ -6,4 +6,10 @@ import type { LinkedModpack } from "./LinkedModpack";
  * What a base or modpack version change replaces: the launch version, the
  * installation source if the instance had one, and a linked pack's details.
  */
-export type PreviousBase = { versionId: string | null, source: InstanceSource | null, modpack?: LinkedModpack, };
+export type PreviousBase = { versionId: string | null, source: InstanceSource | null, modpack?: LinkedModpack, 
+/**
+ * Set once a modpack version change starts replacing content: the pack files
+ * the user had disabled, which the new version disables again. Past that point
+ * the change can only finish, so cancelling it no longer goes back.
+ */
+disabledContent?: Array<string>, };

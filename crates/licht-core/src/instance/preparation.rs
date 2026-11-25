@@ -131,6 +131,12 @@ pub struct PreviousBase {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub modpack: Option<LinkedModpack>,
+    /// Set once a modpack version change starts replacing content: the pack files
+    /// the user had disabled, which the new version disables again. Past that point
+    /// the change can only finish, so cancelling it no longer goes back.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub disabled_content: Option<Vec<String>>,
 }
 
 /// A store pack's details as of its install, so the UI can show them without a request.
@@ -293,6 +299,7 @@ pub async fn begin_instance_base_change(
             version_id: instance.version_id.clone(),
             source: previous,
             modpack: None,
+            disabled_content: None,
         }),
     });
     write_instance(database, &dir, &instance).await?;
@@ -339,13 +346,44 @@ pub async fn begin_modpack_version_change(
         version_id: launch_version,
         source: Some(std::mem::replace(&mut installation.source, target)),
         modpack: installation.modpack.clone(),
+        disabled_content: None,
     });
+    // Not launchable until the change finishes or is cancelled; Play resumes it.
+    installation.state = InstancePreparationState::Installing;
     write_instance(database, &dir, &instance).await?;
     Ok(entry_from(&dir, folder.to_string(), instance))
 }
 
+/// Marks a modpack version change as past the point of no return, just before it
+/// removes the previous version's content. `disabled` lists the pack files the user
+/// had disabled. A change already marked keeps its first list: by then the files it
+/// describes are gone.
+pub(crate) async fn commit_modpack_content_change(
+    database: &crate::DatabaseClient,
+    instances_dir: &Path,
+    folder: &str,
+    disabled: Vec<String>,
+) -> Result<()> {
+    let _guard = profile_guard().await;
+    let dir = instance_dir(instances_dir, folder)?;
+    let mut instance = load_instance(database, &dir).await?;
+    let Some(previous) = instance
+        .installation
+        .as_mut()
+        .and_then(|installation| installation.previous_base.as_mut())
+    else {
+        return Ok(());
+    };
+    if previous.disabled_content.is_none() {
+        previous.disabled_content = Some(disabled);
+        write_instance(database, &dir, &instance).await?;
+    }
+    Ok(())
+}
+
 /// Puts back the base a cancelled base or modpack version change replaced. An
-/// instance with no change waiting is left as it is.
+/// instance with no change waiting is left as it is, and so is a version change
+/// that already replaced content: it waits for Play to finish it.
 pub(crate) async fn restore_instance_base(
     database: &crate::DatabaseClient,
     instances_dir: &Path,
@@ -368,6 +406,9 @@ pub(crate) async fn restore_instance_base(
     else {
         return Ok(());
     };
+    if previous.disabled_content.is_some() {
+        return Ok(());
+    }
     instance.version_id = previous.version_id;
     instance.installation = previous.source.map(|source| InstanceInstallation {
         source,
@@ -627,6 +668,7 @@ mod tests {
                     game_version: "1.21.1".into()
                 }),
                 modpack: None,
+                disabled_content: None,
             })
         );
         configure_instance_version(

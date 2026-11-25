@@ -525,6 +525,33 @@ describe("InstanceSettingsDialog", () => {
     ).toBeDisabled();
   });
 
+  it("waits to repair while the modpack version changes", async () => {
+    renderDialog({
+      entry: {
+        ...entry,
+        installation: {
+          source: {
+            type: "modpack",
+            source: "modrinth",
+            projectId: "fo",
+            versionId: "v16",
+            iconUrl: null,
+          },
+          state: "installing",
+        },
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Instance base" }));
+
+    expect(
+      await screen.findByRole("button", { name: "Repair" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Change version" }),
+    ).toBeDisabled();
+  });
+
   it("repairs the instance from the base section", async () => {
     invoke.mockImplementation((command: string) => {
       if (command === "get_settings") {

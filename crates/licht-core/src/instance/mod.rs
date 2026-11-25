@@ -19,7 +19,9 @@ pub use preparation::{
     configure_instance_version, create_pending_instance, instance_version_for_launch,
     unlink_instance_modpack,
 };
-pub(crate) use preparation::{record_linked_modpack, restore_instance_base};
+pub(crate) use preparation::{
+    commit_modpack_content_change, record_linked_modpack, restore_instance_base,
+};
 
 use std::fs;
 use std::path::{Path, PathBuf};

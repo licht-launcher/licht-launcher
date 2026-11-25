@@ -196,6 +196,10 @@ async fn cancelling_a_modpack_version_change_puts_the_previous_version_back() {
         .expect("change job");
     assert_eq!(failed.operation, DownloadJobOperation::ChangeVersion);
     assert_eq!(failed.status, DownloadJobStatus::Failed);
+    assert!(matches!(
+        crate::instance_version_for_launch(&profile(&fixture, &entry.folder).await),
+        Err(CoreError::InstancePreparing)
+    ));
     let waiting = profile(&fixture, &entry.folder).await;
     assert_eq!(
         waiting.installation.map(|installation| installation.source),
@@ -366,6 +370,7 @@ async fn a_change_or_reinstall_starts_only_from_its_own_action() {
 
     for operation in [
         DownloadJobOperation::ChangeBase,
+        DownloadJobOperation::ChangeVersion,
         DownloadJobOperation::Reinstall,
     ] {
         assert!(matches!(
@@ -374,5 +379,44 @@ async fn a_change_or_reinstall_starts_only_from_its_own_action() {
         ));
     }
     assert!(manager.stored_jobs().await.expect("jobs").is_empty());
+    fixture.close().await;
+}
+
+#[tokio::test]
+async fn a_version_change_past_its_content_waits_to_finish_instead_of_going_back() {
+    let fixture = Fixture::new("http://127.0.0.1:1").await;
+    let manager = fixture.manager();
+    let entry = ready_store_pack(&fixture, "Committed").await;
+    let root = fixture.game.instances_dir().expect("instances");
+    crate::begin_modpack_version_change(&fixture.database(), &root, &entry.folder, "v16")
+        .await
+        .expect("begin");
+    // The job started replacing the pack's content before it stopped.
+    crate::instance::commit_modpack_content_change(
+        &fixture.database(),
+        &root,
+        &entry.folder,
+        vec!["mods/sodium.jar".into()],
+    )
+    .await
+    .expect("commit");
+
+    let resumed = manager
+        .prepare(&entry.folder, DownloadJobOperation::Install)
+        .await
+        .expect("prepare");
+    assert_eq!(resumed.operation, DownloadJobOperation::ChangeVersion);
+    manager.cancel(&resumed.id).await.expect("cancel");
+
+    let waiting = profile(&fixture, &entry.folder).await;
+    let installation = waiting.installation.expect("installation");
+    assert_eq!(installation.source, store_pack("v16"));
+    assert_eq!(installation.state, InstancePreparationState::Installing);
+    assert_eq!(
+        installation
+            .previous_base
+            .and_then(|previous| previous.disabled_content),
+        Some(vec!["mods/sodium.jar".to_string()])
+    );
     fixture.close().await;
 }

@@ -253,16 +253,62 @@ fn reset_pack_content(dir: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Removes the content files (mods, resource packs, shader packs) the instance's
-/// pack installed, whether the user left them enabled or disabled, and the folder
-/// packs they empty. Content the user added and other pack files, such as configs
-/// the next version overwrites, stay. Links are never followed.
-async fn remove_pack_content_files(
+/// The content files of the instance's pack (`mods/a.jar`) the user disabled: a
+/// file the pack ships enabled that is now only there as `name.disabled`.
+async fn disabled_pack_content(
     database: &crate::DatabaseClient,
     instances_dir: &Path,
     folder: &str,
     dir: &Path,
-) -> Result<()> {
+) -> Result<Vec<String>> {
+    let mut disabled = Vec::new();
+    for relative in pack_content_paths(database, instances_dir, folder).await? {
+        if relative.ends_with(DISABLED_SUFFIX) {
+            continue;
+        }
+        let path = path_safety::safe_instance_path(dir, &relative, &[])?;
+        let toggled = path.with_file_name(format!(
+            "{}{DISABLED_SUFFIX}",
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or_default()
+        ));
+        if std::fs::symlink_metadata(&path).is_err()
+            && std::fs::symlink_metadata(&toggled).is_ok_and(|metadata| metadata.is_file())
+        {
+            disabled.push(relative);
+        }
+    }
+    Ok(disabled)
+}
+
+/// Disables again, in the new version, the pack files the user had disabled in the
+/// previous one. Files the new version no longer ships are skipped.
+pub(crate) fn disable_content_again(dir: &Path, disabled: &[String]) -> Result<()> {
+    for relative in disabled {
+        let path = path_safety::safe_instance_path(dir, relative, &[])?;
+        let toggled = path.with_file_name(format!(
+            "{}{DISABLED_SUFFIX}",
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or_default()
+        ));
+        if std::fs::symlink_metadata(&path).is_ok_and(|metadata| metadata.is_file())
+            && std::fs::symlink_metadata(&toggled).is_err()
+        {
+            std::fs::rename(&path, &toggled)?;
+        }
+    }
+    Ok(())
+}
+
+/// The instance-relative content paths (under `mods`, `resourcepacks` or
+/// `shaderpacks`) the instance's pack rows list.
+async fn pack_content_paths(
+    database: &crate::DatabaseClient,
+    instances_dir: &Path,
+    folder: &str,
+) -> Result<Vec<String>> {
     let paths = database
         .modpack_files(instances_dir, folder)
         .await?
@@ -280,22 +326,39 @@ async fn remove_pack_content_files(
                 .modpack_override_files(instances_dir, folder)
                 .await?,
         );
-    for relative in paths {
-        let relative = relative.replace('\\', "/");
+    Ok(paths
+        .map(|relative| relative.replace('\\', "/"))
+        .filter(|relative| {
+            relative
+                .split_once('/')
+                .is_some_and(|(top, _)| CONTENT_FOLDERS.contains(&top))
+        })
+        .collect())
+}
+
+const DISABLED_SUFFIX: &str = ".disabled";
+
+/// Removes the content files (mods, resource packs, shader packs) the instance's
+/// pack installed, whether the user left them enabled or disabled, and the folder
+/// packs they empty. Content the user added and other pack files, such as configs
+/// the next version overwrites, stay. Links are never followed.
+async fn remove_pack_content_files(
+    database: &crate::DatabaseClient,
+    instances_dir: &Path,
+    folder: &str,
+    dir: &Path,
+) -> Result<()> {
+    for relative in pack_content_paths(database, instances_dir, folder).await? {
         let Some((top, _)) = relative.split_once('/') else {
             continue;
         };
-        if !CONTENT_FOLDERS.contains(&top) {
-            continue;
-        }
         let path = path_safety::safe_instance_path(dir, &relative, &[])?;
         let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
             continue;
         };
-        const DISABLED: &str = ".disabled";
-        let toggled = match name.strip_suffix(DISABLED) {
+        let toggled = match name.strip_suffix(DISABLED_SUFFIX) {
             Some(enabled) => enabled.to_string(),
-            None => format!("{name}{DISABLED}"),
+            None => format!("{name}{DISABLED_SUFFIX}"),
         };
         for candidate in [path.clone(), path.with_file_name(toggled)] {
             if std::fs::symlink_metadata(&candidate).is_ok_and(|metadata| metadata.is_file()) {
@@ -379,6 +442,17 @@ async fn install_modpack(
         ContentReset::Keep => {}
         ContentReset::Folders => reset_pack_content(&dir)?,
         ContentReset::PackFiles => {
+            // Past this point the change can only finish: record that, with the
+            // files the user disabled, before anything is removed.
+            let disabled =
+                disabled_pack_content(database, instances_dir, &entry.folder, &dir).await?;
+            crate::instance::commit_modpack_content_change(
+                database,
+                instances_dir,
+                &entry.folder,
+                disabled,
+            )
+            .await?;
             remove_pack_content_files(database, instances_dir, &entry.folder, &dir).await?;
         }
     }
@@ -666,6 +740,10 @@ mod tests {
             .await
             .expect("overrides");
 
+        let disabled = disabled_pack_content(&client, &instances, "Pack", &dir)
+            .await
+            .expect("disabled");
+        assert_eq!(disabled, ["mods/toggled.jar"]);
         remove_pack_content_files(&client, &instances, "Pack", &dir)
             .await
             .expect("remove");
@@ -689,6 +767,29 @@ mod tests {
         );
         assert!(dir.join("shaderpacks").is_dir());
         service.shutdown().await.expect("shutdown");
+    }
+
+    #[test]
+    fn the_new_version_keeps_the_pack_files_the_user_disabled_disabled() {
+        let temp = TempDir::new("version-change-disabled");
+        let dir = temp.path().join("Pack");
+        std::fs::create_dir_all(dir.join("mods")).expect("mods");
+        std::fs::write(dir.join("mods/sodium.jar"), b"new").expect("shipped again");
+        std::fs::write(dir.join("mods/kept.jar"), b"new").expect("other mod");
+
+        disable_content_again(
+            &dir,
+            &[
+                "mods/sodium.jar".to_string(),
+                "mods/dropped.jar".to_string(),
+            ],
+        )
+        .expect("disable");
+
+        assert!(!dir.join("mods/sodium.jar").exists());
+        assert!(dir.join("mods/sodium.jar.disabled").is_file());
+        assert!(dir.join("mods/kept.jar").is_file());
+        assert!(!dir.join("mods/dropped.jar.disabled").exists());
     }
 
     #[test]

@@ -207,6 +207,16 @@ pub(crate) fn execute(
                 .await?;
         }
         context.checkpoint().await?;
+        // The new version installs pack files enabled; disable again the ones the
+        // user had disabled in the previous version.
+        if let Some(disabled) = load_instance(&runtime.database, &dir)
+            .await?
+            .installation
+            .and_then(|installation| installation.previous_base)
+            .and_then(|previous| previous.disabled_content)
+        {
+            crate::modpacks::disable_content_again(&dir, &disabled)?;
+        }
         complete_instance_preparation(&runtime.database, &root, &folder).await?;
         Ok(())
     })
