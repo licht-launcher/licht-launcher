@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDownIcon } from "lucide-react";
 import { type ReactNode, useId } from "react";
-
 import { Button } from "@/components/ui/button";
 import {
   Collapsible,
@@ -21,7 +20,6 @@ import { LOADER_TONES } from "@/features/discover/components/loader-badge/loader
 import {
   categorySearchable,
   parseModpackSource,
-  SOURCE_LABELS,
   toggleCategory,
   toggleLoader,
   withSource,
@@ -35,6 +33,7 @@ import { createVersionChoices } from "@/features/instances/model/create-versions
 import { PlatformIcon } from "@/features/new-instance/assets/platform-icons";
 import type { ModpackSearchFilters } from "@/lib/generated/ModpackSearchFilters";
 import type { ModpackSource } from "@/lib/generated/ModpackSource";
+import { SOURCE_LABELS } from "@/lib/modpack-sources";
 import { cn } from "@/lib/utils";
 
 import { discoverFiltersStyles } from "./discover-filters.styles";

@@ -1,15 +1,14 @@
 import { XIcon } from "lucide-react";
 import type { ReactNode } from "react";
-
 import { Badge } from "@/components/ui/badge";
 import { CategoryBadge } from "@/features/discover/components/category-badge";
 import { LoaderBadge } from "@/features/discover/components/loader-badge";
-import { SOURCE_LABELS } from "@/features/discover/lib/discover-search";
 import {
   CATEGORY_BY_VALUE,
   LOADER_LABELS,
 } from "@/features/discover/lib/filter-options";
 import type { ModpackSearchFilters } from "@/lib/generated/ModpackSearchFilters";
+import { SOURCE_LABELS } from "@/lib/modpack-sources";
 
 import { activeFiltersStyles } from "./active-filters.styles";
 

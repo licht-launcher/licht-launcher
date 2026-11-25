@@ -1,13 +1,12 @@
 import { Link } from "@tanstack/react-router";
 import { CalendarClockIcon, DownloadIcon, PackageIcon } from "lucide-react";
-
 import { CategoryBadge } from "@/features/discover/components/category-badge";
 import {
   formatDownloads,
-  formatTimeAgo,
   formatUpdatedAt,
 } from "@/features/discover/lib/format";
 import type { ModpackListItem } from "@/lib/generated/ModpackListItem";
+import { formatTimeAgo } from "@/lib/time-ago";
 
 import { modpackRowStyles } from "./modpack-row.styles";
 

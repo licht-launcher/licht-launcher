@@ -165,8 +165,3 @@ export function withSource(
 export function parseModpackSource(value: string): ModpackSource | null {
   return pick(value, MODPACK_SOURCES) ?? null;
 }
-
-export const SOURCE_LABELS: Record<ModpackSource, string> = {
-  modrinth: "Modrinth",
-  curseforge: "CurseForge",
-};

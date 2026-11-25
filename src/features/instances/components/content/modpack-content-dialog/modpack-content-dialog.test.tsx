@@ -3,6 +3,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ModpackOrigin } from "@/features/instances/lib/modpack-content";
+import { mockVirtualListLayout } from "@/features/instances/tests/support/virtual-list-layout";
 import type { InstanceContentEntry } from "@/lib/generated/InstanceContentEntry";
 import type { InstanceContentKind } from "@/lib/generated/InstanceContentKind";
 import type { LinkedModpack } from "@/lib/generated/LinkedModpack";
@@ -78,18 +79,12 @@ function listedTitles(): (string | null)[] {
 }
 
 describe("ModpackContentDialog", () => {
-  // jsdom has no layout, so give the virtualized list a viewport and row heights.
+  let restoreLayout: () => void = () => {};
   beforeEach(() => {
-    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(
-      function (this: HTMLElement) {
-        if (this.dataset.slot === "scroll-area-viewport") return 260;
-        return this.tagName === "TR" ? 52 : 0;
-      },
-    );
-    vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(960);
+    restoreLayout = mockVirtualListLayout();
   });
 
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => restoreLayout());
 
   it("lists the modpack content by name with counts per kind", () => {
     renderDialog();
