@@ -2,7 +2,10 @@ import { ClockIcon, EyeIcon, TagIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SOURCE_LABELS } from "@/features/discover/lib/discover-search";
 import { InstanceIcon } from "@/features/instances/components/instance-icon";
-import { useStoreModpackSummary } from "@/features/instances/hooks/use-modpack-summary";
+import {
+  fileModpackSummary,
+  useStoreModpackSummary,
+} from "@/features/instances/hooks/use-modpack-summary";
 import type {
   FileModpackOrigin,
   ModpackOrigin,
@@ -32,7 +35,7 @@ export function ModpackContentCard({
   return origin.type === "modpack" ? (
     <StoreModpackCard origin={origin} linked={linked} {...props} />
   ) : (
-    <FileModpackCard origin={origin} {...props} />
+    <FileModpackCard origin={origin} linked={linked} {...props} />
   );
 }
 
@@ -54,13 +57,21 @@ function StoreModpackCard({
 
 function FileModpackCard({
   origin,
+  linked,
   ...props
-}: CardProps & { origin: FileModpackOrigin }) {
+}: CardProps & { origin: FileModpackOrigin; linked: LinkedModpack | null }) {
+  // Older imports saved nothing about the pack, so only its source is known.
+  if (linked === null) {
+    return (
+      <ModpackCard
+        title={`Imported from a ${SOURCE_LABELS[origin.source]} file`}
+        {...props}
+      />
+    );
+  }
+  const summary = fileModpackSummary(origin, linked);
   return (
-    <ModpackCard
-      title={`Imported from a ${SOURCE_LABELS[origin.source]} file`}
-      {...props}
-    />
+    <ModpackCard title={summary.name} version={summary.version} {...props} />
   );
 }
 

@@ -75,7 +75,7 @@ export function ModpackContentDialog({
             />
           ) : (
             <ModpackHeading
-              summary={fileModpackSummary(origin)}
+              summary={fileModpackSummary(origin, linked)}
               iconPath={iconPath}
             />
           )}

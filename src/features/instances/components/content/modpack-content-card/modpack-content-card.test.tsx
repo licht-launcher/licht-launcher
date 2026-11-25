@@ -162,6 +162,24 @@ describe("ModpackContentCard", () => {
     expect(getModpack).not.toHaveBeenCalled();
   });
 
+  it("names an imported pack and its version from what its archive declared", () => {
+    renderCard({ type: "modpackFile", source: "modrinth" }, ENTRIES, {
+      name: "Fresh & Smooth",
+      author: null,
+      versionName: "2.1.0",
+      publishedAt: null,
+    });
+
+    expect(
+      screen.getByRole("heading", { name: "Fresh & Smooth" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Version").nextElementSibling).toHaveTextContent(
+      "2.1.0",
+    );
+    expect(screen.queryByText("Updated")).not.toBeInTheDocument();
+    expect(getModpack).not.toHaveBeenCalled();
+  });
+
   it("asks to view the modpack content", () => {
     const { onView } = renderCard({
       type: "modpackFile",

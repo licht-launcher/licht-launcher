@@ -143,6 +143,15 @@ installation selection/state use JSON columns. Reads and writes share validation
 An asynchronous mutation lock prevents settings edits and background preparation
 from overwriting each other's changes.
 
+For a modpack instance, the installation JSON may also hold `modpack`: the pack's
+name, author, installed version name and that version's release date, so the
+Content tab can show them without a network request. A store install records what
+the store reports, after the pack archive downloads. A pack imported from a file
+records what its `modrinth.index.json` or `manifest.json` declares, with no release
+date. The field is optional: instances installed before it existed, and installs
+whose details could not be read, have none, and the UI falls back to asking the
+store or to the pack's source.
+
 Deleting a profile and its modpack index is one database transaction after
 filesystem cleanup succeeds. Missing registered directories are omitted from the
 list. Duplication copies game files and creates a separate database profile,
