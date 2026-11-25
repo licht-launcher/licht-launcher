@@ -184,14 +184,10 @@ pub(crate) async fn reinstall_modpack_instance(
     .await
 }
 
-/// Clears what a reinstall replaces: the content folders, with anything the user
-/// added to them, and the pack's stored rows. Worlds and other folders stay.
-async fn reset_pack_content(
-    database: &crate::DatabaseClient,
-    instances_dir: &Path,
-    folder: &str,
-    dir: &Path,
-) -> Result<()> {
+/// Clears the content folders a reinstall replaces, with anything the user added to
+/// them. Worlds and other folders stay. The pack's stored rows are kept: the import
+/// replaces them, and until it does, Repair can still restore the previous files.
+fn reset_pack_content(dir: &Path) -> Result<()> {
     for name in ["mods", "resourcepacks", "shaderpacks"] {
         // `remove_dir_all` removes a linked folder's link, not the folder it points to.
         match std::fs::remove_dir_all(dir.join(name)) {
@@ -200,7 +196,7 @@ async fn reset_pack_content(
             Err(error) => return Err(error.into()),
         }
     }
-    database.delete_modpack(instances_dir, folder).await
+    Ok(())
 }
 
 // One flag separates a first install from a reinstall; the steps are otherwise shared.
@@ -260,7 +256,7 @@ async fn install_modpack(
     }
     context.stage(crate::DownloadPhase::Extracting).await?;
     if reset_content {
-        reset_pack_content(database, instances_dir, &entry.folder, &dir).await?;
+        reset_pack_content(&dir)?;
     }
     let bytes = std::fs::read(&archive)?;
     if remote.is_none()
@@ -399,7 +395,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_reinstall_clears_only_the_content_folders_and_the_pack_rows() {
+    async fn a_reinstall_clears_only_the_content_folders_and_keeps_the_pack_rows() {
         let temp = TempDir::new("reinstall-reset");
         let root = temp.path().to_path_buf();
         let service = crate::DatabaseService::start(
@@ -429,25 +425,22 @@ mod tests {
             .await
             .expect("overrides");
 
-        reset_pack_content(&client, &instances, "Pack", &dir)
-            .await
-            .expect("reset");
+        reset_pack_content(&dir).expect("reset");
 
         for folder in ["mods", "resourcepacks", "shaderpacks"] {
             assert!(!dir.join(folder).exists(), "{folder} is cleared");
         }
         assert!(dir.join("saves").join("World").join("level.dat").is_file());
         assert!(dir.join("config").join("mod.toml").is_file());
-        assert!(
+        // Until the import replaces them, Repair can still restore the old pack.
+        assert_eq!(
             client
                 .modpack_override_files(&instances, "Pack")
                 .await
-                .expect("overrides")
-                .is_empty()
+                .expect("overrides"),
+            ["config/mod.toml"]
         );
-        reset_pack_content(&client, &instances, "Pack", &dir)
-            .await
-            .expect("an already cleared instance resets again");
+        reset_pack_content(&dir).expect("an already cleared instance resets again");
         service.shutdown().await.expect("shutdown");
     }
 

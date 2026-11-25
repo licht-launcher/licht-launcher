@@ -134,6 +134,7 @@ export function InstanceBaseSection({
           origin={modpack.origin}
           linked={modpack.linked}
           preparing={preparing}
+          busy={busy || versionBusy}
         />
       ) : null}
 

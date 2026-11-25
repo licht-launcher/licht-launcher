@@ -177,14 +177,40 @@ impl DownloadManager {
         if installation.state != crate::InstancePreparationState::Ready {
             return Err(CoreError::InstancePreparing);
         }
-        // Another unfinished task would otherwise be resumed instead of the reinstall.
-        if self.stored_jobs().await?.into_iter().any(|job| {
-            job.instance_folder.as_deref() == Some(folder)
-                && job.operation != DownloadJobOperation::Reinstall
-        }) {
+        self.ensure_not_running(folder)?;
+        self.prepare(folder, DownloadJobOperation::Reinstall).await
+    }
+
+    /// Unlinks a ready instance from its modpack. Holding the start lock while no job
+    /// exists for the instance keeps a running reinstall or repair from writing the
+    /// pack back after it is forgotten.
+    pub async fn unlink(self: &Arc<Self>, folder: &str) -> Result<InstanceEntry> {
+        let _starts = self.starts.lock().await;
+        if self
+            .stored_jobs()
+            .await?
+            .iter()
+            .any(|job| job.instance_folder.as_deref() == Some(folder))
+        {
             return Err(CoreError::DownloadJobExists);
         }
-        self.prepare(folder, DownloadJobOperation::Reinstall).await
+        crate::unlink_instance_modpack(
+            &self.runtime.database,
+            &self.runtime.game.instances_dir()?,
+            folder,
+        )
+        .await
+    }
+
+    /// Changing a pack under a running game fails halfway on locked files.
+    fn ensure_not_running(&self, folder: &str) -> Result<()> {
+        let dir = self.runtime.game.instance_dir(folder)?;
+        match crate::read_launch_lock(&dir)? {
+            Some(lock) if crate::process_matches_lock(lock.pid, lock.start_time) => {
+                Err(CoreError::InstanceRunning)
+            }
+            _ => Ok(()),
+        }
     }
 
     pub async fn prepare(
@@ -208,6 +234,13 @@ impl DownloadManager {
             .into_iter()
             .find(|job| job.instance_folder.as_deref() == Some(folder))
         {
+            // Checked under the lock, so another task started meanwhile is never
+            // resumed in place of a reinstall.
+            if operation == DownloadJobOperation::Reinstall
+                && job.operation != DownloadJobOperation::Reinstall
+            {
+                return Err(CoreError::DownloadJobExists);
+            }
             if operation == DownloadJobOperation::Repair {
                 return self.restart_repair(job).await;
             }

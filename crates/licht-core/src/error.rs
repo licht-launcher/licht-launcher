@@ -82,6 +82,8 @@ pub enum CoreError {
     InstancePreparing,
     #[error("this instance is not linked to a modpack")]
     InstanceNotLinked,
+    #[error("close the game before changing this instance's modpack")]
+    InstanceRunning,
     #[error(
         "a modpack imported from a file cannot be reinstalled, because its archive is not kept"
     )]

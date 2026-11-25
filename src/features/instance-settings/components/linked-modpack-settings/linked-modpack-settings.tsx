@@ -36,17 +36,23 @@ export function LinkedModpackSettings({
   origin,
   linked,
   preparing,
+  busy,
 }: {
   folder: string;
   origin: ModpackOrigin;
   linked: LinkedModpack | null;
   preparing: boolean;
+  /** Another action on the instance is running. */
+  busy: boolean;
 }) {
   const queryClient = useQueryClient();
   const unlink = useMutation({
     mutationFn: () => unlinkInstanceModpack(folder),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["instances"] });
+      await queryClient.invalidateQueries({
+        queryKey: ["instance-content", folder],
+      });
       toast.success("Modpack unlinked.");
     },
     onError: (error: unknown) => toast.error(friendlyError(messageOf(error))),
@@ -68,7 +74,7 @@ export function LinkedModpackSettings({
   const source = fromFile
     ? `Imported from a ${SOURCE_LABELS[origin.source]} file`
     : `${SOURCE_LABELS[origin.source]} modpack`;
-  const busy = preparing || unlink.isPending || reinstall.isPending;
+  const disabled = busy || preparing || unlink.isPending || reinstall.isPending;
 
   return (
     <div className={styles.root}>
@@ -85,7 +91,7 @@ export function LinkedModpackSettings({
         icon={<RotateCcwIcon data-icon="inline-start" aria-hidden />}
         action="Reinstall"
         question="Reinstall this modpack?"
-        disabled={busy || fromFile}
+        disabled={disabled || fromFile}
         onConfirm={() => reinstall.mutate()}
       />
       <ConfirmedAction
@@ -94,7 +100,7 @@ export function LinkedModpackSettings({
         icon={<UnlinkIcon data-icon="inline-start" aria-hidden />}
         action="Unlink"
         question="Unlink this modpack?"
-        disabled={busy}
+        disabled={disabled}
         onConfirm={() => unlink.mutate()}
       />
     </div>
