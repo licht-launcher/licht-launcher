@@ -1,23 +1,16 @@
-import { useIsFetching, useQueryClient } from "@tanstack/react-query";
 import {
   BlocksIcon,
   EraserIcon,
   FolderIcon,
   FolderOpenIcon,
-  RefreshCwIcon,
-  SearchIcon,
   SquareTerminalIcon,
 } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 import { openInstanceFolder } from "@/api/commands";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { PageTransition } from "@/components/ui/page-transition";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ContentFilterSelect } from "@/features/instances/components/content/content-filter-select";
 import type { PlayPhase } from "@/features/instances/hooks/use-play-session";
-import { instanceContentQuery } from "@/features/instances/lib/content-query";
 import type { LogLevelSelection } from "@/features/instances/lib/log-level";
 import { modpackOrigin } from "@/features/instances/lib/modpack-content";
 import type { ConsoleLine } from "@/features/instances/model/console-line";
@@ -34,7 +27,6 @@ import {
   FilesSection,
 } from "@/features/instances/sections/files-section";
 import { PlaySection } from "@/features/instances/sections/play-section";
-import { friendlyError, messageOf } from "@/lib/errors";
 import type { DownloadJobSnapshot } from "@/lib/generated/DownloadJobSnapshot";
 import type { DownloadProgress } from "@/lib/generated/DownloadProgress";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
@@ -81,10 +73,7 @@ export function HomePanel({
   );
   const [filesPath, setFilesPath] = useState("");
   const [pathFolder, setPathFolder] = useState<string | null>(null);
-  const queryClient = useQueryClient();
   const folder = instance?.folder ?? null;
-  const refreshingContent =
-    useIsFetching({ queryKey: ["instance-content", folder] }) > 0;
   if (pathFolder !== folder) {
     setPathFolder(folder);
     setFilesPath("");
@@ -92,46 +81,6 @@ export function HomePanel({
   }
 
   const modpack = modpackOrigin(instance?.installation?.source);
-  const contentToolbar = (
-    <>
-      <Input
-        aria-label="Search content"
-        className={homePanelStyles.searchInput}
-        placeholder="Search content"
-        value={contentSearch}
-        startIcon={<SearchIcon aria-hidden />}
-        onChange={(event) => setContentSearch(event.target.value)}
-      />
-      <ContentFilterSelect
-        value={contentFilter}
-        onValueChange={setContentFilter}
-      />
-      <Button
-        type="button"
-        variant="outline"
-        size="icon"
-        aria-label="Refresh content"
-        disabled={folder === null || refreshingContent}
-        onClick={() => {
-          if (folder === null) return;
-          void queryClient
-            .fetchQuery({
-              ...instanceContentQuery(queryClient, folder, true),
-              staleTime: 0,
-            })
-            .catch((error: unknown) =>
-              toast.error(friendlyError(messageOf(error))),
-            );
-        }}
-      >
-        <RefreshCwIcon
-          aria-hidden
-          className={refreshingContent ? homePanelStyles.refreshing : undefined}
-        />
-      </Button>
-    </>
-  );
-
   return (
     <div className={homePanelStyles.root}>
       <div className={homePanelStyles.header}>
@@ -247,11 +196,12 @@ export function HomePanel({
             <ContentSection
               folder={folder}
               filter={contentFilter}
+              onFilterChange={setContentFilter}
               search={contentSearch}
+              onSearchChange={setContentSearch}
               modpack={modpack}
               linkedModpack={instance?.installation?.modpack ?? null}
               iconPath={instance?.iconPath ?? null}
-              toolbar={contentToolbar}
             />
           </PageTransition>
         </TabsContent>

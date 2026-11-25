@@ -1,11 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PackagePlusIcon } from "lucide-react";
-import { type ReactNode, useMemo, useState } from "react";
-import { toast } from "sonner";
-import {
-  removeInstanceContent,
-  setInstanceContentEnabled,
-} from "@/api/commands";
+import { useMemo, useState } from "react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Progress } from "@/components/ui/progress";
 import { ContentLoading } from "@/features/instances/components/content/content-loading";
@@ -15,10 +9,11 @@ import {
   ContentTableColumns,
   ContentTableHead,
 } from "@/features/instances/components/content/content-table-head";
+import { ContentToolbar } from "@/features/instances/components/content/content-toolbar";
 import { ModpackContentCard } from "@/features/instances/components/content/modpack-content-card";
 import { ModpackContentDialog } from "@/features/instances/components/content/modpack-content-dialog";
 import { useContentVirtualizer } from "@/features/instances/hooks/use-content-virtualizer";
-import { instanceContentQuery } from "@/features/instances/lib/content-query";
+import { useInstanceContent } from "@/features/instances/hooks/use-instance-content";
 import {
   type ContentFilter,
   type ContentSortDir,
@@ -28,36 +23,37 @@ import {
   toggleContentSort,
 } from "@/features/instances/lib/content-table";
 import type { ModpackOrigin } from "@/features/instances/lib/modpack-content";
-import { friendlyError, messageOf } from "@/lib/errors";
 import type { InstanceContentEntry } from "@/lib/generated/InstanceContentEntry";
-import type { InstanceContentKind } from "@/lib/generated/InstanceContentKind";
 import type { LinkedModpack } from "@/lib/generated/LinkedModpack";
 
 import { contentSectionStyles } from "./content-section.styles";
 
 export type { ContentFilter } from "@/features/instances/lib/content-table";
-export const CONTENT_STALE_TIME = Number.POSITIVE_INFINITY;
 
 export function ContentSection({
   folder,
   filter,
+  onFilterChange,
   search,
+  onSearchChange,
   modpack = null,
   linkedModpack = null,
   iconPath = null,
-  toolbar = null,
 }: {
   folder: string | null;
+  /** Search and filter live with the caller, so they survive switching instances. */
   filter: ContentFilter;
+  onFilterChange: (filter: ContentFilter) => void;
   search: string;
+  onSearchChange: (search: string) => void;
   modpack?: ModpackOrigin | null;
-  /** The pack's store details saved at install, when the instance has them. */
+  /** The pack's details saved at install, when the instance has them. */
   linkedModpack?: LinkedModpack | null;
   iconPath?: string | null;
-  /** Search, filter and refresh controls, shown right above the list. */
-  toolbar?: ReactNode;
 }) {
-  const queryClient = useQueryClient();
+  const instanceContent = useInstanceContent(folder);
+  const { content, modpackEntries, extraEntries, busy, toggle, remove } =
+    instanceContent;
   const [pendingRemoval, setPendingRemoval] =
     useState<InstanceContentEntry | null>(null);
   const [sortKey, setSortKey] = useState<ContentSortKey>("name");
@@ -66,66 +62,14 @@ export function ContentSection({
   const [modpackOpenFor, setModpackOpenFor] = useState<string | null>(null);
   const modpackOpen =
     modpack !== null && folder !== null && modpackOpenFor === folder;
-  const content = useQuery({
-    ...instanceContentQuery(queryClient, folder ?? ""),
-    enabled: folder !== null,
-    staleTime: CONTENT_STALE_TIME,
-  });
-  const update = useMutation({
-    mutationFn: (input: {
-      kind: InstanceContentKind;
-      name: string;
-      enabled: boolean;
-    }) =>
-      setInstanceContentEnabled(
-        folder ?? "",
-        input.kind,
-        input.name,
-        input.enabled,
-      ),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: ["instance-content", folder],
-      });
-      toast.success("Content status updated.");
-    },
-    onError: (error) => toast.error(friendlyError(messageOf(error))),
-  });
-  const remove = useMutation({
-    mutationFn: (entry: InstanceContentEntry) =>
-      removeInstanceContent(
-        folder ?? "",
-        entry.kind,
-        entry.name,
-        entry.enabled,
-      ),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: ["instance-content", folder],
-      });
-      toast.success("Content removed.");
-    },
-    onError: (error) => toast.error(friendlyError(messageOf(error))),
-  });
-  const modpackEntries = useMemo(
-    () => (content.data ?? []).filter((entry) => entry.fromModpack),
-    [content.data],
-  );
-  const listedEntries = useMemo(
-    () => (content.data ?? []).filter((entry) => !entry.fromModpack),
-    [content.data],
-  );
   const sortedEntries = useMemo(
     () =>
       sortContentEntries(
-        filterContentEntries(listedEntries, filter, search),
+        filterContentEntries(extraEntries, filter, search),
         sortDir,
       ),
-    [listedEntries, filter, search, sortDir],
+    [extraEntries, filter, search, sortDir],
   );
-  const disabled = update.isPending || remove.isPending;
-  const toggleContent = (entry: InstanceContentEntry, enabled: boolean) =>
-    update.mutate({ kind: entry.kind, name: entry.name, enabled });
   const virtualization = useContentVirtualizer({
     entries: sortedEntries,
     folder,
@@ -134,7 +78,7 @@ export function ContentSection({
     sortKey,
     sortDir,
     enabled: folder !== null && content.data !== undefined,
-    disabled,
+    disabled: busy,
     removalOpen: pendingRemoval !== null,
   });
 
@@ -152,9 +96,7 @@ export function ContentSection({
 
   // Nothing to search, filter or refresh until the user adds content of their own.
   const noExtraContent =
-    modpack !== null &&
-    content.data !== undefined &&
-    listedEntries.length === 0;
+    modpack !== null && content.data !== undefined && extraEntries.length === 0;
 
   return (
     <div className={contentSectionStyles.layout}>
@@ -176,12 +118,19 @@ export function ContentSection({
                 Extra content{" "}
                 {content.data !== undefined ? (
                   <span className={contentSectionStyles.extraCount}>
-                    {listedEntries.length}
+                    {extraEntries.length}
                   </span>
                 ) : null}
               </h3>
             ) : null}
-            {toolbar}
+            <ContentToolbar
+              search={search}
+              onSearchChange={onSearchChange}
+              filter={filter}
+              onFilterChange={onFilterChange}
+              refreshing={instanceContent.refreshing}
+              onRefresh={instanceContent.refresh}
+            />
           </div>
         )}
         {content.isPending ? (
@@ -222,11 +171,11 @@ export function ContentSection({
                 ) : null}
                 <ContentTable
                   entries={sortedEntries}
-                  totalEntries={listedEntries.length}
+                  totalEntries={extraEntries.length}
                   virtualization={virtualization}
                   actions={{
-                    disabled,
-                    onToggle: toggleContent,
+                    disabled: busy,
+                    onToggle: toggle,
                     onRemove: setPendingRemoval,
                   }}
                 />
@@ -241,7 +190,7 @@ export function ContentSection({
                 iconPath={iconPath}
                 folder={folder}
                 entries={modpackEntries}
-                actions={{ disabled, onToggle: toggleContent }}
+                actions={{ disabled: busy, onToggle: toggle }}
               />
             ) : null}
             <ContentRemovalDialog
