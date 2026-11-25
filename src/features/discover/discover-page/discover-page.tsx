@@ -6,7 +6,6 @@ import {
   TriangleAlertIcon,
 } from "lucide-react";
 import { useCallback } from "react";
-
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
@@ -19,10 +18,10 @@ import {
   useModpackSources,
 } from "@/features/discover/hooks/use-modpacks";
 import { useSearchDraft } from "@/features/discover/hooks/use-search-draft";
-import { SOURCE_LABELS } from "@/features/discover/lib/discover-search";
 import { friendlyError, messageOf } from "@/lib/errors";
 import type { ModpackSearchFilters } from "@/lib/generated/ModpackSearchFilters";
 import type { ModpackSource } from "@/lib/generated/ModpackSource";
+import { SOURCE_LABELS } from "@/lib/modpack-sources";
 
 import { discoverPageStyles } from "./discover-page.styles";
 

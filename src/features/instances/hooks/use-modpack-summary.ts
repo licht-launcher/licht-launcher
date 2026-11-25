@@ -3,13 +3,13 @@ import {
   useModpack,
   useModpackVersions,
 } from "@/features/discover/hooks/use-modpacks";
-import { SOURCE_LABELS } from "@/features/discover/lib/discover-search";
-import { formatTimeAgo } from "@/features/discover/lib/format";
 import type {
   FileModpackOrigin,
   StoreModpackOrigin,
 } from "@/features/instances/lib/modpack-content";
 import type { LinkedModpack } from "@/lib/generated/LinkedModpack";
+import { SOURCE_LABELS } from "@/lib/modpack-sources";
+import { formatTimeAgo } from "@/lib/time-ago";
 
 /** What the launcher can tell about the modpack an instance is linked to. */
 export type ModpackSummary = {
