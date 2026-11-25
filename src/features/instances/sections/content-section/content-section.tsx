@@ -158,7 +158,8 @@ export function ContentSection({
 
   return (
     <div className={contentSectionStyles.layout}>
-      {modpack !== null && content.data !== undefined ? (
+      {/* Shown at once: until the list loads, the pack's files are unknown and View content waits. */}
+      {modpack !== null ? (
         <ModpackContentCard
           origin={modpack}
           linked={linkedModpack}
