@@ -164,7 +164,7 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
   });
   markStartedRef.current = markStarted;
 
-  const { busy, rename, duplicate, remove, openFolder, changeVersion } =
+  const { busy, rename, duplicate, remove, openFolder, changeBase } =
     useInstanceMutations({
       beginInstall,
       endInstall,
@@ -422,7 +422,7 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
           rename,
           remove,
           openFolder,
-          changeVersion,
+          changeBase,
         }}
         configuringOpen={dialogs.configuringFolder !== null}
         action={dialogs.action}

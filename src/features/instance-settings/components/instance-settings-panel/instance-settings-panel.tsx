@@ -1,3 +1,4 @@
+import type { InstanceBaseInput } from "@/api/commands";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { InstanceDraft } from "@/features/instance-settings/model/draft";
 import {
@@ -27,7 +28,7 @@ export function InstanceSettingsPanel({
   modpack = null,
   onChange,
   onRename,
-  onChangeVersion,
+  onChangeBase,
   onOpenFolder,
   onDuplicate,
   onDelete,
@@ -46,7 +47,7 @@ export function InstanceSettingsPanel({
   instanceActive?: boolean;
   onChange: (patch: Partial<InstanceDraft>) => void;
   onRename: (name: string) => void;
-  onChangeVersion: (versionId: string, installed: boolean) => void;
+  onChangeBase: (base: InstanceBaseInput) => void;
   onOpenFolder: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
@@ -85,7 +86,7 @@ export function InstanceSettingsPanel({
               instanceActive={instanceActive}
               busy={busy}
               versionBusy={versionBusy}
-              onChangeVersion={onChangeVersion}
+              onChangeBase={onChangeBase}
             />
           ) : null}
           {section === "overrides" ? (

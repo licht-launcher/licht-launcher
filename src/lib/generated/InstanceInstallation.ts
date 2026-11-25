@@ -2,10 +2,16 @@
 import type { InstancePreparationState } from "./InstancePreparationState";
 import type { InstanceSource } from "./InstanceSource";
 import type { LinkedModpack } from "./LinkedModpack";
+import type { PreviousBase } from "./PreviousBase";
 
 export type InstanceInstallation = { source: InstanceSource, state: InstancePreparationState, 
 /**
  * What the store said about the pack when it was installed. Older instances and
  * installs whose store details could not be read have none.
  */
-modpack?: LinkedModpack, };
+modpack?: LinkedModpack, 
+/**
+ * The base an instance had before a base change that has not finished, so
+ * cancelling the change can put it back.
+ */
+previousBase?: PreviousBase, };

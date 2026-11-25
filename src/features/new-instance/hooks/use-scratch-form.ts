@@ -13,10 +13,11 @@ import {
 /**
  * The from-scratch form: its state, the version lists it depends on, and the
  * defaults that fill in once those lists load. It lives as long as the popup
- * does, so the lists start loading when the popup opens.
+ * does, so the lists start loading when the popup opens. `initial` starts it
+ * from an existing base instead of an empty form.
  */
-export function useScratchForm() {
-  const [state, setState] = useState<ScratchState>(initialScratchState);
+export function useScratchForm(initial: ScratchState = initialScratchState) {
+  const [state, setState] = useState<ScratchState>(initial);
 
   const update = useCallback((patch: Partial<ScratchState>) => {
     setState((current) => ({ ...current, ...patch }));

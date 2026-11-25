@@ -77,6 +77,7 @@ pub fn run() -> anyhow::Result<()> {
             commands::instances::create_instance,
             commands::instances::list_loader_builds,
             commands::instances::create_instance_with_platform,
+            commands::instances::change_instance_base,
             commands::modpacks::search_modpacks,
             commands::modpacks::get_modpack,
             commands::modpacks::modpack_sources,
@@ -88,7 +89,6 @@ pub fn run() -> anyhow::Result<()> {
             commands::instances::duplicate_instance,
             commands::instances::delete_instance,
             commands::instances::save_instance,
-            commands::instances::set_instance_version,
             commands::instances::open_instance_folder,
             commands::instances::list_instance_entries,
             commands::instances::list_instance_content,
@@ -128,6 +128,7 @@ pub fn run() -> anyhow::Result<()> {
             commands::versions::install_version,
             commands::versions::repair_instance,
             commands::versions::reinstall_instance_modpack,
+            commands::versions::change_instance_modpack_version,
             commands::launch::launch,
             commands::launch::list_running_games,
             commands::launch::stop_game

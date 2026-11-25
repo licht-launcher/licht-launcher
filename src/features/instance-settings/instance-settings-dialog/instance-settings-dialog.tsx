@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
+import type { InstanceBaseInput } from "@/api/commands";
 import { getSettings } from "@/api/commands";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
@@ -21,7 +22,7 @@ export function InstanceSettingsDialog({
   onOpenChange,
   onOpenGlobalSettings,
   onRename,
-  onChangeVersion,
+  onChangeBase,
   onOpenFolder,
   onDuplicate,
   onDelete,
@@ -35,7 +36,7 @@ export function InstanceSettingsDialog({
   onOpenChange: (open: boolean) => void;
   onOpenGlobalSettings: () => void;
   onRename: (name: string) => void;
-  onChangeVersion: (versionId: string, installed: boolean) => void;
+  onChangeBase: (base: InstanceBaseInput) => void;
   onOpenFolder: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
@@ -90,7 +91,7 @@ export function InstanceSettingsDialog({
             instanceActive={instanceActive}
             onChange={update}
             onRename={onRename}
-            onChangeVersion={onChangeVersion}
+            onChangeBase={onChangeBase}
             onOpenFolder={onOpenFolder}
             onDuplicate={onDuplicate}
             onDelete={onDelete}

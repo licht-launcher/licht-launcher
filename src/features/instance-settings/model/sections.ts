@@ -10,8 +10,7 @@ export const INSTANCE_SECTIONS = [
   {
     id: "base",
     label: "Instance base",
-    description:
-      "Platform and game version this instance launches with. Only Vanilla is available for now.",
+    description: "Platform and game version this instance launches with.",
     icon: LayersIcon,
   },
   {
