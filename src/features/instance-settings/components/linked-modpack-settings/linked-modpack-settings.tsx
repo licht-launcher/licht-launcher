@@ -18,12 +18,13 @@ import type { ModpackOrigin } from "@/features/instances/lib/modpack-content";
 import { friendlyError, messageOf } from "@/lib/errors";
 import type { LinkedModpack } from "@/lib/generated/LinkedModpack";
 
-import { modpackSectionStyles as styles } from "./modpack-section.styles";
+import { linkedModpackSettingsStyles as styles } from "./linked-modpack-settings.styles";
 
 const UNLINK_HINT =
   "Unlinking permanently disconnects this instance from its modpack. You can then change its game version, but it will no longer receive modpack updates. Its files stay as they are.";
 
-export function ModpackSection({
+/** The pack a linked instance came from, with the actions that change the link. */
+export function LinkedModpackSettings({
   folder,
   origin,
   linked,
@@ -53,6 +54,7 @@ export function ModpackSection({
   return (
     <div className={styles.root}>
       <div className={styles.summary}>
+        <p className={styles.summaryLabel}>Linked modpack</p>
         <p className={styles.summaryName}>
           {linked ? `${linked.name} ${linked.versionName}` : "Linked modpack"}
         </p>

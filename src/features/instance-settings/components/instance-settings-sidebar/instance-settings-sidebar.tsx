@@ -3,8 +3,8 @@ import { ChevronRightIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DialogTitle } from "@/components/ui/dialog";
 import {
+  INSTANCE_SECTIONS,
   type InstanceSectionId,
-  visibleSections,
 } from "@/features/instance-settings/model/sections";
 
 import { instanceSettingsSidebarStyles } from "./instance-settings-sidebar.styles";
@@ -12,13 +12,11 @@ import { instanceSettingsSidebarStyles } from "./instance-settings-sidebar.style
 export function InstanceSettingsSidebar({
   name,
   section,
-  linkedToModpack,
   onSectionChange,
   onOpenGlobalSettings,
 }: {
   name: string;
   section: InstanceSectionId;
-  linkedToModpack: boolean;
   onSectionChange: (section: InstanceSectionId) => void;
   onOpenGlobalSettings: () => void;
 }) {
@@ -43,7 +41,7 @@ export function InstanceSettingsSidebar({
         aria-label="Instance settings sections"
         className={instanceSettingsSidebarStyles.nav}
       >
-        {visibleSections(linkedToModpack).map((item) => {
+        {INSTANCE_SECTIONS.map((item) => {
           const Icon = item.icon;
           return (
             <Button
