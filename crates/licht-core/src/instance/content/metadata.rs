@@ -6,7 +6,7 @@ use std::path::Path;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
-use super::files::{DISABLED_SUFFIX, content_directory, content_file};
+use super::files::{DISABLED_SUFFIX, content_directory, content_file, is_folder_shader_pack};
 use super::fingerprints::content_fingerprint;
 use super::providers::{fetch_fingerprint_metadata, fetch_remote_metadata};
 use super::{ContentResolution, InstanceContentEntry, InstanceContentKind};
@@ -28,6 +28,14 @@ pub(super) async fn resolve_content_entry(
         format!("{}{}", entry.name, DISABLED_SUFFIX)
     };
     let path = content_file(root, content_directory(entry.kind), &filename)?;
+    // A folder pack keeps its name as its title; stores identify files by hash.
+    if is_folder_shader_pack(entry.kind, &path) {
+        return Ok(ContentResolution {
+            index,
+            entry,
+            fingerprint: None,
+        });
+    }
     let relative = Path::new(content_directory(entry.kind)).join(&filename);
     let relative = relative.to_string_lossy().into_owned();
     let fingerprint = content_fingerprint(
@@ -69,7 +77,7 @@ pub(super) async fn resolve_content_entry(
     Ok(ContentResolution {
         index,
         entry,
-        fingerprint,
+        fingerprint: Some(fingerprint),
     })
 }
 

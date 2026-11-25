@@ -13,7 +13,7 @@ fn simulated_resolution(index: usize) -> ContentResolution {
             icon_url: None,
             from_modpack: false,
         },
-        fingerprint: ContentFingerprint {
+        fingerprint: Some(ContentFingerprint {
             relative_path: Path::new("mods")
                 .join(format!("mod-{index}.jar"))
                 .to_string_lossy()
@@ -21,7 +21,7 @@ fn simulated_resolution(index: usize) -> ContentResolution {
             size: 1,
             modified: "100:0".to_string(),
             sha1: sha1_hex(&[index as u8]),
-        },
+        }),
     }
 }
 
@@ -113,7 +113,10 @@ async fn concurrent_content_limits_in_flight_lookups_and_publishes_completion_or
     assert_eq!(active.load(Ordering::SeqCst), 0);
     assert_eq!(
         fingerprints[0].relative_path,
-        simulated_resolution(2).fingerprint.relative_path
+        simulated_resolution(2)
+            .fingerprint
+            .expect("fingerprint")
+            .relative_path
     );
     assert_eq!(batches[0], ["mod-2.jar"]);
     assert_eq!(
