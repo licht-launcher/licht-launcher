@@ -727,9 +727,14 @@ fn local_mrpack() -> Vec<u8> {
         zip.start_file("modrinth.index.json", options)
             .expect("index entry");
         zip.write_all(
-            serde_json::json!({"dependencies": {"minecraft": VERSION}, "files": []})
-                .to_string()
-                .as_bytes(),
+            serde_json::json!({
+                "name": "Local pack",
+                "versionId": "1.2.0",
+                "dependencies": {"minecraft": VERSION},
+                "files": []
+            })
+            .to_string()
+            .as_bytes(),
         )
         .expect("index");
         zip.start_file("overrides/options.txt", options)
@@ -779,10 +784,20 @@ async fn creating_from_a_local_modpack_archive_installs_it_without_network_reque
         .await
         .expect("profile");
     assert_eq!(profile.version_id.as_deref(), Some(VERSION));
+    let installation = profile.installation.expect("installation");
     assert_eq!(
-        profile.installation.map(|installation| installation.source),
-        Some(InstanceSource::ModpackFile {
+        installation.source,
+        InstanceSource::ModpackFile {
             source: crate::ModpackSource::Modrinth
+        }
+    );
+    assert_eq!(
+        installation.modpack,
+        Some(crate::LinkedModpack {
+            name: "Local pack".into(),
+            author: None,
+            version_name: "1.2.0".into(),
+            published_at: None,
         })
     );
     assert!(archive.is_file(), "the original archive must be untouched");

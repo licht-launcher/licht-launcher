@@ -1,4 +1,8 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  focusManager,
+  QueryClient,
+  QueryClientProvider,
+} from "@tanstack/react-query";
 import {
   act,
   fireEvent,
@@ -574,6 +578,24 @@ describe("ContentSection", () => {
       expect(
         screen.getByRole("button", { name: "View content" }),
       ).toBeDisabled();
+    });
+
+    it("picks up content added outside the app when the window regains focus", async () => {
+      listInstanceContent.mockResolvedValueOnce([packed("Sodium", true)]);
+      renderContent("classic", "all", "", imported);
+      await screen.findByRole("status", { name: "No extra content installed" });
+
+      listInstanceContent.mockResolvedValueOnce([
+        packed("Sodium", true),
+        packed("Extra", false),
+      ]);
+      act(() => {
+        focusManager.setFocused(false);
+        focusManager.setFocused(true);
+      });
+
+      expect(await screen.findByText("Extra")).toBeInTheDocument();
+      focusManager.setFocused(undefined);
     });
 
     it("says when nothing was added on top of the modpack", async () => {
