@@ -209,7 +209,11 @@ describe("InstanceSettingsDialog", () => {
         "Change the platform, game version or loader this instance launches with.",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Repair" })).toBeInTheDocument();
+    expect(
+      screen
+        .getAllByRole("heading", { level: 3 })
+        .map((heading) => heading.textContent),
+    ).toEqual(["Edit base", "Repair"]);
     expect(invoke).not.toHaveBeenCalledWith("list_versions");
 
     // The version list is virtualized; give it room to render its options.
@@ -456,6 +460,17 @@ describe("InstanceSettingsDialog", () => {
     expect(
       await screen.findByRole("heading", { name: "Modpack version" }),
     ).toBeInTheDocument();
+    // Each action sits right under the card it changes.
+    expect(
+      screen
+        .getAllByRole("heading", { level: 3 })
+        .map((heading) => heading.textContent),
+    ).toEqual([
+      "Modpack version",
+      "Reinstall modpack",
+      "Unlink modpack",
+      "Repair",
+    ]);
     expect(
       screen.queryByRole("button", { name: "Edit base" }),
     ).not.toBeInTheDocument();

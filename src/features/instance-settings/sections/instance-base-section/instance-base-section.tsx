@@ -1,22 +1,14 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  BoxIcon,
-  LayersIcon,
-  PackageIcon,
-  PencilIcon,
-  WrenchIcon,
-} from "lucide-react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { BoxIcon, LayersIcon, PencilIcon, WrenchIcon } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import {
-  changeInstanceModpackVersion,
   getInstancePlatform,
   type InstanceBaseInput,
   repairInstance,
 } from "@/api/commands";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { ChangeModpackVersionDialog } from "@/features/instance-settings/components/change-modpack-version-dialog";
 import { EditInstanceBaseDialog } from "@/features/instance-settings/components/edit-instance-base-dialog";
 import { LinkedModpackSettings } from "@/features/instance-settings/components/linked-modpack-settings";
 import {
@@ -123,6 +115,7 @@ export function InstanceBaseSection({
         </div>
       </div>
 
+      {/* Right under the card it changes: the pack's version, or the platform and game version. */}
       {modpack !== null ? (
         <LinkedModpackSettings
           folder={folder}
@@ -130,14 +123,6 @@ export function InstanceBaseSection({
           linked={modpack.linked}
           preparing={preparing}
           busy={busy || versionBusy || instanceActive}
-        />
-      ) : null}
-
-      {modpack !== null ? (
-        <ModpackVersionAction
-          folder={folder}
-          origin={modpack.origin}
-          disabled={busy || versionBusy || preparing || instanceActive}
         />
       ) : (
         <div className={instanceBaseSectionStyles.group}>
@@ -206,80 +191,6 @@ export function InstanceBaseSection({
         onOpenChange={setEditOpen}
         onSave={onChangeBase}
       />
-    </div>
-  );
-}
-
-/**
- * In place of Edit base for a linked instance: the pack sets the base, so the
- * choice is which version of the pack to install.
- */
-function ModpackVersionAction({
-  folder,
-  origin,
-  disabled,
-}: {
-  folder: string;
-  origin: ModpackOrigin;
-  disabled: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const queryClient = useQueryClient();
-  const change = useMutation({
-    mutationFn: (versionId: string) =>
-      changeInstanceModpackVersion(folder, versionId),
-    onSuccess: (job) => {
-      if (job.status === "completed") toast.success("Modpack version changed.");
-      else if (job.status === "failed")
-        toast.error(job.error ?? "Changing the modpack version failed.");
-    },
-    onError: (error: unknown) => toast.error(friendlyError(messageOf(error))),
-    // Also after a failure: the change waits to retry, or a cancel put the old version back.
-    onSettled: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["instances"] });
-      await queryClient.invalidateQueries({
-        queryKey: ["instance-content", folder],
-      });
-    },
-  });
-  const fromFile = origin.type === "modpackFile";
-  return (
-    <div className={instanceBaseSectionStyles.group}>
-      <div className={instanceBaseSectionStyles.groupText}>
-        <h3 className={instanceBaseSectionStyles.label}>Modpack version</h3>
-        <p className={instanceBaseSectionStyles.hint}>
-          {fromFile
-            ? "A modpack imported from a file has no other versions to install."
-            : "The linked modpack sets this instance's platform and game version. Install another version of it; content you added stays."}
-        </p>
-      </div>
-      <Button
-        type="button"
-        variant="warning"
-        className={instanceBaseSectionStyles.action}
-        disabled={disabled || fromFile || change.isPending}
-        onClick={() => setOpen(true)}
-      >
-        {change.isPending ? (
-          <Spinner
-            className={instanceBaseSectionStyles.busySpinner}
-            data-icon="inline-start"
-            aria-hidden
-          />
-        ) : (
-          <PackageIcon data-icon="inline-start" aria-hidden />
-        )}
-        Change version
-      </Button>
-      {origin.type === "modpack" ? (
-        <ChangeModpackVersionDialog
-          open={open}
-          origin={origin}
-          busy={change.isPending}
-          onOpenChange={setOpen}
-          onSave={(versionId) => change.mutate(versionId)}
-        />
-      ) : null}
     </div>
   );
 }
