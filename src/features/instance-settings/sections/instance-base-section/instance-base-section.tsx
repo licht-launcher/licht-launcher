@@ -36,11 +36,14 @@ export function InstanceBaseSection({
   busy,
   versionBusy,
   preparing = false,
+  linkedModpack = false,
   onChangeVersion,
 }: {
   folder: string;
   versionId: string | null;
   preparing?: boolean;
+  /** A modpack sets the game version, so it cannot change while the instance is linked. */
+  linkedModpack?: boolean;
   busy: boolean;
   versionBusy: boolean;
   onChangeVersion: (versionId: string, installed: boolean) => void;
@@ -123,14 +126,22 @@ export function InstanceBaseSection({
         <div className={instanceBaseSectionStyles.groupText}>
           <h3 className={instanceBaseSectionStyles.label}>Edit base</h3>
           <p className={instanceBaseSectionStyles.hint}>
-            Open the editor to pick another Vanilla release for this instance.
+            {linkedModpack
+              ? "The linked modpack sets this instance's game version."
+              : "Open the editor to pick another Vanilla release for this instance."}
           </p>
         </div>
         <Button
           type="button"
           variant="warning"
           className={instanceBaseSectionStyles.action}
-          disabled={busy || versionBusy || preparing || versionId === null}
+          disabled={
+            busy ||
+            versionBusy ||
+            preparing ||
+            linkedModpack ||
+            versionId === null
+          }
           onClick={() => {
             setEditOpen(true);
           }}
