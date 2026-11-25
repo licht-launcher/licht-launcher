@@ -19,6 +19,7 @@ import type { InstanceContentKind } from "@/lib/generated/InstanceContentKind";
 import type { InstanceContentUpdate } from "@/lib/generated/InstanceContentUpdate";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 import type { InstanceFsEntry } from "@/lib/generated/InstanceFsEntry";
+import type { InstancePlatform } from "@/lib/generated/InstancePlatform";
 import type { InstanceSettings } from "@/lib/generated/InstanceSettings";
 import type { JavaDetections } from "@/lib/generated/JavaDetections";
 import type { JavaPaths } from "@/lib/generated/JavaPaths";
@@ -456,6 +457,13 @@ export function isVersionReady(versionId: string): Promise<boolean> {
 
 export function installVersion(versionId: string): Promise<string> {
   return invoke("install_version", { versionId });
+}
+
+/** Which loader and Minecraft version a launch version runs; `null` when unknown. */
+export function getInstancePlatform(
+  versionId: string,
+): Promise<InstancePlatform | null> {
+  return invoke("get_instance_platform", { versionId });
 }
 
 export function repairInstance(folder: string): Promise<DownloadJobSnapshot> {

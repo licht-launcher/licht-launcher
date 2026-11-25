@@ -162,6 +162,14 @@ pub fn open_instance_folder(
 }
 
 #[tauri::command]
+pub fn get_instance_platform(
+    paths: State<'_, LauncherPaths>,
+    version_id: String,
+) -> Result<Option<licht_core::InstancePlatform>, String> {
+    licht_core::instance_platform(&paths.game, &version_id).map_err(failure)
+}
+
+#[tauri::command]
 pub fn list_instance_entries(
     paths: State<'_, LauncherPaths>,
     folder: String,
