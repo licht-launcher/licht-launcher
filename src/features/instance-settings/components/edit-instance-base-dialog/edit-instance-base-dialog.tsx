@@ -1,4 +1,5 @@
 import { BoxIcon } from "lucide-react";
+import { useEffect } from "react";
 import type { InstanceBaseInput } from "@/api/commands";
 import { Button } from "@/components/ui/button";
 import {
@@ -121,6 +122,13 @@ function BaseForm({
     stableMissing,
   } = useScratchForm(initialBase(current));
   const loaderReady = loaderState === "none" || loaderState === "ready";
+  // The version list hides snapshots by default; show them when the instance runs one.
+  const runsSnapshot =
+    versions.data?.find((version) => version.id === current?.gameVersion)
+      ?.versionType === "snapshot";
+  useEffect(() => {
+    if (runsSnapshot) update({ includeSnapshots: true });
+  }, [runsSnapshot, update]);
   const changesPlatform =
     current !== null && state.platform !== PLATFORM_IDS[current.platform];
 
