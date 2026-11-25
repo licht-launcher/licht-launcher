@@ -1,3 +1,4 @@
+use std::fs;
 use std::path::{Path, PathBuf};
 
 pub(super) use crate::path_component::path_component_allowed;
@@ -12,6 +13,31 @@ pub(super) fn instance_key(instance_dir: &Path) -> Result<(&Path, &str)> {
         .and_then(|name| name.to_str())
         .ok_or(CoreError::InstanceName)?;
     Ok((instances, folder))
+}
+
+/// Where a pack file is kept now. The user may have disabled it (`a.jar` became
+/// `a.jar.disabled`) or enabled one the pack ships disabled, so when `destination` is
+/// missing and its toggled copy is a regular file, that copy is the one to check.
+/// A link is never followed, so this never points outside the folder.
+pub(super) fn current_location(destination: PathBuf) -> PathBuf {
+    if fs::symlink_metadata(&destination).is_ok() {
+        return destination;
+    }
+    let Some(name) = destination.file_name().and_then(|name| name.to_str()) else {
+        return destination;
+    };
+    let suffix = crate::instance::content::DISABLED_SUFFIX;
+    let toggled = match name.strip_suffix(suffix) {
+        Some("") => return destination,
+        Some(enabled) => enabled.to_string(),
+        None => format!("{name}{suffix}"),
+    };
+    let toggled = destination.with_file_name(toggled);
+    if fs::symlink_metadata(&toggled).is_ok_and(|metadata| metadata.is_file()) {
+        toggled
+    } else {
+        destination
+    }
 }
 
 /// Joins `relative` onto `instance_dir` after rejecting anything that could

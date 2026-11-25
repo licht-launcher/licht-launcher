@@ -474,6 +474,49 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn verifies_a_pack_file_where_the_user_toggled_it() {
+        // The pack ships `b.jar` disabled; the user disabled `a.jar` and enabled `b.jar`.
+        let temp = TempDir::new("curse-toggled");
+        let root = temp.path().to_path_buf();
+        let cache = SharedCache::at(root.join("cache"));
+        let instance = root.join("instance");
+        let mods = instance.join("mods");
+        fs::create_dir_all(&mods).unwrap();
+        fs::write(mods.join("a.jar.disabled"), b"hello world").unwrap();
+        fs::write(mods.join("b.jar"), b"hello world").unwrap();
+        let service =
+            crate::DatabaseService::start(crate::Database::open(&cache).await.expect("database"))
+                .await
+                .expect("database");
+        let stored = |relative_path: &str, file_id| StoredCurseforgeFile {
+            relative_path: relative_path.into(),
+            url: format!("https://edge.forgecdn.net/files/1/{file_id}/a.jar"),
+            sha1: Some(SHA1.into()),
+            md5: Some(MD5.into()),
+            size: 11,
+            project_id: file_id,
+            file_id,
+            file_name: "a.jar".into(),
+            name: "A".into(),
+            required: true,
+        };
+        service
+            .client()
+            .replace_curseforge_files(
+                &root,
+                "instance",
+                vec![stored("mods/a.jar", 2), stored("mods/b.jar.disabled", 3)],
+            )
+            .await
+            .expect("stored files");
+        let installed = install_cached(&service.client(), &cache, &instance).await;
+        service.shutdown().await.expect("shutdown");
+        installed.expect("the toggled copies are the pack files");
+        assert!(!mods.join("a.jar").exists());
+        assert!(!mods.join("b.jar.disabled").exists());
+    }
+
+    #[tokio::test]
     async fn imports_a_legacy_index_into_sqlite_and_removes_the_file() {
         let temp = TempDir::new("curse-legacy");
         let root = temp.path().to_path_buf();
