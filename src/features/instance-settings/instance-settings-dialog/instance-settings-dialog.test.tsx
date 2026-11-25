@@ -196,7 +196,7 @@ describe("InstanceSettingsDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Instance base" }));
     expect(
       await screen.findByText(
-        "Platform and game version this instance launches with. Only Vanilla is available for now.",
+        "Platform and game version this instance launches with.",
       ),
     ).toBeInTheDocument();
     expect(await screen.findByText("Vanilla")).toBeInTheDocument();
@@ -254,6 +254,23 @@ describe("InstanceSettingsDialog", () => {
     expect(invoke).toHaveBeenCalledWith("get_instance_platform", {
       versionId: "fabric-loader-0.19.5-26.3",
     });
+  });
+
+  it("says when the platform cannot be read", async () => {
+    const original = invoke.getMockImplementation();
+    if (!original) throw new Error("missing command implementation");
+    invoke.mockImplementation((command: string, args?: unknown) =>
+      command === "get_instance_platform"
+        ? Promise.reject(new Error("invalid loader profile"))
+        : original(command, args),
+    );
+    renderDialog();
+
+    fireEvent.click(screen.getByRole("button", { name: "Instance base" }));
+
+    expect(
+      await screen.findByText("Could not read the platform"),
+    ).toBeInTheDocument();
   });
 
   it("reinstalls a store modpack after the user confirms", async () => {

@@ -170,11 +170,16 @@ pub fn open_instance_folder(
 }
 
 #[tauri::command]
-pub fn get_instance_platform(
+pub async fn get_instance_platform(
     paths: State<'_, LauncherPaths>,
     version_id: String,
 ) -> Result<Option<licht_core::InstancePlatform>, String> {
-    licht_core::instance_platform(&paths.game, &version_id).map_err(failure)
+    let game = paths.game.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        licht_core::instance_platform(&game, &version_id).map_err(failure)
+    })
+    .await
+    .map_err(|error| super::command_failure("Platform check failed", &error))?
 }
 
 #[tauri::command]

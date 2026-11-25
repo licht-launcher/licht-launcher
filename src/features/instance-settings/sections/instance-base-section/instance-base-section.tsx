@@ -103,7 +103,11 @@ export function InstanceBaseSection({
             </span>
           </div>
           <div className={instanceBaseSectionStyles.summaryValue}>
-            {platform.data !== undefined ? formatPlatform(platform.data) : "—"}
+            {platform.data !== undefined
+              ? formatPlatform(platform.data)
+              : platform.isError
+                ? "Could not read the platform"
+                : "—"}
           </div>
         </div>
         <div className={instanceBaseSectionStyles.summaryItem}>
