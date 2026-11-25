@@ -84,7 +84,33 @@ jobs:
       - name: Build the end-to-end application
         run: pnpm build:e2e
 
-      # The Tauri service downloads the Microsoft Edge Driver matching WebView2 on Windows.
+      # The runner image's msedgedriver matches its Edge browser, which can be a major
+      # version ahead of the WebView2 runtime the app renders with. The Tauri service's
+      # own download of a matching driver fails on the runner, so put one first on PATH.
+      - name: Install Microsoft Edge Driver matching WebView2
+        if: runner.os == 'Windows'
+        run: |
+          $key = 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
+          $webView2 = (Get-ItemProperty -Path $key -Name pv).pv
+          if ($webView2 -notmatch '^\d+(\.\d+){3}$') {
+            throw "Unexpected WebView2 runtime version: '$webView2'"
+          }
+          $major = $webView2.Split('.')[0]
+          $dir = Join-Path $env:RUNNER_TEMP 'msedgedriver'
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          $latestFile = Join-Path $dir 'LATEST_RELEASE'
+          Invoke-WebRequest -Uri "https://msedgedriver.microsoft.com/LATEST_RELEASE_$major" -OutFile $latestFile
+          $driver = (Get-Content -Path $latestFile -Raw).Trim()
+          if ($driver -notmatch "^$major(\.\d+){3}$") {
+            throw "Unexpected msedgedriver version for WebView2 ${webView2}: '$driver'"
+          }
+          $zip = Join-Path $dir 'edgedriver.zip'
+          Invoke-WebRequest -Uri "https://msedgedriver.microsoft.com/$driver/edgedriver_win64.zip" -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath $dir -Force
+          & (Join-Path $dir 'msedgedriver.exe') --version
+          Write-Output "WebView2 $webView2 -> msedgedriver $driver"
+          Add-Content -Path $env:GITHUB_PATH -Value $dir
+
       - name: Run end-to-end tests (Windows)
         if: runner.os == 'Windows'
         run: pnpm test:e2e
