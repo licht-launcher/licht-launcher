@@ -5,7 +5,7 @@ use super::MODPACK_INDEX_FILE;
 use super::index::MRPACK_DOWNLOAD_HOSTS;
 use super::storage::StoredModpack;
 use crate::modpacks::file_hashes::{ensure_sha512, prepare_download};
-use crate::modpacks::path_safety::instance_key;
+use crate::modpacks::path_safety::{current_location, instance_key};
 use crate::modpacks::secure_download::allowlisted_download_client;
 use crate::modpacks::{CURSEFORGE_INDEX_FILE, remove_legacy_index};
 use crate::transfer::verification::VerificationProgress;
@@ -63,7 +63,8 @@ async fn install_files(
     let mut pending = Vec::new();
     let mut downloaded_files = Vec::new();
     for file in &files {
-        let task = file.task(instance_dir)?;
+        let mut task = file.task(instance_dir)?;
+        task.destination = current_location(task.destination);
         let needs_download = prepare_download(
             &task.destination,
             &task.sha1,
@@ -78,8 +79,8 @@ async fn install_files(
         if let Some(parent) = task.destination.parent() {
             fs::create_dir_all(parent)?;
         }
+        downloaded_files.push((task.destination.clone(), file));
         pending.push(task);
-        downloaded_files.push(file);
     }
     if pending.is_empty() {
         return Ok(());
@@ -92,13 +93,8 @@ async fn install_files(
         )
         .await?;
     let mut verification = VerificationProgress::start(&progress, downloaded_files.len()).await?;
-    for file in downloaded_files {
-        ensure_sha512(
-            &file.task(instance_dir)?.destination,
-            &file.sha512,
-            &progress.control,
-        )
-        .await?;
+    for (destination, file) in downloaded_files {
+        ensure_sha512(&destination, &file.sha512, &progress.control).await?;
         verification.checked().await?;
     }
     Ok(())
@@ -359,6 +355,31 @@ mod tests {
             );
         }
         service.shutdown().await.expect("shutdown");
+    }
+
+    #[tokio::test]
+    async fn verifies_a_pack_file_the_user_disabled_instead_of_downloading_it_again() {
+        let temp = TempDir::new("mrpack-install-disabled");
+        let root = temp.path().to_path_buf();
+        let cache = SharedCache::at(root.join("cache"));
+        let instance = root.join("instance");
+        place_pack_files(&instance);
+        let mods = instance.join("mods");
+        std::fs::rename(mods.join("sodium.jar"), mods.join("sodium.jar.disabled")).unwrap();
+        let service = start_database(&cache).await;
+        let client = service.client();
+        client
+            .replace_modpack(&root, "instance", fixture_index(&instance))
+            .await
+            .expect("stored index");
+        let installed = install_cached(&client, &cache, &instance).await;
+        service.shutdown().await.expect("shutdown");
+        installed.expect("the disabled copy is the pack file");
+        assert!(!mods.join("sodium.jar").exists());
+        assert_eq!(
+            std::fs::read(mods.join("sodium.jar.disabled")).unwrap(),
+            b"hello world"
+        );
     }
 
     #[tokio::test]
