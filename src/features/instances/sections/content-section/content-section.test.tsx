@@ -13,7 +13,10 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { instanceContentQuery } from "@/features/instances/lib/content-query";
+import {
+  FOCUS_RELOAD_INTERVAL_MS,
+  instanceContentQuery,
+} from "@/features/instances/lib/content-query";
 import type { ModpackOrigin } from "@/features/instances/lib/modpack-content";
 import { ContentSection } from "@/features/instances/sections/content-section";
 import { mockVirtualListLayout } from "@/features/instances/tests/support/virtual-list-layout";
@@ -554,12 +557,29 @@ describe("ContentSection", () => {
         packed("Sodium", true),
         packed("Extra", false),
       ]);
+      const later = Date.now() + FOCUS_RELOAD_INTERVAL_MS;
+      vi.spyOn(Date, "now").mockReturnValue(later);
       act(() => {
         focusManager.setFocused(false);
         focusManager.setFocused(true);
       });
 
       expect(await screen.findByText("Extra")).toBeInTheDocument();
+      focusManager.setFocused(undefined);
+    });
+
+    it("does not reread the folders when the window regains focus right away", async () => {
+      listInstanceContent.mockResolvedValue([packed("Sodium", true)]);
+      renderContent("classic", "all", "", imported);
+      await screen.findByRole("status", { name: "No extra content installed" });
+      expect(listInstanceContent).toHaveBeenCalledOnce();
+
+      act(() => {
+        focusManager.setFocused(false);
+        focusManager.setFocused(true);
+      });
+
+      expect(listInstanceContent).toHaveBeenCalledOnce();
       focusManager.setFocused(undefined);
     });
 

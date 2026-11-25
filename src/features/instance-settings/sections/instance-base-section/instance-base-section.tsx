@@ -7,7 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { EditInstanceVersionDialog } from "@/features/instance-settings/components/edit-instance-version-dialog";
 import { LinkedModpackSettings } from "@/features/instance-settings/components/linked-modpack-settings";
-import { formatPlatform } from "@/features/instance-settings/model/platform";
+import {
+  formatPlatform,
+  platformStaleTime,
+} from "@/features/instance-settings/model/platform";
 import type { ModpackOrigin } from "@/features/instances/lib/modpack-content";
 import { versionsQueryOptions } from "@/features/instances/lib/versions-query";
 import { friendlyError, messageOf } from "@/lib/errors";
@@ -67,7 +70,7 @@ export function InstanceBaseSection({
     queryKey: ["instance-platform", versionId],
     queryFn: () => getInstancePlatform(versionId ?? ""),
     enabled: versionId !== null,
-    staleTime: Number.POSITIVE_INFINITY,
+    staleTime: (query) => platformStaleTime(query.state.data),
   });
   const repair = useMutation({
     mutationFn: () => repairInstance(folder),

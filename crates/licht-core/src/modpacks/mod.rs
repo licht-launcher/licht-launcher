@@ -37,40 +37,53 @@ pub(crate) struct PackVersion {
     pub published_at: Option<String>,
 }
 
-fn linked_modpack(details: ModpackDetails, version: PackVersion) -> LinkedModpack {
-    LinkedModpack {
-        name: details.name,
-        author: Some(details.author).filter(|author| !author.trim().is_empty()),
-        version_name: version.name,
-        published_at: version.published_at,
-    }
-}
-
-/// Keeps the store's details of the pack on the instance. They only feed the UI, so a
-/// store that cannot describe the pack does not stop the install.
-async fn record_store_details(
-    database: &crate::DatabaseClient,
-    client: &Client,
-    instances_dir: &Path,
-    folder: &str,
-    source: ModpackSource,
-    project_id: &str,
+/// What to keep about a store pack: the store's name and author, falling back to what
+/// the pack's own archive declares, with the version the download resolved.
+fn linked_modpack(
+    store: Option<&ModpackDetails>,
+    archive: Option<LinkedModpack>,
     version: PackVersion,
-) -> Result<()> {
-    let details = match get_modpack(client, source, project_id).await {
-        Ok(details) => details,
-        Err(error) => {
-            tracing::warn!(%error, "could not read the modpack's store details");
-            return Ok(());
+) -> Option<LinkedModpack> {
+    let (name, author) = match store {
+        Some(details) => (
+            archive_details::capped(&details.name),
+            archive_details::capped(&details.author),
+        ),
+        None => {
+            let archive = archive?;
+            (Some(archive.name), archive.author)
         }
     };
-    crate::instance::record_linked_modpack(
-        database,
-        instances_dir,
-        folder,
-        linked_modpack(details, version),
-    )
-    .await
+    Some(LinkedModpack {
+        name: name?,
+        author,
+        version_name: archive_details::capped(&version.name)?,
+        published_at: version
+            .published_at
+            .as_deref()
+            .and_then(archive_details::capped),
+    })
+}
+
+/// The store page of the pack. It only feeds the UI, so a store that cannot describe
+/// the pack does not stop the install, but cancelling or pausing still does.
+async fn store_details(
+    client: &Client,
+    context: &crate::InstallationContext,
+    source: ModpackSource,
+    project_id: &str,
+) -> Result<Option<ModpackDetails>> {
+    match context
+        .metadata(get_modpack(client, source, project_id))
+        .await
+    {
+        Ok(details) => Ok(Some(details)),
+        Err(CoreError::DownloadCancelled) => Err(CoreError::DownloadCancelled),
+        Err(error) => {
+            tracing::warn!(%error, "could not read the modpack's store details");
+            Ok(None)
+        }
+    }
 }
 
 /// Removes a v0.2.x index file after its rows were stored. A file that is
@@ -228,6 +241,7 @@ async fn install_modpack(
     let dir = instances_dir.join(&entry.folder);
     restore_instance_icon(client, &dir, selection, &context).await?;
     let archive = workspace::archive_path(&dir)?;
+    let mut resolved = None;
     if let Some((project_id, version_id)) = remote {
         let version = match source {
             ModpackSource::Modrinth => {
@@ -243,25 +257,20 @@ async fn install_modpack(
                 .await?
             }
         };
-        record_store_details(
-            database,
-            client,
-            instances_dir,
-            &entry.folder,
-            *source,
-            project_id,
-            version,
-        )
-        .await?;
+        let store = store_details(client, &context, *source, project_id).await?;
+        resolved = Some((version, store));
     }
     context.stage(crate::DownloadPhase::Extracting).await?;
     if reset_content {
         reset_pack_content(&dir)?;
     }
     let bytes = std::fs::read(&archive)?;
-    if remote.is_none()
-        && let Some(details) = archive_details::archive_details(*source, &bytes)
-    {
+    let declared = archive_details::archive_details(*source, &bytes);
+    let details = match resolved {
+        Some((version, store)) => linked_modpack(store.as_ref(), declared, version),
+        None => declared,
+    };
+    if let Some(details) = details {
         crate::instance::record_linked_modpack(database, instances_dir, &entry.folder, details)
             .await?;
     }
@@ -376,22 +385,56 @@ mod tests {
         }
     }
 
-    #[test]
-    fn keeps_the_pack_name_author_and_installed_version() {
-        let version = PackVersion {
+    fn version() -> PackVersion {
+        PackVersion {
             name: "15.0.0-beta.3".into(),
             published_at: Some("2026-11-01T10:00:00Z".into()),
-        };
+        }
+    }
+
+    #[test]
+    fn keeps_the_store_name_author_and_installed_version() {
         assert_eq!(
-            linked_modpack(details("robotkoer"), version.clone()),
-            LinkedModpack {
+            linked_modpack(Some(&details("robotkoer")), None, version()),
+            Some(LinkedModpack {
                 name: "Fabulously Optimized".into(),
                 author: Some("robotkoer".into()),
                 version_name: "15.0.0-beta.3".into(),
                 published_at: Some("2026-11-01T10:00:00Z".into()),
-            }
+            })
         );
-        assert_eq!(linked_modpack(details("  "), version).author, None);
+        assert_eq!(
+            linked_modpack(Some(&details("  ")), None, version()).and_then(|pack| pack.author),
+            None
+        );
+    }
+
+    #[test]
+    fn falls_back_to_the_archive_name_when_the_store_cannot_describe_the_pack() {
+        let declared = LinkedModpack {
+            name: "Fabulously Optimized".into(),
+            author: None,
+            version_name: "archive 15".into(),
+            published_at: None,
+        };
+        assert_eq!(
+            linked_modpack(None, Some(declared), version()),
+            Some(LinkedModpack {
+                name: "Fabulously Optimized".into(),
+                author: None,
+                version_name: "15.0.0-beta.3".into(),
+                published_at: Some("2026-11-01T10:00:00Z".into()),
+            })
+        );
+        assert_eq!(linked_modpack(None, None, version()), None);
+    }
+
+    #[test]
+    fn caps_long_store_text() {
+        let mut store = details("robotkoer");
+        store.name = "x".repeat(500);
+        let pack = linked_modpack(Some(&store), None, version()).expect("details");
+        assert_eq!(pack.name.chars().count(), 200);
     }
 
     #[tokio::test]

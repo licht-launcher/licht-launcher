@@ -10,8 +10,15 @@ use super::ModpackSource;
 use super::archive::read_metadata;
 use crate::instance::LinkedModpack;
 
-/// Archive text is shown as-is in the UI, so it is trimmed and capped.
+/// Pack text from an archive or a store is shown as-is in the UI, so it is trimmed
+/// and capped.
 const MAX_DETAIL_CHARS: usize = 200;
+
+/// `value` trimmed and capped, or `None` when nothing is left.
+pub(super) fn capped(value: &str) -> Option<String> {
+    let value = value.trim();
+    (!value.is_empty()).then(|| value.chars().take(MAX_DETAIL_CHARS).collect())
+}
 
 /// The pack details its index (`.mrpack`) or manifest (CurseForge) declares, or
 /// `None` when the archive names no pack or version.
@@ -32,8 +39,7 @@ pub(super) fn archive_details(source: ModpackSource, bytes: &[u8]) -> Option<Lin
 }
 
 fn text(index: &Value, key: &str) -> Option<String> {
-    let value = index.get(key)?.as_str()?.trim();
-    (!value.is_empty()).then(|| value.chars().take(MAX_DETAIL_CHARS).collect())
+    capped(index.get(key)?.as_str()?)
 }
 
 #[cfg(test)]
