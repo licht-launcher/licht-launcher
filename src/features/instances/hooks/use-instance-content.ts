@@ -5,7 +5,10 @@ import {
   removeInstanceContent,
   setInstanceContentEnabled,
 } from "@/api/commands";
-import { instanceContentQuery } from "@/features/instances/lib/content-query";
+import {
+  instanceContentKey,
+  instanceContentQuery,
+} from "@/features/instances/lib/content-query";
 import { friendlyError, messageOf } from "@/lib/errors";
 import type { InstanceContentEntry } from "@/lib/generated/InstanceContentEntry";
 
@@ -19,32 +22,38 @@ export function useInstanceContent(folder: string | null) {
     ...instanceContentQuery(queryClient, folder ?? ""),
     enabled: folder !== null,
   });
-  const reload = () =>
-    queryClient.invalidateQueries({ queryKey: ["instance-content", folder] });
+  // The folder travels with each change, so selecting another instance while it
+  // runs neither redirects it nor reloads the wrong list.
+  const reload = (target: string) =>
+    queryClient.invalidateQueries({ queryKey: instanceContentKey(target) });
   const update = useMutation({
-    mutationFn: (input: { entry: InstanceContentEntry; enabled: boolean }) =>
+    mutationFn: (input: {
+      folder: string;
+      entry: InstanceContentEntry;
+      enabled: boolean;
+    }) =>
       setInstanceContentEnabled(
-        folder ?? "",
+        input.folder,
         input.entry.kind,
         input.entry.name,
         input.enabled,
       ),
-    onSuccess: async () => {
-      await reload();
+    onSuccess: async (_, input) => {
+      await reload(input.folder);
       toast.success("Content status updated.");
     },
     onError: (error) => toast.error(friendlyError(messageOf(error))),
   });
   const remove = useMutation({
-    mutationFn: (entry: InstanceContentEntry) =>
+    mutationFn: (input: { folder: string; entry: InstanceContentEntry }) =>
       removeInstanceContent(
-        folder ?? "",
-        entry.kind,
-        entry.name,
-        entry.enabled,
+        input.folder,
+        input.entry.kind,
+        input.entry.name,
+        input.entry.enabled,
       ),
-    onSuccess: async () => {
-      await reload();
+    onSuccess: async (_, input) => {
+      await reload(input.folder);
       toast.success("Content removed.");
     },
     onError: (error) => toast.error(friendlyError(messageOf(error))),
@@ -63,8 +72,9 @@ export function useInstanceContent(folder: string | null) {
     extraEntries,
     /** True while a toggle or removal runs, so the controls wait for it. */
     busy: update.isPending || remove.isPending,
-    toggle: (entry: InstanceContentEntry, enabled: boolean) =>
-      update.mutate({ entry, enabled }),
+    toggle: (entry: InstanceContentEntry, enabled: boolean) => {
+      if (folder !== null) update.mutate({ folder, entry, enabled });
+    },
     remove,
     refreshing: content.isFetching,
     /** Lists the folders again and rereads every file's metadata. */

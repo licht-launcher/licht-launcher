@@ -2,12 +2,17 @@ import { type QueryClient, queryOptions } from "@tanstack/react-query";
 import { listInstanceContent } from "@/api/commands";
 import type { InstanceContentEntry } from "@/lib/generated/InstanceContentEntry";
 
+/** The query key of an instance's content list. */
+export function instanceContentKey(folder: string) {
+  return ["instance-content", folder] as const;
+}
+
 export function instanceContentQuery(
   client: QueryClient,
   folder: string,
   refresh = false,
 ) {
-  const queryKey = ["instance-content", folder] as const;
+  const queryKey = instanceContentKey(folder);
   return queryOptions({
     queryKey,
     staleTime: Number.POSITIVE_INFINITY,
