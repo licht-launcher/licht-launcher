@@ -81,6 +81,8 @@ fn lists_shader_packs_kept_as_folders() {
     fs::create_dir_all(shaders.join("Old Pack.disabled").join("shaders"))
         .expect("disabled folder pack");
     fs::create_dir_all(root.join("mods").join("config-folder")).expect("mods folder");
+    // Only a folder with Iris's `shaders` directory is a pack.
+    fs::create_dir_all(shaders.join("Backups").join("old")).expect("other folder");
 
     let entries = list_instance_content(&cache, "classic").expect("list");
 
@@ -125,4 +127,29 @@ fn toggles_and_removes_a_folder_shader_pack() {
     )
     .expect("remove");
     assert!(!disabled.exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn never_lists_or_removes_a_linked_shader_folder() {
+    let (_temp, cache) = cache("shader-folder-link");
+    let root = instance(&cache);
+    let outside_temp = TempDir::new("content-shader-outside");
+    let outside = outside_temp.path().join("Complementary");
+    fs::create_dir_all(outside.join("shaders")).expect("outside pack");
+    fs::write(outside.join("shaders").join("final.fsh"), b"shader").expect("shader file");
+    std::os::unix::fs::symlink(&outside, root.join("shaderpacks").join("Linked")).expect("link");
+
+    let entries = list_instance_content(&cache, "classic").expect("list");
+    let removed = remove_instance_content(
+        &cache,
+        "classic",
+        InstanceContentKind::ShaderPacks,
+        "Linked",
+        true,
+    );
+
+    assert!(entries.is_empty());
+    assert!(removed.is_err());
+    assert!(outside.join("shaders").join("final.fsh").is_file());
 }
