@@ -31,6 +31,7 @@ import type { ModpackOrigin } from "@/features/instances/lib/modpack-content";
 import { friendlyError, messageOf } from "@/lib/errors";
 import type { InstanceContentEntry } from "@/lib/generated/InstanceContentEntry";
 import type { InstanceContentKind } from "@/lib/generated/InstanceContentKind";
+import type { LinkedModpack } from "@/lib/generated/LinkedModpack";
 
 import { contentSectionStyles } from "./content-section.styles";
 
@@ -42,12 +43,17 @@ export function ContentSection({
   filter,
   search,
   modpack = null,
+  linkedModpack = null,
+  iconPath = null,
   toolbar = null,
 }: {
   folder: string | null;
   filter: ContentFilter;
   search: string;
   modpack?: ModpackOrigin | null;
+  /** The pack's store details saved at install, when the instance has them. */
+  linkedModpack?: LinkedModpack | null;
+  iconPath?: string | null;
   /** Search, filter and refresh controls, shown right above the list. */
   toolbar?: ReactNode;
 }) {
@@ -155,6 +161,8 @@ export function ContentSection({
       {modpack !== null && content.data !== undefined ? (
         <ModpackContentCard
           origin={modpack}
+          linked={linkedModpack}
+          iconPath={iconPath}
           entries={modpackEntries}
           onView={() => setModpackOpenFor(folder)}
         />
@@ -228,6 +236,8 @@ export function ContentSection({
                 open={modpackOpen}
                 onOpenChange={(open) => setModpackOpenFor(open ? folder : null)}
                 origin={modpack}
+                linked={linkedModpack}
+                iconPath={iconPath}
                 folder={folder}
                 entries={modpackEntries}
                 actions={{ disabled, onToggle: toggleContent }}

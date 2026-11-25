@@ -1,9 +1,7 @@
 export const modpackContentDialogStyles = {
   content: "flex h-4/5 flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl",
   header: "flex-row items-center gap-3 border-b border-border/60 px-6 py-4",
-  icon: "size-9 shrink-0 rounded-md bg-muted object-cover",
-  iconFallback:
-    "flex size-9 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground [&_svg]:size-5",
+  icon: "size-9",
   heading: "flex min-w-0 flex-1 flex-col gap-1",
   title: "truncate text-base font-semibold",
   description: "truncate text-sm text-muted-foreground",

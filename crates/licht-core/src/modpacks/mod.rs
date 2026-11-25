@@ -24,10 +24,53 @@ pub use types::{
 
 use reqwest::Client;
 
-use crate::instance::{InstanceEntry, InstanceSource, instance_entry};
+use crate::instance::{InstanceEntry, InstanceSource, LinkedModpack, instance_entry};
 use crate::settings::GlobalLaunch;
 use crate::{CoreError, Result, SharedCache};
 use std::path::Path;
+
+/// The pack version a store download resolved.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct PackVersion {
+    pub name: String,
+    pub published_at: Option<String>,
+}
+
+fn linked_modpack(details: ModpackDetails, version: PackVersion) -> LinkedModpack {
+    LinkedModpack {
+        name: details.name,
+        author: Some(details.author).filter(|author| !author.trim().is_empty()),
+        version_name: version.name,
+        published_at: version.published_at,
+    }
+}
+
+/// Keeps the store's details of the pack on the instance. They only feed the UI, so a
+/// store that cannot describe the pack does not stop the install.
+async fn record_store_details(
+    database: &crate::DatabaseClient,
+    client: &Client,
+    instances_dir: &Path,
+    folder: &str,
+    source: ModpackSource,
+    project_id: &str,
+    version: PackVersion,
+) -> Result<()> {
+    let details = match get_modpack(client, source, project_id).await {
+        Ok(details) => details,
+        Err(error) => {
+            tracing::warn!(%error, "could not read the modpack's store details");
+            return Ok(());
+        }
+    };
+    crate::instance::record_linked_modpack(
+        database,
+        instances_dir,
+        folder,
+        linked_modpack(details, version),
+    )
+    .await
+}
 
 /// Removes a v0.2.x index file after its rows were stored. A file that is
 /// already gone was removed by another run that stored the same rows, so the
@@ -117,7 +160,7 @@ pub(crate) async fn prepare_modpack_instance(
     restore_instance_icon(client, &dir, selection, &context).await?;
     let archive = workspace::archive_path(&dir)?;
     if let Some((project_id, version_id)) = remote {
-        match source {
+        let version = match source {
             ModpackSource::Modrinth => {
                 modrinth::download_modrinth_mrpack_to(
                     client, project_id, version_id, &archive, &context,
@@ -131,6 +174,16 @@ pub(crate) async fn prepare_modpack_instance(
                 .await?
             }
         };
+        record_store_details(
+            database,
+            client,
+            instances_dir,
+            &entry.folder,
+            *source,
+            project_id,
+            version,
+        )
+        .await?;
     }
     context.stage(crate::DownloadPhase::Extracting).await?;
     let bytes = std::fs::read(&archive)?;
@@ -221,6 +274,47 @@ mod tests {
     use licht_testkit::temp::TempDir;
 
     use super::*;
+
+    fn details(author: &str) -> ModpackDetails {
+        ModpackDetails {
+            id: "fo".into(),
+            source: ModpackSource::Modrinth,
+            name: "Fabulously Optimized".into(),
+            summary: String::new(),
+            author: author.into(),
+            downloads: 0,
+            followers: None,
+            icon_url: None,
+            categories: Vec::new(),
+            loaders: Vec::new(),
+            game_versions: Vec::new(),
+            license: None,
+            published_at: None,
+            updated_at: None,
+            gallery: Vec::new(),
+            project_url: None,
+            links: Default::default(),
+            description_html: String::new(),
+        }
+    }
+
+    #[test]
+    fn keeps_the_pack_name_author_and_installed_version() {
+        let version = PackVersion {
+            name: "15.0.0-beta.3".into(),
+            published_at: Some("2026-11-01T10:00:00Z".into()),
+        };
+        assert_eq!(
+            linked_modpack(details("robotkoer"), version.clone()),
+            LinkedModpack {
+                name: "Fabulously Optimized".into(),
+                author: Some("robotkoer".into()),
+                version_name: "15.0.0-beta.3".into(),
+                published_at: Some("2026-11-01T10:00:00Z".into()),
+            }
+        );
+        assert_eq!(linked_modpack(details("  "), version).author, None);
+    }
 
     #[test]
     fn a_legacy_index_already_removed_by_another_run_counts_as_removed() {

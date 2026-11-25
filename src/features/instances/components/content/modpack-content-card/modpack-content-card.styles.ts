@@ -1,9 +1,7 @@
 export const modpackContentCardStyles = {
   /** A box of its own above the content list. */
   root: "flex shrink-0 items-start gap-3 rounded-lg border border-border/60 bg-black/20 p-4",
-  icon: "size-12 shrink-0 rounded-md bg-muted object-cover",
-  iconFallback:
-    "flex size-12 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground [&_svg]:size-6",
+  icon: "size-12",
   heading: "flex min-w-0 flex-1 flex-col gap-3",
   title: "truncate text-base font-semibold",
   facts: "flex flex-wrap gap-x-10 gap-y-3",

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ModpackOrigin } from "@/features/instances/lib/modpack-content";
 import type { InstanceContentEntry } from "@/lib/generated/InstanceContentEntry";
 import type { InstanceContentKind } from "@/lib/generated/InstanceContentKind";
+import type { LinkedModpack } from "@/lib/generated/LinkedModpack";
 
 import { ModpackContentDialog } from "./modpack-content-dialog";
 
@@ -42,7 +43,11 @@ const ENTRIES = [
   entry("Fresh", "resourcePacks"),
 ];
 
-function renderDialog(open = true, origin: ModpackOrigin = IMPORTED) {
+function renderDialog(
+  open = true,
+  origin: ModpackOrigin = IMPORTED,
+  linked: LinkedModpack | null = null,
+) {
   const onToggle = vi.fn();
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -53,6 +58,8 @@ function renderDialog(open = true, origin: ModpackOrigin = IMPORTED) {
         open={open}
         onOpenChange={vi.fn()}
         origin={origin}
+        linked={linked}
+        iconPath={null}
         folder="classic"
         entries={ENTRIES}
         actions={{ disabled: false, onToggle }}
@@ -151,6 +158,30 @@ describe("ModpackContentDialog", () => {
         /^Fabulously Optimized 15\.0\.0-beta\.3 · by robotkoer · Modrinth · Updated .+ ago$/,
       ),
     ).toBeInTheDocument();
+  });
+
+  it("describes a pack from the details saved at install, without asking the store", () => {
+    renderDialog(
+      true,
+      {
+        type: "modpack",
+        source: "curseforge",
+        projectId: "123",
+        versionId: "456",
+        iconUrl: null,
+      },
+      {
+        name: "All the Mods",
+        author: null,
+        versionName: "ATM 1.0",
+        publishedAt: null,
+      },
+    );
+
+    expect(
+      screen.getByRole("dialog", { name: "Modpack content" }),
+    ).toHaveAccessibleDescription("All the Mods ATM 1.0 · CurseForge");
+    expect(getModpack).not.toHaveBeenCalled();
   });
 
   it("says where an imported pack came from", () => {
