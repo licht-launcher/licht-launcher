@@ -26,7 +26,10 @@ pub fn list_instance_content(
         for item in fs::read_dir(path)? {
             let item = item?;
             let metadata = item.metadata()?;
-            let folder = kind == InstanceContentKind::ShaderPacks && item.file_type()?.is_dir();
+            // Iris reads a folder pack from its `shaders` directory; other folders are not packs.
+            let folder = kind == InstanceContentKind::ShaderPacks
+                && item.file_type()?.is_dir()
+                && item.path().join("shaders").is_dir();
             if !folder && !metadata.is_file() {
                 continue;
             }

@@ -21,12 +21,24 @@ pub(super) async fn modpack_paths(
         .map(|file| file.relative_path)
         .chain(curseforge.into_iter().map(|file| file.relative_path))
         .chain(overrides)
-        .map(|path| {
-            let path = path.replace('\\', "/");
-            path.strip_suffix(DISABLED_SUFFIX)
-                .map_or_else(|| path.clone(), str::to_string)
-        })
+        .map(|path| enabled_path(&path.replace('\\', "/")))
         .collect())
+}
+
+/// `path` with the `.disabled` suffix taken off the content it names, so a file the
+/// pack ships disabled, or a file inside a folder pack it ships disabled, matches the
+/// entry listed for it.
+fn enabled_path(path: &str) -> String {
+    let mut parts = path.splitn(3, '/');
+    let directory = parts.next().unwrap_or_default();
+    let Some(name) = parts.next() else {
+        return path.to_string();
+    };
+    let name = name.strip_suffix(DISABLED_SUFFIX).unwrap_or(name);
+    match parts.next() {
+        Some(rest) => format!("{directory}/{name}/{rest}"),
+        None => format!("{directory}/{name}"),
+    }
 }
 
 /// Enabling or disabling a modpack file only renames it, so it still belongs to the pack.
