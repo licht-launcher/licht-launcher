@@ -1,8 +1,8 @@
-import { useState } from "react";
 import {
   useModpack,
   useModpackVersions,
 } from "@/features/discover/hooks/use-modpacks";
+import { useNow } from "@/features/instances/hooks/use-now";
 import type {
   FileModpackOrigin,
   StoreModpackOrigin,
@@ -33,7 +33,7 @@ export function useStoreModpackSummary(
   origin: StoreModpackOrigin,
   linked: LinkedModpack | null,
 ): ModpackSummary {
-  const [now] = useState(() => Date.now());
+  const now = useNow();
   const fetch = linked === null;
   const modpack = useModpack(origin.source, origin.projectId, fetch);
   const versions = useModpackVersions(origin.source, origin.projectId, fetch);

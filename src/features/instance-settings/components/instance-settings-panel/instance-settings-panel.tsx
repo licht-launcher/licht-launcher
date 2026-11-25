@@ -1,3 +1,4 @@
+import type { InstanceBaseInput } from "@/api/commands";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { InstanceDraft } from "@/features/instance-settings/model/draft";
 import {
@@ -7,6 +8,8 @@ import {
 import { GeneralSection } from "@/features/instance-settings/sections/general-section";
 import { InstanceBaseSection } from "@/features/instance-settings/sections/instance-base-section";
 import { OverridesSection } from "@/features/instance-settings/sections/overrides-section";
+import type { ModpackOrigin } from "@/features/instances/lib/modpack-content";
+import type { LinkedModpack } from "@/lib/generated/LinkedModpack";
 import type { SettingsSnapshot } from "@/lib/generated/SettingsSnapshot";
 
 import { instanceSettingsPanelStyles } from "./instance-settings-panel.styles";
@@ -20,11 +23,12 @@ export function InstanceSettingsPanel({
   versionId,
   busy,
   versionBusy,
+  instanceActive = false,
   preparing = false,
-  linkedModpack = false,
+  modpack = null,
   onChange,
   onRename,
-  onChangeVersion,
+  onChangeBase,
   onOpenFolder,
   onDuplicate,
   onDelete,
@@ -36,12 +40,14 @@ export function InstanceSettingsPanel({
   folder: string;
   versionId: string | null;
   preparing?: boolean;
-  linkedModpack?: boolean;
+  /** The pack a linked instance was installed from; `null` for other instances. */
+  modpack?: { origin: ModpackOrigin; linked: LinkedModpack | null } | null;
   busy: boolean;
   versionBusy: boolean;
+  instanceActive?: boolean;
   onChange: (patch: Partial<InstanceDraft>) => void;
   onRename: (name: string) => void;
-  onChangeVersion: (versionId: string, installed: boolean) => void;
+  onChangeBase: (base: InstanceBaseInput) => void;
   onOpenFolder: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
@@ -76,10 +82,11 @@ export function InstanceSettingsPanel({
               folder={folder}
               versionId={versionId}
               preparing={preparing}
-              linkedModpack={linkedModpack}
+              modpack={modpack}
+              instanceActive={instanceActive}
               busy={busy}
               versionBusy={versionBusy}
-              onChangeVersion={onChangeVersion}
+              onChangeBase={onChangeBase}
             />
           ) : null}
           {section === "overrides" ? (

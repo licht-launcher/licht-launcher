@@ -1,5 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { toast } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -55,7 +61,7 @@ function renderDialog(
         onOpenChange={() => {}}
         onOpenGlobalSettings={() => {}}
         onRename={() => {}}
-        onChangeVersion={() => {}}
+        onChangeBase={() => {}}
         onOpenFolder={() => {}}
         onDuplicate={() => {}}
         onDelete={() => {}}
@@ -65,6 +71,26 @@ function renderDialog(
     </QueryClientProvider>,
   );
 }
+
+const linkedEntry: InstanceEntry = {
+  ...entry,
+  installation: {
+    source: {
+      type: "modpack",
+      source: "modrinth",
+      projectId: "fo",
+      versionId: "v15",
+      iconUrl: null,
+    },
+    state: "ready",
+    modpack: {
+      name: "Fabulously Optimized",
+      author: "robotkoer",
+      versionName: "15.0.0-beta.3",
+      publishedAt: null,
+    },
+  },
+};
 
 describe("InstanceSettingsDialog", () => {
   afterEach(() => vi.restoreAllMocks());
@@ -121,13 +147,13 @@ describe("InstanceSettingsDialog", () => {
     const onOpenFolder = vi.fn();
     const onDuplicate = vi.fn();
     const onDelete = vi.fn();
-    const onChangeVersion = vi.fn();
+    const onChangeBase = vi.fn();
     renderDialog({
       onRename,
       onOpenFolder,
       onDuplicate,
       onDelete,
-      onChangeVersion,
+      onChangeBase,
     });
 
     expect(
@@ -170,7 +196,7 @@ describe("InstanceSettingsDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Instance base" }));
     expect(
       await screen.findByText(
-        "Platform and game version this instance launches with. Only Vanilla is available for now.",
+        "Platform and game version this instance launches with.",
       ),
     ).toBeInTheDocument();
     expect(await screen.findByText("Vanilla")).toBeInTheDocument();
@@ -180,29 +206,39 @@ describe("InstanceSettingsDialog", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Open the editor to pick another Vanilla release for this instance.",
+        "Change the platform, game version or loader this instance launches with.",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Repair" })).toBeInTheDocument();
+    expect(
+      screen
+        .getAllByRole("heading", { level: 3 })
+        .map((heading) => heading.textContent),
+    ).toEqual(["Edit base", "Repair"]);
     expect(invoke).not.toHaveBeenCalledWith("list_versions");
 
+    // The version list is virtualized; give it room to render its options.
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(
+      function (this: HTMLElement) {
+        return this.dataset.slot === "combobox-viewport" ? 256 : 0;
+      },
+    );
+    vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(320);
     fireEvent.click(screen.getByRole("button", { name: "Edit base" }));
     expect(
-      await screen.findByRole("heading", { name: "Edit game version" }),
+      await screen.findByRole("dialog", { name: "Edit base" }),
     ).toBeInTheDocument();
-    await waitFor(() => {
-      expect(invoke).toHaveBeenCalledWith("list_versions");
-    });
-    fireEvent.click(screen.getByLabelText("Game version"));
-    expect(
-      await screen.findByRole("option", { name: "1.21.1" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("option", { name: "24w14a" }),
-    ).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("option", { name: "1.21.1" }));
+    const field = screen.getByRole("combobox", { name: "Game version" });
+    await waitFor(() => expect(field).toHaveValue("1.20.1"));
+    fireEvent.focus(field);
+    fireEvent.change(field, { target: { value: "1.21" } });
+    fireEvent.click(await screen.findByRole("option", { name: "1.21.1" }));
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    expect(onChangeVersion).toHaveBeenCalledWith("1.21.1", false);
+    expect(onChangeBase).toHaveBeenCalledWith({
+      platform: "vanilla",
+      gameVersion: "1.21.1",
+      loaderChannel: "stable",
+      loaderVersion: null,
+    });
   });
 
   it("shows the loader and Minecraft version an instance runs", async () => {
@@ -230,7 +266,179 @@ describe("InstanceSettingsDialog", () => {
     });
   });
 
-  it("keeps the game version of an instance linked to a modpack", async () => {
+  it("says when the platform cannot be read", async () => {
+    const original = invoke.getMockImplementation();
+    if (!original) throw new Error("missing command implementation");
+    invoke.mockImplementation((command: string, args?: unknown) =>
+      command === "get_instance_platform"
+        ? Promise.reject(new Error("invalid loader profile"))
+        : original(command, args),
+    );
+    renderDialog();
+
+    fireEvent.click(screen.getByRole("button", { name: "Instance base" }));
+
+    expect(
+      await screen.findByText("Could not read the platform"),
+    ).toBeInTheDocument();
+  });
+
+  it("reinstalls a store modpack after the user confirms", async () => {
+    const original = invoke.getMockImplementation();
+    if (!original) throw new Error("missing command implementation");
+    invoke.mockImplementation((command: string, args?: unknown) =>
+      command === "reinstall_instance_modpack"
+        ? Promise.resolve(
+            completedDownload({
+              instanceFolder: "Survival",
+              operation: "reinstall",
+            }),
+          )
+        : original(command, args),
+    );
+    const success = vi.spyOn(toast, "success");
+    renderDialog({ entry: linkedEntry });
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Instance base" }),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Reinstall" }));
+    const confirm = await screen.findByRole("dialog", {
+      name: "Reinstall this modpack?",
+    });
+    expect(invoke).not.toHaveBeenCalledWith(
+      "reinstall_instance_modpack",
+      expect.anything(),
+    );
+    fireEvent.click(within(confirm).getByRole("button", { name: "Reinstall" }));
+
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("reinstall_instance_modpack", {
+        folder: "Survival",
+      }),
+    );
+    await waitFor(() =>
+      expect(success).toHaveBeenCalledWith("Modpack reinstalled."),
+    );
+  });
+
+  it("cannot reinstall a modpack imported from a file", async () => {
+    renderDialog({
+      entry: {
+        ...linkedEntry,
+        installation: {
+          source: { type: "modpackFile", source: "modrinth" },
+          state: "ready",
+        },
+      },
+    });
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Instance base" }),
+    );
+
+    expect(
+      await screen.findByText(
+        "A modpack imported from a file cannot be reinstalled, because its archive is not kept after install.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reinstall" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Unlink" })).toBeEnabled();
+  });
+
+  it("shows the linked modpack under Instance base only for linked instances", async () => {
+    const { unmount } = renderDialog();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Instance base" }),
+    );
+    expect(await screen.findByText("Vanilla")).toBeInTheDocument();
+    expect(screen.queryByText("Linked modpack")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Unlink" }),
+    ).not.toBeInTheDocument();
+    unmount();
+
+    renderDialog({ entry: linkedEntry });
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Instance base" }),
+    );
+    expect(await screen.findByText("Linked modpack")).toBeInTheDocument();
+    expect(
+      screen.getByText("Fabulously Optimized 15.0.0-beta.3"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Modpack" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("holds the modpack actions while the game or a download runs", async () => {
+    renderDialog({ entry: linkedEntry, instanceActive: true });
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Instance base" }),
+    );
+
+    expect(
+      await screen.findByRole("button", { name: "Reinstall" }),
+    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Unlink" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Repair" })).toBeEnabled();
+  });
+
+  it("unlinks the modpack after the user confirms", async () => {
+    const success = vi.spyOn(toast, "success");
+    renderDialog({ entry: linkedEntry });
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Instance base" }),
+    );
+    expect(
+      await screen.findByText("Fabulously Optimized 15.0.0-beta.3"),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Unlink" }));
+    const confirm = await screen.findByRole("dialog", {
+      name: "Unlink this modpack?",
+    });
+    expect(invoke).not.toHaveBeenCalledWith(
+      "unlink_instance_modpack",
+      expect.anything(),
+    );
+    fireEvent.click(within(confirm).getByRole("button", { name: "Unlink" }));
+
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("unlink_instance_modpack", {
+        folder: "Survival",
+      }),
+    );
+    await waitFor(() =>
+      expect(success).toHaveBeenCalledWith("Modpack unlinked."),
+    );
+  });
+
+  it("installs another modpack version in place of Edit base", async () => {
+    const original = invoke.getMockImplementation();
+    if (!original) throw new Error("missing command implementation");
+    invoke.mockImplementation((command: string, args?: unknown) => {
+      if (command === "list_modpack_versions") {
+        return Promise.resolve(
+          ["v16", "v15"].map((id) => ({
+            id,
+            name: `Fabulously Optimized ${id}`,
+            gameVersions: ["1.21.1"],
+            loaders: ["fabric"],
+            versionType: "release",
+            publishedAt: null,
+            downloads: 0,
+          })),
+        );
+      }
+      if (command === "change_instance_modpack_version") {
+        return Promise.resolve(
+          completedDownload({ operation: "changeVersion" }),
+        );
+      }
+      return original(command, args);
+    });
     renderDialog({
       entry: {
         ...entry,
@@ -250,12 +458,98 @@ describe("InstanceSettingsDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Instance base" }));
 
     expect(
+      await screen.findByRole("heading", { name: "Modpack version" }),
+    ).toBeInTheDocument();
+    // Each action sits right under the card it changes.
+    expect(
+      screen
+        .getAllByRole("heading", { level: 3 })
+        .map((heading) => heading.textContent),
+    ).toEqual([
+      "Modpack version",
+      "Reinstall modpack",
+      "Unlink modpack",
+      "Repair",
+    ]);
+    expect(
+      screen.queryByRole("button", { name: "Edit base" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Repair" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Change version" }));
+    const install = await screen.findByRole("button", {
+      name: "Install version",
+    });
+    await waitFor(() => {
+      expect(screen.getByLabelText("Version")).toHaveTextContent(
+        "Fabulously Optimized v15",
+      );
+    });
+    expect(install).toBeDisabled();
+    fireEvent.click(screen.getByLabelText("Version"));
+    fireEvent.click(
+      await screen.findByRole("option", { name: "Fabulously Optimized v16" }),
+    );
+    fireEvent.click(install);
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("change_instance_modpack_version", {
+        folder: "Survival",
+        versionId: "v16",
+      });
+    });
+    expect(
+      await screen.findByText("Modpack version changed."),
+    ).toBeInTheDocument();
+  });
+
+  it("has no other versions for a modpack imported from a file", async () => {
+    renderDialog({
+      entry: {
+        ...entry,
+        installation: {
+          source: { type: "modpackFile", source: "modrinth" },
+          state: "ready",
+        },
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Instance base" }));
+
+    expect(
       await screen.findByText(
-        "The linked modpack sets this instance's game version.",
+        "A modpack imported from a file has no other versions to install.",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Edit base" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Repair" })).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: "Change version" }),
+    ).toBeDisabled();
+  });
+
+  it("waits to repair while the modpack version changes", async () => {
+    renderDialog({
+      entry: {
+        ...entry,
+        installation: {
+          source: {
+            type: "modpack",
+            source: "modrinth",
+            projectId: "fo",
+            versionId: "v16",
+            iconUrl: null,
+          },
+          state: "installing",
+        },
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Instance base" }));
+
+    expect(
+      await screen.findByRole("button", { name: "Repair" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Change version" }),
+    ).toBeDisabled();
   });
 
   it("repairs the instance from the base section", async () => {

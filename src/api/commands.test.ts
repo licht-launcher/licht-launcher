@@ -10,6 +10,8 @@ import {
   browseJava,
   browseModpackFile,
   cancelDownloadJob,
+  changeInstanceBase,
+  changeInstanceModpackVersion,
   checkAppUpdate,
   clearLastPlayedFolder,
   closeStartupPreview,
@@ -58,6 +60,7 @@ import {
   pauseDownloadJob,
   prepareInstanceDownload,
   quitApp,
+  reinstallInstanceModpack,
   renameInstance,
   repairInstance,
   requestUpdateRestart,
@@ -69,10 +72,10 @@ import {
   saveSettings,
   searchModpacks,
   setActiveMicrosoftAccount,
-  setInstanceVersion,
   setLastPlayedFolder,
   stopGame,
   touchLastOpened,
+  unlinkInstanceModpack,
 } from "@/api/commands";
 import { buildDiagnostics } from "@/features/settings/fixtures/build-diagnostics";
 import { appUpdateState } from "@/features/updater/fixtures/state";
@@ -333,10 +336,18 @@ describe("launcher commands", () => {
       folder: "Survival",
       settings,
     });
-    await setInstanceVersion("Survival", "1.21.1");
-    expect(invoke).toHaveBeenCalledWith("set_instance_version", {
+    await changeInstanceBase("Survival", {
+      platform: "fabric",
+      gameVersion: "1.21.4",
+      loaderChannel: "manual",
+      loaderVersion: "0.16.10",
+    });
+    expect(invoke).toHaveBeenCalledWith("change_instance_base", {
       folder: "Survival",
-      versionId: "1.21.1",
+      platform: "fabric",
+      gameVersion: "1.21.4",
+      loaderChannel: "manual",
+      loaderVersion: "0.16.10",
     });
   });
 
@@ -645,6 +656,28 @@ describe("launcher commands", () => {
     await getInstancePlatform("fabric-loader-0.19.5-26.3");
     expect(invoke).toHaveBeenCalledWith("get_instance_platform", {
       versionId: "fabric-loader-0.19.5-26.3",
+    });
+  });
+
+  it("installs another version of an instance's modpack", async () => {
+    await changeInstanceModpackVersion("classic", "v16");
+    expect(invoke).toHaveBeenCalledWith("change_instance_modpack_version", {
+      folder: "classic",
+      versionId: "v16",
+    });
+  });
+
+  it("reinstalls an instance's modpack", async () => {
+    await reinstallInstanceModpack("classic");
+    expect(invoke).toHaveBeenCalledWith("reinstall_instance_modpack", {
+      folder: "classic",
+    });
+  });
+
+  it("unlinks an instance from its modpack", async () => {
+    await unlinkInstanceModpack("classic");
+    expect(invoke).toHaveBeenCalledWith("unlink_instance_modpack", {
+      folder: "classic",
     });
   });
 

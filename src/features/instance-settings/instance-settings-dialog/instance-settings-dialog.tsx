@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
+import type { InstanceBaseInput } from "@/api/commands";
 import { getSettings } from "@/api/commands";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
@@ -17,10 +18,11 @@ export function InstanceSettingsDialog({
   open,
   busy,
   versionBusy,
+  instanceActive = false,
   onOpenChange,
   onOpenGlobalSettings,
   onRename,
-  onChangeVersion,
+  onChangeBase,
   onOpenFolder,
   onDuplicate,
   onDelete,
@@ -29,15 +31,18 @@ export function InstanceSettingsDialog({
   open: boolean;
   busy: boolean;
   versionBusy: boolean;
+  /** The instance's game or a download for it is running. */
+  instanceActive?: boolean;
   onOpenChange: (open: boolean) => void;
   onOpenGlobalSettings: () => void;
   onRename: (name: string) => void;
-  onChangeVersion: (versionId: string, installed: boolean) => void;
+  onChangeBase: (base: InstanceBaseInput) => void;
   onOpenFolder: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
 }) {
   const [section, setSection] = useState<InstanceSectionId>("general");
+  const origin = modpackOrigin(entry?.installation?.source);
   const { draft, update, flush } = useInstanceDraft(entry, open);
   const settings = useQuery({
     queryKey: ["settings"],
@@ -76,12 +81,17 @@ export function InstanceSettingsDialog({
               entry.installation !== undefined &&
               entry.installation.state !== "ready"
             }
-            linkedModpack={modpackOrigin(entry.installation?.source) !== null}
+            modpack={
+              origin !== null
+                ? { origin, linked: entry.installation?.modpack ?? null }
+                : null
+            }
             busy={busy}
             versionBusy={versionBusy}
+            instanceActive={instanceActive}
             onChange={update}
             onRename={onRename}
-            onChangeVersion={onChangeVersion}
+            onChangeBase={onChangeBase}
             onOpenFolder={onOpenFolder}
             onDuplicate={onDuplicate}
             onDelete={onDelete}

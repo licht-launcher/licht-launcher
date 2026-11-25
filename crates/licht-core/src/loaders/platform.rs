@@ -36,7 +36,9 @@ pub fn instance_platform(
 
 fn platform_of(version_id: &str, profile: &Value) -> Option<InstancePlatform> {
     let Some(game_version) = profile.get("inheritsFrom").and_then(Value::as_str) else {
-        return Some(InstancePlatform {
+        // A standalone profile is Vanilla only when it starts the game the way
+        // Mojang's do; an imported loader profile without a parent is unknown.
+        return is_mojang_profile(profile).then(|| InstancePlatform {
             platform: LoaderPlatform::Vanilla,
             game_version: version_id.to_string(),
             loader_version: None,
@@ -77,6 +79,28 @@ fn platform_of(version_id: &str, profile: &Value) -> Option<InstancePlatform> {
     })
 }
 
+/// Mojang's profiles start `net.minecraft.client.main.Main`, or, before 1.6, the
+/// launch wrapper with only Mojang's own tweakers.
+fn is_mojang_profile(profile: &Value) -> bool {
+    const LAUNCH_WRAPPER: &str = "net.minecraft.launchwrapper.";
+    match profile.get("mainClass").and_then(Value::as_str) {
+        Some("net.minecraft.client.main.Main") => true,
+        Some("net.minecraft.launchwrapper.Launch") => {
+            let arguments = profile
+                .get("minecraftArguments")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            let mut words = arguments.split_whitespace();
+            let mut tweakers = std::iter::from_fn(|| {
+                words.find(|word| *word == "--tweakClass")?;
+                Some(words.next().unwrap_or_default())
+            });
+            tweakers.all(|tweaker| tweaker.starts_with(LAUNCH_WRAPPER))
+        }
+        _ => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use licht_testkit::temp::TempDir;
@@ -91,13 +115,40 @@ mod tests {
     #[test]
     fn a_version_without_a_parent_is_vanilla() {
         assert_eq!(
-            platform("1.21.1", json!({"id": "1.21.1"})),
+            platform(
+                "1.21.1",
+                json!({"id": "1.21.1", "mainClass": "net.minecraft.client.main.Main"})
+            ),
             Some(InstancePlatform {
                 platform: LoaderPlatform::Vanilla,
                 game_version: "1.21.1".into(),
                 loader_version: None,
             })
         );
+    }
+
+    #[test]
+    fn reads_an_old_vanilla_profile_through_the_launch_wrapper() {
+        let profile = json!({
+            "mainClass": "net.minecraft.launchwrapper.Launch",
+            "minecraftArguments": "${auth_player_name} --tweakClass net.minecraft.launchwrapper.AlphaVanillaTweaker"
+        });
+        assert_eq!(
+            platform("a1.2.6", profile).map(|platform| platform.platform),
+            Some(LoaderPlatform::Vanilla)
+        );
+    }
+
+    #[test]
+    fn does_not_call_a_loader_profile_without_a_parent_vanilla() {
+        let legacy_forge = json!({
+            "mainClass": "net.minecraft.launchwrapper.Launch",
+            "minecraftArguments": "--username ${auth_player_name} --tweakClass cpw.mods.fml.common.launcher.FMLTweaker"
+        });
+        let fabric = json!({"mainClass": "net.fabricmc.loader.impl.launch.knot.KnotClient"});
+        assert_eq!(platform("1.7.10-Forge10.13.4.1614", legacy_forge), None);
+        assert_eq!(platform("fabric-merged", fabric), None);
+        assert_eq!(platform("custom", json!({"id": "custom"})), None);
     }
 
     #[test]

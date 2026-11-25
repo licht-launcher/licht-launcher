@@ -164,7 +164,7 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
   });
   markStartedRef.current = markStarted;
 
-  const { busy, rename, duplicate, remove, openFolder, changeVersion } =
+  const { busy, rename, duplicate, remove, openFolder, changeBase } =
     useInstanceMutations({
       beginInstall,
       endInstall,
@@ -188,6 +188,11 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
     instances.data?.find(
       (instance) => instance.folder === dialogs.configuringFolder,
     ) ?? null;
+  // A running game or download for the instance being configured.
+  const configuringActive =
+    configuring !== null &&
+    (playPhase(configuring.folder) !== "idle" ||
+      isInstalling(configuring.folder));
 
   const context = useMemo<InstancesChromeContext>(
     () => ({
@@ -411,12 +416,13 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
       />
       <InstanceDialogs
         configuring={configuring}
+        configuringActive={configuringActive}
         busy={busy}
         mutations={{
           rename,
           remove,
           openFolder,
-          changeVersion,
+          changeBase,
         }}
         configuringOpen={dialogs.configuringFolder !== null}
         action={dialogs.action}

@@ -2,33 +2,24 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { BoxIcon, LayersIcon, PencilIcon, WrenchIcon } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { getInstancePlatform, repairInstance } from "@/api/commands";
+import {
+  getInstancePlatform,
+  type InstanceBaseInput,
+  repairInstance,
+} from "@/api/commands";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { EditInstanceVersionDialog } from "@/features/instance-settings/components/edit-instance-version-dialog";
-import { formatPlatform } from "@/features/instance-settings/model/platform";
-import { versionsQueryOptions } from "@/features/instances/lib/versions-query";
+import { EditInstanceBaseDialog } from "@/features/instance-settings/components/edit-instance-base-dialog";
+import { LinkedModpackSettings } from "@/features/instance-settings/components/linked-modpack-settings";
+import {
+  formatPlatform,
+  platformStaleTime,
+} from "@/features/instance-settings/model/platform";
+import type { ModpackOrigin } from "@/features/instances/lib/modpack-content";
 import { friendlyError, messageOf } from "@/lib/errors";
-import type { VersionSummary } from "@/lib/generated/VersionSummary";
+import type { LinkedModpack } from "@/lib/generated/LinkedModpack";
 
 import { instanceBaseSectionStyles } from "./instance-base-section.styles";
-
-function versionsForPicker(
-  versions: VersionSummary[] | undefined,
-  versionId: string | null,
-): VersionSummary[] {
-  if (versions !== undefined && versions.length > 0) {
-    return versions;
-  }
-  if (versionId === null) return [];
-  return [
-    {
-      id: versionId,
-      versionType: "old_alpha",
-      installed: true,
-    },
-  ];
-}
 
 export function InstanceBaseSection({
   folder,
@@ -36,29 +27,31 @@ export function InstanceBaseSection({
   busy,
   versionBusy,
   preparing = false,
-  linkedModpack = false,
-  onChangeVersion,
+  modpack = null,
+  instanceActive = false,
+  onChangeBase,
 }: {
   folder: string;
   versionId: string | null;
   preparing?: boolean;
-  /** A modpack sets the game version, so it cannot change while the instance is linked. */
-  linkedModpack?: boolean;
+  /**
+   * The pack a linked instance came from. It sets the game version, so that cannot
+   * change while the instance is linked.
+   */
+  modpack?: { origin: ModpackOrigin; linked: LinkedModpack | null } | null;
+  /** The game or a download is running, so the modpack must not change under it. */
+  instanceActive?: boolean;
   busy: boolean;
   versionBusy: boolean;
-  onChangeVersion: (versionId: string, installed: boolean) => void;
+  onChangeBase: (base: InstanceBaseInput) => void;
 }) {
   const [editOpen, setEditOpen] = useState(false);
-  const versions = useQuery({
-    ...versionsQueryOptions,
-    enabled: editOpen,
-  });
   // A local profile read, so it resolves at once; it changes only with the version.
   const platform = useQuery({
     queryKey: ["instance-platform", versionId],
     queryFn: () => getInstancePlatform(versionId ?? ""),
     enabled: versionId !== null,
-    staleTime: Number.POSITIVE_INFINITY,
+    staleTime: (query) => platformStaleTime(query.state.data),
   });
   const repair = useMutation({
     mutationFn: () => repairInstance(folder),
@@ -72,10 +65,6 @@ export function InstanceBaseSection({
       toast.error(friendlyError(messageOf(error)));
     },
   });
-
-  const pickerVersions = versionsForPicker(versions.data, versionId);
-  const versionsLoading = editOpen && versions.isPending;
-  const versionsFailed = editOpen && versions.isError;
 
   return (
     <div className={instanceBaseSectionStyles.root}>
@@ -91,7 +80,11 @@ export function InstanceBaseSection({
             </span>
           </div>
           <div className={instanceBaseSectionStyles.summaryValue}>
-            {platform.data !== undefined ? formatPlatform(platform.data) : "—"}
+            {platform.data !== undefined
+              ? formatPlatform(platform.data)
+              : platform.isError
+                ? "Could not read the platform"
+                : "—"}
           </div>
         </div>
         <div className={instanceBaseSectionStyles.summaryItem}>
@@ -122,34 +115,44 @@ export function InstanceBaseSection({
         </div>
       </div>
 
-      <div className={instanceBaseSectionStyles.group}>
-        <div className={instanceBaseSectionStyles.groupText}>
-          <h3 className={instanceBaseSectionStyles.label}>Edit base</h3>
-          <p className={instanceBaseSectionStyles.hint}>
-            {linkedModpack
-              ? "The linked modpack sets this instance's game version."
-              : "Open the editor to pick another Vanilla release for this instance."}
-          </p>
+      {/* Right under the card it changes: the pack's version, or the platform and game version. */}
+      {modpack !== null ? (
+        <LinkedModpackSettings
+          folder={folder}
+          origin={modpack.origin}
+          linked={modpack.linked}
+          preparing={preparing}
+          busy={busy || versionBusy || instanceActive}
+        />
+      ) : (
+        <div className={instanceBaseSectionStyles.group}>
+          <div className={instanceBaseSectionStyles.groupText}>
+            <h3 className={instanceBaseSectionStyles.label}>Edit base</h3>
+            <p className={instanceBaseSectionStyles.hint}>
+              Change the platform, game version or loader this instance launches
+              with.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="warning"
+            className={instanceBaseSectionStyles.action}
+            disabled={
+              busy ||
+              versionBusy ||
+              preparing ||
+              instanceActive ||
+              versionId === null
+            }
+            onClick={() => {
+              setEditOpen(true);
+            }}
+          >
+            <PencilIcon data-icon="inline-start" aria-hidden />
+            Edit base
+          </Button>
         </div>
-        <Button
-          type="button"
-          variant="warning"
-          className={instanceBaseSectionStyles.action}
-          disabled={
-            busy ||
-            versionBusy ||
-            preparing ||
-            linkedModpack ||
-            versionId === null
-          }
-          onClick={() => {
-            setEditOpen(true);
-          }}
-        >
-          <PencilIcon data-icon="inline-start" aria-hidden />
-          Edit base
-        </Button>
-      </div>
+      )}
 
       <div className={instanceBaseSectionStyles.group}>
         <div className={instanceBaseSectionStyles.groupText}>
@@ -163,7 +166,7 @@ export function InstanceBaseSection({
           type="button"
           variant="outline"
           className={instanceBaseSectionStyles.action}
-          disabled={busy || versionBusy || repair.isPending}
+          disabled={busy || versionBusy || preparing || repair.isPending}
           onClick={() => {
             repair.mutate();
           }}
@@ -181,21 +184,13 @@ export function InstanceBaseSection({
         </Button>
       </div>
 
-      {versionId !== null && (
-        <EditInstanceVersionDialog
-          open={editOpen}
-          versionId={versionId}
-          versions={pickerVersions}
-          versionsPending={versionsLoading}
-          versionsError={versionsFailed}
-          onRetryVersions={() => {
-            void versions.refetch();
-          }}
-          busy={busy || versionBusy}
-          onOpenChange={setEditOpen}
-          onSave={onChangeVersion}
-        />
-      )}
+      <EditInstanceBaseDialog
+        open={editOpen}
+        current={platform.data ?? null}
+        busy={busy || versionBusy}
+        onOpenChange={setEditOpen}
+        onSave={onChangeBase}
+      />
     </div>
   );
 }

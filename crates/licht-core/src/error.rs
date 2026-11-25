@@ -80,6 +80,22 @@ pub enum CoreError {
     InstanceName,
     #[error("instance preparation is incomplete")]
     InstancePreparing,
+    #[error("this instance is not linked to a modpack")]
+    InstanceNotLinked,
+    #[error("a modpack sets this instance's base; change the modpack version instead")]
+    InstanceLinked,
+    #[error("a modpack imported from a file has no other versions to install")]
+    ModpackFileVersion,
+    #[error("an instance base must be Vanilla or a mod loader")]
+    InstanceBaseUnsupported,
+    #[error("this task starts only from its own action")]
+    DownloadOperationUnsupported,
+    #[error("close the game before changing this instance's modpack")]
+    InstanceRunning,
+    #[error(
+        "a modpack imported from a file cannot be reinstalled, because its archive is not kept"
+    )]
+    ModpackFileReinstall,
     #[error("Java runtime index JSON is invalid")]
     JavaRuntime(#[source] serde_json::Error),
     #[error("Java runtime was not found for this system")]

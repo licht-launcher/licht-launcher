@@ -60,11 +60,25 @@ pub async fn create_instance_with_platform(
     loader_channel: String,
     loader_version: Option<String>,
 ) -> Result<InstanceEntry, String> {
-    let platform =
-        LoaderPlatform::parse(&platform).ok_or_else(|| "unknown platform".to_string())?;
+    let source = platform_source(&platform, game_version, &loader_channel, loader_version)?;
+    downloads
+        .inner()
+        .create(&name, source)
+        .await
+        .map_err(failure)
+}
+
+/// The instance source a platform form describes.
+fn platform_source(
+    platform: &str,
+    game_version: String,
+    loader_channel: &str,
+    loader_version: Option<String>,
+) -> Result<licht_core::InstanceSource, String> {
+    let platform = LoaderPlatform::parse(platform).ok_or_else(|| "unknown platform".to_string())?;
     let channel =
-        LoaderChannel::parse(&loader_channel).ok_or_else(|| "unknown channel".to_string())?;
-    let source = if platform == LoaderPlatform::Vanilla {
+        LoaderChannel::parse(loader_channel).ok_or_else(|| "unknown channel".to_string())?;
+    Ok(if platform == LoaderPlatform::Vanilla {
         licht_core::InstanceSource::Vanilla { game_version }
     } else {
         licht_core::InstanceSource::Loader {
@@ -73,10 +87,24 @@ pub async fn create_instance_with_platform(
             channel,
             loader_version,
         }
-    };
+    })
+}
+
+/// Moves a ready, unlinked instance to another platform or game version and waits
+/// for the change job.
+#[tauri::command]
+pub async fn change_instance_base(
+    downloads: State<'_, std::sync::Arc<licht_core::DownloadManager>>,
+    folder: String,
+    platform: String,
+    game_version: String,
+    loader_channel: String,
+    loader_version: Option<String>,
+) -> Result<licht_core::DownloadJobSnapshot, String> {
+    let source = platform_source(&platform, game_version, &loader_channel, loader_version)?;
     downloads
         .inner()
-        .create(&name, source)
+        .change_base(&folder, source)
         .await
         .map_err(failure)
 }
@@ -92,6 +120,14 @@ pub async fn rename_instance(
     licht_core::rename_instance(&database, &root, &folder, &name)
         .await
         .map_err(failure)
+}
+
+#[tauri::command]
+pub async fn unlink_instance_modpack(
+    downloads: State<'_, std::sync::Arc<licht_core::DownloadManager>>,
+    folder: String,
+) -> Result<InstanceEntry, String> {
+    downloads.inner().unlink(&folder).await.map_err(failure)
 }
 
 #[tauri::command]
@@ -135,18 +171,6 @@ pub async fn save_instance(
 }
 
 #[tauri::command]
-pub async fn set_instance_version(
-    downloads: State<'_, std::sync::Arc<licht_core::DownloadManager>>,
-    folder: String,
-    version_id: String,
-) -> Result<InstanceEntry, String> {
-    downloads
-        .change_version(&folder, &version_id)
-        .await
-        .map_err(failure)
-}
-
-#[tauri::command]
 pub fn open_instance_folder(
     app: AppHandle,
     paths: State<'_, LauncherPaths>,
@@ -162,11 +186,16 @@ pub fn open_instance_folder(
 }
 
 #[tauri::command]
-pub fn get_instance_platform(
+pub async fn get_instance_platform(
     paths: State<'_, LauncherPaths>,
     version_id: String,
 ) -> Result<Option<licht_core::InstancePlatform>, String> {
-    licht_core::instance_platform(&paths.game, &version_id).map_err(failure)
+    let game = paths.game.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        licht_core::instance_platform(&game, &version_id).map_err(failure)
+    })
+    .await
+    .map_err(|error| super::command_failure("Platform check failed", &error))?
 }
 
 #[tauri::command]

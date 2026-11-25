@@ -1,5 +1,5 @@
 import type { UseMutationResult } from "@tanstack/react-query";
-
+import type { InstanceBaseInput } from "@/api/commands";
 import { InstanceSettingsDialog } from "@/features/instance-settings/instance-settings-dialog";
 import {
   type InstanceAction,
@@ -7,6 +7,7 @@ import {
 } from "@/features/instances/components/instance-action-dialog";
 import type { SectionId } from "@/features/settings/model/sections";
 import { SettingsDialog } from "@/features/settings/settings-dialog";
+import type { DownloadJobSnapshot } from "@/lib/generated/DownloadJobSnapshot";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 
 type DialogMutations = {
@@ -17,15 +18,16 @@ type DialogMutations = {
   >;
   remove: UseMutationResult<void, unknown, string>;
   openFolder: UseMutationResult<void, unknown, string>;
-  changeVersion: UseMutationResult<
-    InstanceEntry,
+  changeBase: UseMutationResult<
+    DownloadJobSnapshot,
     unknown,
-    { folder: string; versionId: string; installed: boolean }
+    { folder: string; base: InstanceBaseInput }
   >;
 };
 
 export function InstanceDialogs({
   configuring,
+  configuringActive,
   busy,
   mutations,
   configuringOpen,
@@ -42,6 +44,8 @@ export function InstanceDialogs({
   onOpenDelete,
 }: {
   configuring: InstanceEntry | null;
+  /** The configured instance's game or a download for it is running. */
+  configuringActive: boolean;
   busy: boolean;
   mutations: DialogMutations;
   configuringOpen: boolean;
@@ -86,7 +90,8 @@ export function InstanceDialogs({
         entry={configuring}
         open={configuringOpen}
         busy={busy}
-        versionBusy={mutations.changeVersion.isPending}
+        versionBusy={mutations.changeBase.isPending}
+        instanceActive={configuringActive}
         onOpenChange={onConfiguringOpenChange}
         onOpenGlobalSettings={() => onOpenGlobalSettings("instances")}
         onRename={(name) => {
@@ -95,15 +100,11 @@ export function InstanceDialogs({
           }
           mutations.rename.mutate({ folder: configuring.folder, name });
         }}
-        onChangeVersion={(versionId, installed) => {
-          if (!configuring || versionId === configuring.versionId) {
+        onChangeBase={(base) => {
+          if (!configuring) {
             return;
           }
-          mutations.changeVersion.mutate({
-            folder: configuring.folder,
-            versionId,
-            installed,
-          });
+          mutations.changeBase.mutate({ folder: configuring.folder, base });
         }}
         onOpenFolder={() => {
           if (!configuring) {

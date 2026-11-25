@@ -53,6 +53,30 @@ pub async fn repair_instance(
         .map_err(failure)
 }
 
+/// Installs a linked instance's store modpack again over its content folders (Reinstall).
+#[tauri::command]
+pub async fn reinstall_instance_modpack(
+    downloads: State<'_, std::sync::Arc<licht_core::DownloadManager>>,
+    folder: String,
+) -> Result<licht_core::DownloadJobSnapshot, String> {
+    downloads.inner().reinstall(&folder).await.map_err(failure)
+}
+
+/// Installs another version of a linked instance's store modpack, keeping content
+/// the user added.
+#[tauri::command]
+pub async fn change_instance_modpack_version(
+    downloads: State<'_, std::sync::Arc<licht_core::DownloadManager>>,
+    folder: String,
+    version_id: String,
+) -> Result<licht_core::DownloadJobSnapshot, String> {
+    downloads
+        .inner()
+        .change_modpack_version(&folder, &version_id)
+        .await
+        .map_err(failure)
+}
+
 async fn install_one(
     app: &AppHandle,
     game: &SharedCache,
