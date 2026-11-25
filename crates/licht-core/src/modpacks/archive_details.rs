@@ -5,6 +5,7 @@ use std::io::Cursor;
 
 use serde_json::Value;
 use zip::ZipArchive;
+use zip::result::ZipError;
 
 use super::ModpackSource;
 use super::archive::read_metadata;
@@ -14,10 +15,24 @@ use crate::instance::LinkedModpack;
 /// and capped.
 const MAX_DETAIL_CHARS: usize = 200;
 
-/// `value` trimmed and capped, or `None` when nothing is left.
+/// `value` on one line, trimmed and capped, or `None` when nothing is left. Control
+/// characters become spaces and bidi controls are dropped, so the text cannot break
+/// the layout or reorder what is shown around it.
 pub(super) fn capped(value: &str) -> Option<String> {
-    let value = value.trim();
+    let clean: String = value
+        .chars()
+        .filter(|c| !is_bidi_control(*c))
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .collect();
+    let value = clean.trim();
     (!value.is_empty()).then(|| value.chars().take(MAX_DETAIL_CHARS).collect())
+}
+
+fn is_bidi_control(c: char) -> bool {
+    matches!(
+        c,
+        '\u{061C}' | '\u{200E}' | '\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}'
+    )
 }
 
 /// The pack details its index (`.mrpack`) or manifest (CurseForge) declares, or
@@ -27,15 +42,31 @@ pub(super) fn archive_details(source: ModpackSource, bytes: &[u8]) -> Option<Lin
         ModpackSource::Modrinth => ("modrinth.index.json", "versionId"),
         ModpackSource::Curseforge => ("manifest.json", "version"),
     };
-    let mut archive = ZipArchive::new(Cursor::new(bytes)).ok()?;
-    let body = read_metadata(archive.by_name(file).ok()?).ok()?;
-    let index: Value = serde_json::from_str(&body).ok()?;
+    let index = match declared_index(bytes, file) {
+        Ok(index) => index?,
+        Err(error) => {
+            // The details only feed the UI, so an unreadable index skips them.
+            tracing::warn!(%error, file, "could not read the pack details its archive declares");
+            return None;
+        }
+    };
     Some(LinkedModpack {
         name: text(&index, "name")?,
         author: text(&index, "author"),
         version_name: text(&index, version_key)?,
         published_at: None,
     })
+}
+
+/// The archive's `file` parsed as JSON, or `None` when the archive has no such file.
+fn declared_index(bytes: &[u8], file: &str) -> crate::Result<Option<Value>> {
+    let mut archive = ZipArchive::new(Cursor::new(bytes)).map_err(std::io::Error::other)?;
+    let entry = match archive.by_name(file) {
+        Ok(entry) => entry,
+        Err(ZipError::FileNotFound) => return Ok(None),
+        Err(error) => return Err(std::io::Error::other(error).into()),
+    };
+    Ok(Some(serde_json::from_str(&read_metadata(entry)?)?))
 }
 
 fn text(index: &Value, key: &str) -> Option<String> {
@@ -95,6 +126,15 @@ mod tests {
             None
         );
         assert_eq!(archive_details(ModpackSource::Modrinth, b"not a zip"), None);
+    }
+
+    #[test]
+    fn keeps_text_on_one_line_without_bidi_controls() {
+        assert_eq!(
+            capped("\u{202E}Pack\nName\t\u{2066}2\u{2069}\u{0}").as_deref(),
+            Some("Pack Name 2")
+        );
+        assert_eq!(capped("\u{200F}\n"), None);
     }
 
     #[test]

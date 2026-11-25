@@ -39,11 +39,18 @@ pub(crate) struct PackVersion {
 
 /// What to keep about a store pack: the store's name and author, falling back to what
 /// the pack's own archive declares, with the version the download resolved.
+/// CurseForge file names repeat the pack's name (`All the Mods 10-8.5`), so there the
+/// version its manifest declares is preferred.
 fn linked_modpack(
+    source: ModpackSource,
     store: Option<&ModpackDetails>,
     archive: Option<LinkedModpack>,
     version: PackVersion,
 ) -> Option<LinkedModpack> {
+    let declared_version = archive
+        .as_ref()
+        .filter(|_| source == ModpackSource::Curseforge)
+        .map(|archive| archive.version_name.clone());
     let (name, author) = match store {
         Some(details) => (
             archive_details::capped(&details.name),
@@ -57,7 +64,10 @@ fn linked_modpack(
     Some(LinkedModpack {
         name: name?,
         author,
-        version_name: archive_details::capped(&version.name)?,
+        version_name: match declared_version {
+            Some(declared) => declared,
+            None => archive_details::capped(&version.name)?,
+        },
         published_at: version
             .published_at
             .as_deref()
@@ -459,7 +469,7 @@ async fn install_modpack(
     let bytes = std::fs::read(&archive)?;
     let declared = archive_details::archive_details(*source, &bytes);
     let details = match resolved {
-        Some((version, store)) => linked_modpack(store.as_ref(), declared, version),
+        Some((version, store)) => linked_modpack(*source, store.as_ref(), declared, version),
         None => declared,
     };
     if let Some(details) = details {
@@ -587,7 +597,12 @@ mod tests {
     #[test]
     fn keeps_the_store_name_author_and_installed_version() {
         assert_eq!(
-            linked_modpack(Some(&details("robotkoer")), None, version()),
+            linked_modpack(
+                ModpackSource::Modrinth,
+                Some(&details("robotkoer")),
+                None,
+                version()
+            ),
             Some(LinkedModpack {
                 name: "Fabulously Optimized".into(),
                 author: Some("robotkoer".into()),
@@ -596,7 +611,13 @@ mod tests {
             })
         );
         assert_eq!(
-            linked_modpack(Some(&details("  ")), None, version()).and_then(|pack| pack.author),
+            linked_modpack(
+                ModpackSource::Modrinth,
+                Some(&details("  ")),
+                None,
+                version()
+            )
+            .and_then(|pack| pack.author),
             None
         );
     }
@@ -610,7 +631,7 @@ mod tests {
             published_at: None,
         };
         assert_eq!(
-            linked_modpack(None, Some(declared), version()),
+            linked_modpack(ModpackSource::Modrinth, None, Some(declared), version()),
             Some(LinkedModpack {
                 name: "Fabulously Optimized".into(),
                 author: None,
@@ -618,14 +639,48 @@ mod tests {
                 published_at: Some("2026-11-01T10:00:00Z".into()),
             })
         );
-        assert_eq!(linked_modpack(None, None, version()), None);
+        assert_eq!(
+            linked_modpack(ModpackSource::Modrinth, None, None, version()),
+            None
+        );
+    }
+
+    #[test]
+    fn prefers_the_curseforge_manifest_version_over_the_file_name() {
+        let declared = LinkedModpack {
+            name: "All the Mods 10".into(),
+            author: None,
+            version_name: "8.5".into(),
+            published_at: None,
+        };
+        let file = PackVersion {
+            name: "All the Mods 10-8.5".into(),
+            published_at: None,
+        };
+        let pick = |source, archive: Option<LinkedModpack>| {
+            linked_modpack(source, Some(&details("ATM Team")), archive, file.clone())
+                .map(|pack| pack.version_name)
+        };
+        assert_eq!(
+            pick(ModpackSource::Curseforge, Some(declared.clone())).as_deref(),
+            Some("8.5")
+        );
+        assert_eq!(
+            pick(ModpackSource::Curseforge, None).as_deref(),
+            Some("All the Mods 10-8.5")
+        );
+        assert_eq!(
+            pick(ModpackSource::Modrinth, Some(declared)).as_deref(),
+            Some("All the Mods 10-8.5")
+        );
     }
 
     #[test]
     fn caps_long_store_text() {
         let mut store = details("robotkoer");
         store.name = "x".repeat(500);
-        let pack = linked_modpack(Some(&store), None, version()).expect("details");
+        let pack = linked_modpack(ModpackSource::Modrinth, Some(&store), None, version())
+            .expect("details");
         assert_eq!(pack.name.chars().count(), 200);
     }
 
