@@ -679,3 +679,58 @@ async fn modpack_workspace_survives_pause_and_resume_and_is_removed_after_cancel
     assert!(!directory.join(".install").exists());
     fixture.close().await;
 }
+
+#[tokio::test]
+async fn reinstall_refuses_instances_it_cannot_reinstall_without_starting_a_job() {
+    let fixture = Fixture::new("http://127.0.0.1:1").await;
+    let manager = fixture.manager();
+    let root = fixture.game.instances_dir().expect("instances");
+    let template = crate::global_launch(
+        &crate::load_settings(&fixture.settings)
+            .await
+            .expect("settings"),
+    );
+    let create = |name: &'static str, source: InstanceSource| {
+        let database = fixture.database();
+        let root = root.clone();
+        let template = template.clone();
+        async move {
+            crate::create_pending_instance(&database, &root, name, source, &template)
+                .await
+                .expect("instance")
+        }
+    };
+    let vanilla = fixture.instance("Vanilla").await;
+    let file = create(
+        "File pack",
+        InstanceSource::ModpackFile {
+            source: crate::ModpackSource::Modrinth,
+        },
+    )
+    .await;
+    let store = create(
+        "Store pack",
+        InstanceSource::Modpack {
+            source: crate::ModpackSource::Modrinth,
+            project_id: "fo".into(),
+            version_id: "v15".into(),
+            icon_url: None,
+        },
+    )
+    .await;
+
+    assert!(matches!(
+        manager.reinstall(&vanilla.folder).await,
+        Err(CoreError::InstanceNotLinked)
+    ));
+    assert!(matches!(
+        manager.reinstall(&file.folder).await,
+        Err(CoreError::ModpackFileReinstall)
+    ));
+    assert!(matches!(
+        manager.reinstall(&store.folder).await,
+        Err(CoreError::InstancePreparing)
+    ));
+    assert!(manager.stored_jobs().await.expect("jobs").is_empty());
+    fixture.close().await;
+}

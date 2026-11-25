@@ -157,6 +157,36 @@ impl DownloadManager {
             .await?;
         Ok(entry)
     }
+    /// Reinstalls a ready instance's store modpack and waits for it. Only a store pack
+    /// can be fetched again; an archive imported from disk is not kept after install.
+    pub async fn reinstall(self: &Arc<Self>, folder: &str) -> Result<DownloadJobSnapshot> {
+        let profile = load_instance(
+            &self.runtime.database,
+            &self.runtime.game.instance_dir(folder)?,
+        )
+        .await?;
+        let installation = profile
+            .installation
+            .as_ref()
+            .ok_or(CoreError::InstanceNotLinked)?;
+        match installation.source {
+            InstanceSource::Modpack { .. } => {}
+            InstanceSource::ModpackFile { .. } => return Err(CoreError::ModpackFileReinstall),
+            _ => return Err(CoreError::InstanceNotLinked),
+        }
+        if installation.state != crate::InstancePreparationState::Ready {
+            return Err(CoreError::InstancePreparing);
+        }
+        // Another unfinished task would otherwise be resumed instead of the reinstall.
+        if self.stored_jobs().await?.into_iter().any(|job| {
+            job.instance_folder.as_deref() == Some(folder)
+                && job.operation != DownloadJobOperation::Reinstall
+        }) {
+            return Err(CoreError::DownloadJobExists);
+        }
+        self.prepare(folder, DownloadJobOperation::Reinstall).await
+    }
+
     pub async fn prepare(
         self: &Arc<Self>,
         folder: &str,

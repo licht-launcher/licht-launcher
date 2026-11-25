@@ -8,6 +8,9 @@ use ts_rs::TS;
 pub enum DownloadJobOperation {
     Install,
     Repair,
+    /// Installs a ready instance's store pack again over its content folders. Unlike a
+    /// first Install, cancelling it never removes the instance.
+    Reinstall,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -161,4 +164,52 @@ pub(crate) fn validate_completion(
         ));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn job(operation: DownloadJobOperation) -> DownloadJobSnapshot {
+        DownloadJobSnapshot {
+            id: "job".into(),
+            instance_folder: Some("Pack".into()),
+            version_id: Some("1.21.1".into()),
+            operation,
+            status: DownloadJobStatus::Running,
+            component: None,
+            phase: DownloadPhase::Preparing,
+            progress: DownloadProgress {
+                finished: 0,
+                failed: 0,
+                total: 0,
+                bytes_done: 0,
+                bytes_total: 0,
+            },
+            created_at: 0,
+            updated_at: 0,
+            error: None,
+            java_major: None,
+        }
+    }
+
+    #[test]
+    fn only_a_first_install_may_remove_its_instance_when_cancelled() {
+        assert!(
+            validate_cancellation_target(
+                &job(DownloadJobOperation::Install),
+                DownloadJobStatus::Cancelling
+            )
+            .is_ok()
+        );
+        for operation in [
+            DownloadJobOperation::Repair,
+            DownloadJobOperation::Reinstall,
+        ] {
+            assert!(
+                validate_cancellation_target(&job(operation), DownloadJobStatus::Cancelling)
+                    .is_err()
+            );
+        }
+    }
 }

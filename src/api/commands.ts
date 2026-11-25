@@ -471,6 +471,13 @@ export function getInstancePlatform(
   return invoke("get_instance_platform", { versionId });
 }
 
+/** Installs a linked instance's store modpack again over its content folders. */
+export function reinstallInstanceModpack(
+  folder: string,
+): Promise<DownloadJobSnapshot> {
+  return invoke("reinstall_instance_modpack", { folder });
+}
+
 export function repairInstance(folder: string): Promise<DownloadJobSnapshot> {
   return invoke("repair_instance", { folder });
 }

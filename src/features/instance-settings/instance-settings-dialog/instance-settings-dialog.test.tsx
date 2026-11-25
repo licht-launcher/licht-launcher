@@ -256,6 +256,69 @@ describe("InstanceSettingsDialog", () => {
     });
   });
 
+  it("reinstalls a store modpack after the user confirms", async () => {
+    const original = invoke.getMockImplementation();
+    if (!original) throw new Error("missing command implementation");
+    invoke.mockImplementation((command: string, args?: unknown) =>
+      command === "reinstall_instance_modpack"
+        ? Promise.resolve(
+            completedDownload({
+              instanceFolder: "Survival",
+              operation: "reinstall",
+            }),
+          )
+        : original(command, args),
+    );
+    const success = vi.spyOn(toast, "success");
+    renderDialog({ entry: linkedEntry });
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Instance base" }),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Reinstall" }));
+    const confirm = await screen.findByRole("dialog", {
+      name: "Reinstall this modpack?",
+    });
+    expect(invoke).not.toHaveBeenCalledWith(
+      "reinstall_instance_modpack",
+      expect.anything(),
+    );
+    fireEvent.click(within(confirm).getByRole("button", { name: "Reinstall" }));
+
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("reinstall_instance_modpack", {
+        folder: "Survival",
+      }),
+    );
+    await waitFor(() =>
+      expect(success).toHaveBeenCalledWith("Modpack reinstalled."),
+    );
+  });
+
+  it("cannot reinstall a modpack imported from a file", async () => {
+    renderDialog({
+      entry: {
+        ...linkedEntry,
+        installation: {
+          source: { type: "modpackFile", source: "modrinth" },
+          state: "ready",
+        },
+      },
+    });
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Instance base" }),
+    );
+
+    expect(
+      await screen.findByText(
+        "A modpack imported from a file cannot be reinstalled, because its archive is not kept after install.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reinstall" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Unlink" })).toBeEnabled();
+  });
+
   it("shows the linked modpack under Instance base only for linked instances", async () => {
     const { unmount } = renderDialog();
     fireEvent.click(

@@ -58,6 +58,7 @@ import {
   pauseDownloadJob,
   prepareInstanceDownload,
   quitApp,
+  reinstallInstanceModpack,
   renameInstance,
   repairInstance,
   requestUpdateRestart,
@@ -646,6 +647,13 @@ describe("launcher commands", () => {
     await getInstancePlatform("fabric-loader-0.19.5-26.3");
     expect(invoke).toHaveBeenCalledWith("get_instance_platform", {
       versionId: "fabric-loader-0.19.5-26.3",
+    });
+  });
+
+  it("reinstalls an instance's modpack", async () => {
+    await reinstallInstanceModpack("classic");
+    expect(invoke).toHaveBeenCalledWith("reinstall_instance_modpack", {
+      folder: "classic",
     });
   });
 
