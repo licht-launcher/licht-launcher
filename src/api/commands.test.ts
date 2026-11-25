@@ -22,6 +22,7 @@ import {
   duplicateInstance,
   getAppUpdateState,
   getBuildDiagnostics,
+  getInstancePlatform,
   getLastPlayedFolder,
   getLogsFolder,
   getModpack,
@@ -637,6 +638,13 @@ describe("launcher commands", () => {
     await installVersion("1.20.1");
     expect(invoke).toHaveBeenCalledWith("install_version", {
       versionId: "1.20.1",
+    });
+  });
+
+  it("reads the platform behind a launch version", async () => {
+    await getInstancePlatform("fabric-loader-0.19.5-26.3");
+    expect(invoke).toHaveBeenCalledWith("get_instance_platform", {
+      versionId: "fabric-loader-0.19.5-26.3",
     });
   });
 

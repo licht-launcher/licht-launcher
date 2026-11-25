@@ -92,6 +92,7 @@ pub fn run() -> anyhow::Result<()> {
             commands::instances::open_instance_folder,
             commands::instances::list_instance_entries,
             commands::instances::list_instance_content,
+            commands::instances::get_instance_platform,
             commands::instances::set_instance_content_enabled,
             commands::instances::remove_instance_content,
             commands::shell::open_repository,

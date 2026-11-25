@@ -2,10 +2,11 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { BoxIcon, LayersIcon, PencilIcon, WrenchIcon } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { repairInstance } from "@/api/commands";
+import { getInstancePlatform, repairInstance } from "@/api/commands";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { EditInstanceVersionDialog } from "@/features/instance-settings/components/edit-instance-version-dialog";
+import { formatPlatform } from "@/features/instance-settings/model/platform";
 import { versionsQueryOptions } from "@/features/instances/lib/versions-query";
 import { friendlyError, messageOf } from "@/lib/errors";
 import type { VersionSummary } from "@/lib/generated/VersionSummary";
@@ -49,6 +50,13 @@ export function InstanceBaseSection({
     ...versionsQueryOptions,
     enabled: editOpen,
   });
+  // A local profile read, so it resolves at once; it changes only with the version.
+  const platform = useQuery({
+    queryKey: ["instance-platform", versionId],
+    queryFn: () => getInstancePlatform(versionId ?? ""),
+    enabled: versionId !== null,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
   const repair = useMutation({
     mutationFn: () => repairInstance(folder),
     onSuccess: (job) => {
@@ -79,7 +87,9 @@ export function InstanceBaseSection({
               Platform
             </span>
           </div>
-          <div className={instanceBaseSectionStyles.summaryValue}>Vanilla</div>
+          <div className={instanceBaseSectionStyles.summaryValue}>
+            {platform.data !== undefined ? formatPlatform(platform.data) : "—"}
+          </div>
         </div>
         <div className={instanceBaseSectionStyles.summaryItem}>
           <div className={instanceBaseSectionStyles.summaryLabel}>
@@ -102,7 +112,7 @@ export function InstanceBaseSection({
               </span>
             ) : (
               <span className={instanceBaseSectionStyles.valueText}>
-                {versionId ?? "Preparing"}
+                {platform.data?.gameVersion ?? versionId ?? "Preparing"}
               </span>
             )}
           </div>

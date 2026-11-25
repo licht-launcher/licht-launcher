@@ -105,6 +105,13 @@ describe("InstanceSettingsDialog", () => {
           { id: "24w14a", versionType: "snapshot", installed: false },
         ]);
       }
+      if (command === "get_instance_platform") {
+        return Promise.resolve({
+          platform: "vanilla",
+          gameVersion: "1.20.1",
+          loaderVersion: null,
+        });
+      }
       return Promise.resolve(entry);
     });
   });
@@ -166,7 +173,7 @@ describe("InstanceSettingsDialog", () => {
         "Platform and game version this instance launches with. Only Vanilla is available for now.",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByText("Vanilla")).toBeInTheDocument();
+    expect(await screen.findByText("Vanilla")).toBeInTheDocument();
     expect(screen.getByText("1.20.1")).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: "Edit base" }),
@@ -196,6 +203,31 @@ describe("InstanceSettingsDialog", () => {
     fireEvent.click(screen.getByRole("option", { name: "1.21.1" }));
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(onChangeVersion).toHaveBeenCalledWith("1.21.1", false);
+  });
+
+  it("shows the loader and Minecraft version an instance runs", async () => {
+    const original = invoke.getMockImplementation();
+    if (!original) throw new Error("missing command implementation");
+    invoke.mockImplementation((command: string, args?: unknown) =>
+      command === "get_instance_platform"
+        ? Promise.resolve({
+            platform: "fabric",
+            gameVersion: "26.3",
+            loaderVersion: "0.19.5",
+          })
+        : original(command, args),
+    );
+    renderDialog({
+      entry: { ...entry, versionId: "fabric-loader-0.19.5-26.3" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Instance base" }));
+
+    expect(await screen.findByText("Fabric 0.19.5")).toBeInTheDocument();
+    expect(screen.getByText("26.3")).toBeInTheDocument();
+    expect(invoke).toHaveBeenCalledWith("get_instance_platform", {
+      versionId: "fabric-loader-0.19.5-26.3",
+    });
   });
 
   it("repairs the instance from the base section", async () => {

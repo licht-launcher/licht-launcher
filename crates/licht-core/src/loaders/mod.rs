@@ -3,10 +3,12 @@
 pub(crate) mod fabric;
 pub(crate) mod forge;
 mod http_cache;
+mod platform;
 mod types;
 
 pub use fabric::{install_fabric_like, list_fabric_like_versions};
 pub use forge::{install_forge_like, list_forge_like_versions};
+pub use platform::{InstancePlatform, instance_platform};
 pub use types::{LoaderBuild, LoaderChannel, LoaderPlatform};
 
 use reqwest::Client;
