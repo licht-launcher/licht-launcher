@@ -9,6 +9,7 @@ use crate::{DatabaseClient, Result, SharedCache};
 mod files;
 mod fingerprints;
 mod metadata;
+mod modpack;
 mod providers;
 mod types;
 
@@ -17,6 +18,7 @@ pub use types::{InstanceContentEntry, InstanceContentKind, InstanceContentUpdate
 
 use files::instance_root;
 use metadata::resolve_content_entry;
+use modpack::{mark_modpack_content, modpack_paths};
 
 const CONTENT_METADATA_CONCURRENCY: usize = 4;
 
@@ -40,7 +42,13 @@ pub async fn list_instance_content_progressively(
 ) -> Result<Vec<InstanceContentEntry>> {
     let root = instance_root(cache, folder)?;
     let mut entries = list_instance_content(cache, folder)?;
+    // Local rows are published even when the database is unavailable; its error surfaces after.
+    let modpack = modpack_paths(cache, database, folder).await;
+    if let Ok(paths) = &modpack {
+        mark_modpack_content(&mut entries, paths);
+    }
     publish(&entries)?;
+    modpack?;
     let last_published = std::time::Instant::now();
     let previous = database.content_fingerprints(cache, folder).await?;
     let known: BTreeMap<_, _> = previous

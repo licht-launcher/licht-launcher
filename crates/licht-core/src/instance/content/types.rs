@@ -20,6 +20,8 @@ pub struct InstanceContentEntry {
     pub title: String,
     pub version: Option<String>,
     pub icon_url: Option<String>,
+    /// Whether the instance's modpack installed this file, as opposed to the user.
+    pub from_modpack: bool,
 }
 
 /// The first event contains the local listing; later events contain enriched batches.

@@ -18,11 +18,14 @@ pub(super) fn read_index(archive: &mut ZipArchive<Cursor<&[u8]>>) -> Result<Valu
     serde_json::from_str(&body).map_err(CoreError::LoaderJson)
 }
 
+/// Copies every file under `prefix` into the instance and returns their
+/// instance-relative paths.
 pub(super) fn extract_prefixed(
     archive: &mut ZipArchive<Cursor<&[u8]>>,
     instance_dir: &Path,
     prefix: &str,
-) -> Result<()> {
+) -> Result<Vec<String>> {
+    let mut extracted = Vec::new();
     for index in 0..archive.len() {
         let mut file = archive
             .by_index(index)
@@ -48,8 +51,9 @@ pub(super) fn extract_prefixed(
         }
         let mut out = fs::File::create(&destination)?;
         std::io::copy(&mut file, &mut out)?;
+        extracted.push(relative.to_string());
     }
-    Ok(())
+    Ok(extracted)
 }
 
 #[cfg(test)]

@@ -1,5 +1,6 @@
 export const contentLoadingStyles = {
-  root: "flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border/60 bg-black/20",
+  /** Fills the content panel, which draws the frame. */
+  root: "flex min-h-0 flex-1 flex-col overflow-hidden",
   tableWrapper: "w-full min-w-full",
   table: "w-full table-fixed text-sm",
   progress: "h-px rounded-none",

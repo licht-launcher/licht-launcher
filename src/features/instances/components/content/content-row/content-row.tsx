@@ -1,10 +1,10 @@
-import { BlocksIcon, ImageIcon, SparklesIcon, Trash2Icon } from "lucide-react";
+import { Trash2Icon } from "lucide-react";
 import type { Ref } from "react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { ContentKindIcon } from "@/features/instances/components/content/content-kind-icon";
 import { formatContentTitle } from "@/features/instances/lib/content-table";
 import type { InstanceContentEntry } from "@/lib/generated/InstanceContentEntry";
-import type { InstanceContentKind } from "@/lib/generated/InstanceContentKind";
 import { cn } from "@/lib/utils";
 
 import { contentRowStyles } from "./content-row.styles";
@@ -14,17 +14,14 @@ export function ContentRow({
   index,
   last,
   rowRef,
-  disabled,
-  onToggle,
-  onRemove,
+  actions,
 }: {
   entry: InstanceContentEntry;
   index: number;
   last: boolean;
   rowRef: Ref<HTMLTableRowElement>;
-  disabled: boolean;
-  onToggle: (entry: InstanceContentEntry, enabled: boolean) => void;
-  onRemove: (entry: InstanceContentEntry) => void;
+  /** Omitted for read-only lists, such as content a modpack manages. */
+  actions?: ContentActions;
 }) {
   return (
     <tr
@@ -46,7 +43,7 @@ export function ContentRow({
               className={contentRowStyles.image}
             />
           ) : (
-            <ContentIcon kind={entry.kind} />
+            <ContentKindIcon kind={entry.kind} />
           )}
           <div className={contentRowStyles.text}>
             <p className={contentRowStyles.name} title={entry.title}>
@@ -59,15 +56,35 @@ export function ContentRow({
           </div>
         </div>
       </td>
-      <td className={contentRowStyles.cell}>
-        <div className={contentRowStyles.actions}>
-          <Switch
-            data-content-action="toggle"
-            checked={entry.enabled}
-            disabled={disabled}
-            aria-label={`${entry.enabled ? "Disable" : "Enable"} ${entry.title}`}
-            onCheckedChange={(enabled) => onToggle(entry, enabled)}
-          />
+      {actions ? <ContentRowActions entry={entry} {...actions} /> : null}
+    </tr>
+  );
+}
+
+export type ContentActions = {
+  disabled: boolean;
+  onToggle: (entry: InstanceContentEntry, enabled: boolean) => void;
+  /** Omitted where content can be disabled but not deleted. */
+  onRemove?: (entry: InstanceContentEntry) => void;
+};
+
+function ContentRowActions({
+  entry,
+  disabled,
+  onToggle,
+  onRemove,
+}: ContentActions & { entry: InstanceContentEntry }) {
+  return (
+    <td className={contentRowStyles.cell}>
+      <div className={contentRowStyles.actions}>
+        <Switch
+          data-content-action="toggle"
+          checked={entry.enabled}
+          disabled={disabled}
+          aria-label={`${entry.enabled ? "Disable" : "Enable"} ${entry.title}`}
+          onCheckedChange={(enabled) => onToggle(entry, enabled)}
+        />
+        {onRemove ? (
           <Button
             data-content-action="remove"
             type="button"
@@ -80,32 +97,8 @@ export function ContentRow({
           >
             <Trash2Icon aria-hidden className={contentRowStyles.icon} />
           </Button>
-        </div>
-      </td>
-    </tr>
-  );
-}
-
-function ContentIcon({ kind }: { kind: InstanceContentKind }) {
-  const contentIcon =
-    kind === "mods"
-      ? {
-          Icon: BlocksIcon,
-          ...contentRowStyles.kinds.mods,
-        }
-      : kind === "resourcePacks"
-        ? {
-            Icon: ImageIcon,
-            ...contentRowStyles.kinds.resourcePacks,
-          }
-        : {
-            Icon: SparklesIcon,
-            ...contentRowStyles.kinds.shaders,
-          };
-  const { Icon, wrapper, icon } = contentIcon;
-  return (
-    <span className={cn(contentRowStyles.iconWell, wrapper)}>
-      <Icon aria-hidden className={cn(contentRowStyles.icon, icon)} />
-    </span>
+        ) : null}
+      </div>
+    </td>
   );
 }

@@ -501,6 +501,9 @@ describe("Instance downloads", () => {
             : pending,
         ]);
       if (command === "is_version_ready_cmd") return Promise.resolve(ready);
+      if (command === "get_modpack")
+        return Promise.reject(new Error("offline"));
+      if (command === "list_modpack_versions") return Promise.resolve([]);
       if (command === "prepare_instance_download")
         return new Promise<DownloadJobSnapshot>((resolve) => {
           finish = () => {

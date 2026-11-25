@@ -47,6 +47,7 @@ pub fn list_instance_content(
                 size: metadata.len(),
                 version: None,
                 icon_url: None,
+                from_modpack: false,
             });
         }
     }

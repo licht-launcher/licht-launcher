@@ -365,6 +365,7 @@ describe("launcher commands", () => {
         title: "One",
         version: null,
         iconUrl: null,
+        fromModpack: false,
       },
     ];
     vi.mocked(invoke).mockImplementationOnce(async (_command, args) => {
