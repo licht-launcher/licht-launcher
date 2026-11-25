@@ -10,32 +10,36 @@ export function mockVirtualListLayout(): () => void {
     HTMLElement.prototype,
     "scrollTo",
   );
-  vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(
-    function (this: HTMLElement) {
-      if (this.dataset.slot === "scroll-area-viewport") return 260;
-      return this.tagName === "TR" && this.hasAttribute("data-index") ? 52 : 0;
-    },
-  );
-  vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(960);
-  vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockImplementation(
-    function (this: HTMLElement) {
-      return this.dataset.slot === "scroll-area-viewport" ? 260 : 0;
-    },
-  );
-  vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockImplementation(
-    function (this: HTMLElement) {
-      return [
-        ...this.querySelectorAll<HTMLTableRowElement>("tbody > tr"),
-      ].reduce(
-        (total, row) =>
-          total +
-          (row.hasAttribute("data-index")
-            ? row.offsetHeight
-            : Number.parseFloat(row.cells[0]?.style.height || "0")),
-        0,
-      );
-    },
-  );
+  const spies = [
+    vi
+      .spyOn(HTMLElement.prototype, "offsetHeight", "get")
+      .mockImplementation(function (this: HTMLElement) {
+        if (this.dataset.slot === "scroll-area-viewport") return 260;
+        return this.tagName === "TR" && this.hasAttribute("data-index")
+          ? 52
+          : 0;
+      }),
+    vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(960),
+    vi
+      .spyOn(HTMLElement.prototype, "clientHeight", "get")
+      .mockImplementation(function (this: HTMLElement) {
+        return this.dataset.slot === "scroll-area-viewport" ? 260 : 0;
+      }),
+    vi
+      .spyOn(HTMLElement.prototype, "scrollHeight", "get")
+      .mockImplementation(function (this: HTMLElement) {
+        return [
+          ...this.querySelectorAll<HTMLTableRowElement>("tbody > tr"),
+        ].reduce(
+          (total, row) =>
+            total +
+            (row.hasAttribute("data-index")
+              ? row.offsetHeight
+              : Number.parseFloat(row.cells[0]?.style.height || "0")),
+          0,
+        );
+      }),
+  ];
   Object.defineProperty(HTMLElement.prototype, "scrollTo", {
     configurable: true,
     value: function (this: HTMLElement, options: ScrollToOptions) {
@@ -53,7 +57,7 @@ export function mockVirtualListLayout(): () => void {
     },
   });
   return () => {
-    vi.restoreAllMocks();
+    for (const spy of spies) spy.mockRestore();
     if (originalScrollTo)
       Object.defineProperty(
         HTMLElement.prototype,

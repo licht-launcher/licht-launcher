@@ -200,9 +200,12 @@ export function ContentSection({
                 if (!open) setPendingRemoval(null);
               }}
               onConfirm={(entry) =>
-                remove.mutate(entry, {
-                  onSuccess: () => setPendingRemoval(null),
-                })
+                remove.mutate(
+                  { folder, entry },
+                  {
+                    onSuccess: () => setPendingRemoval(null),
+                  },
+                )
               }
               onCloseAutoFocus={virtualization.onCloseAutoFocus}
             />

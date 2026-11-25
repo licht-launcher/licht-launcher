@@ -13,6 +13,7 @@ import {
   isDownloadFinished,
   replaceDownloadSnapshot,
 } from "@/features/downloads/hooks/use-download-jobs";
+import { instanceContentKey } from "@/features/instances/lib/content-query";
 import { VERSIONS_QUERY_KEY } from "@/features/instances/lib/versions-query";
 import { friendlyError, messageOf } from "@/lib/errors";
 import type { DownloadJobSnapshot } from "@/lib/generated/DownloadJobSnapshot";
@@ -84,7 +85,7 @@ export function useDownloadJobsSync() {
             payload.status !== previous?.status
           ) {
             void queryClient.invalidateQueries({
-              queryKey: ["instance-content", payload.instanceFolder],
+              queryKey: instanceContentKey(payload.instanceFolder),
             });
           }
           if (
