@@ -164,7 +164,7 @@ pub(crate) async fn prepare_modpack_instance(
         entry,
         selection,
         context,
-        false,
+        ContentReset::Keep,
     )
     .await
 }
@@ -192,16 +192,57 @@ pub(crate) async fn reinstall_modpack_instance(
         entry,
         selection,
         context,
-        true,
+        ContentReset::Folders,
     )
     .await
 }
+
+/// Installs another version of a ready instance's store pack. Only the previous
+/// version's content files are removed, once the new archive has downloaded, so
+/// content the user added stays.
+pub(crate) async fn update_modpack_instance(
+    database: &crate::DatabaseClient,
+    client: &Client,
+    cache: &SharedCache,
+    instances_dir: &Path,
+    entry: &InstanceEntry,
+    selection: &InstanceSource,
+    context: &crate::InstallationContext,
+) -> Result<InstanceEntry> {
+    if !matches!(selection, InstanceSource::Modpack { .. }) {
+        return Err(CoreError::InstanceNotLinked);
+    }
+    install_modpack(
+        database,
+        client,
+        cache,
+        instances_dir,
+        entry,
+        selection,
+        context,
+        ContentReset::PackFiles,
+    )
+    .await
+}
+
+/// What an install clears from the instance before importing the pack.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ContentReset {
+    /// A first install: nothing is there yet.
+    Keep,
+    /// A reinstall: the content folders, with anything the user added.
+    Folders,
+    /// A version change: the previous version's content files only.
+    PackFiles,
+}
+
+const CONTENT_FOLDERS: [&str; 3] = ["mods", "resourcepacks", "shaderpacks"];
 
 /// Clears the content folders a reinstall replaces, with anything the user added to
 /// them. Worlds and other folders stay. The pack's stored rows are kept: the import
 /// replaces them, and until it does, Repair can still restore the previous files.
 fn reset_pack_content(dir: &Path) -> Result<()> {
-    for name in ["mods", "resourcepacks", "shaderpacks"] {
+    for name in CONTENT_FOLDERS {
         // `remove_dir_all` removes a linked folder's link, not the folder it points to.
         match std::fs::remove_dir_all(dir.join(name)) {
             Ok(()) => {}
@@ -212,7 +253,80 @@ fn reset_pack_content(dir: &Path) -> Result<()> {
     Ok(())
 }
 
-// One flag separates a first install from a reinstall; the steps are otherwise shared.
+/// Removes the content files (mods, resource packs, shader packs) the instance's
+/// pack installed, whether the user left them enabled or disabled, and the folder
+/// packs they empty. Content the user added and other pack files, such as configs
+/// the next version overwrites, stay. Links are never followed.
+async fn remove_pack_content_files(
+    database: &crate::DatabaseClient,
+    instances_dir: &Path,
+    folder: &str,
+    dir: &Path,
+) -> Result<()> {
+    let paths = database
+        .modpack_files(instances_dir, folder)
+        .await?
+        .into_iter()
+        .map(|file| file.relative_path)
+        .chain(
+            database
+                .curseforge_files(instances_dir, folder)
+                .await?
+                .into_iter()
+                .map(|file| file.relative_path),
+        )
+        .chain(
+            database
+                .modpack_override_files(instances_dir, folder)
+                .await?,
+        );
+    for relative in paths {
+        let relative = relative.replace('\\', "/");
+        let Some((top, _)) = relative.split_once('/') else {
+            continue;
+        };
+        if !CONTENT_FOLDERS.contains(&top) {
+            continue;
+        }
+        let path = path_safety::safe_instance_path(dir, &relative, &[])?;
+        let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        const DISABLED: &str = ".disabled";
+        let toggled = match name.strip_suffix(DISABLED) {
+            Some(enabled) => enabled.to_string(),
+            None => format!("{name}{DISABLED}"),
+        };
+        for candidate in [path.clone(), path.with_file_name(toggled)] {
+            if std::fs::symlink_metadata(&candidate).is_ok_and(|metadata| metadata.is_file()) {
+                std::fs::remove_file(&candidate)?;
+            }
+        }
+        remove_empty_parents(dir.join(top), &path)?;
+    }
+    Ok(())
+}
+
+/// Removes the folders between `root` and `path` that removing `path` left empty.
+fn remove_empty_parents(root: std::path::PathBuf, path: &Path) -> Result<()> {
+    let mut current = path.parent();
+    while let Some(folder) = current {
+        if folder == root || !folder.starts_with(&root) {
+            break;
+        }
+        match std::fs::remove_dir(folder) {
+            Ok(()) => {}
+            // Not empty, or already gone: the folders above stay too.
+            Err(_) if folder.exists() => break,
+            Err(_) => {}
+        }
+        current = folder.parent();
+    }
+    Ok(())
+}
+
+// One setting separates a first install, a reinstall and a version change; the
+// steps are otherwise shared.
 #[allow(clippy::too_many_arguments)]
 async fn install_modpack(
     database: &crate::DatabaseClient,
@@ -222,7 +336,7 @@ async fn install_modpack(
     entry: &InstanceEntry,
     selection: &InstanceSource,
     context: &crate::InstallationContext,
-    reset_content: bool,
+    reset: ContentReset,
 ) -> Result<InstanceEntry> {
     let (source, remote) = match selection {
         InstanceSource::Modpack {
@@ -261,8 +375,12 @@ async fn install_modpack(
         resolved = Some((version, store));
     }
     context.stage(crate::DownloadPhase::Extracting).await?;
-    if reset_content {
-        reset_pack_content(&dir)?;
+    match reset {
+        ContentReset::Keep => {}
+        ContentReset::Folders => reset_pack_content(&dir)?,
+        ContentReset::PackFiles => {
+            remove_pack_content_files(database, instances_dir, &entry.folder, &dir).await?;
+        }
     }
     let bytes = std::fs::read(&archive)?;
     let declared = archive_details::archive_details(*source, &bytes);
@@ -484,6 +602,92 @@ mod tests {
             ["config/mod.toml"]
         );
         reset_pack_content(&dir).expect("an already cleared instance resets again");
+        service.shutdown().await.expect("shutdown");
+    }
+
+    #[tokio::test]
+    async fn a_version_change_removes_only_the_old_packs_content_files() {
+        let temp = TempDir::new("version-change-reset");
+        let root = temp.path().to_path_buf();
+        let service = crate::DatabaseService::start(
+            crate::Database::open(&SharedCache::at(&root))
+                .await
+                .expect("database"),
+        )
+        .await
+        .expect("service");
+        let client = service.client();
+        let instances = root.join("instances");
+        let dir = instances.join("Pack");
+        for folder in ["mods", "shaderpacks/Pack Shader/shaders", "config"] {
+            std::fs::create_dir_all(dir.join(folder)).expect("folder");
+        }
+        for file in [
+            "mods/pack.jar",
+            "mods/toggled.jar.disabled",
+            "mods/extra.jar",
+            "shaderpacks/Pack Shader/shaders/final.fsh",
+            "config/pack.toml",
+        ] {
+            std::fs::write(dir.join(file), b"file").expect("file");
+        }
+        client
+            .replace_curseforge_files(
+                &instances,
+                "Pack",
+                ["mods/pack.jar", "mods/toggled.jar"]
+                    .into_iter()
+                    .enumerate()
+                    .map(|(id, path)| curseforge::storage::StoredCurseforgeFile {
+                        relative_path: path.into(),
+                        url: "https://edge.forgecdn.net/files/1/2/a.jar".into(),
+                        sha1: Some("a".repeat(40)),
+                        md5: None,
+                        size: 4,
+                        project_id: id as i64,
+                        file_id: id as i64,
+                        file_name: "a.jar".into(),
+                        name: "A".into(),
+                        required: true,
+                    })
+                    .collect(),
+            )
+            .await
+            .expect("files");
+        client
+            .replace_modpack_override_files(
+                &instances,
+                "Pack",
+                vec![
+                    "shaderpacks/Pack Shader/shaders/final.fsh".into(),
+                    "config/pack.toml".into(),
+                ],
+            )
+            .await
+            .expect("overrides");
+
+        remove_pack_content_files(&client, &instances, "Pack", &dir)
+            .await
+            .expect("remove");
+
+        assert!(!dir.join("mods/pack.jar").exists());
+        assert!(
+            !dir.join("mods/toggled.jar.disabled").exists(),
+            "toggled pack file"
+        );
+        assert!(
+            !dir.join("shaderpacks/Pack Shader").exists(),
+            "emptied folder pack"
+        );
+        assert!(
+            dir.join("mods/extra.jar").is_file(),
+            "the user's own mod stays"
+        );
+        assert!(
+            dir.join("config/pack.toml").is_file(),
+            "the new pack overwrites configs"
+        );
+        assert!(dir.join("shaderpacks").is_dir());
         service.shutdown().await.expect("shutdown");
     }
 

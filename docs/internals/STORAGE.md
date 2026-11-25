@@ -161,6 +161,11 @@ game files, sets the new launch version and marks the instance ready, which clea
 never removes the instance. Until then a failed change waits to be retried or
 cancelled, and the instance cannot launch.
 
+Changing a linked store pack's version works the same way with a `changeVersion`
+job, except that the instance stays `ready`: the new version id goes into the
+installation source, and `previousBase` also keeps the pack's `modpack` details.
+Cancelling puts the previous version, source and details back.
+
 Deleting a profile and its modpack index is one database transaction after
 filesystem cleanup succeeds. Missing registered directories are omitted from the
 list. Duplication copies game files and creates a separate database profile,
@@ -194,7 +199,10 @@ pack deletes them and then clears the instance's installation, leaving its files
 place. Reinstalling a store pack downloads its archive first; only then does it
 delete the `mods`, `resourcepacks` and `shaderpacks` folders and import the pack
 again, which replaces these rows; until then Repair can still restore the old pack. The instance stays ready throughout, and a cancelled or
-failed reinstall never removes it, unlike a cancelled first install.
+failed reinstall never removes it, unlike a cancelled first install. Changing the
+pack's version also downloads first, but then deletes only the content files
+(`mods`, `resourcepacks`, `shaderpacks`) these rows list, enabled or disabled, and
+the folder packs that leaves empty, so content the user added stays.
 
 Builds up to v0.2.3 kept these lists in the instance folder. The next time the
 pack files are installed or repaired, a leftover `licht-modpack.json` is imported

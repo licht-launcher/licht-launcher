@@ -15,6 +15,10 @@ pub enum DownloadJobOperation {
     /// the previous base back and never removes the instance.
     #[serde(rename = "changeBase")]
     ChangeBase,
+    /// Installs another version of a ready instance's store pack, keeping content the
+    /// user added. Cancelling it puts the previous version back.
+    #[serde(rename = "changeVersion")]
+    ChangeVersion,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -210,6 +214,7 @@ mod tests {
             DownloadJobOperation::Repair,
             DownloadJobOperation::Reinstall,
             DownloadJobOperation::ChangeBase,
+            DownloadJobOperation::ChangeVersion,
         ] {
             assert!(
                 validate_cancellation_target(&job(operation), DownloadJobStatus::Cancelling)

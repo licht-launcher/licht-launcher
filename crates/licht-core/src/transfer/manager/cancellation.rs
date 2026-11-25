@@ -88,8 +88,10 @@ impl DownloadManager {
         mut job: DownloadJobSnapshot,
     ) -> Result<DownloadJobSnapshot> {
         if job.status != DownloadJobStatus::Cancelling {
-            if job.operation == DownloadJobOperation::ChangeBase
-                && job.status == DownloadJobStatus::Cancelled
+            if matches!(
+                job.operation,
+                DownloadJobOperation::ChangeBase | DownloadJobOperation::ChangeVersion
+            ) && job.status == DownloadJobStatus::Cancelled
                 && let Some(folder) = &job.instance_folder
             {
                 crate::instance::restore_instance_base(

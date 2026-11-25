@@ -136,3 +136,152 @@ async fn a_repair_never_replaces_a_waiting_base_change() {
     ));
     fixture.close().await;
 }
+
+/// A ready instance linked to version `v15` of a Modrinth pack.
+async fn ready_store_pack(fixture: &Fixture, name: &str) -> InstanceEntry {
+    let database = fixture.database();
+    let root = fixture.game.instances_dir().expect("instances");
+    let template = crate::global_launch(
+        &crate::load_settings(&fixture.settings)
+            .await
+            .expect("settings"),
+    );
+    let entry =
+        crate::create_pending_instance(&database, &root, name, store_pack("v15"), &template)
+            .await
+            .expect("instance");
+    crate::instance::record_linked_modpack(&database, &root, &entry.folder, linked("15.0"))
+        .await
+        .expect("details");
+    crate::configure_instance_version(
+        &database,
+        &root,
+        &entry.folder,
+        "fabric-loader-0.16.10-1.21.1",
+    )
+    .await
+    .expect("version");
+    crate::complete_instance_preparation(&database, &root, &entry.folder)
+        .await
+        .expect("ready")
+}
+
+fn store_pack(version_id: &str) -> InstanceSource {
+    InstanceSource::Modpack {
+        source: crate::ModpackSource::Modrinth,
+        project_id: "fo".into(),
+        version_id: version_id.into(),
+        icon_url: None,
+    }
+}
+
+fn linked(version_name: &str) -> crate::LinkedModpack {
+    crate::LinkedModpack {
+        name: "Fabulously Optimized".into(),
+        author: Some("robotkoer".into()),
+        version_name: version_name.into(),
+        published_at: None,
+    }
+}
+
+#[tokio::test]
+async fn cancelling_a_modpack_version_change_puts_the_previous_version_back() {
+    let fixture = Fixture::new("http://127.0.0.1:1").await;
+    let manager = fixture.manager();
+    let entry = ready_store_pack(&fixture, "Pack").await;
+
+    let failed = manager
+        .change_modpack_version(&entry.folder, "v16")
+        .await
+        .expect("change job");
+    assert_eq!(failed.operation, DownloadJobOperation::ChangeVersion);
+    assert_eq!(failed.status, DownloadJobStatus::Failed);
+    let waiting = profile(&fixture, &entry.folder).await;
+    assert_eq!(
+        waiting.installation.map(|installation| installation.source),
+        Some(store_pack("v16"))
+    );
+    assert!(matches!(
+        manager
+            .prepare(&entry.folder, DownloadJobOperation::Repair)
+            .await,
+        Err(CoreError::DownloadJobExists)
+    ));
+
+    manager.cancel(&failed.id).await.expect("cancel");
+
+    let restored = profile(&fixture, &entry.folder).await;
+    assert_eq!(
+        restored.version_id.as_deref(),
+        Some("fabric-loader-0.16.10-1.21.1")
+    );
+    assert_eq!(
+        restored.installation,
+        Some(crate::InstanceInstallation {
+            source: store_pack("v15"),
+            state: InstancePreparationState::Ready,
+            modpack: Some(linked("15.0")),
+            previous_base: None,
+        })
+    );
+    fixture.close().await;
+}
+
+#[tokio::test]
+async fn only_a_store_pack_can_change_its_version() {
+    let fixture = Fixture::new("http://127.0.0.1:1").await;
+    let manager = fixture.manager();
+    let vanilla = ready_vanilla(&fixture, "Vanilla").await;
+    let root = fixture.game.instances_dir().expect("instances");
+    let template = crate::global_launch(
+        &crate::load_settings(&fixture.settings)
+            .await
+            .expect("settings"),
+    );
+    let file = crate::create_pending_instance(
+        &fixture.database(),
+        &root,
+        "File pack",
+        InstanceSource::ModpackFile {
+            source: crate::ModpackSource::Modrinth,
+        },
+        &template,
+    )
+    .await
+    .expect("instance");
+    crate::configure_instance_version(&fixture.database(), &root, &file.folder, "1.21.1")
+        .await
+        .expect("version");
+    crate::complete_instance_preparation(&fixture.database(), &root, &file.folder)
+        .await
+        .expect("ready");
+    let store = ready_store_pack(&fixture, "Store pack").await;
+
+    assert!(matches!(
+        manager.change_modpack_version(&vanilla.folder, "v16").await,
+        Err(CoreError::InstanceNotLinked)
+    ));
+    assert!(matches!(
+        manager.change_modpack_version(&file.folder, "v16").await,
+        Err(CoreError::ModpackFileVersion)
+    ));
+    assert!(matches!(
+        manager
+            .change_modpack_version(&store.folder, "../v16")
+            .await,
+        Err(CoreError::ModpackMeta { .. })
+    ));
+    assert!(matches!(
+        manager.change_base(&store.folder, fabric()).await,
+        Err(CoreError::InstanceLinked)
+    ));
+    assert!(manager.stored_jobs().await.expect("jobs").is_empty());
+    assert_eq!(
+        profile(&fixture, &store.folder)
+            .await
+            .installation
+            .map(|installation| installation.source),
+        Some(store_pack("v15"))
+    );
+    fixture.close().await;
+}

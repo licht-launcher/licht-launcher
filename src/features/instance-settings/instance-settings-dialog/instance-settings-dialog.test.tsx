@@ -411,7 +411,30 @@ describe("InstanceSettingsDialog", () => {
     );
   });
 
-  it("keeps the game version of an instance linked to a modpack", async () => {
+  it("installs another modpack version in place of Edit base", async () => {
+    const original = invoke.getMockImplementation();
+    if (!original) throw new Error("missing command implementation");
+    invoke.mockImplementation((command: string, args?: unknown) => {
+      if (command === "list_modpack_versions") {
+        return Promise.resolve(
+          ["v16", "v15"].map((id) => ({
+            id,
+            name: `Fabulously Optimized ${id}`,
+            gameVersions: ["1.21.1"],
+            loaders: ["fabric"],
+            versionType: "release",
+            publishedAt: null,
+            downloads: 0,
+          })),
+        );
+      }
+      if (command === "change_instance_modpack_version") {
+        return Promise.resolve(
+          completedDownload({ operation: "changeVersion" }),
+        );
+      }
+      return original(command, args);
+    });
     renderDialog({
       entry: {
         ...entry,
@@ -431,12 +454,60 @@ describe("InstanceSettingsDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Instance base" }));
 
     expect(
+      await screen.findByRole("heading", { name: "Modpack version" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Edit base" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Repair" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Change version" }));
+    const install = await screen.findByRole("button", {
+      name: "Install version",
+    });
+    await waitFor(() => {
+      expect(screen.getByLabelText("Version")).toHaveTextContent(
+        "Fabulously Optimized v15",
+      );
+    });
+    expect(install).toBeDisabled();
+    fireEvent.click(screen.getByLabelText("Version"));
+    fireEvent.click(
+      await screen.findByRole("option", { name: "Fabulously Optimized v16" }),
+    );
+    fireEvent.click(install);
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("change_instance_modpack_version", {
+        folder: "Survival",
+        versionId: "v16",
+      });
+    });
+    expect(
+      await screen.findByText("Modpack version changed."),
+    ).toBeInTheDocument();
+  });
+
+  it("has no other versions for a modpack imported from a file", async () => {
+    renderDialog({
+      entry: {
+        ...entry,
+        installation: {
+          source: { type: "modpackFile", source: "modrinth" },
+          state: "ready",
+        },
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Instance base" }));
+
+    expect(
       await screen.findByText(
-        "The linked modpack sets this instance's game version.",
+        "A modpack imported from a file has no other versions to install.",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Edit base" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Repair" })).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: "Change version" }),
+    ).toBeDisabled();
   });
 
   it("repairs the instance from the base section", async () => {
