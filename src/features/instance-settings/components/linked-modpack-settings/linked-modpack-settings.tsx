@@ -16,10 +16,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { SOURCE_LABELS } from "@/features/discover/lib/discover-search";
 import type { ModpackOrigin } from "@/features/instances/lib/modpack-content";
 import { friendlyError, messageOf } from "@/lib/errors";
 import type { LinkedModpack } from "@/lib/generated/LinkedModpack";
+import { SOURCE_LABELS } from "@/lib/modpack-sources";
 
 import { linkedModpackSettingsStyles as styles } from "./linked-modpack-settings.styles";
 
