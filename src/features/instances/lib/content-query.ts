@@ -11,6 +11,9 @@ export function instanceContentQuery(
   return queryOptions({
     queryKey,
     staleTime: Number.POSITIVE_INFINITY,
+    // Files added or removed outside the app show up when the user comes back to it.
+    // Unchanged files reuse their cached fingerprints, so a refocus stays cheap.
+    refetchOnWindowFocus: "always",
     queryFn: ({ signal }) =>
       listInstanceContent(
         folder,
