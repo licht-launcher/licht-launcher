@@ -71,3 +71,58 @@ fn rejects_unsafe_names_and_conflicts() {
         Err(CoreError::Io(error)) if error.kind() == std::io::ErrorKind::AlreadyExists
     ));
 }
+
+#[test]
+fn lists_shader_packs_kept_as_folders() {
+    let (_temp, cache) = cache("shader-folders");
+    let root = instance(&cache);
+    let shaders = root.join("shaderpacks");
+    fs::create_dir_all(shaders.join("Complementary").join("shaders")).expect("folder pack");
+    fs::create_dir_all(shaders.join("Old Pack.disabled").join("shaders"))
+        .expect("disabled folder pack");
+    fs::create_dir_all(root.join("mods").join("config-folder")).expect("mods folder");
+
+    let entries = list_instance_content(&cache, "classic").expect("list");
+
+    let listed = entries
+        .iter()
+        .map(|entry| (entry.kind, entry.name.as_str(), entry.enabled))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        listed,
+        [
+            (InstanceContentKind::ShaderPacks, "Complementary", true),
+            (InstanceContentKind::ShaderPacks, "Old Pack", false),
+        ]
+    );
+}
+
+#[test]
+fn toggles_and_removes_a_folder_shader_pack() {
+    let (_temp, cache) = cache("shader-folder-actions");
+    let root = instance(&cache);
+    let pack = root.join("shaderpacks").join("Complementary");
+    fs::create_dir_all(pack.join("shaders")).expect("folder pack");
+    fs::write(pack.join("shaders").join("final.fsh"), b"shader").expect("shader file");
+
+    set_instance_content_enabled(
+        &cache,
+        "classic",
+        InstanceContentKind::ShaderPacks,
+        "Complementary",
+        false,
+    )
+    .expect("disable");
+    let disabled = root.join("shaderpacks").join("Complementary.disabled");
+    assert!(disabled.join("shaders").join("final.fsh").is_file());
+
+    remove_instance_content(
+        &cache,
+        "classic",
+        InstanceContentKind::ShaderPacks,
+        "Complementary",
+        false,
+    )
+    .expect("remove");
+    assert!(!disabled.exists());
+}

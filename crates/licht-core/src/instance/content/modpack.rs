@@ -30,9 +30,15 @@ pub(super) async fn modpack_paths(
 }
 
 /// Enabling or disabling a modpack file only renames it, so it still belongs to the pack.
+/// A shader pack kept as a folder belongs to it when the pack copied files into it.
 pub(super) fn mark_modpack_content(entries: &mut [InstanceContentEntry], paths: &BTreeSet<String>) {
     for entry in entries {
         let relative = format!("{}/{}", content_directory(entry.kind), entry.name);
-        entry.from_modpack = paths.contains(&relative);
+        let folder = format!("{relative}/");
+        entry.from_modpack = paths.contains(&relative)
+            || paths
+                .range(folder.clone()..)
+                .next()
+                .is_some_and(|path| path.starts_with(&folder));
     }
 }

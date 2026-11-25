@@ -25,7 +25,8 @@ pub fn list_instance_content(
         for item in fs::read_dir(path)? {
             let item = item?;
             let metadata = item.metadata()?;
-            if !metadata.is_file() {
+            let folder = kind == InstanceContentKind::ShaderPacks && item.file_type()?.is_dir();
+            if !folder && !metadata.is_file() {
                 continue;
             }
             let raw_name = item.file_name().to_string_lossy().into_owned();
@@ -35,6 +36,7 @@ pub fn list_instance_content(
                 .unwrap_or(&raw_name)
                 .to_string();
             if kind == InstanceContentKind::ShaderPacks
+                && !folder
                 && !name.to_ascii_lowercase().ends_with(".zip")
             {
                 continue;
@@ -44,7 +46,7 @@ pub fn list_instance_content(
                 name,
                 kind,
                 enabled,
-                size: metadata.len(),
+                size: if folder { 0 } else { metadata.len() },
                 version: None,
                 icon_url: None,
                 from_modpack: false,
@@ -84,7 +86,7 @@ pub fn set_instance_content_enabled(
     };
     let current = content_file(&root, content_directory(kind), &current_name)?;
     let next = content_file(&root, content_directory(kind), &next_name)?;
-    if !current.is_file() {
+    if !current.is_file() && !is_folder_shader_pack(kind, &current) {
         return Err(CoreError::Io(std::io::Error::new(
             std::io::ErrorKind::NotFound,
             "content file is missing",
@@ -114,14 +116,24 @@ pub fn remove_instance_content(
         format!("{name}{DISABLED_SUFFIX}")
     };
     let path = content_file(&root, content_directory(kind), &filename)?;
-    if !path.is_file() {
+    if is_folder_shader_pack(kind, &path) {
+        fs::remove_dir_all(path)?;
+    } else if path.is_file() {
+        fs::remove_file(path)?;
+    } else {
         return Err(CoreError::Io(std::io::Error::new(
             std::io::ErrorKind::NotFound,
             "content file is missing",
         )));
     }
-    fs::remove_file(path)?;
     Ok(())
+}
+
+/// Iris also loads shader packs left unzipped, as folders. A link is never treated
+/// as one, so removing a pack cannot reach outside the instance.
+pub(super) fn is_folder_shader_pack(kind: InstanceContentKind, path: &Path) -> bool {
+    kind == InstanceContentKind::ShaderPacks
+        && fs::symlink_metadata(path).is_ok_and(|metadata| metadata.is_dir())
 }
 
 pub(super) fn instance_root(cache: &SharedCache, folder: &str) -> Result<PathBuf> {
