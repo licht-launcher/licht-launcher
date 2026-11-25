@@ -82,6 +82,14 @@ pub enum CoreError {
     InstancePreparing,
     #[error("this instance is not linked to a modpack")]
     InstanceNotLinked,
+    #[error("a modpack sets this instance's base; change the modpack version instead")]
+    InstanceLinked,
+    #[error("a modpack imported from a file has no other versions to install")]
+    ModpackFileVersion,
+    #[error("an instance base must be Vanilla or a mod loader")]
+    InstanceBaseUnsupported,
+    #[error("this task starts only from its own action")]
+    DownloadOperationUnsupported,
     #[error("close the game before changing this instance's modpack")]
     InstanceRunning,
     #[error(

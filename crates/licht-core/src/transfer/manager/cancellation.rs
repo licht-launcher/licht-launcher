@@ -70,8 +70,10 @@ impl DownloadManager {
                 &self.runtime.game.instance_dir(folder)?,
             )
             .await?;
+            // An existing instance in the middle of a change is restored, not removed.
             if profile.installation.is_some_and(|installation| {
                 installation.state != crate::InstancePreparationState::Ready
+                    && installation.previous_base.is_none()
             }) {
                 // Persist removal intent before deleting files or the profile.
                 job.status = DownloadJobStatus::Cancelling;
@@ -88,6 +90,23 @@ impl DownloadManager {
         mut job: DownloadJobSnapshot,
     ) -> Result<DownloadJobSnapshot> {
         if job.status != DownloadJobStatus::Cancelling {
+            // Restoring does nothing unless a change is waiting, so it also covers a
+            // change an install job was left to finish.
+            if matches!(
+                job.operation,
+                DownloadJobOperation::ChangeBase
+                    | DownloadJobOperation::ChangeVersion
+                    | DownloadJobOperation::Install
+            ) && job.status == DownloadJobStatus::Cancelled
+                && let Some(folder) = &job.instance_folder
+            {
+                crate::instance::restore_instance_base(
+                    &self.runtime.database,
+                    &self.runtime.game.instances_dir()?,
+                    folder,
+                )
+                .await?;
+            }
             return Ok(job);
         }
         let folder = job
