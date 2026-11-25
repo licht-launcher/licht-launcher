@@ -7,7 +7,5 @@ export const homePanelStyles = {
   tabsTrigger: "cursor-pointer gap-1.5 px-3",
   tabIcon: "size-4 shrink-0",
   tabActions: "flex min-w-0 items-center gap-2 empty:hidden",
-  searchInput: "min-w-0 flex-1 font-medium",
-  refreshing: "animate-spin",
   tabContent: "mt-0 flex min-h-0 flex-1 flex-col outline-none",
 } as const;
