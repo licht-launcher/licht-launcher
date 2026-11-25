@@ -2,6 +2,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use super::*;
+mod base_change;
 mod logging;
 mod modpack;
 mod persistence;

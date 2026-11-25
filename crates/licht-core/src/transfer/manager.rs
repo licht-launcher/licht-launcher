@@ -65,6 +65,14 @@ pub struct DownloadManager {
     counters: Arc<super::control::TransferCounters>,
 }
 
+/// What a change job moves an instance to.
+enum Change<'a> {
+    /// Another platform or game version, for an unlinked instance.
+    Base(InstanceSource),
+    /// Another version of a linked store pack.
+    ModpackVersion(&'a str),
+}
+
 impl DownloadManager {
     pub fn new(
         settings: crate::Database,
@@ -178,7 +186,86 @@ impl DownloadManager {
             return Err(CoreError::InstancePreparing);
         }
         self.ensure_not_running(folder)?;
-        self.prepare(folder, DownloadJobOperation::Reinstall).await
+        let job = self.start(folder, DownloadJobOperation::Reinstall).await?;
+        self.wait(&job.id).await
+    }
+
+    /// Moves a ready, unlinked instance to `target` and waits for its loader profile
+    /// and game files. Until the job finishes the instance waits in `Preparing`;
+    /// cancelling the job puts the previous base back.
+    pub async fn change_base(
+        self: &Arc<Self>,
+        folder: &str,
+        target: InstanceSource,
+    ) -> Result<DownloadJobSnapshot> {
+        self.start_change(folder, Change::Base(target)).await
+    }
+
+    /// Moves a ready instance linked to a store pack to the pack's `version_id` and
+    /// waits for it. Content the user added stays; cancelling the job puts the
+    /// previous version back.
+    pub async fn change_modpack_version(
+        self: &Arc<Self>,
+        folder: &str,
+        version_id: &str,
+    ) -> Result<DownloadJobSnapshot> {
+        self.start_change(folder, Change::ModpackVersion(version_id))
+            .await
+    }
+
+    /// Starts a change job once nothing else runs for the instance and its game is
+    /// closed. The change is recorded on the instance under the start lock, and
+    /// undone if the job cannot be created.
+    async fn start_change(
+        self: &Arc<Self>,
+        folder: &str,
+        change: Change<'_>,
+    ) -> Result<DownloadJobSnapshot> {
+        let starts = self.starts.lock().await;
+        self.accept_work()?;
+        if self
+            .stored_jobs()
+            .await?
+            .iter()
+            .any(|job| job.instance_folder.as_deref() == Some(folder))
+        {
+            return Err(CoreError::DownloadJobExists);
+        }
+        self.ensure_not_running(folder)?;
+        let root = self.runtime.game.instances_dir()?;
+        let database = &self.runtime.database;
+        let (entry, operation) = match change {
+            Change::Base(target) => (
+                crate::begin_instance_base_change(database, &root, folder, target).await?,
+                DownloadJobOperation::ChangeBase,
+            ),
+            Change::ModpackVersion(version_id) => (
+                crate::begin_modpack_version_change(database, &root, folder, version_id).await?,
+                DownloadJobOperation::ChangeVersion,
+            ),
+        };
+        let job = match self
+            .runtime
+            .database
+            .create_pending_download_job(
+                &self.runtime.game,
+                folder,
+                entry.version_id.as_deref(),
+                operation,
+            )
+            .await
+        {
+            Ok(job) => job,
+            Err(error) => {
+                // No job will finish or cancel the change, so undo it now.
+                crate::instance::restore_instance_base(&self.runtime.database, &root, folder)
+                    .await?;
+                return Err(error);
+            }
+        };
+        self.spawn(job.clone()).await;
+        drop(starts);
+        self.wait(&job.id).await
     }
 
     /// Unlinks a ready instance from its modpack. Holding the start lock while no job
@@ -213,11 +300,19 @@ impl DownloadManager {
         }
     }
 
+    /// Installs or repairs an instance and waits for it. A reinstall or a change
+    /// starts only from its own method, which checks the instance first.
     pub async fn prepare(
         self: &Arc<Self>,
         folder: &str,
         operation: DownloadJobOperation,
     ) -> Result<DownloadJobSnapshot> {
+        if !matches!(
+            operation,
+            DownloadJobOperation::Install | DownloadJobOperation::Repair
+        ) {
+            return Err(CoreError::DownloadOperationUnsupported);
+        }
         let job = self.start(folder, operation).await?;
         self.wait(&job.id).await
     }
@@ -235,9 +330,15 @@ impl DownloadManager {
             .find(|job| job.instance_folder.as_deref() == Some(folder))
         {
             // Checked under the lock, so another task started meanwhile is never
-            // resumed in place of a reinstall.
-            if operation == DownloadJobOperation::Reinstall
-                && job.operation != DownloadJobOperation::Reinstall
+            // resumed in place of a reinstall, and a repair never replaces a base or
+            // version change. Preparing the instance for play resumes a base change.
+            if (operation == DownloadJobOperation::Reinstall
+                && job.operation != DownloadJobOperation::Reinstall)
+                || (operation == DownloadJobOperation::Repair
+                    && matches!(
+                        job.operation,
+                        DownloadJobOperation::ChangeBase | DownloadJobOperation::ChangeVersion
+                    ))
             {
                 return Err(CoreError::DownloadJobExists);
             }
@@ -257,6 +358,19 @@ impl DownloadManager {
             &self.runtime.game.instance_dir(folder)?,
         )
         .await?;
+        // A change left without its job, by a crash or a failed cancel, is finished
+        // or cancelled as a change: never as a first install, whose cancel removes
+        // the instance.
+        let operation = match &profile.installation {
+            Some(installation) if installation.previous_base.is_some() => {
+                if matches!(installation.source, InstanceSource::Modpack { .. }) {
+                    DownloadJobOperation::ChangeVersion
+                } else {
+                    DownloadJobOperation::ChangeBase
+                }
+            }
+            _ => operation,
+        };
         let job = self
             .runtime
             .database
@@ -460,16 +574,6 @@ impl DownloadManager {
             .await?,
         )?;
         Ok(())
-    }
-    pub async fn change_version(&self, folder: &str, version: &str) -> Result<InstanceEntry> {
-        self.ensure_launchable(folder).await?;
-        crate::update_instance_version(
-            &self.runtime.database,
-            &self.runtime.game.instances_dir()?,
-            folder,
-            version,
-        )
-        .await
     }
     async fn wait(&self, id: &str) -> Result<DownloadJobSnapshot> {
         if let Some(slot) = self.active_job(id).await {

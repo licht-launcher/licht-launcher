@@ -60,11 +60,25 @@ pub async fn create_instance_with_platform(
     loader_channel: String,
     loader_version: Option<String>,
 ) -> Result<InstanceEntry, String> {
-    let platform =
-        LoaderPlatform::parse(&platform).ok_or_else(|| "unknown platform".to_string())?;
+    let source = platform_source(&platform, game_version, &loader_channel, loader_version)?;
+    downloads
+        .inner()
+        .create(&name, source)
+        .await
+        .map_err(failure)
+}
+
+/// The instance source a platform form describes.
+fn platform_source(
+    platform: &str,
+    game_version: String,
+    loader_channel: &str,
+    loader_version: Option<String>,
+) -> Result<licht_core::InstanceSource, String> {
+    let platform = LoaderPlatform::parse(platform).ok_or_else(|| "unknown platform".to_string())?;
     let channel =
-        LoaderChannel::parse(&loader_channel).ok_or_else(|| "unknown channel".to_string())?;
-    let source = if platform == LoaderPlatform::Vanilla {
+        LoaderChannel::parse(loader_channel).ok_or_else(|| "unknown channel".to_string())?;
+    Ok(if platform == LoaderPlatform::Vanilla {
         licht_core::InstanceSource::Vanilla { game_version }
     } else {
         licht_core::InstanceSource::Loader {
@@ -73,10 +87,24 @@ pub async fn create_instance_with_platform(
             channel,
             loader_version,
         }
-    };
+    })
+}
+
+/// Moves a ready, unlinked instance to another platform or game version and waits
+/// for the change job.
+#[tauri::command]
+pub async fn change_instance_base(
+    downloads: State<'_, std::sync::Arc<licht_core::DownloadManager>>,
+    folder: String,
+    platform: String,
+    game_version: String,
+    loader_channel: String,
+    loader_version: Option<String>,
+) -> Result<licht_core::DownloadJobSnapshot, String> {
+    let source = platform_source(&platform, game_version, &loader_channel, loader_version)?;
     downloads
         .inner()
-        .create(&name, source)
+        .change_base(&folder, source)
         .await
         .map_err(failure)
 }
@@ -138,18 +166,6 @@ pub async fn save_instance(
 ) -> Result<InstanceEntry, String> {
     let root = instances_root(&paths).map_err(failure)?;
     update_instance(&database, &root, &folder, &settings)
-        .await
-        .map_err(failure)
-}
-
-#[tauri::command]
-pub async fn set_instance_version(
-    downloads: State<'_, std::sync::Arc<licht_core::DownloadManager>>,
-    folder: String,
-    version_id: String,
-) -> Result<InstanceEntry, String> {
-    downloads
-        .change_version(&folder, &version_id)
         .await
         .map_err(failure)
 }
