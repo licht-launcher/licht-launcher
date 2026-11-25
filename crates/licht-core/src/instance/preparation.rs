@@ -109,6 +109,23 @@ impl InstanceSource {
 pub struct InstanceInstallation {
     pub source: InstanceSource,
     pub state: InstancePreparationState,
+    /// What the store said about the pack when it was installed. Older instances and
+    /// installs whose store details could not be read have none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub modpack: Option<LinkedModpack>,
+}
+
+/// A store pack's details as of its install, so the UI can show them without a request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LinkedModpack {
+    pub name: String,
+    pub author: Option<String>,
+    /// The installed version's name, such as `15.0.0-beta.3`.
+    pub version_name: String,
+    /// RFC 3339 timestamp of the installed version's release, when the store has one.
+    pub published_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -139,6 +156,7 @@ pub async fn create_pending_instance(
     instance.installation = Some(InstanceInstallation {
         source,
         state: InstancePreparationState::Preparing,
+        modpack: None,
     });
     if let Err(error) = write_instance(database, &dir, &instance).await {
         fs::remove_dir(&dir)?;
@@ -167,6 +185,23 @@ pub async fn complete_instance_preparation(
     write_instance(database, &dir, &instance).await?;
     Ok(entry_from(&dir, folder.to_string(), instance))
 }
+/// Keeps the store details of the pack being installed on the instance.
+pub(crate) async fn record_linked_modpack(
+    database: &crate::DatabaseClient,
+    instances_dir: &Path,
+    folder: &str,
+    modpack: LinkedModpack,
+) -> Result<()> {
+    let _guard = profile_guard().await;
+    let dir = instance_dir(instances_dir, folder)?;
+    let mut instance = load_instance(database, &dir).await?;
+    let Some(installation) = instance.installation.as_mut() else {
+        return Ok(());
+    };
+    installation.modpack = Some(modpack);
+    write_instance(database, &dir, &instance).await
+}
+
 pub fn instance_version_for_launch(instance: &Instance) -> Result<&str> {
     if instance
         .installation
@@ -196,4 +231,85 @@ pub async fn configure_instance_version(
     }
     write_instance(database, &dir, &instance).await?;
     Ok(entry_from(&dir, folder.to_string(), instance))
+}
+
+#[cfg(test)]
+mod tests {
+    use licht_testkit::temp::TempDir;
+
+    use super::*;
+    use crate::{DatabaseService, ModpackSource, SharedCache};
+
+    fn template() -> GlobalLaunch {
+        GlobalLaunch {
+            max_memory_mb: 2048,
+            jvm_arguments: vec![],
+            fullscreen: false,
+            width: None,
+            height: None,
+        }
+    }
+
+    fn linked() -> LinkedModpack {
+        LinkedModpack {
+            name: "Fabulously Optimized".into(),
+            author: Some("robotkoer".into()),
+            version_name: "15.0.0-beta.3".into(),
+            published_at: Some("2026-11-01T10:00:00Z".into()),
+        }
+    }
+
+    #[tokio::test]
+    async fn keeps_the_store_details_of_the_pack_through_the_rest_of_the_install() {
+        let temp = TempDir::new("linked-modpack");
+        let root = temp.path().to_path_buf();
+        let service = DatabaseService::start(
+            crate::Database::open(&SharedCache::at(&root))
+                .await
+                .expect("database"),
+        )
+        .await
+        .expect("service");
+        let client = service.client();
+        let source = InstanceSource::Modpack {
+            source: ModpackSource::Modrinth,
+            project_id: "fo".into(),
+            version_id: "v15".into(),
+            icon_url: None,
+        };
+        let entry = create_pending_instance(&client, &root, "Pack", source, &template())
+            .await
+            .expect("create");
+        assert_eq!(
+            entry.installation.as_ref().expect("installation").modpack,
+            None
+        );
+
+        record_linked_modpack(&client, &root, &entry.folder, linked())
+            .await
+            .expect("record");
+        configure_instance_version(&client, &root, &entry.folder, "1.21.1")
+            .await
+            .expect("version");
+        let entry = complete_instance_preparation(&client, &root, &entry.folder)
+            .await
+            .expect("ready");
+
+        assert_eq!(
+            entry.installation.expect("installation").modpack,
+            Some(linked())
+        );
+        service.shutdown().await.expect("shutdown");
+    }
+
+    #[test]
+    fn reads_an_installation_saved_before_store_details_were_kept() {
+        let installation: InstanceInstallation = serde_json::from_str(
+            r#"{"source":{"type":"modpackFile","source":"modrinth"},"state":"ready"}"#,
+        )
+        .expect("older installation");
+        assert_eq!(installation.modpack, None);
+        let saved = serde_json::to_value(&installation).expect("serialize");
+        assert!(saved.get("modpack").is_none());
+    }
 }

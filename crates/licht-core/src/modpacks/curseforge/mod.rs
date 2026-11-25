@@ -246,7 +246,7 @@ pub(super) async fn download_curseforge_pack_to(
     file_id: &str,
     destination: &std::path::Path,
     context: &crate::InstallationContext,
-) -> Result<()> {
+) -> Result<super::PackVersion> {
     let key = curseforge_api_key()?;
     let url = format!("{MOD_URL}/{mod_id}/files/{file_id}/download-url");
     let download_url = context
@@ -300,7 +300,20 @@ pub(super) async fn download_curseforge_pack_to(
     if let Some(expected) = &file.md5 {
         super::file_hashes::ensure_md5(destination, expected)?;
     }
-    Ok(())
+    Ok(pack_version(file))
+}
+
+/// A pack file's display name stands for its version, like the file list shows it.
+fn pack_version(file: &api::RemoteFile) -> super::PackVersion {
+    let name = if file.display_name.trim().is_empty() {
+        &file.file_name
+    } else {
+        &file.display_name
+    };
+    super::PackVersion {
+        name: name.clone(),
+        published_at: file.file_date.clone(),
+    }
 }
 
 fn download_url_status_error(status: u16, body: &str) -> CoreError {
@@ -326,6 +339,32 @@ fn parse_pack_download_url(body: &str) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn remote_file(display_name: &str) -> api::RemoteFile {
+        api::RemoteFile {
+            file_id: 2,
+            mod_id: 1,
+            file_name: "pack-1.0.zip".into(),
+            display_name: display_name.into(),
+            file_date: Some("2026-11-04T07:16:05.953Z".into()),
+            size: 10,
+            sha1: None,
+            md5: None,
+            download_url: None,
+        }
+    }
+
+    #[test]
+    fn a_pack_file_stands_for_its_version_by_display_name() {
+        assert_eq!(
+            pack_version(&remote_file("Pack 1.0")),
+            super::super::PackVersion {
+                name: "Pack 1.0".into(),
+                published_at: Some("2026-11-04T07:16:05.953Z".into()),
+            }
+        );
+        assert_eq!(pack_version(&remote_file(" ")).name, "pack-1.0.zip");
+    }
 
     #[test]
     fn the_first_files_page_says_which_others_to_fetch() {
