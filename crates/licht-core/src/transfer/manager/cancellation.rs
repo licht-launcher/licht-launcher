@@ -94,7 +94,9 @@ impl DownloadManager {
             // change an install job was left to finish.
             if matches!(
                 job.operation,
-                DownloadJobOperation::ChangeBase | DownloadJobOperation::Install
+                DownloadJobOperation::ChangeBase
+                    | DownloadJobOperation::ChangeVersion
+                    | DownloadJobOperation::Install
             ) && job.status == DownloadJobStatus::Cancelled
                 && let Some(folder) = &job.instance_folder
             {

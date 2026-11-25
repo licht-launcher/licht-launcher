@@ -35,27 +35,45 @@ pub(crate) fn execute(
         let profile = load_instance(&runtime.database, &dir).await?;
         let verify_modpack = matches!(
             job.operation,
-            DownloadJobOperation::Repair | DownloadJobOperation::Reinstall
+            DownloadJobOperation::Repair
+                | DownloadJobOperation::Reinstall
+                | DownloadJobOperation::ChangeVersion
         ) || profile
             .installation
             .as_ref()
             .is_some_and(|installation| installation.state != InstancePreparationState::Ready);
-        if job.operation == DownloadJobOperation::Reinstall {
+        if matches!(
+            job.operation,
+            DownloadJobOperation::Reinstall | DownloadJobOperation::ChangeVersion
+        ) {
             let installation = profile
                 .installation
                 .as_ref()
                 .ok_or(CoreError::InstanceNotLinked)?;
             let entry = instance_entry(&runtime.database, &dir, &folder).await?;
-            crate::modpacks::reinstall_modpack_instance(
-                &runtime.database,
-                &runtime.client,
-                &runtime.game,
-                &root,
-                &entry,
-                &installation.source,
-                &context,
-            )
-            .await?;
+            if job.operation == DownloadJobOperation::Reinstall {
+                crate::modpacks::reinstall_modpack_instance(
+                    &runtime.database,
+                    &runtime.client,
+                    &runtime.game,
+                    &root,
+                    &entry,
+                    &installation.source,
+                    &context,
+                )
+                .await?;
+            } else {
+                crate::modpacks::update_modpack_instance(
+                    &runtime.database,
+                    &runtime.client,
+                    &runtime.game,
+                    &root,
+                    &entry,
+                    &installation.source,
+                    &context,
+                )
+                .await?;
+            }
         } else if let Some(installation) = &profile.installation
             && installation.state == InstancePreparationState::Preparing
         {
@@ -120,7 +138,8 @@ pub(crate) fn execute(
                 DownloadJobOperation::Repair => CacheCheck::Verify,
                 DownloadJobOperation::Install
                 | DownloadJobOperation::Reinstall
-                | DownloadJobOperation::ChangeBase => CacheCheck::Reuse,
+                | DownloadJobOperation::ChangeBase
+                | DownloadJobOperation::ChangeVersion => CacheCheck::Reuse,
             };
             install_game_version(
                 &runtime.client,
@@ -188,6 +207,16 @@ pub(crate) fn execute(
                 .await?;
         }
         context.checkpoint().await?;
+        // The new version installs pack files enabled; disable again the ones the
+        // user had disabled in the previous version.
+        if let Some(disabled) = load_instance(&runtime.database, &dir)
+            .await?
+            .installation
+            .and_then(|installation| installation.previous_base)
+            .and_then(|previous| previous.disabled_content)
+        {
+            crate::modpacks::disable_content_again(&dir, &disabled)?;
+        }
         complete_instance_preparation(&runtime.database, &root, &folder).await?;
         Ok(())
     })

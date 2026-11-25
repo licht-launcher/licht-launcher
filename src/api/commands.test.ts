@@ -11,6 +11,7 @@ import {
   browseModpackFile,
   cancelDownloadJob,
   changeInstanceBase,
+  changeInstanceModpackVersion,
   checkAppUpdate,
   clearLastPlayedFolder,
   closeStartupPreview,
@@ -655,6 +656,14 @@ describe("launcher commands", () => {
     await getInstancePlatform("fabric-loader-0.19.5-26.3");
     expect(invoke).toHaveBeenCalledWith("get_instance_platform", {
       versionId: "fabric-loader-0.19.5-26.3",
+    });
+  });
+
+  it("installs another version of an instance's modpack", async () => {
+    await changeInstanceModpackVersion("classic", "v16");
+    expect(invoke).toHaveBeenCalledWith("change_instance_modpack_version", {
+      folder: "classic",
+      versionId: "v16",
     });
   });
 

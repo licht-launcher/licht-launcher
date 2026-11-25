@@ -115,6 +115,7 @@ export function InstanceBaseSection({
         </div>
       </div>
 
+      {/* Right under the card it changes: the pack's version, or the platform and game version. */}
       {modpack !== null ? (
         <LinkedModpackSettings
           folder={folder}
@@ -123,37 +124,35 @@ export function InstanceBaseSection({
           preparing={preparing}
           busy={busy || versionBusy || instanceActive}
         />
-      ) : null}
-
-      <div className={instanceBaseSectionStyles.group}>
-        <div className={instanceBaseSectionStyles.groupText}>
-          <h3 className={instanceBaseSectionStyles.label}>Edit base</h3>
-          <p className={instanceBaseSectionStyles.hint}>
-            {modpack !== null
-              ? "The linked modpack sets this instance's game version."
-              : "Change the platform, game version or loader this instance launches with."}
-          </p>
+      ) : (
+        <div className={instanceBaseSectionStyles.group}>
+          <div className={instanceBaseSectionStyles.groupText}>
+            <h3 className={instanceBaseSectionStyles.label}>Edit base</h3>
+            <p className={instanceBaseSectionStyles.hint}>
+              Change the platform, game version or loader this instance launches
+              with.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="warning"
+            className={instanceBaseSectionStyles.action}
+            disabled={
+              busy ||
+              versionBusy ||
+              preparing ||
+              instanceActive ||
+              versionId === null
+            }
+            onClick={() => {
+              setEditOpen(true);
+            }}
+          >
+            <PencilIcon data-icon="inline-start" aria-hidden />
+            Edit base
+          </Button>
         </div>
-        <Button
-          type="button"
-          variant="warning"
-          className={instanceBaseSectionStyles.action}
-          disabled={
-            busy ||
-            versionBusy ||
-            preparing ||
-            instanceActive ||
-            modpack !== null ||
-            versionId === null
-          }
-          onClick={() => {
-            setEditOpen(true);
-          }}
-        >
-          <PencilIcon data-icon="inline-start" aria-hidden />
-          Edit base
-        </Button>
-      </div>
+      )}
 
       <div className={instanceBaseSectionStyles.group}>
         <div className={instanceBaseSectionStyles.groupText}>
@@ -167,7 +166,7 @@ export function InstanceBaseSection({
           type="button"
           variant="outline"
           className={instanceBaseSectionStyles.action}
-          disabled={busy || versionBusy || repair.isPending}
+          disabled={busy || versionBusy || preparing || repair.isPending}
           onClick={() => {
             repair.mutate();
           }}

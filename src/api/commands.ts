@@ -493,6 +493,14 @@ export function reinstallInstanceModpack(
   return invoke("reinstall_instance_modpack", { folder });
 }
 
+/** Installs another version of a linked store pack, keeping the user's content. */
+export function changeInstanceModpackVersion(
+  folder: string,
+  versionId: string,
+): Promise<DownloadJobSnapshot> {
+  return invoke("change_instance_modpack_version", { folder, versionId });
+}
+
 export function repairInstance(folder: string): Promise<DownloadJobSnapshot> {
   return invoke("repair_instance", { folder });
 }

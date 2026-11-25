@@ -15,10 +15,13 @@ pub use persistence::{load_instance, parse_instance};
 use persistence::{validate, write_instance};
 pub use preparation::{
     InstanceInstallation, InstancePreparationState, InstanceSource, LinkedModpack, PreviousBase,
-    begin_instance_base_change, complete_instance_preparation, configure_instance_version,
-    create_pending_instance, instance_version_for_launch, unlink_instance_modpack,
+    begin_instance_base_change, begin_modpack_version_change, complete_instance_preparation,
+    configure_instance_version, create_pending_instance, instance_version_for_launch,
+    unlink_instance_modpack,
 };
-pub(crate) use preparation::{record_linked_modpack, restore_instance_base};
+pub(crate) use preparation::{
+    commit_modpack_content_change, record_linked_modpack, restore_instance_base,
+};
 
 use std::fs;
 use std::path::{Path, PathBuf};

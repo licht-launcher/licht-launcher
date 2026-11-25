@@ -128,6 +128,7 @@ pub fn run() -> anyhow::Result<()> {
             commands::versions::install_version,
             commands::versions::repair_instance,
             commands::versions::reinstall_instance_modpack,
+            commands::versions::change_instance_modpack_version,
             commands::launch::launch,
             commands::launch::list_running_games,
             commands::launch::stop_game
