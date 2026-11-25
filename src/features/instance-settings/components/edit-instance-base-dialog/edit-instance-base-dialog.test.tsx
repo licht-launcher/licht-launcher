@@ -54,6 +54,7 @@ describe("EditInstanceBaseDialog", () => {
         return Promise.resolve([
           { id: "1.21.4", versionType: "release", installed: false },
           { id: "1.21.1", versionType: "release", installed: true },
+          { id: "24w14a", versionType: "snapshot", installed: false },
         ]);
       }
       if (command === "list_loader_builds") return Promise.resolve(builds);
@@ -120,5 +121,21 @@ describe("EditInstanceBaseDialog", () => {
       loaderChannel: "stable",
       loaderVersion: null,
     });
+  });
+
+  it("shows snapshots when the instance runs one", async () => {
+    renderDialog({
+      current: {
+        platform: "vanilla",
+        gameVersion: "24w14a",
+        loaderVersion: null,
+      },
+    });
+
+    const field = await screen.findByRole("combobox", { name: "Game version" });
+    await waitFor(() => expect(field).toHaveValue("24w14a"));
+    expect(
+      screen.getByRole("switch", { name: "Include snapshots" }),
+    ).toBeChecked();
   });
 });

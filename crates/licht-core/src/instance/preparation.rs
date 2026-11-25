@@ -262,7 +262,7 @@ pub async fn begin_instance_base_change(
         target,
         InstanceSource::Vanilla { .. } | InstanceSource::Loader { .. }
     ) {
-        return Err(CoreError::InstancePreparing);
+        return Err(CoreError::InstanceBaseUnsupported);
     }
     target.validate()?;
     let dir = instance_dir(instances_dir, folder)?;
@@ -303,7 +303,14 @@ pub(crate) async fn restore_instance_base(
     folder: &str,
 ) -> Result<()> {
     let _guard = profile_guard().await;
-    let dir = instance_dir(instances_dir, folder)?;
+    let dir = match instance_dir(instances_dir, folder) {
+        Ok(dir) => dir,
+        // A removed instance has nothing to restore.
+        Err(CoreError::Io(error)) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(());
+        }
+        Err(error) => return Err(error),
+    };
     let mut instance = load_instance(database, &dir).await?;
     let Some(previous) = instance
         .installation

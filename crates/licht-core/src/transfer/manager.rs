@@ -178,7 +178,8 @@ impl DownloadManager {
             return Err(CoreError::InstancePreparing);
         }
         self.ensure_not_running(folder)?;
-        self.prepare(folder, DownloadJobOperation::Reinstall).await
+        let job = self.start(folder, DownloadJobOperation::Reinstall).await?;
+        self.wait(&job.id).await
     }
 
     /// Moves a ready, unlinked instance to `target` and waits for its loader profile
@@ -260,11 +261,19 @@ impl DownloadManager {
         }
     }
 
+    /// Installs or repairs an instance and waits for it. A reinstall or a change
+    /// starts only from its own method, which checks the instance first.
     pub async fn prepare(
         self: &Arc<Self>,
         folder: &str,
         operation: DownloadJobOperation,
     ) -> Result<DownloadJobSnapshot> {
+        if !matches!(
+            operation,
+            DownloadJobOperation::Install | DownloadJobOperation::Repair
+        ) {
+            return Err(CoreError::DownloadOperationUnsupported);
+        }
         let job = self.start(folder, operation).await?;
         self.wait(&job.id).await
     }
@@ -307,6 +316,18 @@ impl DownloadManager {
             &self.runtime.game.instance_dir(folder)?,
         )
         .await?;
+        // A change left without its job, by a crash or a failed cancel, is finished
+        // or cancelled as a change: never as a first install, whose cancel removes
+        // the instance.
+        let operation = if profile
+            .installation
+            .as_ref()
+            .is_some_and(|installation| installation.previous_base.is_some())
+        {
+            DownloadJobOperation::ChangeBase
+        } else {
+            operation
+        };
         let job = self
             .runtime
             .database

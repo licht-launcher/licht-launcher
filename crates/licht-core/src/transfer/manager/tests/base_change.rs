@@ -136,3 +136,95 @@ async fn a_repair_never_replaces_a_waiting_base_change() {
     ));
     fixture.close().await;
 }
+
+/// Leaves `folder` mid change with no job, as a crash between recording the change
+/// and creating its job would.
+async fn change_without_a_job(fixture: &Fixture, folder: &str) {
+    crate::begin_instance_base_change(
+        &fixture.database(),
+        &fixture.game.instances_dir().expect("instances"),
+        folder,
+        fabric(),
+    )
+    .await
+    .expect("begin");
+}
+
+#[tokio::test]
+async fn preparing_an_instance_left_mid_change_resumes_the_change() {
+    let fixture = Fixture::new("http://127.0.0.1:1").await;
+    let manager = fixture.manager();
+    let entry = ready_vanilla(&fixture, "Interrupted").await;
+    change_without_a_job(&fixture, &entry.folder).await;
+
+    let resumed = manager
+        .prepare(&entry.folder, DownloadJobOperation::Install)
+        .await
+        .expect("prepare");
+    assert_eq!(resumed.operation, DownloadJobOperation::ChangeBase);
+
+    manager.cancel(&resumed.id).await.expect("cancel");
+    let restored = profile(&fixture, &entry.folder).await;
+    assert_eq!(restored.version_id.as_deref(), Some("1.21.1"));
+    assert_eq!(
+        restored.installation.map(|installation| installation.state),
+        Some(InstancePreparationState::Ready)
+    );
+    fixture.close().await;
+}
+
+#[tokio::test]
+async fn cancelling_an_install_never_removes_an_instance_mid_change() {
+    let fixture = Fixture::new("http://127.0.0.1:1").await;
+    let manager = fixture.manager();
+    let entry = ready_vanilla(&fixture, "Kept").await;
+    change_without_a_job(&fixture, &entry.folder).await;
+    let install = fixture
+        .database()
+        .create_pending_download_job(
+            &fixture.game,
+            &entry.folder,
+            Some("1.21.1"),
+            DownloadJobOperation::Install,
+        )
+        .await
+        .expect("install job");
+
+    let cancelled = manager.cancel(&install.id).await.expect("cancel");
+
+    assert_eq!(cancelled.status, DownloadJobStatus::Cancelled);
+    assert!(
+        fixture
+            .game
+            .instance_dir(&entry.folder)
+            .expect("dir")
+            .is_dir(),
+        "the existing instance stays"
+    );
+    let restored = profile(&fixture, &entry.folder).await;
+    assert_eq!(restored.version_id.as_deref(), Some("1.21.1"));
+    assert_eq!(
+        restored.installation.map(|installation| installation.state),
+        Some(InstancePreparationState::Ready)
+    );
+    fixture.close().await;
+}
+
+#[tokio::test]
+async fn a_change_or_reinstall_starts_only_from_its_own_action() {
+    let fixture = Fixture::new("http://127.0.0.1:1").await;
+    let manager = fixture.manager();
+    let entry = ready_vanilla(&fixture, "Guarded").await;
+
+    for operation in [
+        DownloadJobOperation::ChangeBase,
+        DownloadJobOperation::Reinstall,
+    ] {
+        assert!(matches!(
+            manager.prepare(&entry.folder, operation).await,
+            Err(CoreError::DownloadOperationUnsupported)
+        ));
+    }
+    assert!(manager.stored_jobs().await.expect("jobs").is_empty());
+    fixture.close().await;
+}
