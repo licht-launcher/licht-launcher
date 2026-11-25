@@ -9,7 +9,7 @@ use crate::download::DownloadTask;
 use crate::modpacks::curseforge::cdn::select_cdn_url;
 use crate::modpacks::curseforge::storage::StoredCurseforgeFile;
 use crate::modpacks::file_hashes::prepare_destination_sha1_md5;
-use crate::modpacks::path_safety::safe_instance_path;
+use crate::modpacks::path_safety::{current_location, safe_instance_path};
 use crate::{CoreError, Result};
 
 /// Shape of the legacy `licht-curseforge.json` written by v0.2.x builds.
@@ -111,7 +111,11 @@ pub(super) fn pending_task(
     file: &StoredCurseforgeFile,
     instance_dir: &Path,
 ) -> Result<Option<PendingDownload>> {
-    let destination = safe_instance_path(instance_dir, &file.relative_path, &PROTECTED_ROOT_NAMES)?;
+    let destination = current_location(safe_instance_path(
+        instance_dir,
+        &file.relative_path,
+        &PROTECTED_ROOT_NAMES,
+    )?);
     let url = select_cdn_url(std::slice::from_ref(&file.url))?;
     let sha1 = present_hash(&file.sha1).unwrap_or_default();
     let md5 = present_hash(&file.md5);

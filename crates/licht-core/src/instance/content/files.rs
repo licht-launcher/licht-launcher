@@ -5,7 +5,8 @@ use super::metadata::fallback_title;
 use super::{InstanceContentEntry, InstanceContentKind};
 use crate::{CoreError, Result, SharedCache};
 
-pub(super) const DISABLED_SUFFIX: &str = ".disabled";
+/// Disabling content renames `name` to `name.disabled`.
+pub(crate) const DISABLED_SUFFIX: &str = ".disabled";
 
 pub fn list_instance_content(
     cache: &SharedCache,
