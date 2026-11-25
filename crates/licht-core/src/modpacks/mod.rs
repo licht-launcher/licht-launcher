@@ -143,6 +143,78 @@ pub(crate) async fn prepare_modpack_instance(
     selection: &InstanceSource,
     context: &crate::InstallationContext,
 ) -> Result<InstanceEntry> {
+    install_modpack(
+        database,
+        client,
+        cache,
+        instances_dir,
+        entry,
+        selection,
+        context,
+        false,
+    )
+    .await
+}
+
+/// Installs a ready instance's store pack again. Its content folders are only
+/// cleared once the new archive has downloaded, so a cancelled or failed download
+/// leaves the instance as it was.
+pub(crate) async fn reinstall_modpack_instance(
+    database: &crate::DatabaseClient,
+    client: &Client,
+    cache: &SharedCache,
+    instances_dir: &Path,
+    entry: &InstanceEntry,
+    selection: &InstanceSource,
+    context: &crate::InstallationContext,
+) -> Result<InstanceEntry> {
+    if !matches!(selection, InstanceSource::Modpack { .. }) {
+        return Err(CoreError::InstanceNotLinked);
+    }
+    install_modpack(
+        database,
+        client,
+        cache,
+        instances_dir,
+        entry,
+        selection,
+        context,
+        true,
+    )
+    .await
+}
+
+/// Clears what a reinstall replaces: the content folders, with anything the user
+/// added to them, and the pack's stored rows. Worlds and other folders stay.
+async fn reset_pack_content(
+    database: &crate::DatabaseClient,
+    instances_dir: &Path,
+    folder: &str,
+    dir: &Path,
+) -> Result<()> {
+    for name in ["mods", "resourcepacks", "shaderpacks"] {
+        // `remove_dir_all` removes a linked folder's link, not the folder it points to.
+        match std::fs::remove_dir_all(dir.join(name)) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+        }
+    }
+    database.delete_modpack(instances_dir, folder).await
+}
+
+// One flag separates a first install from a reinstall; the steps are otherwise shared.
+#[allow(clippy::too_many_arguments)]
+async fn install_modpack(
+    database: &crate::DatabaseClient,
+    client: &Client,
+    cache: &SharedCache,
+    instances_dir: &Path,
+    entry: &InstanceEntry,
+    selection: &InstanceSource,
+    context: &crate::InstallationContext,
+    reset_content: bool,
+) -> Result<InstanceEntry> {
     let (source, remote) = match selection {
         InstanceSource::Modpack {
             source,
@@ -187,6 +259,9 @@ pub(crate) async fn prepare_modpack_instance(
         .await?;
     }
     context.stage(crate::DownloadPhase::Extracting).await?;
+    if reset_content {
+        reset_pack_content(database, instances_dir, &entry.folder, &dir).await?;
+    }
     let bytes = std::fs::read(&archive)?;
     if remote.is_none()
         && let Some(details) = archive_details::archive_details(*source, &bytes)
@@ -321,6 +396,59 @@ mod tests {
             }
         );
         assert_eq!(linked_modpack(details("  "), version).author, None);
+    }
+
+    #[tokio::test]
+    async fn a_reinstall_clears_only_the_content_folders_and_the_pack_rows() {
+        let temp = TempDir::new("reinstall-reset");
+        let root = temp.path().to_path_buf();
+        let service = crate::DatabaseService::start(
+            crate::Database::open(&SharedCache::at(&root))
+                .await
+                .expect("database"),
+        )
+        .await
+        .expect("service");
+        let client = service.client();
+        let instances = root.join("instances");
+        let dir = instances.join("Pack");
+        for folder in [
+            "mods",
+            "resourcepacks",
+            "shaderpacks/Folder Pack",
+            "saves/World",
+            "config",
+        ] {
+            std::fs::create_dir_all(dir.join(folder)).expect("folder");
+        }
+        std::fs::write(dir.join("mods").join("extra.jar"), b"mod").expect("mod");
+        std::fs::write(dir.join("saves").join("World").join("level.dat"), b"world").expect("world");
+        std::fs::write(dir.join("config").join("mod.toml"), b"config").expect("config");
+        client
+            .replace_modpack_override_files(&instances, "Pack", vec!["config/mod.toml".into()])
+            .await
+            .expect("overrides");
+
+        reset_pack_content(&client, &instances, "Pack", &dir)
+            .await
+            .expect("reset");
+
+        for folder in ["mods", "resourcepacks", "shaderpacks"] {
+            assert!(!dir.join(folder).exists(), "{folder} is cleared");
+        }
+        assert!(dir.join("saves").join("World").join("level.dat").is_file());
+        assert!(dir.join("config").join("mod.toml").is_file());
+        assert!(
+            client
+                .modpack_override_files(&instances, "Pack")
+                .await
+                .expect("overrides")
+                .is_empty()
+        );
+        reset_pack_content(&client, &instances, "Pack", &dir)
+            .await
+            .expect("an already cleared instance resets again");
+        service.shutdown().await.expect("shutdown");
     }
 
     #[test]

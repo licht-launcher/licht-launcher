@@ -82,6 +82,10 @@ pub enum CoreError {
     InstancePreparing,
     #[error("this instance is not linked to a modpack")]
     InstanceNotLinked,
+    #[error(
+        "a modpack imported from a file cannot be reinstalled, because its archive is not kept"
+    )]
+    ModpackFileReinstall,
     #[error("Java runtime index JSON is invalid")]
     JavaRuntime(#[source] serde_json::Error),
     #[error("Java runtime was not found for this system")]

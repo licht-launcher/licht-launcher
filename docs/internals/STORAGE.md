@@ -182,7 +182,10 @@ Deleting or duplicating an instance deletes or copies all of these rows, and a
 content-directory move rewrites their `instances_directory`. Starting a new install
 clears them before the pack is imported again. Unlinking a ready instance from its
 pack deletes them and then clears the instance's installation, leaving its files in
-place.
+place. Reinstalling a store pack downloads its archive first; only then does it
+delete these rows and the `mods`, `resourcepacks` and `shaderpacks` folders, and
+import the pack again. The instance stays ready throughout, and a cancelled or
+failed reinstall never removes it, unlike a cancelled first install.
 
 Builds up to v0.2.3 kept these lists in the instance folder. The next time the
 pack files are installed or repaired, a leftover `licht-modpack.json` is imported

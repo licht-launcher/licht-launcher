@@ -33,12 +33,30 @@ pub(crate) fn execute(
         let root = runtime.game.instances_dir()?;
         let dir = runtime.game.instance_dir(&folder)?;
         let profile = load_instance(&runtime.database, &dir).await?;
-        let verify_modpack = job.operation == DownloadJobOperation::Repair
-            || profile
+        let verify_modpack = matches!(
+            job.operation,
+            DownloadJobOperation::Repair | DownloadJobOperation::Reinstall
+        ) || profile
+            .installation
+            .as_ref()
+            .is_some_and(|installation| installation.state != InstancePreparationState::Ready);
+        if job.operation == DownloadJobOperation::Reinstall {
+            let installation = profile
                 .installation
                 .as_ref()
-                .is_some_and(|installation| installation.state != InstancePreparationState::Ready);
-        if let Some(installation) = &profile.installation
+                .ok_or(CoreError::InstanceNotLinked)?;
+            let entry = instance_entry(&runtime.database, &dir, &folder).await?;
+            crate::modpacks::reinstall_modpack_instance(
+                &runtime.database,
+                &runtime.client,
+                &runtime.game,
+                &root,
+                &entry,
+                &installation.source,
+                &context,
+            )
+            .await?;
+        } else if let Some(installation) = &profile.installation
             && installation.state == InstancePreparationState::Preparing
         {
             let version = match &installation.source {
@@ -100,7 +118,9 @@ pub(crate) fn execute(
         {
             let check = match job.operation {
                 DownloadJobOperation::Repair => CacheCheck::Verify,
-                DownloadJobOperation::Install => CacheCheck::Reuse,
+                DownloadJobOperation::Install | DownloadJobOperation::Reinstall => {
+                    CacheCheck::Reuse
+                }
             };
             install_game_version(
                 &runtime.client,
