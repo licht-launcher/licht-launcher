@@ -62,12 +62,19 @@ export function useStoreModpackSummary(
   };
 }
 
-/** A pack imported from disk has no store page to describe it. */
-export function fileModpackSummary(origin: FileModpackOrigin): ModpackSummary {
+/**
+ * A pack imported from disk has no store page; what its archive declared at
+ * import, when anything, stands in for it.
+ */
+export function fileModpackSummary(
+  origin: FileModpackOrigin,
+  linked: LinkedModpack | null,
+): ModpackSummary {
+  const installed = `Installed from a ${SOURCE_LABELS[origin.source]} file`;
   return {
-    name: "Imported modpack",
-    version: null,
+    name: linked?.name ?? "Imported modpack",
+    version: linked?.versionName ?? null,
     updated: null,
-    details: [`Installed from a ${SOURCE_LABELS[origin.source]} file`],
+    details: linked?.author ? [`by ${linked.author}`, installed] : [installed],
   };
 }

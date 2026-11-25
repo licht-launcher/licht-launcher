@@ -1,6 +1,7 @@
 //! Modpack discovery (Modrinth / CurseForge) and `.mrpack` import.
 
 mod archive;
+mod archive_details;
 pub(crate) mod curseforge;
 mod description;
 mod discovery;
@@ -187,6 +188,12 @@ pub(crate) async fn prepare_modpack_instance(
     }
     context.stage(crate::DownloadPhase::Extracting).await?;
     let bytes = std::fs::read(&archive)?;
+    if remote.is_none()
+        && let Some(details) = archive_details::archive_details(*source, &bytes)
+    {
+        crate::instance::record_linked_modpack(database, instances_dir, &entry.folder, details)
+            .await?;
+    }
     let entry = match source {
         ModpackSource::Modrinth => {
             let entry = mrpack::import_mrpack_into(database, instances_dir, entry, &bytes).await?;
