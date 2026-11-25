@@ -73,7 +73,8 @@ pub async fn list_instance_content_progressively(
 struct ContentResolution {
     index: usize,
     entry: InstanceContentEntry,
-    fingerprint: ContentFingerprint,
+    /// `None` for a shader pack kept as a folder, which has no single file to hash.
+    fingerprint: Option<ContentFingerprint>,
 }
 
 async fn enrich_content_entries<F>(
@@ -93,7 +94,7 @@ where
         let resolved = result?;
         entries[resolved.index] = resolved.entry.clone();
         batch.push(resolved.entry);
-        fingerprints.push(resolved.fingerprint);
+        fingerprints.extend(resolved.fingerprint);
         if publish_content_batch(
             &batch,
             &mut last_published,
