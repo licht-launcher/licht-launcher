@@ -6,7 +6,10 @@ import {
 } from "@/features/instance-settings/model/sections";
 import { GeneralSection } from "@/features/instance-settings/sections/general-section";
 import { InstanceBaseSection } from "@/features/instance-settings/sections/instance-base-section";
+import { ModpackSection } from "@/features/instance-settings/sections/modpack-section";
 import { OverridesSection } from "@/features/instance-settings/sections/overrides-section";
+import type { ModpackOrigin } from "@/features/instances/lib/modpack-content";
+import type { LinkedModpack } from "@/lib/generated/LinkedModpack";
 import type { SettingsSnapshot } from "@/lib/generated/SettingsSnapshot";
 
 import { instanceSettingsPanelStyles } from "./instance-settings-panel.styles";
@@ -21,7 +24,7 @@ export function InstanceSettingsPanel({
   busy,
   versionBusy,
   preparing = false,
-  linkedModpack = false,
+  modpack = null,
   onChange,
   onRename,
   onChangeVersion,
@@ -36,7 +39,8 @@ export function InstanceSettingsPanel({
   folder: string;
   versionId: string | null;
   preparing?: boolean;
-  linkedModpack?: boolean;
+  /** The pack a linked instance was installed from; `null` for other instances. */
+  modpack?: { origin: ModpackOrigin; linked: LinkedModpack | null } | null;
   busy: boolean;
   versionBusy: boolean;
   onChange: (patch: Partial<InstanceDraft>) => void;
@@ -76,10 +80,18 @@ export function InstanceSettingsPanel({
               folder={folder}
               versionId={versionId}
               preparing={preparing}
-              linkedModpack={linkedModpack}
+              linkedModpack={modpack !== null}
               busy={busy}
               versionBusy={versionBusy}
               onChangeVersion={onChangeVersion}
+            />
+          ) : null}
+          {section === "modpack" && modpack !== null ? (
+            <ModpackSection
+              folder={folder}
+              origin={modpack.origin}
+              linked={modpack.linked}
+              preparing={preparing}
             />
           ) : null}
           {section === "overrides" ? (

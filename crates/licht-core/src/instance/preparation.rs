@@ -202,6 +202,36 @@ pub(crate) async fn record_linked_modpack(
     write_instance(database, &dir, &instance).await
 }
 
+/// Turns a ready modpack instance into a regular one. Its files stay, but the
+/// launcher forgets the pack: none of its content counts as pack content any more,
+/// repairs stop restoring pack files, and its game version can change.
+pub async fn unlink_instance_modpack(
+    database: &crate::DatabaseClient,
+    instances_dir: &Path,
+    folder: &str,
+) -> Result<InstanceEntry> {
+    let _guard = profile_guard().await;
+    let dir = instance_dir(instances_dir, folder)?;
+    let mut instance = load_instance(database, &dir).await?;
+    let Some(installation) = &instance.installation else {
+        return Err(CoreError::InstanceNotLinked);
+    };
+    if !matches!(
+        installation.source,
+        InstanceSource::Modpack { .. } | InstanceSource::ModpackFile { .. }
+    ) {
+        return Err(CoreError::InstanceNotLinked);
+    }
+    if installation.state != InstancePreparationState::Ready {
+        return Err(CoreError::InstancePreparing);
+    }
+    // Rows first: a failure here leaves the link in place, so the user can retry.
+    database.delete_modpack(instances_dir, folder).await?;
+    instance.installation = None;
+    write_instance(database, &dir, &instance).await?;
+    Ok(entry_from(&dir, folder.to_string(), instance))
+}
+
 pub fn instance_version_for_launch(instance: &Instance) -> Result<&str> {
     if instance
         .installation
@@ -298,6 +328,99 @@ mod tests {
         assert_eq!(
             entry.installation.expect("installation").modpack,
             Some(linked())
+        );
+        service.shutdown().await.expect("shutdown");
+    }
+
+    async fn ready_pack(client: &crate::DatabaseClient, root: &Path) -> InstanceEntry {
+        let source = InstanceSource::Modpack {
+            source: ModpackSource::Modrinth,
+            project_id: "fo".into(),
+            version_id: "v15".into(),
+            icon_url: None,
+        };
+        let entry = create_pending_instance(client, root, "Pack", source, &template())
+            .await
+            .expect("create");
+        configure_instance_version(client, root, &entry.folder, "1.21.1")
+            .await
+            .expect("version");
+        complete_instance_preparation(client, root, &entry.folder)
+            .await
+            .expect("ready")
+    }
+
+    async fn service(root: &Path) -> DatabaseService {
+        DatabaseService::start(
+            crate::Database::open(&SharedCache::at(root))
+                .await
+                .expect("database"),
+        )
+        .await
+        .expect("service")
+    }
+
+    #[tokio::test]
+    async fn unlinking_keeps_the_files_and_forgets_the_pack() {
+        let temp = TempDir::new("unlink-modpack");
+        let root = temp.path().to_path_buf();
+        let service = service(&root).await;
+        let client = service.client();
+        let entry = ready_pack(&client, &root).await;
+        let dir = root.join(&entry.folder);
+        fs::create_dir_all(dir.join("mods")).expect("mods");
+        fs::write(dir.join("mods").join("sodium.jar"), b"mod").expect("mod");
+        client
+            .replace_modpack_override_files(&root, &entry.folder, vec!["options.txt".into()])
+            .await
+            .expect("overrides");
+
+        let unlinked = unlink_instance_modpack(&client, &root, &entry.folder)
+            .await
+            .expect("unlink");
+
+        assert_eq!(unlinked.installation, None);
+        assert_eq!(unlinked.version_id.as_deref(), Some("1.21.1"));
+        assert!(dir.join("mods").join("sodium.jar").is_file());
+        assert!(
+            client
+                .modpack_override_files(&root, &entry.folder)
+                .await
+                .expect("overrides")
+                .is_empty()
+        );
+        let reloaded = load_instance(&client, &dir).await.expect("reload");
+        assert_eq!(reloaded.installation, None);
+        assert!(matches!(
+            unlink_instance_modpack(&client, &root, &entry.folder).await,
+            Err(CoreError::InstanceNotLinked)
+        ));
+        service.shutdown().await.expect("shutdown");
+    }
+
+    #[tokio::test]
+    async fn refuses_to_unlink_a_pack_that_is_still_installing() {
+        let temp = TempDir::new("unlink-preparing");
+        let root = temp.path().to_path_buf();
+        let service = service(&root).await;
+        let client = service.client();
+        let source = InstanceSource::ModpackFile {
+            source: ModpackSource::Modrinth,
+        };
+        let entry = create_pending_instance(&client, &root, "Pack", source, &template())
+            .await
+            .expect("create");
+
+        assert!(matches!(
+            unlink_instance_modpack(&client, &root, &entry.folder).await,
+            Err(CoreError::InstancePreparing)
+        ));
+        assert!(
+            load_instance(&client, &root.join(&entry.folder))
+                .await
+                .expect("reload")
+                .installation
+                .is_some()
         );
         service.shutdown().await.expect("shutdown");
     }

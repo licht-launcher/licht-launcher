@@ -180,7 +180,9 @@ override rows until the pack is installed again.
 
 Deleting or duplicating an instance deletes or copies all of these rows, and a
 content-directory move rewrites their `instances_directory`. Starting a new install
-clears them before the pack is imported again.
+clears them before the pack is imported again. Unlinking a ready instance from its
+pack deletes them and then clears the instance's installation, leaving its files in
+place.
 
 Builds up to v0.2.3 kept these lists in the instance folder. The next time the
 pack files are installed or repaired, a leftover `licht-modpack.json` is imported

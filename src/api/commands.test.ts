@@ -73,6 +73,7 @@ import {
   setLastPlayedFolder,
   stopGame,
   touchLastOpened,
+  unlinkInstanceModpack,
 } from "@/api/commands";
 import { buildDiagnostics } from "@/features/settings/fixtures/build-diagnostics";
 import { appUpdateState } from "@/features/updater/fixtures/state";
@@ -645,6 +646,13 @@ describe("launcher commands", () => {
     await getInstancePlatform("fabric-loader-0.19.5-26.3");
     expect(invoke).toHaveBeenCalledWith("get_instance_platform", {
       versionId: "fabric-loader-0.19.5-26.3",
+    });
+  });
+
+  it("unlinks an instance from its modpack", async () => {
+    await unlinkInstanceModpack("classic");
+    expect(invoke).toHaveBeenCalledWith("unlink_instance_modpack", {
+      folder: "classic",
     });
   });
 

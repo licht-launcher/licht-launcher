@@ -80,6 +80,8 @@ pub enum CoreError {
     InstanceName,
     #[error("instance preparation is incomplete")]
     InstancePreparing,
+    #[error("this instance is not linked to a modpack")]
+    InstanceNotLinked,
     #[error("Java runtime index JSON is invalid")]
     JavaRuntime(#[source] serde_json::Error),
     #[error("Java runtime was not found for this system")]

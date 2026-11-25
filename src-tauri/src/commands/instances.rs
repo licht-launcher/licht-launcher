@@ -95,6 +95,18 @@ pub async fn rename_instance(
 }
 
 #[tauri::command]
+pub async fn unlink_instance_modpack(
+    database: State<'_, DatabaseClient>,
+    paths: State<'_, LauncherPaths>,
+    folder: String,
+) -> Result<InstanceEntry, String> {
+    let root = instances_root(&paths).map_err(failure)?;
+    licht_core::unlink_instance_modpack(&database, &root, &folder)
+        .await
+        .map_err(failure)
+}
+
+#[tauri::command]
 pub async fn duplicate_instance(
     database: State<'_, DatabaseClient>,
     paths: State<'_, LauncherPaths>,

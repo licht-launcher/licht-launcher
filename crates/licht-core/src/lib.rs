@@ -82,8 +82,8 @@ pub use instance::{
     InstanceSource, LinkedModpack, complete_instance_preparation, configure_instance_version,
     create_instance, create_pending_instance, delete_instance, duplicate_instance, instance_entry,
     instance_launch, instance_version_for_launch, list_instances, load_instance, parse_instance,
-    rename_instance, resolved_java_path, resolved_launch, touch_last_opened, update_instance,
-    update_instance_version,
+    rename_instance, resolved_java_path, resolved_launch, touch_last_opened,
+    unlink_instance_modpack, update_instance, update_instance_version,
 };
 pub use instance_fs::{InstanceFsEntry, list_instance_entries};
 pub use launch::{apply_global_launch, classpath, launch_command};

@@ -6,7 +6,10 @@ import { Spinner } from "@/components/ui/spinner";
 import { InstanceSettingsPanel } from "@/features/instance-settings/components/instance-settings-panel";
 import { InstanceSettingsSidebar } from "@/features/instance-settings/components/instance-settings-sidebar";
 import { useInstanceDraft } from "@/features/instance-settings/hooks/use-instance-draft";
-import type { InstanceSectionId } from "@/features/instance-settings/model/sections";
+import {
+  type InstanceSectionId,
+  shownSection,
+} from "@/features/instance-settings/model/sections";
 import { modpackOrigin } from "@/features/instances/lib/modpack-content";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 
@@ -37,7 +40,9 @@ export function InstanceSettingsDialog({
   onDuplicate: () => void;
   onDelete: () => void;
 }) {
-  const [section, setSection] = useState<InstanceSectionId>("general");
+  const [selectedSection, setSection] = useState<InstanceSectionId>("general");
+  const origin = modpackOrigin(entry?.installation?.source);
+  const section = shownSection(selectedSection, origin !== null);
   const { draft, update, flush } = useInstanceDraft(entry, open);
   const settings = useQuery({
     queryKey: ["settings"],
@@ -60,6 +65,7 @@ export function InstanceSettingsDialog({
           <InstanceSettingsSidebar
             name={entry.name}
             section={section}
+            linkedToModpack={origin !== null}
             onSectionChange={setSection}
             onOpenGlobalSettings={onOpenGlobalSettings}
           />
@@ -76,7 +82,11 @@ export function InstanceSettingsDialog({
               entry.installation !== undefined &&
               entry.installation.state !== "ready"
             }
-            linkedModpack={modpackOrigin(entry.installation?.source) !== null}
+            modpack={
+              origin !== null
+                ? { origin, linked: entry.installation?.modpack ?? null }
+                : null
+            }
             busy={busy}
             versionBusy={versionBusy}
             onChange={update}

@@ -17,7 +17,7 @@ pub(crate) use preparation::record_linked_modpack;
 pub use preparation::{
     InstanceInstallation, InstancePreparationState, InstanceSource, LinkedModpack,
     complete_instance_preparation, configure_instance_version, create_pending_instance,
-    instance_version_for_launch,
+    instance_version_for_launch, unlink_instance_modpack,
 };
 
 use std::fs;

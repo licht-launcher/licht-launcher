@@ -1,5 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { toast } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -65,6 +71,26 @@ function renderDialog(
     </QueryClientProvider>,
   );
 }
+
+const linkedEntry: InstanceEntry = {
+  ...entry,
+  installation: {
+    source: {
+      type: "modpack",
+      source: "modrinth",
+      projectId: "fo",
+      versionId: "v15",
+      iconUrl: null,
+    },
+    state: "ready",
+    modpack: {
+      name: "Fabulously Optimized",
+      author: "robotkoer",
+      versionName: "15.0.0-beta.3",
+      publishedAt: null,
+    },
+  },
+};
 
 describe("InstanceSettingsDialog", () => {
   afterEach(() => vi.restoreAllMocks());
@@ -228,6 +254,50 @@ describe("InstanceSettingsDialog", () => {
     expect(invoke).toHaveBeenCalledWith("get_instance_platform", {
       versionId: "fabric-loader-0.19.5-26.3",
     });
+  });
+
+  it("offers the Modpack section only to instances linked to a pack", async () => {
+    const { unmount } = renderDialog();
+    expect(
+      await screen.findByRole("button", { name: "General" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Modpack" }),
+    ).not.toBeInTheDocument();
+    unmount();
+
+    renderDialog({ entry: linkedEntry });
+    expect(
+      await screen.findByRole("button", { name: "Modpack" }),
+    ).toBeInTheDocument();
+  });
+
+  it("unlinks the modpack after the user confirms", async () => {
+    const success = vi.spyOn(toast, "success");
+    renderDialog({ entry: linkedEntry });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Modpack" }));
+    expect(
+      await screen.findByText("Fabulously Optimized 15.0.0-beta.3"),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Unlink" }));
+    const confirm = await screen.findByRole("dialog", {
+      name: "Unlink this modpack?",
+    });
+    expect(invoke).not.toHaveBeenCalledWith(
+      "unlink_instance_modpack",
+      expect.anything(),
+    );
+    fireEvent.click(within(confirm).getByRole("button", { name: "Unlink" }));
+
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("unlink_instance_modpack", {
+        folder: "Survival",
+      }),
+    );
+    await waitFor(() =>
+      expect(success).toHaveBeenCalledWith("Modpack unlinked."),
+    );
   });
 
   it("keeps the game version of an instance linked to a modpack", async () => {

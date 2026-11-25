@@ -216,6 +216,11 @@ export function createInstanceFromModpackFile(input: {
   });
 }
 
+/** Turns a modpack instance into a regular one, keeping its files. */
+export function unlinkInstanceModpack(folder: string): Promise<InstanceEntry> {
+  return invoke("unlink_instance_modpack", { folder });
+}
+
 export function renameInstance(
   folder: string,
   name: string,
