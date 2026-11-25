@@ -567,6 +567,19 @@ describe("ContentSection", () => {
       ).toBeInTheDocument();
     });
 
+    it("shows the modpack card while the content list is still loading", () => {
+      listInstanceContent.mockReturnValue(new Promise(() => {}));
+
+      renderContent("classic", "all", "", imported);
+
+      expect(
+        screen.getByRole("region", { name: "Modpack content" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "View content" }),
+      ).toBeDisabled();
+    });
+
     it("picks up content added outside the app when the window regains focus", async () => {
       listInstanceContent.mockResolvedValueOnce([packed("Sodium", true)]);
       renderContent("classic", "all", "", imported);
