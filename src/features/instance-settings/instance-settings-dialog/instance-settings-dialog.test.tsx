@@ -272,7 +272,9 @@ describe("InstanceSettingsDialog", () => {
     const success = vi.spyOn(toast, "success");
     renderDialog({ entry: linkedEntry });
 
-    fireEvent.click(await screen.findByRole("button", { name: "Modpack" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Instance base" }),
+    );
     fireEvent.click(await screen.findByRole("button", { name: "Reinstall" }));
     const confirm = await screen.findByRole("dialog", {
       name: "Reinstall this modpack?",
@@ -304,7 +306,9 @@ describe("InstanceSettingsDialog", () => {
       },
     });
 
-    fireEvent.click(await screen.findByRole("button", { name: "Modpack" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Instance base" }),
+    );
 
     expect(
       await screen.findByText(
@@ -315,27 +319,38 @@ describe("InstanceSettingsDialog", () => {
     expect(screen.getByRole("button", { name: "Unlink" })).toBeEnabled();
   });
 
-  it("offers the Modpack section only to instances linked to a pack", async () => {
+  it("shows the linked modpack under Instance base only for linked instances", async () => {
     const { unmount } = renderDialog();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Instance base" }),
+    );
+    expect(await screen.findByText("Vanilla")).toBeInTheDocument();
+    expect(screen.queryByText("Linked modpack")).not.toBeInTheDocument();
     expect(
-      await screen.findByRole("button", { name: "General" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Modpack" }),
+      screen.queryByRole("button", { name: "Unlink" }),
     ).not.toBeInTheDocument();
     unmount();
 
     renderDialog({ entry: linkedEntry });
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Instance base" }),
+    );
+    expect(await screen.findByText("Linked modpack")).toBeInTheDocument();
     expect(
-      await screen.findByRole("button", { name: "Modpack" }),
+      screen.getByText("Fabulously Optimized 15.0.0-beta.3"),
     ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Modpack" }),
+    ).not.toBeInTheDocument();
   });
 
   it("unlinks the modpack after the user confirms", async () => {
     const success = vi.spyOn(toast, "success");
     renderDialog({ entry: linkedEntry });
 
-    fireEvent.click(await screen.findByRole("button", { name: "Modpack" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Instance base" }),
+    );
     expect(
       await screen.findByText("Fabulously Optimized 15.0.0-beta.3"),
     ).toBeInTheDocument();

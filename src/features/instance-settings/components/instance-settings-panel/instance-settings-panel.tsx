@@ -6,7 +6,6 @@ import {
 } from "@/features/instance-settings/model/sections";
 import { GeneralSection } from "@/features/instance-settings/sections/general-section";
 import { InstanceBaseSection } from "@/features/instance-settings/sections/instance-base-section";
-import { ModpackSection } from "@/features/instance-settings/sections/modpack-section";
 import { OverridesSection } from "@/features/instance-settings/sections/overrides-section";
 import type { ModpackOrigin } from "@/features/instances/lib/modpack-content";
 import type { LinkedModpack } from "@/lib/generated/LinkedModpack";
@@ -80,18 +79,10 @@ export function InstanceSettingsPanel({
               folder={folder}
               versionId={versionId}
               preparing={preparing}
-              linkedModpack={modpack !== null}
+              modpack={modpack}
               busy={busy}
               versionBusy={versionBusy}
               onChangeVersion={onChangeVersion}
-            />
-          ) : null}
-          {section === "modpack" && modpack !== null ? (
-            <ModpackSection
-              folder={folder}
-              origin={modpack.origin}
-              linked={modpack.linked}
-              preparing={preparing}
             />
           ) : null}
           {section === "overrides" ? (

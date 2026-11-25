@@ -6,9 +6,12 @@ import { getInstancePlatform, repairInstance } from "@/api/commands";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { EditInstanceVersionDialog } from "@/features/instance-settings/components/edit-instance-version-dialog";
+import { LinkedModpackSettings } from "@/features/instance-settings/components/linked-modpack-settings";
 import { formatPlatform } from "@/features/instance-settings/model/platform";
+import type { ModpackOrigin } from "@/features/instances/lib/modpack-content";
 import { versionsQueryOptions } from "@/features/instances/lib/versions-query";
 import { friendlyError, messageOf } from "@/lib/errors";
+import type { LinkedModpack } from "@/lib/generated/LinkedModpack";
 import type { VersionSummary } from "@/lib/generated/VersionSummary";
 
 import { instanceBaseSectionStyles } from "./instance-base-section.styles";
@@ -36,14 +39,17 @@ export function InstanceBaseSection({
   busy,
   versionBusy,
   preparing = false,
-  linkedModpack = false,
+  modpack = null,
   onChangeVersion,
 }: {
   folder: string;
   versionId: string | null;
   preparing?: boolean;
-  /** A modpack sets the game version, so it cannot change while the instance is linked. */
-  linkedModpack?: boolean;
+  /**
+   * The pack a linked instance came from. It sets the game version, so that cannot
+   * change while the instance is linked.
+   */
+  modpack?: { origin: ModpackOrigin; linked: LinkedModpack | null } | null;
   busy: boolean;
   versionBusy: boolean;
   onChangeVersion: (versionId: string, installed: boolean) => void;
@@ -122,11 +128,20 @@ export function InstanceBaseSection({
         </div>
       </div>
 
+      {modpack !== null ? (
+        <LinkedModpackSettings
+          folder={folder}
+          origin={modpack.origin}
+          linked={modpack.linked}
+          preparing={preparing}
+        />
+      ) : null}
+
       <div className={instanceBaseSectionStyles.group}>
         <div className={instanceBaseSectionStyles.groupText}>
           <h3 className={instanceBaseSectionStyles.label}>Edit base</h3>
           <p className={instanceBaseSectionStyles.hint}>
-            {linkedModpack
+            {modpack !== null
               ? "The linked modpack sets this instance's game version."
               : "Open the editor to pick another Vanilla release for this instance."}
           </p>
@@ -139,7 +154,7 @@ export function InstanceBaseSection({
             busy ||
             versionBusy ||
             preparing ||
-            linkedModpack ||
+            modpack !== null ||
             versionId === null
           }
           onClick={() => {
