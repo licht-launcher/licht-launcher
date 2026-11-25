@@ -11,6 +11,10 @@ pub enum DownloadJobOperation {
     /// Installs a ready instance's store pack again over its content folders. Unlike a
     /// first Install, cancelling it never removes the instance.
     Reinstall,
+    /// Moves a ready instance to another platform or game version. Cancelling it puts
+    /// the previous base back and never removes the instance.
+    #[serde(rename = "changeBase")]
+    ChangeBase,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -205,6 +209,7 @@ mod tests {
         for operation in [
             DownloadJobOperation::Repair,
             DownloadJobOperation::Reinstall,
+            DownloadJobOperation::ChangeBase,
         ] {
             assert!(
                 validate_cancellation_target(&job(operation), DownloadJobStatus::Cancelling)

@@ -246,11 +246,26 @@ export function saveInstance(
   return invoke("save_instance", { folder, settings });
 }
 
-export function setInstanceVersion(
+/** The platform, game version and loader an instance launches with. */
+export type InstanceBaseInput = {
+  platform: PlatformId;
+  gameVersion: string;
+  loaderChannel: LoaderChannel;
+  loaderVersion: string | null;
+};
+
+/** Moves a ready, unlinked instance to another base and waits for the change job. */
+export function changeInstanceBase(
   folder: string,
-  versionId: string,
-): Promise<InstanceEntry> {
-  return invoke("set_instance_version", { folder, versionId });
+  base: InstanceBaseInput,
+): Promise<DownloadJobSnapshot> {
+  return invoke("change_instance_base", {
+    folder,
+    platform: base.platform,
+    gameVersion: base.gameVersion,
+    loaderChannel: base.loaderChannel,
+    loaderVersion: base.loaderVersion,
+  });
 }
 
 export function openInstanceFolder(folder: string): Promise<void> {

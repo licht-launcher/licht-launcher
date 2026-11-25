@@ -118,9 +118,9 @@ pub(crate) fn execute(
         {
             let check = match job.operation {
                 DownloadJobOperation::Repair => CacheCheck::Verify,
-                DownloadJobOperation::Install | DownloadJobOperation::Reinstall => {
-                    CacheCheck::Reuse
-                }
+                DownloadJobOperation::Install
+                | DownloadJobOperation::Reinstall
+                | DownloadJobOperation::ChangeBase => CacheCheck::Reuse,
             };
             install_game_version(
                 &runtime.client,

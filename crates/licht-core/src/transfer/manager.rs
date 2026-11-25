@@ -181,6 +181,53 @@ impl DownloadManager {
         self.prepare(folder, DownloadJobOperation::Reinstall).await
     }
 
+    /// Moves a ready, unlinked instance to `target` and waits for its loader profile
+    /// and game files. Until the job finishes the instance waits in `Preparing`;
+    /// cancelling the job puts the previous base back.
+    pub async fn change_base(
+        self: &Arc<Self>,
+        folder: &str,
+        target: InstanceSource,
+    ) -> Result<DownloadJobSnapshot> {
+        let starts = self.starts.lock().await;
+        self.accept_work()?;
+        if self
+            .stored_jobs()
+            .await?
+            .iter()
+            .any(|job| job.instance_folder.as_deref() == Some(folder))
+        {
+            return Err(CoreError::DownloadJobExists);
+        }
+        self.ensure_not_running(folder)?;
+        let root = self.runtime.game.instances_dir()?;
+        let entry =
+            crate::begin_instance_base_change(&self.runtime.database, &root, folder, target)
+                .await?;
+        let job = match self
+            .runtime
+            .database
+            .create_pending_download_job(
+                &self.runtime.game,
+                folder,
+                entry.version_id.as_deref(),
+                DownloadJobOperation::ChangeBase,
+            )
+            .await
+        {
+            Ok(job) => job,
+            Err(error) => {
+                // No job will finish or cancel the change, so undo it now.
+                crate::instance::restore_instance_base(&self.runtime.database, &root, folder)
+                    .await?;
+                return Err(error);
+            }
+        };
+        self.spawn(job.clone()).await;
+        drop(starts);
+        self.wait(&job.id).await
+    }
+
     /// Unlinks a ready instance from its modpack. Holding the start lock while no job
     /// exists for the instance keeps a running reinstall or repair from writing the
     /// pack back after it is forgotten.
@@ -235,9 +282,12 @@ impl DownloadManager {
             .find(|job| job.instance_folder.as_deref() == Some(folder))
         {
             // Checked under the lock, so another task started meanwhile is never
-            // resumed in place of a reinstall.
-            if operation == DownloadJobOperation::Reinstall
-                && job.operation != DownloadJobOperation::Reinstall
+            // resumed in place of a reinstall, and a repair never replaces a base
+            // change. Preparing the instance for play resumes the change instead.
+            if (operation == DownloadJobOperation::Reinstall
+                && job.operation != DownloadJobOperation::Reinstall)
+                || (operation == DownloadJobOperation::Repair
+                    && job.operation == DownloadJobOperation::ChangeBase)
             {
                 return Err(CoreError::DownloadJobExists);
             }
@@ -460,16 +510,6 @@ impl DownloadManager {
             .await?,
         )?;
         Ok(())
-    }
-    pub async fn change_version(&self, folder: &str, version: &str) -> Result<InstanceEntry> {
-        self.ensure_launchable(folder).await?;
-        crate::update_instance_version(
-            &self.runtime.database,
-            &self.runtime.game.instances_dir()?,
-            folder,
-            version,
-        )
-        .await
     }
     async fn wait(&self, id: &str) -> Result<DownloadJobSnapshot> {
         if let Some(slot) = self.active_job(id).await {

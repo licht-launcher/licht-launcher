@@ -10,6 +10,7 @@ import {
   browseJava,
   browseModpackFile,
   cancelDownloadJob,
+  changeInstanceBase,
   checkAppUpdate,
   clearLastPlayedFolder,
   closeStartupPreview,
@@ -70,7 +71,6 @@ import {
   saveSettings,
   searchModpacks,
   setActiveMicrosoftAccount,
-  setInstanceVersion,
   setLastPlayedFolder,
   stopGame,
   touchLastOpened,
@@ -335,10 +335,18 @@ describe("launcher commands", () => {
       folder: "Survival",
       settings,
     });
-    await setInstanceVersion("Survival", "1.21.1");
-    expect(invoke).toHaveBeenCalledWith("set_instance_version", {
+    await changeInstanceBase("Survival", {
+      platform: "fabric",
+      gameVersion: "1.21.4",
+      loaderChannel: "manual",
+      loaderVersion: "0.16.10",
+    });
+    expect(invoke).toHaveBeenCalledWith("change_instance_base", {
       folder: "Survival",
-      versionId: "1.21.1",
+      platform: "fabric",
+      gameVersion: "1.21.4",
+      loaderChannel: "manual",
+      loaderVersion: "0.16.10",
     });
   });
 

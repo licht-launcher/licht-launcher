@@ -61,7 +61,7 @@ function renderDialog(
         onOpenChange={() => {}}
         onOpenGlobalSettings={() => {}}
         onRename={() => {}}
-        onChangeVersion={() => {}}
+        onChangeBase={() => {}}
         onOpenFolder={() => {}}
         onDuplicate={() => {}}
         onDelete={() => {}}
@@ -147,13 +147,13 @@ describe("InstanceSettingsDialog", () => {
     const onOpenFolder = vi.fn();
     const onDuplicate = vi.fn();
     const onDelete = vi.fn();
-    const onChangeVersion = vi.fn();
+    const onChangeBase = vi.fn();
     renderDialog({
       onRename,
       onOpenFolder,
       onDuplicate,
       onDelete,
-      onChangeVersion,
+      onChangeBase,
     });
 
     expect(
@@ -206,29 +206,35 @@ describe("InstanceSettingsDialog", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Open the editor to pick another Vanilla release for this instance.",
+        "Change the platform, game version or loader this instance launches with.",
       ),
     ).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Repair" })).toBeInTheDocument();
     expect(invoke).not.toHaveBeenCalledWith("list_versions");
 
+    // The version list is virtualized; give it room to render its options.
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(
+      function (this: HTMLElement) {
+        return this.dataset.slot === "combobox-viewport" ? 256 : 0;
+      },
+    );
+    vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(320);
     fireEvent.click(screen.getByRole("button", { name: "Edit base" }));
     expect(
-      await screen.findByRole("heading", { name: "Edit game version" }),
+      await screen.findByRole("dialog", { name: "Edit base" }),
     ).toBeInTheDocument();
-    await waitFor(() => {
-      expect(invoke).toHaveBeenCalledWith("list_versions");
-    });
-    fireEvent.click(screen.getByLabelText("Game version"));
-    expect(
-      await screen.findByRole("option", { name: "1.21.1" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("option", { name: "24w14a" }),
-    ).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("option", { name: "1.21.1" }));
+    const field = screen.getByRole("combobox", { name: "Game version" });
+    await waitFor(() => expect(field).toHaveValue("1.20.1"));
+    fireEvent.focus(field);
+    fireEvent.change(field, { target: { value: "1.21" } });
+    fireEvent.click(await screen.findByRole("option", { name: "1.21.1" }));
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    expect(onChangeVersion).toHaveBeenCalledWith("1.21.1", false);
+    expect(onChangeBase).toHaveBeenCalledWith({
+      platform: "vanilla",
+      gameVersion: "1.21.1",
+      loaderChannel: "stable",
+      loaderVersion: null,
+    });
   });
 
   it("shows the loader and Minecraft version an instance runs", async () => {

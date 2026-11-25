@@ -82,6 +82,8 @@ pub enum CoreError {
     InstancePreparing,
     #[error("this instance is not linked to a modpack")]
     InstanceNotLinked,
+    #[error("a modpack sets this instance's base; change the modpack version instead")]
+    InstanceLinked,
     #[error("close the game before changing this instance's modpack")]
     InstanceRunning,
     #[error(

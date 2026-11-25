@@ -152,6 +152,15 @@ date. The field is optional: instances installed before it existed, and installs
 whose details could not be read, have none, and the UI falls back to asking the
 store or to the pack's source.
 
+Changing the base of a ready instance that is not linked to a modpack (Edit base)
+writes the new platform and game version as the installation source in the
+`preparing` state, and keeps the replaced launch version and source in
+`previousBase`. A `changeBase` download job then installs the loader profile and
+game files, sets the new launch version and marks the instance ready, which clears
+`previousBase`. Cancelling that job puts the previous version and source back; it
+never removes the instance. Until then a failed change waits to be retried or
+cancelled, and the instance cannot launch.
+
 Deleting a profile and its modpack index is one database transaction after
 filesystem cleanup succeeds. Missing registered directories are omitted from the
 list. Duplication copies game files and creates a separate database profile,

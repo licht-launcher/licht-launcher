@@ -114,6 +114,20 @@ pub struct InstanceInstallation {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub modpack: Option<LinkedModpack>,
+    /// The base an instance had before a base change that has not finished, so
+    /// cancelling the change can put it back.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub previous_base: Option<PreviousBase>,
+}
+
+/// What a base change replaces: the launch version and the installation source, if
+/// the instance had one.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct PreviousBase {
+    pub version_id: Option<String>,
+    pub source: Option<InstanceSource>,
 }
 
 /// A store pack's details as of its install, so the UI can show them without a request.
@@ -157,6 +171,7 @@ pub async fn create_pending_instance(
         source,
         state: InstancePreparationState::Preparing,
         modpack: None,
+        previous_base: None,
     });
     if let Err(error) = write_instance(database, &dir, &instance).await {
         fs::remove_dir(&dir)?;
@@ -180,6 +195,7 @@ pub async fn complete_instance_preparation(
             return Err(CoreError::InstancePreparing);
         }
         installation.state = InstancePreparationState::Ready;
+        installation.previous_base = None;
     }
     crate::modpacks::workspace::cleanup(&dir)?;
     write_instance(database, &dir, &instance).await?;
@@ -230,6 +246,80 @@ pub async fn unlink_instance_modpack(
     instance.installation = None;
     write_instance(database, &dir, &instance).await?;
     Ok(entry_from(&dir, folder.to_string(), instance))
+}
+
+/// Starts moving a ready, unlinked instance to another platform or game version. The
+/// instance waits in `Preparing` with `target` as its source until the change job
+/// finishes; its current base is kept so cancelling can restore it.
+pub async fn begin_instance_base_change(
+    database: &crate::DatabaseClient,
+    instances_dir: &Path,
+    folder: &str,
+    target: InstanceSource,
+) -> Result<InstanceEntry> {
+    let _guard = profile_guard().await;
+    if !matches!(
+        target,
+        InstanceSource::Vanilla { .. } | InstanceSource::Loader { .. }
+    ) {
+        return Err(CoreError::InstancePreparing);
+    }
+    target.validate()?;
+    let dir = instance_dir(instances_dir, folder)?;
+    let mut instance = load_instance(database, &dir).await?;
+    let previous = match instance.installation.take() {
+        None => None,
+        Some(installation) => {
+            if matches!(
+                installation.source,
+                InstanceSource::Modpack { .. } | InstanceSource::ModpackFile { .. }
+            ) {
+                return Err(CoreError::InstanceLinked);
+            }
+            if installation.state != InstancePreparationState::Ready {
+                return Err(CoreError::InstancePreparing);
+            }
+            Some(installation.source)
+        }
+    };
+    instance.installation = Some(InstanceInstallation {
+        source: target,
+        state: InstancePreparationState::Preparing,
+        modpack: None,
+        previous_base: Some(PreviousBase {
+            version_id: instance.version_id.clone(),
+            source: previous,
+        }),
+    });
+    write_instance(database, &dir, &instance).await?;
+    Ok(entry_from(&dir, folder.to_string(), instance))
+}
+
+/// Puts back the base a cancelled base change replaced. An instance with no change
+/// waiting is left as it is.
+pub(crate) async fn restore_instance_base(
+    database: &crate::DatabaseClient,
+    instances_dir: &Path,
+    folder: &str,
+) -> Result<()> {
+    let _guard = profile_guard().await;
+    let dir = instance_dir(instances_dir, folder)?;
+    let mut instance = load_instance(database, &dir).await?;
+    let Some(previous) = instance
+        .installation
+        .as_mut()
+        .and_then(|installation| installation.previous_base.take())
+    else {
+        return Ok(());
+    };
+    instance.version_id = previous.version_id;
+    instance.installation = previous.source.map(|source| InstanceInstallation {
+        source,
+        state: InstancePreparationState::Ready,
+        modpack: None,
+        previous_base: None,
+    });
+    write_instance(database, &dir, &instance).await
 }
 
 pub fn instance_version_for_launch(instance: &Instance) -> Result<&str> {
@@ -434,5 +524,111 @@ mod tests {
         assert_eq!(installation.modpack, None);
         let saved = serde_json::to_value(&installation).expect("serialize");
         assert!(saved.get("modpack").is_none());
+    }
+
+    #[tokio::test]
+    async fn a_finished_base_change_keeps_the_new_base_and_forgets_the_old_one() {
+        let temp = TempDir::new("base-change");
+        let root = temp.path().to_path_buf();
+        let service = DatabaseService::start(
+            crate::Database::open(&SharedCache::at(&root))
+                .await
+                .expect("database"),
+        )
+        .await
+        .expect("service");
+        let client = service.client();
+        let vanilla = InstanceSource::Vanilla {
+            game_version: "1.21.1".into(),
+        };
+        let entry = create_pending_instance(&client, &root, "Survival", vanilla, &template())
+            .await
+            .expect("create");
+        configure_instance_version(&client, &root, &entry.folder, "1.21.1")
+            .await
+            .expect("version");
+        complete_instance_preparation(&client, &root, &entry.folder)
+            .await
+            .expect("ready");
+        let fabric = InstanceSource::Loader {
+            platform: LoaderPlatform::Fabric,
+            game_version: "1.21.4".into(),
+            channel: LoaderChannel::Stable,
+            loader_version: None,
+        };
+
+        let changing = begin_instance_base_change(&client, &root, &entry.folder, fabric.clone())
+            .await
+            .expect("begin");
+        assert_eq!(
+            changing
+                .installation
+                .as_ref()
+                .and_then(|installation| installation.previous_base.clone()),
+            Some(PreviousBase {
+                version_id: Some("1.21.1".into()),
+                source: Some(InstanceSource::Vanilla {
+                    game_version: "1.21.1".into()
+                }),
+            })
+        );
+        configure_instance_version(
+            &client,
+            &root,
+            &entry.folder,
+            "fabric-loader-0.16.10-1.21.4",
+        )
+        .await
+        .expect("version");
+        let done = complete_instance_preparation(&client, &root, &entry.folder)
+            .await
+            .expect("ready");
+
+        let installation = done.installation.expect("installation");
+        assert_eq!(installation.source, fabric);
+        assert_eq!(installation.previous_base, None);
+        assert_eq!(
+            done.version_id.as_deref(),
+            Some("fabric-loader-0.16.10-1.21.4")
+        );
+        service.shutdown().await.expect("shutdown");
+    }
+
+    #[tokio::test]
+    async fn a_linked_instance_cannot_change_its_base() {
+        let temp = TempDir::new("base-change-linked");
+        let root = temp.path().to_path_buf();
+        let service = DatabaseService::start(
+            crate::Database::open(&SharedCache::at(&root))
+                .await
+                .expect("database"),
+        )
+        .await
+        .expect("service");
+        let client = service.client();
+        let source = InstanceSource::Modpack {
+            source: ModpackSource::Modrinth,
+            project_id: "fo".into(),
+            version_id: "v15".into(),
+            icon_url: None,
+        };
+        let entry = create_pending_instance(&client, &root, "Pack", source, &template())
+            .await
+            .expect("create");
+        configure_instance_version(&client, &root, &entry.folder, "1.21.1")
+            .await
+            .expect("version");
+        complete_instance_preparation(&client, &root, &entry.folder)
+            .await
+            .expect("ready");
+        let vanilla = InstanceSource::Vanilla {
+            game_version: "1.21.4".into(),
+        };
+
+        assert!(matches!(
+            begin_instance_base_change(&client, &root, &entry.folder, vanilla).await,
+            Err(CoreError::InstanceLinked)
+        ));
+        service.shutdown().await.expect("shutdown");
     }
 }
