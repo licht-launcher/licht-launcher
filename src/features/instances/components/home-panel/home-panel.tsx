@@ -249,6 +249,8 @@ export function HomePanel({
               filter={contentFilter}
               search={contentSearch}
               modpack={modpack}
+              linkedModpack={instance?.installation?.modpack ?? null}
+              iconPath={instance?.iconPath ?? null}
               toolbar={contentToolbar}
             />
           </PageTransition>

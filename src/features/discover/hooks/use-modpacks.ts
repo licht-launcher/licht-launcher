@@ -65,18 +65,28 @@ const PACK_QUERY_OPTIONS = {
   refetchOnWindowFocus: false,
 } as const;
 
-export function useModpack(source: ModpackSource, projectId: string) {
+export function useModpack(
+  source: ModpackSource,
+  projectId: string,
+  enabled = true,
+) {
   return useQuery({
     queryKey: ["modpacks", "details", source, projectId],
     queryFn: () => getModpack(source, projectId),
+    enabled,
     ...PACK_QUERY_OPTIONS,
   });
 }
 
-export function useModpackVersions(source: ModpackSource, projectId: string) {
+export function useModpackVersions(
+  source: ModpackSource,
+  projectId: string,
+  enabled = true,
+) {
   return useQuery({
     queryKey: ["modpacks", "versions", source, projectId],
     queryFn: () => listModpackVersions(source, projectId),
+    enabled,
     ...PACK_QUERY_OPTIONS,
   });
 }

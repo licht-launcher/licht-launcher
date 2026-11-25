@@ -1,6 +1,7 @@
-import { ClockIcon, EyeIcon, PackageIcon, TagIcon } from "lucide-react";
+import { ClockIcon, EyeIcon, TagIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SOURCE_LABELS } from "@/features/discover/lib/discover-search";
+import { InstanceIcon } from "@/features/instances/components/instance-icon";
 import { useStoreModpackSummary } from "@/features/instances/hooks/use-modpack-summary";
 import type {
   FileModpackOrigin,
@@ -8,11 +9,14 @@ import type {
   StoreModpackOrigin,
 } from "@/features/instances/lib/modpack-content";
 import type { InstanceContentEntry } from "@/lib/generated/InstanceContentEntry";
+import type { LinkedModpack } from "@/lib/generated/LinkedModpack";
 
 import { modpackContentCardStyles as styles } from "./modpack-content-card.styles";
 
 type CardProps = {
   entries: readonly InstanceContentEntry[];
+  /** The instance's own icon, cached on disk. */
+  iconPath: string | null;
   onView: () => void;
 };
 
@@ -22,10 +26,11 @@ type CardProps = {
  */
 export function ModpackContentCard({
   origin,
+  linked,
   ...props
-}: CardProps & { origin: ModpackOrigin }) {
+}: CardProps & { origin: ModpackOrigin; linked: LinkedModpack | null }) {
   return origin.type === "modpack" ? (
-    <StoreModpackCard origin={origin} {...props} />
+    <StoreModpackCard origin={origin} linked={linked} {...props} />
   ) : (
     <FileModpackCard origin={origin} {...props} />
   );
@@ -33,12 +38,12 @@ export function ModpackContentCard({
 
 function StoreModpackCard({
   origin,
+  linked,
   ...props
-}: CardProps & { origin: StoreModpackOrigin }) {
-  const summary = useStoreModpackSummary(origin);
+}: CardProps & { origin: StoreModpackOrigin; linked: LinkedModpack | null }) {
+  const summary = useStoreModpackSummary(origin, linked);
   return (
     <ModpackCard
-      iconUrl={summary.iconUrl}
       title={summary.name}
       version={summary.version}
       updated={summary.updated}
@@ -53,7 +58,6 @@ function FileModpackCard({
 }: CardProps & { origin: FileModpackOrigin }) {
   return (
     <ModpackCard
-      iconUrl={null}
       title={`Imported from a ${SOURCE_LABELS[origin.source]} file`}
       {...props}
     />
@@ -61,14 +65,13 @@ function FileModpackCard({
 }
 
 function ModpackCard({
-  iconUrl,
+  iconPath,
   title,
   version,
   updated,
   entries,
   onView,
 }: CardProps & {
-  iconUrl: string | null;
   title: string;
   /** The installed pack version; `null` when unknown, left out for packs from a file. */
   version?: string | null;
@@ -77,13 +80,7 @@ function ModpackCard({
 }) {
   return (
     <section aria-label="Modpack content" className={styles.root}>
-      {iconUrl ? (
-        <img src={iconUrl} alt="" className={styles.icon} />
-      ) : (
-        <span aria-hidden className={styles.iconFallback}>
-          <PackageIcon />
-        </span>
-      )}
+      <InstanceIcon iconPath={iconPath} size="md" className={styles.icon} />
       <div className={styles.heading}>
         <h3 className={styles.title}>{title}</h3>
         {version !== undefined || updated !== undefined ? (

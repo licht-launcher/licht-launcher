@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ModpackOrigin } from "@/features/instances/lib/modpack-content";
 import type { InstanceContentEntry } from "@/lib/generated/InstanceContentEntry";
 import type { InstanceContentKind } from "@/lib/generated/InstanceContentKind";
+import type { LinkedModpack } from "@/lib/generated/LinkedModpack";
 
 import { ModpackContentCard } from "./modpack-content-card";
 
@@ -45,9 +46,17 @@ const ENTRIES = [
   entry("pack.zip", "resourcePacks"),
 ];
 
+const LINKED: LinkedModpack = {
+  name: "Fabulously Optimized",
+  author: "robotkoer",
+  versionName: "15.0.0-beta.3",
+  publishedAt: "2020-01-01T00:00:00Z",
+};
+
 function renderCard(
   origin: ModpackOrigin,
   entries: InstanceContentEntry[] = ENTRIES,
+  linked: LinkedModpack | null = null,
 ) {
   const onView = vi.fn();
   const client = new QueryClient({
@@ -55,7 +64,13 @@ function renderCard(
   });
   render(
     <QueryClientProvider client={client}>
-      <ModpackContentCard origin={origin} entries={entries} onView={onView} />
+      <ModpackContentCard
+        origin={origin}
+        linked={linked}
+        iconPath={null}
+        entries={entries}
+        onView={onView}
+      />
     </QueryClientProvider>,
   );
   return { onView };
@@ -105,6 +120,22 @@ describe("ModpackContentCard", () => {
       screen.getByRole("region", { name: "Modpack content" }),
     ).not.toHaveTextContent(/robotkoer/);
     expect(getModpack).toHaveBeenCalledWith("modrinth", "fo");
+  });
+
+  it("shows the details saved at install right away, without asking the store", () => {
+    renderCard(STORE, ENTRIES, LINKED);
+
+    expect(
+      screen.getByRole("heading", { name: "Fabulously Optimized" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Version").nextElementSibling).toHaveTextContent(
+      "15.0.0-beta.3",
+    );
+    expect(screen.getByText("Updated").nextElementSibling).toHaveTextContent(
+      /ago$/,
+    );
+    expect(getModpack).not.toHaveBeenCalled();
+    expect(listModpackVersions).not.toHaveBeenCalled();
   });
 
   it("still opens its content when the store cannot be reached", async () => {
