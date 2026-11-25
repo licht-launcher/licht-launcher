@@ -1,7 +1,6 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { DownloadIcon, LayersIcon, TriangleAlertIcon } from "lucide-react";
 import { useRef, useState } from "react";
-
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -11,13 +10,13 @@ import { LoaderBadge } from "@/features/discover/components/loader-badge";
 import { useModpackVersions } from "@/features/discover/hooks/use-modpacks";
 import {
   formatDownloads,
-  formatTimeAgo,
   formatUpdatedAt,
 } from "@/features/discover/lib/format";
 import { friendlyError, messageOf } from "@/lib/errors";
 import type { ModpackSource } from "@/lib/generated/ModpackSource";
 import type { ModpackVersionItem } from "@/lib/generated/ModpackVersionItem";
 import type { ModpackVersionType } from "@/lib/generated/ModpackVersionType";
+import { formatTimeAgo } from "@/lib/time-ago";
 import { cn } from "@/lib/utils";
 
 import { modpackVersionsStyles } from "./modpack-versions.styles";

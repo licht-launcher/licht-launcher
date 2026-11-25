@@ -1,6 +1,5 @@
 import { ClockIcon, EyeIcon, TagIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { SOURCE_LABELS } from "@/features/discover/lib/discover-search";
 import { InstanceIcon } from "@/features/instances/components/instance-icon";
 import {
   fileModpackSummary,
@@ -13,6 +12,7 @@ import type {
 } from "@/features/instances/lib/modpack-content";
 import type { InstanceContentEntry } from "@/lib/generated/InstanceContentEntry";
 import type { LinkedModpack } from "@/lib/generated/LinkedModpack";
+import { SOURCE_LABELS } from "@/lib/modpack-sources";
 
 import { modpackContentCardStyles as styles } from "./modpack-content-card.styles";
 

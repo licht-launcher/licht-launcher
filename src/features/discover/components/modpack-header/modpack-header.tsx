@@ -6,18 +6,17 @@ import {
   PackageIcon,
 } from "lucide-react";
 import { useState } from "react";
-
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { CategoryBadge } from "@/features/discover/components/category-badge";
-import { SOURCE_LABELS } from "@/features/discover/lib/discover-search";
 import {
   formatDownloads,
-  formatTimeAgo,
   formatUpdatedAt,
 } from "@/features/discover/lib/format";
 import { openLink } from "@/features/discover/lib/open-link";
 import type { ModpackDetails } from "@/lib/generated/ModpackDetails";
+import { SOURCE_LABELS } from "@/lib/modpack-sources";
+import { formatTimeAgo } from "@/lib/time-ago";
 
 import { modpackHeaderStyles } from "./modpack-header.styles";
 
