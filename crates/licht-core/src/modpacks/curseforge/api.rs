@@ -190,6 +190,8 @@ pub(super) struct RemoteFile {
     pub(super) mod_id: u64,
     pub(super) file_name: String,
     pub(super) display_name: String,
+    /// RFC 3339 timestamp of the file's upload.
+    pub(super) file_date: Option<String>,
     pub(super) size: u64,
     pub(super) sha1: Option<String>,
     pub(super) md5: Option<String>,
@@ -571,6 +573,10 @@ fn remote_files_from_value(value: &Value) -> Result<Vec<RemoteFile>> {
                 .and_then(Value::as_str)
                 .unwrap_or("")
                 .to_string(),
+            file_date: item
+                .get("fileDate")
+                .and_then(Value::as_str)
+                .map(str::to_string),
             size: item.get("fileLength").and_then(Value::as_u64).unwrap_or(0),
             sha1,
             md5,
@@ -883,6 +889,7 @@ mod tests {
                 "modId": 9,
                 "fileName": "sodium.jar",
                 "displayName": "Sodium 0.5",
+                "fileDate": "2026-11-04T07:16:05.953Z",
                 "fileLength": 12,
                 "hashes": [
                   {"value": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB", "algo": 2},
@@ -908,6 +915,11 @@ mod tests {
             Some("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
         );
         assert!(files[1].download_url.is_none());
+        assert_eq!(
+            files[0].file_date.as_deref(),
+            Some("2026-11-04T07:16:05.953Z")
+        );
+        assert_eq!(files[1].file_date, None);
     }
 
     #[test]

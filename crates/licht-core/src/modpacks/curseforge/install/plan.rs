@@ -337,6 +337,7 @@ mod tests {
             mod_id,
             file_name: format!("{file_id}.jar"),
             display_name: format!("File {file_id}"),
+            file_date: None,
             size: 4,
             sha1: Some("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".into()),
             md5: None,

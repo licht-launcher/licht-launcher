@@ -1,4 +1,4 @@
-import { PackageIcon, SearchIcon, XIcon } from "lucide-react";
+import { SearchIcon, XIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,6 +18,7 @@ import {
   ContentTableColumns,
   ContentTableHead,
 } from "@/features/instances/components/content/content-table-head";
+import { InstanceIcon } from "@/features/instances/components/instance-icon";
 import { useContentVirtualizer } from "@/features/instances/hooks/use-content-virtualizer";
 import {
   fileModpackSummary,
@@ -36,6 +37,7 @@ import {
   type StoreModpackOrigin,
 } from "@/features/instances/lib/modpack-content";
 import type { InstanceContentEntry } from "@/lib/generated/InstanceContentEntry";
+import type { LinkedModpack } from "@/lib/generated/LinkedModpack";
 
 import { modpackContentDialogStyles as styles } from "./modpack-content-dialog.styles";
 
@@ -51,20 +53,31 @@ export function ModpackContentDialog({
   open,
   onOpenChange,
   origin,
+  linked,
+  iconPath,
   ...content
 }: ModpackContent & {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   origin: ModpackOrigin;
+  linked: LinkedModpack | null;
+  iconPath: string | null;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className={styles.content} showCloseButton={false}>
         <DialogHeader className={styles.header}>
           {origin.type === "modpack" ? (
-            <StoreModpackHeading origin={origin} />
+            <StoreModpackHeading
+              origin={origin}
+              linked={linked}
+              iconPath={iconPath}
+            />
           ) : (
-            <ModpackHeading summary={fileModpackSummary(origin)} />
+            <ModpackHeading
+              summary={fileModpackSummary(origin)}
+              iconPath={iconPath}
+            />
           )}
           <DialogClose asChild>
             <Button
@@ -83,21 +96,34 @@ export function ModpackContentDialog({
   );
 }
 
-function StoreModpackHeading({ origin }: { origin: StoreModpackOrigin }) {
-  return <ModpackHeading summary={useStoreModpackSummary(origin)} />;
+function StoreModpackHeading({
+  origin,
+  linked,
+  iconPath,
+}: {
+  origin: StoreModpackOrigin;
+  linked: LinkedModpack | null;
+  iconPath: string | null;
+}) {
+  return (
+    <ModpackHeading
+      summary={useStoreModpackSummary(origin, linked)}
+      iconPath={iconPath}
+    />
+  );
 }
 
 /** The pack's icon, then which pack and version, who provides it and how recent it is. */
-function ModpackHeading({ summary }: { summary: ModpackSummary }) {
+function ModpackHeading({
+  summary,
+  iconPath,
+}: {
+  summary: ModpackSummary;
+  iconPath: string | null;
+}) {
   return (
     <>
-      {summary.iconUrl ? (
-        <img src={summary.iconUrl} alt="" className={styles.icon} />
-      ) : (
-        <span aria-hidden className={styles.iconFallback}>
-          <PackageIcon />
-        </span>
-      )}
+      <InstanceIcon iconPath={iconPath} size="md" className={styles.icon} />
       <div className={styles.heading}>
         <DialogTitle className={styles.title}>Modpack content</DialogTitle>
         <DialogDescription className={styles.description}>

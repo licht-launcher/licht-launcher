@@ -426,15 +426,16 @@ pub(super) async fn download_modrinth_mrpack_to(
     version_id: &str,
     destination: &std::path::Path,
     context: &crate::InstallationContext,
-) -> Result<()> {
+) -> Result<super::PackVersion> {
     let versions = context
         .metadata(list_modrinth_versions(client, project_id))
         .await?;
-    if !versions.iter().any(|version| version.id == version_id) {
-        return Err(CoreError::ModpackMeta {
+    let version = versions
+        .into_iter()
+        .find(|version| version.id == version_id)
+        .ok_or(CoreError::ModpackMeta {
             detail: "version_not_in_project".into(),
-        });
-    }
+        })?;
     let url = format!("{PROJECT_URL}/{project_id}/version/{version_id}");
     let parsed = context
         .metadata(async {
@@ -502,7 +503,10 @@ pub(super) async fn download_modrinth_mrpack_to(
     if let Some(expected) = file.pointer("/hashes/sha512").and_then(Value::as_str) {
         super::file_hashes::ensure_sha512(destination, expected, &context.control).await?;
     }
-    Ok(())
+    Ok(super::PackVersion {
+        name: version.name,
+        published_at: version.published_at,
+    })
 }
 
 #[cfg(test)]
