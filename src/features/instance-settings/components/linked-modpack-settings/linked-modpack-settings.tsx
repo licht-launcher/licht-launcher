@@ -18,6 +18,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ChangeModpackVersionDialog } from "@/features/instance-settings/components/change-modpack-version-dialog";
+import { instanceContentKey } from "@/features/instances/lib/content-query";
 import type { ModpackOrigin } from "@/features/instances/lib/modpack-content";
 import { friendlyError, messageOf } from "@/lib/errors";
 import type { LinkedModpack } from "@/lib/generated/LinkedModpack";
@@ -57,7 +58,7 @@ export function LinkedModpackSettings({
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["instances"] });
       await queryClient.invalidateQueries({
-        queryKey: ["instance-content", folder],
+        queryKey: instanceContentKey(folder),
       });
       toast.success("Modpack unlinked.");
     },
@@ -68,7 +69,7 @@ export function LinkedModpackSettings({
     onSuccess: async (job) => {
       await queryClient.invalidateQueries({ queryKey: ["instances"] });
       await queryClient.invalidateQueries({
-        queryKey: ["instance-content", folder],
+        queryKey: instanceContentKey(folder),
       });
       if (job.status === "completed") toast.success("Modpack reinstalled.");
       else if (job.status === "failed")
@@ -89,7 +90,7 @@ export function LinkedModpackSettings({
     onSettled: async () => {
       await queryClient.invalidateQueries({ queryKey: ["instances"] });
       await queryClient.invalidateQueries({
-        queryKey: ["instance-content", folder],
+        queryKey: instanceContentKey(folder),
       });
     },
   });

@@ -25,6 +25,7 @@ pub use types::{
 
 use reqwest::Client;
 
+use crate::instance::content::DISABLED_SUFFIX;
 use crate::instance::{InstanceEntry, InstanceSource, LinkedModpack, instance_entry};
 use crate::settings::GlobalLaunch;
 use crate::{CoreError, Result, SharedCache};
@@ -345,8 +346,6 @@ async fn pack_content_paths(
         })
         .collect())
 }
-
-const DISABLED_SUFFIX: &str = ".disabled";
 
 /// Removes the content files (mods, resource packs, shader packs) the instance's
 /// pack installed, whether the user left them enabled or disabled, and the folder

@@ -13,6 +13,7 @@ mod modpack;
 mod providers;
 mod types;
 
+pub(crate) use files::DISABLED_SUFFIX;
 pub use files::{list_instance_content, remove_instance_content, set_instance_content_enabled};
 pub use types::{InstanceContentEntry, InstanceContentKind, InstanceContentUpdate};
 

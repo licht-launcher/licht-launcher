@@ -5,12 +5,17 @@ import type { InstanceContentEntry } from "@/lib/generated/InstanceContentEntry"
 /** Coming back to the app rereads the content folders at most this often. */
 export const FOCUS_RELOAD_INTERVAL_MS = 15_000;
 
+/** The query key of an instance's content list. */
+export function instanceContentKey(folder: string) {
+  return ["instance-content", folder] as const;
+}
+
 export function instanceContentQuery(
   client: QueryClient,
   folder: string,
   refresh = false,
 ) {
-  const queryKey = ["instance-content", folder] as const;
+  const queryKey = instanceContentKey(folder);
   return queryOptions({
     queryKey,
     staleTime: Number.POSITIVE_INFINITY,
