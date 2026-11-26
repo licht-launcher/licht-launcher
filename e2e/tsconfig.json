@@ -5,7 +5,12 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
-    "types": ["node", "@wdio/globals/types", "@wdio/mocha-framework"],
+    "types": [
+      "node",
+      "@wdio/globals/types",
+      "@wdio/mocha-framework",
+      "@wdio/tauri-service"
+    ],
     "noEmit": true,
     "skipLibCheck": true,
     "strict": true,

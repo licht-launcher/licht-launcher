@@ -16,7 +16,6 @@ import {
   within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { onOpenSettingsRequest } from "@/api/shell-events";
 import { AppContextMenu } from "@/components/app-context-menu";
 import {
   Dialog,
@@ -27,11 +26,15 @@ import {
 import { Toaster } from "@/components/ui/sonner";
 import * as updater from "@/features/updater/components/update-check";
 
-const openRepository = vi.hoisted(() => vi.fn<() => Promise<void>>());
+const { openRepository, openSettingsWindow } = vi.hoisted(() => ({
+  openRepository: vi.fn<() => Promise<void>>(),
+  openSettingsWindow: vi.fn<(section: string) => Promise<void>>(),
+}));
 
 vi.mock("@/api/commands", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/api/commands")>()),
   openRepository,
+  openSettingsWindow,
 }));
 
 async function renderApp() {
@@ -135,20 +138,15 @@ describe("AppContextMenu", () => {
     expect(await screen.findByText("Next page")).toBeVisible();
   });
 
-  it("requests Settings using the existing shell event", async () => {
-    const onSettings = vi.fn();
-    const unsubscribe = onOpenSettingsRequest(onSettings);
-    try {
-      const { target } = await renderApp();
-      await openMenu(target);
-      fireEvent.click(screen.getByRole("menuitem", { name: "Settings" }));
-      expect(onSettings).toHaveBeenCalledWith("account");
-      await waitFor(() =>
-        expect(screen.queryByRole("menu")).not.toBeInTheDocument(),
-      );
-    } finally {
-      unsubscribe();
-    }
+  it("opens the settings window", async () => {
+    openSettingsWindow.mockResolvedValue();
+    const { target } = await renderApp();
+    await openMenu(target);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Settings" }));
+    expect(openSettingsWindow).toHaveBeenCalledWith("account");
+    await waitFor(() =>
+      expect(screen.queryByRole("menu")).not.toBeInTheDocument(),
+    );
   });
 
   it("requests a manual update check", async () => {

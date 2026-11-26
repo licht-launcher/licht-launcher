@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
+import { listen } from "@tauri-apps/api/event";
 import { PlusIcon } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef } from "react";
 import { useDefaultLayout } from "react-resizable-panels";
@@ -43,6 +44,7 @@ import { CreateInstanceDialog } from "@/features/new-instance/create-instance-di
 import { uniqueName } from "@/features/new-instance/model/create-state";
 import { PlayerAccountButton } from "@/features/settings/components/player-account-button";
 import { APP_CODENAME, APP_VERSION } from "@/lib/app-release";
+import { reportInterfaceError } from "@/lib/error-reporting";
 import { cn } from "@/lib/utils";
 import type { HomeSearch } from "@/routes/_app/index";
 
@@ -121,12 +123,21 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
     pathname === "/discover" || pathname.startsWith("/discover/");
   useEffect(() => {
     if (!import.meta.env.DEV) return;
-    const preview = () => {
-      void navigate({ to: "/downloads" });
+    // Developer Tools in the settings window asks the launcher to show Downloads.
+    let active = true;
+    let unsubscribe: (() => void) | undefined;
+    listen(STORAGE_LOADING_PREVIEW_EVENT, () => {
+      if (active) void navigate({ to: "/downloads" });
+    })
+      .then((stop) => {
+        if (active) unsubscribe = stop;
+        else stop();
+      })
+      .catch((error: unknown) => reportInterfaceError("promise", error));
+    return () => {
+      active = false;
+      unsubscribe?.();
     };
-    window.addEventListener(STORAGE_LOADING_PREVIEW_EVENT, preview);
-    return () =>
-      window.removeEventListener(STORAGE_LOADING_PREVIEW_EVENT, preview);
   }, [navigate]);
   const markStartedRef = useRef<(folder: string) => void>(() => {});
   const {
@@ -280,9 +291,7 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
             onOpenSettings={dialogs.openGlobalSettings}
           />
         </TitleBar>
-        {pathname === "/downloads" ||
-        pathname === "/settings" ||
-        discoverActive ? (
+        {pathname === "/downloads" || discoverActive ? (
           content
         ) : (
           <ResizablePanelGroup

@@ -10,11 +10,15 @@ import {
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { StoragePanel } from "@/features/downloads/components/storage-panel";
 import { storageSummary } from "@/features/downloads/fixtures/storage";
-import { STORAGE_LOADING_PREVIEW_QUERY_KEY } from "@/features/downloads/hooks/use-storage-loading-preview";
+import { setStorageLoadingPreview } from "@/features/downloads/hooks/use-storage-loading-preview";
 import type { StorageSummary } from "@/lib/generated/StorageSummary";
 
-const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
+const { invoke, emitTo } = vi.hoisted(() => ({
+  invoke: vi.fn(),
+  emitTo: vi.fn(),
+}));
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
+vi.mock("@tauri-apps/api/event", () => ({ emitTo }));
 
 function renderStorage(
   client = new QueryClient({
@@ -29,7 +33,11 @@ function renderStorage(
 }
 
 describe("StoragePanel", () => {
-  beforeEach(() => invoke.mockReset());
+  beforeEach(() => {
+    invoke.mockReset();
+    emitTo.mockReset().mockResolvedValue(undefined);
+    localStorage.clear();
+  });
 
   it("shows launcher consumption by category without exposing the disk name", async () => {
     invoke.mockResolvedValue(storageSummary);
@@ -129,7 +137,7 @@ describe("StoragePanel", () => {
         defaultOptions: { queries: { retry: false } },
       });
       client.setQueryData(["storage-summary"], storageSummary);
-      client.setQueryData(STORAGE_LOADING_PREVIEW_QUERY_KEY, true);
+      setStorageLoadingPreview(true);
       const view = renderStorage(client);
       expect(screen.getAllByRole("status")).toHaveLength(6);
       expect(
@@ -144,7 +152,7 @@ describe("StoragePanel", () => {
       ).toHaveAttribute("data-state", "indeterminate");
       expect(invoke).not.toHaveBeenCalled();
       await act(async () => {
-        client.setQueryData(STORAGE_LOADING_PREVIEW_QUERY_KEY, false);
+        setStorageLoadingPreview(false);
         await vi.advanceTimersByTimeAsync(1);
       });
       expect(screen.getByText("20.0 GB")).toBeVisible();

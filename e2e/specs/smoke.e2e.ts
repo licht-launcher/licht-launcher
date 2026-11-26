@@ -1,4 +1,4 @@
-import { $, expect } from "@wdio/globals";
+import { $, browser, expect } from "@wdio/globals";
 
 describe("launcher smoke", () => {
   it("leaves the startup screen for an empty library", async () => {
@@ -16,19 +16,30 @@ describe("launcher smoke", () => {
     await expect(dialog).not.toBeExisting();
   });
 
-  it("opens settings and switches sections", async () => {
+  it("opens settings in its own window and switches sections", async () => {
     await $("button=Licht Launcher").click();
     await $('[role="menuitem"]=Settings').click();
+    await browser.waitUntil(async () =>
+      (await browser.tauri.listWindows()).includes("settings"),
+    );
+    await browser.tauri.switchWindow("settings");
+
     const page = $('section[aria-label="Settings"]');
     await expect(page.$("h2=General")).toBeDisplayed();
-
     await page
       .$('nav[aria-label="Settings sections"]')
       .$("button=Instances")
       .click();
     await expect(page.$("h2=Instances")).toBeDisplayed();
 
-    await $("button=Library").click();
-    await expect(page).not.toBeExisting();
+    // E2E builds expose the Tauri API globally (`withGlobalTauri`).
+    await browser.tauri.execute(
+      "return window.__TAURI__.window.getCurrentWindow().close()",
+    );
+    await browser.waitUntil(
+      async () => !(await browser.tauri.listWindows()).includes("settings"),
+    );
+    await browser.tauri.switchWindow("main");
+    await expect($("button=Licht Launcher")).toBeDisplayed();
   });
 });

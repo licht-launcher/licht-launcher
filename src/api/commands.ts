@@ -7,6 +7,7 @@ import type {
   LoaderChannel,
   PlatformId,
 } from "@/features/new-instance/model/create-state";
+import type { SectionId } from "@/features/settings/model/sections";
 import type { AccountProfile } from "@/lib/generated/AccountProfile";
 import type { AppUpdateState } from "@/lib/generated/AppUpdateState";
 import type { BuildDiagnostics } from "@/lib/generated/BuildDiagnostics";
@@ -43,6 +44,10 @@ export function listInstances(): Promise<InstanceEntry[]> {
 
 export async function getBuildDiagnostics(): Promise<BuildDiagnostics> {
   return parseBuildDiagnostics(await invoke<unknown>("get_build_diagnostics"));
+}
+
+export function openSettingsWindow(section: SectionId): Promise<void> {
+  return invoke("open_settings_window", { section });
 }
 
 export function quitApp(): Promise<void> {

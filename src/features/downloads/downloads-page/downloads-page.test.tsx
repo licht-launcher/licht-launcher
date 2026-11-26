@@ -15,7 +15,6 @@ import type { ReactNode } from "react";
 import { toast } from "sonner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { listDownloadJobs } from "@/api/commands";
-import { onOpenSettingsRequest } from "@/api/shell-events";
 import { DownloadsPage } from "@/features/downloads/downloads-page";
 import { downloadJob } from "@/features/downloads/fixtures/job";
 import { storageSummary } from "@/features/downloads/fixtures/storage";
@@ -180,12 +179,11 @@ describe("DownloadsPage", () => {
   });
 
   it("opens the downloads section from the settings shortcut", () => {
-    const requested = vi.fn();
-    const unsubscribe = onOpenSettingsRequest(requested);
     renderPage();
     fireEvent.click(screen.getByRole("button", { name: "Download settings" }));
-    expect(requested).toHaveBeenCalledWith("downloads");
-    unsubscribe();
+    expect(invoke).toHaveBeenCalledWith("open_settings_window", {
+      section: "downloads",
+    });
   });
 
   it("shows independent download/write measurements in one chart", async () => {

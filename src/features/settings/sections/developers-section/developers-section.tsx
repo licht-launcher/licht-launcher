@@ -362,9 +362,7 @@ export function DevelopersSection({
               className={developersSectionStyles.control}
               aria-describedby="simulate-storage-loading-hint"
               checked={storageLoading}
-              onCheckedChange={(enabled) =>
-                setStorageLoadingPreview(queryClient, enabled)
-              }
+              onCheckedChange={setStorageLoadingPreview}
             />
           </div>
         )}
