@@ -1,11 +1,12 @@
 use anyhow::Context;
-use tauri::{WebviewUrl, WebviewWindowBuilder};
+use tauri::{WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
 mod app_updates;
 mod commands;
 mod desktop;
 mod logging;
 mod progress;
+mod settings_window;
 mod startup;
 mod theme;
 
@@ -63,6 +64,7 @@ pub fn run() -> anyhow::Result<()> {
             app_updates::download_app_update,
             app_updates::install_app_update,
             commands::shell::get_build_diagnostics,
+            settings_window::open_settings_window,
             commands::downloads::list_download_jobs,
             commands::downloads::reorder_download_jobs,
             commands::downloads::download_telemetry,
@@ -160,6 +162,14 @@ pub fn run() -> anyhow::Result<()> {
             label,
             event: tauri::WindowEvent::Destroyed,
             ..
+        } = &event
+            && label == "main"
+        {
+            settings_window::close(app);
+        } else if let tauri::RunEvent::WindowEvent {
+            label,
+            event: tauri::WindowEvent::Destroyed,
+            ..
         } = event
             && label.starts_with("startup-preview-")
         {
@@ -180,13 +190,23 @@ pub fn run() -> anyhow::Result<()> {
 /// Creates the launcher window, which shows startup and update progress before the
 /// launcher itself. Developer startup previews use the same window with their own label.
 pub(crate) fn create_launcher_window(app: &tauri::AppHandle, label: &str) -> tauri::Result<()> {
-    let theme = theme::preference(app)?;
     let builder = WebviewWindowBuilder::new(app, label, WebviewUrl::default())
         .title("Licht Launcher")
         .inner_size(1200.0, 800.0)
         .min_inner_size(960.0, 560.0)
         .max_inner_size(1200.0, 960.0)
-        .center()
+        .center();
+    build_launcher_style_window(app, builder)?;
+    Ok(())
+}
+
+/// Builds a window with the launcher's own title bar, theme and WebView options.
+pub(crate) fn build_launcher_style_window(
+    app: &tauri::AppHandle,
+    builder: WebviewWindowBuilder<'_, tauri::Wry, tauri::AppHandle>,
+) -> tauri::Result<WebviewWindow> {
+    let theme = theme::preference(app)?;
+    let builder = builder
         // Shown by the page once it has rendered; a window shown while the app is
         // still starting stays unpainted until it receives input.
         .visible(false)
@@ -214,5 +234,5 @@ pub(crate) fn create_launcher_window(app: &tauri::AppHandle, label: &str) -> tau
     let window = builder.build()?;
     desktop::configure_webview(&window)?;
 
-    Ok(())
+    Ok(window)
 }

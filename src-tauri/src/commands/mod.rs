@@ -66,6 +66,21 @@ pub(crate) fn command_failure(summary: &str, error: &dyn std::error::Error) -> S
     summary.to_string()
 }
 
+/// Sent to every window after the saved settings change.
+pub(crate) const SETTINGS_CHANGED_EVENT: &str = "settings-changed";
+/// Sent to every window after the signed-in or active account changes.
+pub(crate) const ACCOUNTS_CHANGED_EVENT: &str = "accounts-changed";
+
+/// Tells every window that shared launcher data changed, so the launcher and
+/// settings windows show the same state. The change itself has already succeeded,
+/// so a failed notification is logged instead of failing the command.
+pub(crate) fn notify_windows(app: &tauri::AppHandle, event: &str) {
+    use tauri::Emitter;
+    if let Err(error) = app.emit(event, ()) {
+        tracing::error!(%error, event, "Could not notify windows of a change");
+    }
+}
+
 pub(crate) fn host_environment() -> Result<LaunchEnvironment, CoreError> {
     let os = match std::env::consts::OS {
         "windows" => OsName::Windows,

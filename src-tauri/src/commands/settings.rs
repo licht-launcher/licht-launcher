@@ -29,6 +29,7 @@ pub async fn save_settings(
         .map_err(|error| {
             format!("Settings were saved, but background updates could not be notified: {error}")
         })?;
+    super::notify_windows(&app, super::SETTINGS_CHANGED_EVENT);
     crate::desktop::apply_preferences(&app, &saved).map_err(|error| {
         format!("Settings were saved, but launcher behavior could not be applied: {error}")
     })?;
