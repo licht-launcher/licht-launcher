@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   activateOfflineAccount,
   activeMicrosoftAccount,
+  appliedHardwareAcceleration,
   beginMicrosoftLogin,
   browseApplicationDirectory,
   browseJava,
@@ -141,6 +142,16 @@ describe("launcher commands", () => {
     expect(invoke).toHaveBeenCalledWith("is_startup_preview_open");
     await closeStartupPreview();
     expect(invoke).toHaveBeenCalledWith("close_startup_preview");
+  });
+
+  it("reads the hardware acceleration the launcher started with", async () => {
+    vi.mocked(invoke).mockResolvedValueOnce(false);
+    expect(await appliedHardwareAcceleration()).toBe(false);
+    expect(invoke).toHaveBeenCalledWith("applied_hardware_acceleration");
+    vi.mocked(invoke).mockResolvedValueOnce("off");
+    await expect(appliedHardwareAcceleration()).rejects.toThrow(
+      "Invalid hardware acceleration state",
+    );
   });
 
   it("rejects an invalid native preview state", async () => {

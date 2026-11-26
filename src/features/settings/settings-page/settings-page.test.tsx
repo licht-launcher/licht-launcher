@@ -1,5 +1,6 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { CloseRequest } from "@/api/window-close";
 import {
   invoke,
   mockSettingsCommands,
@@ -13,8 +14,31 @@ vi.mock("@tauri-apps/api/core", async () => {
   return { invoke: mocked };
 });
 
+const closeHandlers = vi.hoisted(
+  () => new Set<(request: CloseRequest) => Promise<void>>(),
+);
+vi.mock("@/api/window-close", () => ({
+  onWindowCloseRequested: async (
+    handler: (request: CloseRequest) => Promise<void>,
+  ) => {
+    closeHandlers.add(handler);
+    return () => {
+      closeHandlers.delete(handler);
+    };
+  },
+}));
+
+/** Asks this window to close, as its close button does, and waits for the page. */
+async function requestClose() {
+  const request = { preventDefault: vi.fn() };
+  await waitFor(() => expect(closeHandlers.size).toBe(1));
+  for (const handler of closeHandlers) await handler(request);
+  return request;
+}
+
 describe("SettingsPage", () => {
   beforeEach(() => {
+    closeHandlers.clear();
     mockSettingsCommands();
   });
 
@@ -138,5 +162,58 @@ describe("SettingsPage", () => {
         settings: expect.objectContaining({ username: "Leaving" }),
       }),
     );
+  });
+
+  it("saves a pending edit before the window closes", async () => {
+    mockSettingsCommands((command, args) => {
+      if (
+        command === "save_settings" &&
+        typeof args === "object" &&
+        args !== null &&
+        "settings" in args
+      )
+        return Promise.resolve(args.settings);
+      return undefined;
+    });
+    await renderSettings("developers");
+    fireEvent.change(
+      await screen.findByRole("textbox", { name: "Offline username" }),
+      { target: { value: "Closing" } },
+    );
+
+    const request = await requestClose();
+
+    expect(invoke).toHaveBeenCalledWith("save_settings", {
+      settings: expect.objectContaining({ username: "Closing" }),
+    });
+    expect(request.preventDefault).not.toHaveBeenCalled();
+  });
+
+  it("keeps the window open when the last edit cannot be saved", async () => {
+    mockSettingsCommands((command) =>
+      command === "save_settings"
+        ? Promise.reject(new Error("Disk is full"))
+        : undefined,
+    );
+    await renderSettings("developers");
+    fireEvent.change(
+      await screen.findByRole("textbox", { name: "Offline username" }),
+      { target: { value: "Closing" } },
+    );
+
+    const request = await requestClose();
+
+    expect(request.preventDefault).toHaveBeenCalledOnce();
+    expect(await screen.findByText("Disk is full")).toBeVisible();
+  });
+
+  it("closes right away when nothing is waiting to be saved", async () => {
+    await renderSettings();
+    await screen.findByRole("button", { name: "Dark" });
+
+    const request = await requestClose();
+
+    expect(request.preventDefault).not.toHaveBeenCalled();
+    expect(invoke).not.toHaveBeenCalledWith("save_settings", expect.anything());
   });
 });

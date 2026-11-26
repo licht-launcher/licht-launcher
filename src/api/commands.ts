@@ -446,6 +446,14 @@ export function saveSettings(settings: Settings): Promise<Settings> {
   return invoke("save_settings", { settings });
 }
 
+/** The hardware acceleration the running launcher started with. */
+export async function appliedHardwareAcceleration(): Promise<boolean> {
+  const applied = await invoke<unknown>("applied_hardware_acceleration");
+  if (typeof applied !== "boolean")
+    throw new Error("Invalid hardware acceleration state");
+  return applied;
+}
+
 export function runtimeJava(): Promise<JavaPaths> {
   return invoke("runtime_java");
 }

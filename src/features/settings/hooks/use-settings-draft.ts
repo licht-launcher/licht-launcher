@@ -1,7 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { getSettings, runtimeJava, saveSettings } from "@/api/commands";
+import {
+  appliedHardwareAcceleration as getAppliedHardwareAcceleration,
+  getSettings,
+  runtimeJava,
+  saveSettings,
+} from "@/api/commands";
+import { onWindowCloseRequested } from "@/api/window-close";
 import { useToastError } from "@/features/settings/hooks/use-toast-error";
 import {
   dismissRestartToast,
@@ -14,12 +20,12 @@ import {
   toSettings,
 } from "@/features/settings/model/draft";
 import { DOWNLOAD_SPEED_ERROR, parseDownloadLimit } from "@/lib/download-speed";
+import { reportInterfaceError } from "@/lib/error-reporting";
 import { friendlyError, messageOf } from "@/lib/errors";
 import type { Settings } from "@/lib/generated/Settings";
 
 const SAVE_DELAY_MS = 400;
-// The value this launcher session started with. It outlives the Settings page,
-// so leaving and coming back still compares against what is actually applied.
+// What the running launcher uses; it only changes when the launcher restarts.
 const APPLIED_HARDWARE_ACCELERATION_KEY = ["applied-hardware-acceleration"];
 
 export function useSettingsDraft() {
@@ -31,15 +37,8 @@ export function useSettingsDraft() {
   });
   const appliedHardwareAcceleration = useQuery({
     queryKey: APPLIED_HARDWARE_ACCELERATION_KEY,
-    queryFn: async () => {
-      const snapshot = await queryClient.ensureQueryData({
-        queryKey: ["settings"],
-        queryFn: getSettings,
-      });
-      return snapshot.settings.hardwareAcceleration;
-    },
+    queryFn: getAppliedHardwareAcceleration,
     staleTime: Number.POSITIVE_INFINITY,
-    gcTime: Number.POSITIVE_INFINITY,
     retry: false,
   });
   const runtime = useQuery({
@@ -52,7 +51,11 @@ export function useSettingsDraft() {
   const draftRef = useRef<Draft | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const schemaRef = useRef(1);
-  const persistRef = useRef<(current: Draft) => void>(() => {});
+  // Resolves to whether the draft was saved; failures were already shown.
+  const persistRef = useRef<(current: Draft) => Promise<boolean>>(
+    async () => true,
+  );
+  const flushRef = useRef<() => Promise<boolean>>(async () => true);
 
   const save = useMutation({
     mutationFn: saveSettings,
@@ -72,19 +75,37 @@ export function useSettingsDraft() {
     },
   });
 
-  persistRef.current = (current) => {
+  persistRef.current = async (current) => {
     const width = optionalSize(current.width);
     const height = optionalSize(current.height);
     if (width === "invalid" || height === "invalid") {
       toast.error("window size must be at least 1");
-      return;
+      return false;
     }
     const speed = parseDownloadLimit(current.downloadSpeedLimitKbs);
     if (speed === "invalid") {
       toast.error(DOWNLOAD_SPEED_ERROR);
-      return;
+      return false;
     }
-    save.mutate(toSettings(current, schemaRef.current, width, height));
+    try {
+      await save.mutateAsync(
+        toSettings(current, schemaRef.current, width, height),
+      );
+      return true;
+    } catch {
+      // The mutation's onError has already shown why.
+      return false;
+    }
+  };
+
+  /** Saves the edit still waiting for its delay; resolves to whether it saved. */
+  flushRef.current = () => {
+    if (timerRef.current === null || draftRef.current === null) {
+      return Promise.resolve(true);
+    }
+    clearTimeout(timerRef.current);
+    timerRef.current = null;
+    return persistRef.current(draftRef.current);
   };
 
   useEffect(() => {
@@ -99,14 +120,24 @@ export function useSettingsDraft() {
   useToastError(settings.error);
   useToastError(runtime.error);
 
-  // Leaving Settings saves the edit still waiting for its delay.
+  // Closing the window ends the page without unmounting it, so the window
+  // waits for the last edit, and stays open to show why it could not be saved.
   useEffect(() => {
+    let active = true;
+    let stop: (() => void) | undefined;
+    onWindowCloseRequested(async (request) => {
+      if (!(await flushRef.current())) request.preventDefault();
+    })
+      .then((unsubscribe) => {
+        if (active) stop = unsubscribe;
+        else unsubscribe();
+      })
+      .catch((error: unknown) => reportInterfaceError("promise", error));
     return () => {
-      if (timerRef.current !== null && draftRef.current !== null) {
-        clearTimeout(timerRef.current);
-        timerRef.current = null;
-        persistRef.current(draftRef.current);
-      }
+      active = false;
+      stop?.();
+      // Unmounting without closing the window also keeps the last edit.
+      void flushRef.current();
     };
   }, []);
 
@@ -132,7 +163,7 @@ export function useSettingsDraft() {
     }
     timerRef.current = setTimeout(() => {
       timerRef.current = null;
-      persistRef.current(next);
+      void persistRef.current(next);
     }, SAVE_DELAY_MS);
   }
 

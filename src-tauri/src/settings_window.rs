@@ -1,5 +1,7 @@
 //! The launcher settings open in their own window beside the launcher window.
 
+use std::sync::Mutex;
+
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
 use crate::commands::{command_error, command_failure};
@@ -8,6 +10,9 @@ pub const LABEL: &str = "settings";
 /// Sent to an open settings window when another section is requested.
 const SECTION_EVENT: &str = "settings-window-section";
 const MAX_SECTION_LENGTH: usize = 32;
+/// Held while one request looks for the window and creates it, so two quick
+/// requests cannot both try to create it.
+static OPENING: Mutex<()> = Mutex::new(());
 
 /// Windows that may use launcher-only commands such as updates and diagnostics.
 pub fn is_launcher_window(label: &str) -> bool {
@@ -32,6 +37,9 @@ fn initialization_script(section: &str) -> Result<String, serde_json::Error> {
 /// Shows the settings window at `section`, creating it when it is not open yet.
 pub fn open(app: &AppHandle, section: &str) -> anyhow::Result<()> {
     anyhow::ensure!(valid_section(section), "Unknown settings section");
+    let _opening = OPENING
+        .lock()
+        .map_err(|_| anyhow::anyhow!("settings window lock failed"))?;
     if let Some(window) = app.get_webview_window(LABEL) {
         app.emit_to(LABEL, SECTION_EVENT, section)?;
         window.unminimize()?;

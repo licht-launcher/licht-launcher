@@ -119,6 +119,7 @@ pub fn run() -> anyhow::Result<()> {
             commands::accounts::logout_microsoft_account,
             commands::settings::get_settings,
             commands::settings::save_settings,
+            commands::settings::applied_hardware_acceleration,
             commands::settings::runtime_java,
             commands::settings::java_installation_status,
             commands::settings::detect_java_installations,

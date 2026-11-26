@@ -28,6 +28,9 @@ export function mockSettingsCommands(
     if (command === "get_settings") {
       return Promise.resolve(snapshot);
     }
+    if (command === "applied_hardware_acceleration") {
+      return Promise.resolve(snapshot.settings.hardwareAcceleration);
+    }
     if (command === "get_app_update_state")
       return Promise.resolve(appUpdateState());
     if (command === "get_build_diagnostics")

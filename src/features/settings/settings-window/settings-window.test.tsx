@@ -39,6 +39,7 @@ vi.mock("@tauri-apps/api/window", () => ({
     show: showWindow,
     minimize: vi.fn(),
     close: vi.fn(),
+    onCloseRequested: vi.fn().mockResolvedValue(() => {}),
   }),
 }));
 vi.mock("@tauri-apps/api/core", async (importOriginal) => {
