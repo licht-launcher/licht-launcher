@@ -6,14 +6,15 @@ import {
   type WindowSizePreset,
 } from "@/api/window-preview";
 
-const { setSize, center, unmaximize, settingsSetSize, getByLabel } =
-  vi.hoisted(() => ({
+const { setSize, center, unmaximize, settingsSetSize, getByLabel } = vi.hoisted(
+  () => ({
     setSize: vi.fn(),
     unmaximize: vi.fn(),
     center: vi.fn(),
     settingsSetSize: vi.fn(),
     getByLabel: vi.fn(),
-  }));
+  }),
+);
 vi.mock("@tauri-apps/api/window", () => ({
   getCurrentWindow: () => ({ setSize: settingsSetSize, center: vi.fn() }),
   Window: { getByLabel },
