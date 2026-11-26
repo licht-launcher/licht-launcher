@@ -56,9 +56,13 @@ export function SettingsSidebar({
   }
 
   return (
-    // In the settings window, the sidebar's empty space (its top included) moves
-    // the window; Tauri keeps its buttons clickable.
-    <div data-tauri-drag-region="deep" className={settingsSidebarStyles.root}>
+    <div className={settingsSidebarStyles.root}>
+      {/* Moves the settings window, in line with the title bar over the panel. */}
+      <div
+        data-tauri-drag-region
+        aria-hidden
+        className={settingsSidebarStyles.dragRegion}
+      />
       <h1 className={settingsSidebarStyles.title}>Settings</h1>
       <nav aria-label="Settings sections" className={settingsSidebarStyles.nav}>
         {SECTIONS.filter((item) => item.id !== "developers").map(renderSection)}

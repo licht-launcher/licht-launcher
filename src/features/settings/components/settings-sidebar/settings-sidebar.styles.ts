@@ -3,7 +3,10 @@ export const settingsSidebarStyles = {
     "h-auto flex items-center justify-start gap-2 px-2.5 py-1.75 font-medium",
   navIcon: "size-4 shrink-0",
   navLabel: "min-w-0 truncate",
-  root: "flex w-48 shrink-0 flex-col gap-4 border-r border-border px-3 py-4",
+  root: "flex w-48 shrink-0 flex-col gap-4 border-r border-border px-3 pb-4",
+  // As tall as the settings window's title bar (`h-9`); it spans the sidebar's
+  // padding and cancels the gap below it, so the sections start right under it.
+  dragRegion: "-mx-3 -mb-4 h-9 shrink-0",
   title: "sr-only",
   nav: "flex flex-col gap-0",
   footer: "mt-auto flex min-w-0 flex-col gap-2",
