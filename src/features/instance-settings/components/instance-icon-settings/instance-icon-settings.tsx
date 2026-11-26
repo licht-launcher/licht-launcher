@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ImageIcon, RotateCcwIcon } from "lucide-react";
+import { ImageIcon, PencilIcon, RotateCcwIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -7,7 +7,12 @@ import {
   resetInstanceIcon,
   setInstanceIcon,
 } from "@/api/commands";
-import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { InstanceIcon } from "@/features/instances/components/instance-icon";
 import { friendlyError, messageOf } from "@/lib/errors";
 
@@ -52,33 +57,40 @@ export function InstanceIconSettings({
 
   return (
     <div className={styles.row}>
-      <InstanceIcon iconPath={iconPath} size="md" />
       <div className={styles.rowText}>
         <p className={styles.rowLabel}>Icon</p>
         <p className={styles.rowDescription}>
           A PNG, JPEG, WebP or GIF image up to 2 MB.
         </p>
       </div>
-      <div className={styles.actions}>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={disabled || !customIcon}
-          onClick={() => reset.mutate()}
-        >
-          <RotateCcwIcon data-icon="inline-start" aria-hidden />
-          Reset
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={disabled}
-          onClick={() => change.mutate()}
-        >
-          <ImageIcon data-icon="inline-start" aria-hidden />
-          Change icon
-        </Button>
-      </div>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className={styles.trigger}
+            disabled={disabled}
+            aria-label="Instance icon"
+          >
+            <InstanceIcon iconPath={iconPath} size="lg" />
+            <span className={styles.overlay}>
+              <PencilIcon className={styles.overlayIcon} aria-hidden />
+            </span>
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" aria-label="Instance icon">
+          <DropdownMenuItem onSelect={() => change.mutate()}>
+            <ImageIcon aria-hidden />
+            Change icon
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            disabled={!customIcon}
+            onSelect={() => reset.mutate()}
+          >
+            <RotateCcwIcon aria-hidden />
+            Reset icon
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }

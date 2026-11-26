@@ -75,6 +75,14 @@ function renderPage(
   );
 }
 
+async function openIconMenu() {
+  fireEvent.pointerDown(
+    await screen.findByRole("button", { name: "Instance icon" }),
+    { button: 0, ctrlKey: false, pointerType: "mouse" },
+  );
+  return screen.findByRole("menu", { name: "Instance icon" });
+}
+
 const linkedEntry: InstanceEntry = {
   ...entry,
   installation: {
@@ -395,7 +403,8 @@ describe("InstanceSettingsPage", () => {
     open.mockResolvedValueOnce("C:\\pictures\\creeper.png");
     renderPage();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Change icon" }));
+    await openIconMenu();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Change icon" }));
 
     await waitFor(() =>
       expect(invoke).toHaveBeenCalledWith("set_instance_icon", {
@@ -410,7 +419,8 @@ describe("InstanceSettingsPage", () => {
     open.mockResolvedValueOnce(null);
     renderPage();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Change icon" }));
+    await openIconMenu();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Change icon" }));
 
     await waitFor(() => expect(open).toHaveBeenCalled());
     expect(invoke).not.toHaveBeenCalledWith(
@@ -422,11 +432,15 @@ describe("InstanceSettingsPage", () => {
   it("resets only an icon the user picked", async () => {
     const success = vi.spyOn(toast, "success");
     const { unmount } = renderPage();
-    expect(await screen.findByRole("button", { name: "Reset" })).toBeDisabled();
+    await openIconMenu();
+    expect(
+      screen.getByRole("menuitem", { name: "Reset icon" }),
+    ).toHaveAttribute("aria-disabled", "true");
     unmount();
 
     renderPage({ entry: { ...entry, customIcon: true } });
-    fireEvent.click(await screen.findByRole("button", { name: "Reset" }));
+    await openIconMenu();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Reset icon" }));
 
     await waitFor(() =>
       expect(invoke).toHaveBeenCalledWith("reset_instance_icon", {

@@ -47,12 +47,6 @@ export function GeneralSection({
   return (
     <div className={generalSectionStyles.root}>
       <Card title="Instance">
-        <InstanceIconSettings
-          folder={folder}
-          iconPath={iconPath}
-          customIcon={customIcon}
-          busy={busy}
-        />
         <div className={generalSectionStyles.row}>
           <div className={generalSectionStyles.rowText}>
             <label
@@ -85,6 +79,12 @@ export function GeneralSection({
             }}
           />
         </div>
+        <InstanceIconSettings
+          folder={folder}
+          iconPath={iconPath}
+          customIcon={customIcon}
+          busy={busy}
+        />
       </Card>
 
       <Card title="Actions">
