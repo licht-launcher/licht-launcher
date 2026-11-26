@@ -32,14 +32,16 @@ describe("launcher smoke", () => {
       .click();
     await expect(page.$("h2=Instances")).toBeDisplayed();
 
-    // E2E builds expose the Tauri API globally (`withGlobalTauri`).
+    // The window closes after this script has answered, and WebDriver moves
+    // back to the launcher before it does: a command sent to a closed window
+    // fails. E2E builds expose the Tauri API globally (`withGlobalTauri`).
     await browser.tauri.execute(
-      "return window.__TAURI__.window.getCurrentWindow().close()",
+      "setTimeout(() => window.__TAURI__.window.getCurrentWindow().close(), 100); return null",
     );
+    await browser.tauri.switchWindow("main");
     await browser.waitUntil(
       async () => !(await browser.tauri.listWindows()).includes("settings"),
     );
-    await browser.tauri.switchWindow("main");
     await expect($("button=Licht Launcher")).toBeDisplayed();
   });
 });
