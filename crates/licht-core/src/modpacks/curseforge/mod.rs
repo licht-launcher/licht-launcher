@@ -203,10 +203,11 @@ pub(super) async fn list_curseforge_versions(
     let mod_id = parse_mod_id(mod_id)?;
     let fetch_page = move |index: u64| async move {
         let url = format!("{MOD_URL}/{mod_id}/files?index={index}&pageSize={FILES_PAGE_SIZE}");
-        let body = api::get_api(client, key, &url, "curseforge_files").await?;
-        api::parse_versions(&body)
+        api::get_api(client, key, &url, "curseforge_files").await
     };
-    let first = fetch_page(0).await?;
+    let (first, title) = tokio::try_join!(fetch_page(0), fetch_pack_title(client, key, mod_id))?;
+    let title = title.as_str();
+    let first = api::parse_versions(&first, title)?;
     if first.total > MAX_FILE_PAGES * FILES_PAGE_SIZE {
         tracing::warn!(
             mod_id,
@@ -214,14 +215,14 @@ pub(super) async fn list_curseforge_versions(
             "CurseForge pack has more files than Licht lists"
         );
     }
-    let others: Vec<api::FilesPage> = stream::iter(remaining_file_indexes(first.total))
+    let others: Vec<String> = stream::iter(remaining_file_indexes(first.total))
         .map(fetch_page)
         .buffered(FILE_PAGE_CONCURRENCY)
         .try_collect()
         .await?;
     let mut versions = first.items;
-    for page in others {
-        versions.extend(page.items);
+    for body in others {
+        versions.extend(api::parse_versions(&body, title)?.items);
     }
     Ok(versions)
 }
@@ -271,8 +272,14 @@ pub(super) async fn download_curseforge_pack_to(
         })
     };
     let (project, file_id) = (parse(mod_id)?, parse(file_id)?);
-    let files = context
-        .metadata(api::fetch_remote_files(client, &key, &[file_id]))
+    let file_ids = [file_id];
+    let (files, title) = context
+        .metadata(async {
+            tokio::try_join!(
+                api::fetch_remote_files(client, &key, &file_ids),
+                fetch_pack_title(client, &key, project),
+            )
+        })
         .await?;
     let file = files
         .iter()
@@ -300,20 +307,50 @@ pub(super) async fn download_curseforge_pack_to(
     if let Some(expected) = &file.md5 {
         super::file_hashes::ensure_md5(destination, expected)?;
     }
-    Ok(pack_version(file))
+    Ok(pack_version(file, &title))
 }
 
 /// A pack file's display name stands for its version, like the file list shows it.
-fn pack_version(file: &api::RemoteFile) -> super::PackVersion {
+fn pack_version(file: &api::RemoteFile, pack_title: &str) -> super::PackVersion {
     let name = if file.display_name.trim().is_empty() {
-        &file.file_name
+        file.file_name.clone()
     } else {
-        &file.display_name
+        version_label(&file.display_name, pack_title)
     };
     super::PackVersion {
-        name: name.clone(),
+        name,
         published_at: file.file_date.clone(),
     }
+}
+
+/// CurseForge file names usually repeat the pack title ("Homestead 2.0.1");
+/// the version is what follows it. A name without the title stays whole.
+fn version_label(name: &str, pack_title: &str) -> String {
+    let name = name.trim();
+    let title = pack_title.trim();
+    let rest = name
+        .get(..title.len())
+        .filter(|head| !title.is_empty() && head.eq_ignore_ascii_case(title))
+        .map(|_| &name[title.len()..])
+        .filter(|rest| rest.starts_with(|ch: char| !ch.is_alphanumeric()))
+        .map(|rest| rest.trim_start_matches(|ch: char| !ch.is_alphanumeric()))
+        .unwrap_or_default();
+    if rest.is_empty() {
+        name.to_string()
+    } else {
+        rest.to_string()
+    }
+}
+
+async fn fetch_pack_title(client: &Client, key: &str, mod_id: u64) -> Result<String> {
+    let body = api::get_api(
+        client,
+        key,
+        &format!("{MOD_URL}/{mod_id}"),
+        "curseforge_mod",
+    )
+    .await?;
+    api::parse_mod_title(&body)
 }
 
 fn download_url_status_error(status: u16, body: &str) -> CoreError {
@@ -357,13 +394,32 @@ mod tests {
     #[test]
     fn a_pack_file_stands_for_its_version_by_display_name() {
         assert_eq!(
-            pack_version(&remote_file("Pack 1.0")),
+            pack_version(&remote_file("Pack 1.0"), "Pack"),
             super::super::PackVersion {
-                name: "Pack 1.0".into(),
+                name: "1.0".into(),
                 published_at: Some("2026-11-04T07:16:05.953Z".into()),
             }
         );
-        assert_eq!(pack_version(&remote_file(" ")).name, "pack-1.0.zip");
+        assert_eq!(pack_version(&remote_file(" "), "Pack").name, "pack-1.0.zip");
+    }
+
+    #[test]
+    fn a_version_drops_the_pack_title_it_starts_with() {
+        assert_eq!(version_label("Homestead 2.0.1", "Homestead"), "2.0.1");
+        assert_eq!(version_label("homestead-1.2.9.4", "Homestead"), "1.2.9.4");
+        assert_eq!(
+            version_label("All the Mods 9 - 0.3.2", "All the Mods 9"),
+            "0.3.2"
+        );
+        // The title must end at a word boundary.
+        assert_eq!(
+            version_label("Homesteadders 1.0", "Homestead"),
+            "Homesteadders 1.0"
+        );
+        // Nothing left after the title: keep the whole name.
+        assert_eq!(version_label("Homestead", "Homestead"), "Homestead");
+        assert_eq!(version_label("2.0.1", "Homestead"), "2.0.1");
+        assert_eq!(version_label("Ñandú 1.0", "Ñandú"), "1.0");
     }
 
     #[test]
