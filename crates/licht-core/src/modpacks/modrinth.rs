@@ -103,6 +103,9 @@ struct VersionEntry {
     id: String,
     #[serde(default)]
     name: Option<String>,
+    /// The bare version ("2.0.1"); `name` often repeats the pack title.
+    #[serde(default)]
+    version_number: Option<String>,
     #[serde(default)]
     game_versions: Vec<String>,
     #[serde(default)]
@@ -404,7 +407,11 @@ pub(super) fn parse_versions(body: &str) -> Result<Vec<ModpackVersionItem>> {
                 }
             }
             ModpackVersionItem {
-                name: entry.name.unwrap_or_else(|| entry.id.clone()),
+                name: entry
+                    .version_number
+                    .filter(|number| !number.trim().is_empty())
+                    .or(entry.name)
+                    .unwrap_or_else(|| entry.id.clone()),
                 id: entry.id,
                 game_versions: entry.game_versions,
                 loaders,
@@ -763,6 +770,19 @@ mod tests {
         assert_eq!(versions[0].downloads, 160447);
         assert_eq!(versions[1].name, "v1");
         assert_eq!(versions[1].version_type, ModpackVersionType::Release);
+    }
+
+    #[test]
+    fn a_version_is_named_by_its_version_number() {
+        let versions = parse_versions(
+            r#"[
+              {"id":"v3","name":"Homestead 2.0.1","version_number":"2.0.1"},
+              {"id":"v2","name":"Homestead 2.0","version_number":" "}
+            ]"#,
+        )
+        .expect("ok");
+        assert_eq!(versions[0].name, "2.0.1");
+        assert_eq!(versions[1].name, "Homestead 2.0");
     }
 
     #[test]
