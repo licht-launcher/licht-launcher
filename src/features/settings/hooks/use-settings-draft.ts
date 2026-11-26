@@ -25,7 +25,6 @@ import { friendlyError, messageOf } from "@/lib/errors";
 import type { Settings } from "@/lib/generated/Settings";
 
 const SAVE_DELAY_MS = 400;
-// What the running launcher uses; it only changes when the launcher restarts.
 const APPLIED_HARDWARE_ACCELERATION_KEY = ["applied-hardware-acceleration"];
 
 export function useSettingsDraft() {
@@ -51,12 +50,10 @@ export function useSettingsDraft() {
   const draftRef = useRef<Draft | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const schemaRef = useRef(1);
-  // Resolves to whether the draft was saved; failures were already shown.
   const persistRef = useRef<(current: Draft) => Promise<boolean>>(
     async () => true,
   );
   const flushRef = useRef<() => Promise<boolean>>(async () => true);
-  // The save that is still running, so closing the window can wait for it.
   const savingRef = useRef<Promise<boolean> | null>(null);
 
   const save = useMutation({
@@ -109,10 +106,6 @@ export function useSettingsDraft() {
     return saving;
   };
 
-  /**
-   * Saves the edit still waiting for its delay, or waits for the save already
-   * running; resolves to whether the last edit is saved.
-   */
   flushRef.current = () => {
     if (timerRef.current === null || draftRef.current === null) {
       return savingRef.current ?? Promise.resolve(true);
@@ -134,9 +127,7 @@ export function useSettingsDraft() {
   useToastError(settings.error);
   useToastError(runtime.error);
 
-  // Closing the window ends the page without unmounting it, so the window
-  // waits for the last edit, and stays open to show why it could not be saved.
-  // When the launcher closed, the app is ending: the window closes regardless.
+  // Closing a window does not unmount React, so the cleanup below would not save.
   useEffect(() => {
     let active = true;
     const stops: (() => void)[] = [];
@@ -168,7 +159,6 @@ export function useSettingsDraft() {
     return () => {
       active = false;
       for (const stop of stops) stop();
-      // Unmounting without closing the window also keeps the last edit.
       void flushRef.current();
     };
   }, []);

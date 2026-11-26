@@ -13,7 +13,6 @@ const { setSize, center, settingsSetSize, getByLabel } = vi.hoisted(() => ({
   getByLabel: vi.fn(),
 }));
 vi.mock("@tauri-apps/api/window", () => ({
-  // Developer Tools runs in the settings window; the presets are for the launcher.
   getCurrentWindow: () => ({ setSize: settingsSetSize, center: vi.fn() }),
   Window: { getByLabel },
 }));

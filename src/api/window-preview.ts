@@ -10,7 +10,7 @@ export const WINDOW_SIZE_PRESETS = [
 
 export type WindowSizePreset = (typeof WINDOW_SIZE_PRESETS)[number]["id"];
 
-/** The presets are for the launcher window; Developer Tools runs in the settings window. */
+// Developer Tools runs in the settings window; the presets are for the launcher.
 async function launcherWindow(): Promise<Window> {
   const window = await Window.getByLabel("main");
   if (!window) throw new Error("The launcher window is not open");

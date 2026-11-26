@@ -50,10 +50,6 @@ export function openSettingsWindow(section: SectionId): Promise<void> {
   return invoke("open_settings_window", { section });
 }
 
-/**
- * Tells the backend the settings window listens for section requests; resolves
- * to the section requested most recently, if any.
- */
 export async function settingsWindowReady(): Promise<string | null> {
   const section = await invoke<unknown>("settings_window_ready");
   if (section !== null && typeof section !== "string")
@@ -457,7 +453,6 @@ export function saveSettings(settings: Settings): Promise<Settings> {
   return invoke("save_settings", { settings });
 }
 
-/** The hardware acceleration the running launcher started with. */
 export async function appliedHardwareAcceleration(): Promise<boolean> {
   const applied = await invoke<unknown>("applied_hardware_acceleration");
   if (typeof applied !== "boolean")

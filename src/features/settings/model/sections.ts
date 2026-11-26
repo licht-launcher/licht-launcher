@@ -60,7 +60,6 @@ export const SECTIONS = [
 
 export type SectionId = (typeof SECTIONS)[number]["id"];
 
-/** A known section id, or the first section for anything else. */
 export function parseSectionId(value: unknown): SectionId {
   return SECTIONS.find((item) => item.id === value)?.id ?? "account";
 }

@@ -35,7 +35,6 @@ vi.mock("@/api/window-close", () => ({
   },
 }));
 
-/** Asks this window to close, as its close button does, and waits for the page. */
 async function requestClose() {
   const request = { preventDefault: vi.fn() };
   await waitFor(() => expect(closeHandlers.size).toBe(1));

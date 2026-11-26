@@ -1,8 +1,7 @@
 export const DEV_SIMULATE_UPDATE_EVENT = "licht-launcher:dev-simulate-update";
 export const DEV_CLEAR_SIMULATED_UPDATE_EVENT =
   "licht-launcher:dev-clear-simulated-update";
-// Local storage is shared by the launcher and settings windows; the launcher
-// clears it when it starts, so a simulation lasts one launcher session.
+// Shared with the settings window; the launcher clears it when it starts.
 const key = "licht-launcher.dev-update-simulation";
 
 export function getUpdateSimulation(): boolean {
@@ -24,7 +23,6 @@ export function clearUpdateSimulation() {
   localStorage.removeItem(key);
 }
 
-/** Notifies `listener` when this or another window changes the simulation. */
 export function subscribeUpdateSimulation(listener: () => void) {
   const onStorage = (event: StorageEvent) => {
     if (event.key === key || event.key === null) listener();

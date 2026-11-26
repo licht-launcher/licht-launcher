@@ -32,9 +32,8 @@ describe("launcher smoke", () => {
       .click();
     await expect(page.$("h2=Instances")).toBeDisplayed();
 
-    // The window closes after this script has answered, and WebDriver moves
-    // back to the launcher before it does: a command sent to a closed window
-    // fails. E2E builds expose the Tauri API globally (`withGlobalTauri`).
+    // Close after the script answers, and leave the window first: WebDriver
+    // fails on a closed window.
     await browser.tauri.execute(
       "setTimeout(() => window.__TAURI__.window.getCurrentWindow().close(), 100); return null",
     );

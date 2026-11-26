@@ -64,13 +64,11 @@ if (root === null) {
   throw new Error("The application root element was not found.");
 }
 
-// Developer startup previews and the settings open in their own windows; the
-// launcher window shows startup itself and then the launcher.
+// Developer startup previews open in their own window; the launcher window
+// shows startup itself and then the launcher.
 const windowLabel = isTauri() ? getCurrentWindow().label : "main";
 const previewWindow = windowLabel.startsWith("startup-preview-");
 
-// Developer simulations are shared with the settings window through local
-// storage, and last until the launcher starts again.
 if (windowLabel === "main") {
   clearUpdateSimulation();
   clearStorageLoadingPreview();

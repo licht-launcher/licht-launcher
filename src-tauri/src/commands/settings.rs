@@ -37,8 +37,7 @@ pub async fn save_settings(
     Ok(saved)
 }
 
-/// The hardware acceleration this launcher process started with. A saved change
-/// only applies after a restart, and every window compares against this value.
+/// The value this process started with; a saved change applies after a restart.
 #[tauri::command]
 pub fn applied_hardware_acceleration(runtime: State<'_, crate::desktop::Runtime>) -> bool {
     runtime.hardware_acceleration
@@ -96,8 +95,6 @@ fn starting_directory(current: &str, fallback: &Path) -> Result<PathBuf, String>
     Ok(directory)
 }
 
-/// A file dialog owned by the window that asked for it, so it stays in front of
-/// that window and blocks it until it closes.
 fn owned_file_dialog(window: &WebviewWindow) -> FileDialogBuilder<tauri::Wry> {
     window.dialog().file().set_parent(window)
 }

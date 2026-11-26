@@ -210,7 +210,6 @@ pub(crate) fn create_launcher_window(app: &tauri::AppHandle, label: &str) -> tau
     Ok(())
 }
 
-/// Builds a window with the launcher's own title bar, theme and WebView options.
 pub(crate) fn build_launcher_style_window(
     app: &tauri::AppHandle,
     builder: WebviewWindowBuilder<'_, tauri::Wry, tauri::AppHandle>,

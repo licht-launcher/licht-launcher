@@ -84,10 +84,6 @@ export function showCheckToast(
   );
 }
 
-/**
- * Runs the update actions requested in this window and reports their result
- * here, so the launcher and settings windows each answer their own buttons.
- */
 export function useUpdateActions() {
   const query = useAppUpdateState();
   const client = useQueryClient();

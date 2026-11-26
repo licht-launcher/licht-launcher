@@ -16,17 +16,14 @@ import { friendlyError, messageOf } from "@/lib/errors";
 
 import { settingsWindowStyles } from "./settings-window.styles";
 
-/** Sent by the backend when another section is requested while this window is open. */
 export const SETTINGS_WINDOW_SECTION_EVENT = "settings-window-section";
 
 export function SettingsWindow() {
   const [section, setSection] = useState<SectionId>("account");
   useSharedDataSync();
-  // The Updates section's buttons are answered in this window.
   useUpdateActions();
 
-  // The window starts hidden. Once it listens for section requests it asks the
-  // backend for the section requested most recently, then shows itself.
+  // Ask for the section only once listening, so no request is missed.
   const revealed = useRef(false);
   useEffect(() => {
     let active = true;

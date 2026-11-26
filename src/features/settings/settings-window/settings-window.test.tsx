@@ -50,7 +50,6 @@ vi.mock("@tauri-apps/api/core", async (importOriginal) => {
 });
 
 let state = appUpdateState({ automaticUpdates: false });
-/** The section the backend gives the page once it reports that it is ready. */
 let requestedSection: string | null = null;
 
 function emit(name: string, payload: unknown) {

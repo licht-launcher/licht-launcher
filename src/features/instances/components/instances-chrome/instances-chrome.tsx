@@ -123,7 +123,6 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
     pathname === "/discover" || pathname.startsWith("/discover/");
   useEffect(() => {
     if (!import.meta.env.DEV) return;
-    // Developer Tools in the settings window asks the launcher to show Downloads.
     let active = true;
     let unsubscribe: (() => void) | undefined;
     listen(STORAGE_LOADING_PREVIEW_EVENT, () => {

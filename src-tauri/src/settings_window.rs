@@ -1,5 +1,3 @@
-//! The launcher settings open in their own window beside the launcher window.
-
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -8,32 +6,22 @@ use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindow, WebviewWindo
 use crate::commands::{command_error, command_failure};
 
 pub const LABEL: &str = "settings";
-/// Sent to a ready settings window when another section is requested.
 const SECTION_EVENT: &str = "settings-window-section";
-/// Sent to the settings window when the launcher window has closed: the page
-/// saves its last edit and closes itself, since the app is ending.
 const LAUNCHER_CLOSED_EVENT: &str = "launcher-closed";
-/// How long the settings window may take to save before it is closed anyway.
 const LAUNCHER_CLOSED_GRACE: Duration = Duration::from_secs(5);
 const MAX_SECTION_LENGTH: usize = 32;
 
-/// The settings window's lifecycle, kept so a request made while the page is
-/// still loading is not lost.
+/// Keeps a section requested while the page is still loading.
 #[derive(Debug, Default)]
 struct WindowState {
-    /// The section asked for most recently.
     section: Option<String>,
-    /// The page listens for section requests and has shown itself.
     ready: bool,
 }
 
 #[derive(Debug, PartialEq, Eq)]
 enum Next {
-    /// No window yet: create it. The page asks for the section once it loads.
     Create,
-    /// The page is still loading: it reads the section when it is ready.
     Wait,
-    /// The page is ready: send it the section and bring it forward.
     Show,
 }
 
@@ -60,8 +48,7 @@ impl WindowState {
     }
 }
 
-/// Also held while a request looks for the window and creates it, so two quick
-/// requests cannot both try to create it.
+/// Held while creating the window, so two quick requests cannot both create it.
 static STATE: Mutex<WindowState> = Mutex::new(WindowState {
     section: None,
     ready: false,
@@ -73,20 +60,16 @@ fn state() -> anyhow::Result<std::sync::MutexGuard<'static, WindowState>> {
         .map_err(|_| anyhow::anyhow!("settings window lock failed"))
 }
 
-/// Windows that may use launcher-only commands such as updates and diagnostics.
 pub fn is_launcher_window(label: &str) -> bool {
     label == "main" || label == LABEL
 }
 
-/// Section ids are lowercase words; the page falls back to its first section for
-/// one it does not know.
 fn valid_section(section: &str) -> bool {
     !section.is_empty()
         && section.len() <= MAX_SECTION_LENGTH
         && section.bytes().all(|byte| byte.is_ascii_lowercase())
 }
 
-/// Shows the settings window at `section`, creating it when it is not open yet.
 pub fn open(app: &AppHandle, section: &str) -> anyhow::Result<()> {
     anyhow::ensure!(valid_section(section), "Unknown settings section");
     let mut state = state()?;
@@ -112,7 +95,6 @@ pub fn open(app: &AppHandle, section: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Forgets the closed settings window, so the next request creates a new one.
 pub fn forget() {
     match state() {
         Ok(mut state) => state.closed(),
@@ -120,8 +102,7 @@ pub fn forget() {
     }
 }
 
-/// Closes the settings window after the launcher window has closed, so the app
-/// ends. The page saves its last edit first; it cannot keep itself open.
+/// The page saves its last edit, then closes itself without being able to refuse.
 pub fn close(app: &AppHandle) {
     let Some(window) = app.get_webview_window(LABEL) else {
         return;
@@ -163,10 +144,7 @@ pub async fn open_settings_window(
         .map_err(|error| command_error(error.as_ref()))
 }
 
-/// Called by the settings page once it listens for section requests. Returns the
-/// section asked for most recently; the page then shows the window.
-// Async, so it never waits for the state lock on the UI thread while a request
-// holds it to create the window there.
+// Async: on the UI thread it could deadlock with `open` creating the window.
 #[tauri::command]
 pub async fn settings_window_ready(window: WebviewWindow) -> Result<Option<String>, String> {
     if window.label() != LABEL {

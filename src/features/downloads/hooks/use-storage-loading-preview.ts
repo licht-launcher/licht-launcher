@@ -2,11 +2,9 @@ import { emitTo } from "@tauri-apps/api/event";
 import { useSyncExternalStore } from "react";
 import { reportInterfaceError } from "@/lib/error-reporting";
 
-/** Sent to the launcher window so it opens Downloads to show the preview. */
 export const STORAGE_LOADING_PREVIEW_EVENT = "dev-storage-loading-preview";
 const CHANGE_EVENT = "licht-launcher:dev-storage-loading-preview-change";
-// Local storage is shared by the launcher and settings windows; the launcher
-// clears it when it starts, so a preview lasts one launcher session.
+// Shared with the settings window; the launcher clears it when it starts.
 const key = "licht-launcher.dev-storage-loading-preview";
 
 function getStorageLoadingPreview(): boolean {
@@ -41,7 +39,6 @@ function subscribe(listener: () => void) {
   };
 }
 
-/** Whether a developer asked Downloads to keep showing storage as loading. */
 export function useStorageLoadingPreview(): boolean {
   return useSyncExternalStore(subscribe, getStorageLoadingPreview, () => false);
 }
