@@ -216,7 +216,6 @@ pub(crate) fn create_launcher_window(app: &tauri::AppHandle, label: &str) -> tau
         .title("Licht Launcher")
         .inner_size(1200.0, 800.0)
         .min_inner_size(960.0, 560.0)
-        .max_inner_size(1200.0, 960.0)
         .center();
     build_launcher_style_window(app, builder)?;
     Ok(())
@@ -232,7 +231,6 @@ pub(crate) fn build_launcher_style_window(
         // still starting stays unpainted until it receives input.
         .visible(false)
         .fullscreen(false)
-        .maximizable(false)
         .decorations(false)
         .theme(theme::native_theme(theme))
         .initialization_script(theme::initialization_script(theme)?)
@@ -247,8 +245,7 @@ pub(crate) fn build_launcher_style_window(
     #[cfg(windows)]
     let window = {
         use tauri_plugin_window_controls::WindowControlsBuilderExt;
-        // Native min / (disabled) max / close above the WebView. Maximize stays
-        // grayed while `maximizable(false)` clears WS_MAXIMIZEBOX.
+        // Native min / max / close above the WebView.
         builder.window_controls_height(TITLE_BAR_HEIGHT).build()?
     };
     #[cfg(not(windows))]

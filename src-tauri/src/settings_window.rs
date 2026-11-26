@@ -87,6 +87,7 @@ pub fn open(app: &AppHandle, section: &str) -> anyhow::Result<()> {
                 // The size the settings dialog had inside the launcher window.
                 .inner_size(896.0, 664.0)
                 .min_inner_size(760.0, 520.0)
+                .maximizable(false)
                 .center();
             crate::build_launcher_style_window(app, builder)?;
         }
