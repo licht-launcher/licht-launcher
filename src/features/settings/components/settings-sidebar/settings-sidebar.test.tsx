@@ -127,6 +127,19 @@ describe("SettingsSidebar", () => {
     expect(writeText).not.toHaveBeenCalled();
   });
 
+  it("lets its empty space move the window while its buttons stay clickable", async () => {
+    await renderSettings();
+    await screen.findByRole("button", { name: "Dark" });
+    const sections = screen.getByRole("navigation", {
+      name: "Settings sections",
+    });
+    const sidebar = sections.closest("[data-tauri-drag-region]");
+    expect(sidebar).toHaveAttribute("data-tauri-drag-region", "deep");
+    expect(
+      within(sections).getByRole("button", { name: "General" }),
+    ).not.toHaveAttribute("data-tauri-drag-region");
+  });
+
   it("keeps an accessible page name and navigates without the app footer", async () => {
     await renderSettings();
     await screen.findByRole("button", { name: "Dark" });
