@@ -1,12 +1,8 @@
+// Rows follow the launcher settings cards.
 export const linkedModpackSettingsStyles = {
-  root: "flex flex-col gap-6",
-  summary: "flex flex-col gap-1 rounded-xl bg-background/60 p-4",
-  summaryLabel: "text-sm text-muted-foreground",
-  summaryName: "truncate text-sm font-medium",
-  summaryDetail: "truncate text-sm text-muted-foreground",
-  group: "flex flex-col gap-2",
-  groupText: "flex flex-col gap-1",
-  label: "text-sm font-medium",
-  hint: "text-sm text-muted-foreground",
-  action: "self-start",
+  row: "flex items-center justify-between gap-3",
+  rowText: "flex min-w-0 flex-col gap-0.5",
+  rowLabel: "truncate text-sm font-normal",
+  rowDescription: "text-sm text-muted-foreground",
+  control: "shrink-0",
 } as const;

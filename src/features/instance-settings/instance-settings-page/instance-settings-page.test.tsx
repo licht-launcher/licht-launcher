@@ -57,7 +57,6 @@ function renderPage(
         entry={entry}
         busy={false}
         versionBusy={false}
-        onOpenGlobalSettings={() => {}}
         onRename={() => {}}
         onChangeBase={() => {}}
         onOpenFolder={() => {}}
@@ -175,12 +174,10 @@ describe("InstanceSettingsPage", () => {
     expect(onRename).toHaveBeenCalledWith("Hardcore");
 
     expect(
-      screen.getByRole("heading", { name: "Open folder" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { name: "Duplicate" }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Delete" })).toBeInTheDocument();
+      screen
+        .getAllByRole("heading", { level: 3 })
+        .map((heading) => heading.textContent),
+    ).toEqual(["Instance", "Actions", "Danger zone"]);
     fireEvent.click(screen.getByRole("button", { name: "Open folder" }));
     fireEvent.click(screen.getByRole("button", { name: "Duplicate" }));
     fireEvent.click(screen.getByRole("button", { name: "Delete instance" }));
@@ -200,9 +197,6 @@ describe("InstanceSettingsPage", () => {
     expect(await screen.findByText("Vanilla")).toBeInTheDocument();
     expect(screen.getByText("1.20.1")).toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: "Edit base" }),
-    ).toBeInTheDocument();
-    expect(
       screen.getByText(
         "Change the platform, game version or loader this instance launches with.",
       ),
@@ -211,7 +205,7 @@ describe("InstanceSettingsPage", () => {
       screen
         .getAllByRole("heading", { level: 3 })
         .map((heading) => heading.textContent),
-    ).toEqual(["Edit base", "Repair"]);
+    ).toEqual(["Base", "Maintenance"]);
     expect(invoke).not.toHaveBeenCalledWith("list_versions");
 
     // The version list is virtualized; give it room to render its options.
@@ -455,20 +449,15 @@ describe("InstanceSettingsPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Instance base" }));
 
-    expect(
-      await screen.findByRole("heading", { name: "Modpack version" }),
-    ).toBeInTheDocument();
-    // Each action sits right under the card it changes.
+    expect(await screen.findByText("Modpack version")).toBeInTheDocument();
+    // The linked pack replaces Edit base, right under the base it sets.
     expect(
       screen
         .getAllByRole("heading", { level: 3 })
         .map((heading) => heading.textContent),
-    ).toEqual([
-      "Modpack version",
-      "Reinstall modpack",
-      "Unlink modpack",
-      "Repair",
-    ]);
+    ).toEqual(["Base", "Linked modpack", "Maintenance"]);
+    expect(screen.getByText("Reinstall modpack")).toBeInTheDocument();
+    expect(screen.getByText("Unlink modpack")).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Edit base" }),
     ).not.toBeInTheDocument();
@@ -628,10 +617,12 @@ describe("InstanceSettingsPage", () => {
 
   it("groups overrides under Override Settings", async () => {
     renderPage();
-    expect(await screen.findByText("Survival")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Open Global Settings" }),
+      await screen.findByRole("heading", { level: 1, name: "Survival" }),
     ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Open Global Settings" }),
+    ).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Override Settings" }));
 
     expect(
@@ -639,9 +630,19 @@ describe("InstanceSettingsPage", () => {
         "Turn on a category to use values from this instance instead of global Settings.",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Window" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Memory" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Java" })).toBeInTheDocument();
+    expect(
+      screen
+        .getAllByRole("heading", { level: 3 })
+        .map((heading) => heading.textContent),
+    ).toEqual(["Game window", "Memory", "Java"]);
+    // Off, each category says which global value the instance uses.
+    expect(
+      screen.getByText("Using global settings: 854 × 480."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Using global settings: 2GB.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Using the Java installation from global settings."),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole("heading", { name: "Arguments" }),
     ).not.toBeInTheDocument();
@@ -658,6 +659,9 @@ describe("InstanceSettingsPage", () => {
     expect(screen.queryByLabelText("Full screen")).not.toBeInTheDocument();
     fireEvent.click(customizeWindow);
     expect(screen.getByLabelText("Full screen")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Using global settings: 854 × 480."),
+    ).not.toBeInTheDocument();
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith(

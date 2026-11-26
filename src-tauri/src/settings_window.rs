@@ -140,9 +140,7 @@ pub async fn open_settings_window(
     window: WebviewWindow,
     section: String,
 ) -> Result<(), String> {
-    if !is_launcher_window(window.label())
-        && !crate::instance_settings_window::is_instance_settings_window(window.label())
-    {
+    if !is_launcher_window(window.label()) {
         return Err("Settings can only be opened from the launcher".to_string());
     }
     // WebView2 creation must not block the synchronous IPC/UI thread on Windows.

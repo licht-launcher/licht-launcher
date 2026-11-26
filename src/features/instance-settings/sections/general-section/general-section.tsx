@@ -2,6 +2,7 @@ import { CopyIcon, FolderOpenIcon, Trash2Icon } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
 import { generalSectionStyles } from "./general-section.styles";
@@ -38,44 +39,53 @@ export function GeneralSection({
 
   return (
     <div className={generalSectionStyles.root}>
-      <div className={generalSectionStyles.group}>
-        <div className={generalSectionStyles.groupText}>
-          <label className={generalSectionStyles.label} htmlFor="instance-name">
-            Name
-          </label>
-          <p id="instance-name-hint" className={generalSectionStyles.hint}>
-            Display name for this instance. The folder on disk stays the same.
-          </p>
+      <Card title="Instance">
+        <div className={generalSectionStyles.row}>
+          <div className={generalSectionStyles.rowText}>
+            <label
+              className={generalSectionStyles.rowLabel}
+              htmlFor="instance-name"
+            >
+              Name
+            </label>
+            <p
+              id="instance-name-hint"
+              className={generalSectionStyles.rowDescription}
+            >
+              Display name for this instance. The folder on disk stays the same.
+            </p>
+          </div>
+          <Input
+            id="instance-name"
+            className={generalSectionStyles.nameInput}
+            value={draftName}
+            disabled={busy}
+            aria-describedby="instance-name-hint"
+            onChange={(event) => {
+              setDraftName(event.target.value);
+            }}
+            onBlur={commitName}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.currentTarget.blur();
+              }
+            }}
+          />
         </div>
-        <Input
-          id="instance-name"
-          value={draftName}
-          disabled={busy}
-          aria-describedby="instance-name-hint"
-          onChange={(event) => {
-            setDraftName(event.target.value);
-          }}
-          onBlur={commitName}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.currentTarget.blur();
-            }
-          }}
-        />
-      </div>
+      </Card>
 
-      <div className={generalSectionStyles.actions}>
-        <div className={generalSectionStyles.group}>
-          <div className={generalSectionStyles.groupText}>
-            <h3 className={generalSectionStyles.label}>Open folder</h3>
-            <p className={generalSectionStyles.hint}>
+      <Card title="Actions">
+        <div className={generalSectionStyles.row}>
+          <div className={generalSectionStyles.rowText}>
+            <p className={generalSectionStyles.rowLabel}>Open folder</p>
+            <p className={generalSectionStyles.rowDescription}>
               Open this instance directory in the system file manager.
             </p>
           </div>
           <Button
             type="button"
-            variant="secondary"
-            className={generalSectionStyles.action}
+            variant="outline"
+            className={generalSectionStyles.control}
             disabled={busy}
             onClick={onOpenFolder}
           >
@@ -83,17 +93,17 @@ export function GeneralSection({
             Open folder
           </Button>
         </div>
-        <div className={generalSectionStyles.group}>
-          <div className={generalSectionStyles.groupText}>
-            <h3 className={generalSectionStyles.label}>Duplicate</h3>
-            <p className={generalSectionStyles.hint}>
+        <div className={generalSectionStyles.row}>
+          <div className={generalSectionStyles.rowText}>
+            <p className={generalSectionStyles.rowLabel}>Duplicate</p>
+            <p className={generalSectionStyles.rowDescription}>
               Copy this instance, including world saves, under a new name.
             </p>
           </div>
           <Button
             type="button"
-            variant="secondary"
-            className={generalSectionStyles.action}
+            variant="outline"
+            className={generalSectionStyles.control}
             disabled={busy}
             onClick={onDuplicate}
           >
@@ -101,27 +111,29 @@ export function GeneralSection({
             Duplicate
           </Button>
         </div>
-      </div>
+      </Card>
 
-      <div className={generalSectionStyles.dangerGroup}>
-        <div className={generalSectionStyles.groupText}>
-          <h3 className={generalSectionStyles.label}>Delete</h3>
-          <p className={generalSectionStyles.hint}>
-            Permanently remove this instance and its saves. This cannot be
-            undone.
-          </p>
+      <Card title="Danger zone">
+        <div className={generalSectionStyles.row}>
+          <div className={generalSectionStyles.rowText}>
+            <p className={generalSectionStyles.rowLabel}>Delete</p>
+            <p className={generalSectionStyles.rowDescription}>
+              Permanently remove this instance and its saves. This cannot be
+              undone.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="destructive"
+            className={generalSectionStyles.control}
+            disabled={busy}
+            onClick={onDelete}
+          >
+            <Trash2Icon data-icon="inline-start" aria-hidden />
+            Delete instance
+          </Button>
         </div>
-        <Button
-          type="button"
-          variant="destructive"
-          className={generalSectionStyles.action}
-          disabled={busy}
-          onClick={onDelete}
-        >
-          <Trash2Icon data-icon="inline-start" aria-hidden />
-          Delete instance
-        </Button>
-      </div>
+      </Card>
     </div>
   );
 }

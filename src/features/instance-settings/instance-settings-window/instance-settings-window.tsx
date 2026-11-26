@@ -4,7 +4,6 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { instanceSettingsWindowReady, listInstances } from "@/api/commands";
-import { requestOpenSettings } from "@/api/shell-events";
 import { TitleBar } from "@/components/title-bar/title-bar";
 import { InstanceSettingsPage } from "@/features/instance-settings/instance-settings-page";
 import {
@@ -128,7 +127,6 @@ export function InstanceSettingsWindow() {
         instanceActive={
           entry !== null && status.activeFolders.includes(entry.folder)
         }
-        onOpenGlobalSettings={() => requestOpenSettings("instances")}
         onRename={(next) => {
           if (entry)
             request({ kind: "rename", folder: entry.folder, name: next });

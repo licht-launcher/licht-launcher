@@ -4,43 +4,46 @@ import { MemoryInput } from "@/features/settings/components/memory-input";
 import { MemorySlider } from "@/features/settings/components/memory-slider";
 import type { SettingsSnapshot } from "@/lib/generated/SettingsSnapshot";
 
-import { memorySectionStyles } from "./memory-section.styles";
+import { memorySectionStyles as styles } from "./memory-section.styles";
 
 export function MemorySection({
   draft,
   snapshot,
+  globalHint,
   onChange,
 }: {
   draft: InstanceDraft;
   snapshot: SettingsSnapshot;
+  /** What the instance uses while it does not override memory. */
+  globalHint: string;
   onChange: (patch: Partial<InstanceDraft>) => void;
 }) {
   return (
-    <div className={memorySectionStyles.root}>
-      <div className={memorySectionStyles.toggle}>
-        <div className={memorySectionStyles.toggleRow}>
-          <label
-            htmlFor="override-memory"
-            className={memorySectionStyles.label}
-          >
+    <>
+      <div className={styles.row}>
+        <div className={styles.rowText}>
+          <label htmlFor="override-memory" className={styles.rowLabel}>
             Customize memory allocation
           </label>
-          <Switch
-            id="override-memory"
-            aria-label="Customize memory allocation"
-            aria-describedby="override-memory-hint"
-            checked={draft.overrideMemory}
-            onCheckedChange={(overrideMemory) => onChange({ overrideMemory })}
-          />
+          <p id="override-memory-hint" className={styles.rowDescription}>
+            {draft.overrideMemory
+              ? "Set memory allocation separately for this instance. The minimum stays 512 MB."
+              : globalHint}
+          </p>
         </div>
-        <p id="override-memory-hint" className={memorySectionStyles.hint}>
-          Set memory allocation separately for this instance.
-        </p>
+        <Switch
+          id="override-memory"
+          className={styles.control}
+          aria-label="Customize memory allocation"
+          aria-describedby="override-memory-hint"
+          checked={draft.overrideMemory}
+          onCheckedChange={(overrideMemory) => onChange({ overrideMemory })}
+        />
       </div>
       {draft.overrideMemory ? (
-        <div className={memorySectionStyles.fields}>
-          <div className={memorySectionStyles.valueRow}>
-            <span>Memory</span>
+        <div className={styles.memoryField}>
+          <div className={styles.row}>
+            <span className={styles.rowLabel}>Memory</span>
             <MemoryInput
               valueMb={draft.maxMemoryMb}
               minimumMb={snapshot.memoryMinimumMb}
@@ -59,11 +62,8 @@ export function MemorySection({
               onChange({ maxMemoryMb });
             }}
           />
-          <p className={memorySectionStyles.hint}>
-            Memory allocation. The minimum stays 512 MB.
-          </p>
         </div>
       ) : null}
-    </div>
+    </>
   );
 }

@@ -17,7 +17,6 @@ export function InstanceSettingsPage({
   busy,
   versionBusy,
   instanceActive = false,
-  onOpenGlobalSettings,
   onRename,
   onChangeBase,
   onOpenFolder,
@@ -29,7 +28,6 @@ export function InstanceSettingsPage({
   versionBusy: boolean;
   /** The instance's game or a download for it is running. */
   instanceActive?: boolean;
-  onOpenGlobalSettings: () => void;
   onRename: (name: string) => void;
   onChangeBase: (base: InstanceBaseInput) => void;
   onOpenFolder: () => void;
@@ -53,9 +51,9 @@ export function InstanceSettingsPage({
       {entry ? (
         <InstanceSettingsSidebar
           name={entry.name}
+          iconPath={entry.iconPath}
           section={section}
           onSectionChange={setSection}
-          onOpenGlobalSettings={onOpenGlobalSettings}
         />
       ) : null}
       {entry && draft && settings.data ? (

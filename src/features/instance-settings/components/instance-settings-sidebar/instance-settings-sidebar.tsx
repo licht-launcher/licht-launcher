@@ -1,23 +1,22 @@
-import { ChevronRightIcon } from "lucide-react";
-
 import { Button } from "@/components/ui/button";
 import {
   INSTANCE_SECTIONS,
   type InstanceSectionId,
 } from "@/features/instance-settings/model/sections";
+import { InstanceIcon } from "@/features/instances/components/instance-icon";
 
 import { instanceSettingsSidebarStyles } from "./instance-settings-sidebar.styles";
 
 export function InstanceSettingsSidebar({
   name,
+  iconPath,
   section,
   onSectionChange,
-  onOpenGlobalSettings,
 }: {
   name: string;
+  iconPath: string | null;
   section: InstanceSectionId;
   onSectionChange: (section: InstanceSectionId) => void;
-  onOpenGlobalSettings: () => void;
 }) {
   return (
     <div className={instanceSettingsSidebarStyles.root}>
@@ -26,7 +25,12 @@ export function InstanceSettingsSidebar({
         aria-hidden
         className={instanceSettingsSidebarStyles.dragRegion}
       />
-      <h1 className={instanceSettingsSidebarStyles.title}>{name}</h1>
+      <div className={instanceSettingsSidebarStyles.header}>
+        <InstanceIcon iconPath={iconPath} />
+        <h1 className={instanceSettingsSidebarStyles.title} title={name}>
+          {name}
+        </h1>
+      </div>
       <nav
         aria-label="Instance settings sections"
         className={instanceSettingsSidebarStyles.nav}
@@ -51,20 +55,6 @@ export function InstanceSettingsSidebar({
           );
         })}
       </nav>
-      <div className={instanceSettingsSidebarStyles.footer}>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className={instanceSettingsSidebarStyles.globalButton}
-          onClick={onOpenGlobalSettings}
-        >
-          <span className={instanceSettingsSidebarStyles.navLabel}>
-            Open Global Settings
-          </span>
-          <ChevronRightIcon data-icon="inline-end" aria-hidden />
-        </Button>
-      </div>
     </div>
   );
 }

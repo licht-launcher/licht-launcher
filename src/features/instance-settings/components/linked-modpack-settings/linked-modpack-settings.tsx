@@ -8,6 +8,7 @@ import {
   unlinkInstanceModpack,
 } from "@/api/commands";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import {
   Dialog,
   DialogClose,
@@ -107,25 +108,26 @@ export function LinkedModpackSettings({
     changeVersion.isPending;
 
   return (
-    <div className={styles.root}>
-      <div className={styles.summary}>
-        <p className={styles.summaryLabel}>Linked modpack</p>
-        <p className={styles.summaryName}>
-          {linked ? `${linked.name} ${linked.versionName}` : "Linked modpack"}
-        </p>
-        <p className={styles.summaryDetail}>{source}</p>
+    <Card title="Linked modpack">
+      <div className={styles.row}>
+        <div className={styles.rowText}>
+          <p className={styles.rowLabel}>
+            {linked ? `${linked.name} ${linked.versionName}` : "Linked modpack"}
+          </p>
+          <p className={styles.rowDescription}>{source}</p>
+        </div>
       </div>
-      <div className={styles.group}>
-        <div className={styles.groupText}>
-          <h3 className={styles.label}>Modpack version</h3>
-          <p className={styles.hint}>
+      <div className={styles.row}>
+        <div className={styles.rowText}>
+          <p className={styles.rowLabel}>Modpack version</p>
+          <p className={styles.rowDescription}>
             {fromFile ? VERSION_FILE_HINT : VERSION_HINT}
           </p>
         </div>
         <Button
           type="button"
           variant="warning"
-          className={styles.action}
+          className={styles.control}
           disabled={disabled || fromFile}
           onClick={() => setVersionOpen(true)}
         >
@@ -160,7 +162,7 @@ export function LinkedModpackSettings({
         disabled={disabled}
         onConfirm={() => unlink.mutate()}
       />
-    </div>
+    </Card>
   );
 }
 
@@ -184,15 +186,15 @@ function ConfirmedAction({
 }) {
   const [confirming, setConfirming] = useState(false);
   return (
-    <div className={styles.group}>
-      <div className={styles.groupText}>
-        <h3 className={styles.label}>{title}</h3>
-        <p className={styles.hint}>{hint}</p>
+    <div className={styles.row}>
+      <div className={styles.rowText}>
+        <p className={styles.rowLabel}>{title}</p>
+        <p className={styles.rowDescription}>{hint}</p>
       </div>
       <Button
         type="button"
         variant="warning"
-        className={styles.action}
+        className={styles.control}
         disabled={disabled}
         onClick={() => setConfirming(true)}
       >
