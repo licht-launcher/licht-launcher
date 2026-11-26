@@ -65,6 +65,48 @@ pub async fn rename_instance(
     write_instance(database, &dir, &instance).await?;
     Ok(entry_from(&dir, folder.to_string(), instance))
 }
+/// Uses the image at `source` as this instance's icon in place of the pack's or the default.
+pub async fn set_instance_icon(
+    database: &crate::DatabaseClient,
+    instances_dir: &Path,
+    folder: &str,
+    source: &Path,
+) -> Result<InstanceEntry> {
+    let _guard = profile_guard().await;
+    let dir = instance_dir(instances_dir, folder)?;
+    let instance = load_instance(database, &dir).await?;
+    let bytes = super::icon::read_custom_icon(source)?;
+    let destination = super::icon::custom_icon_path(&dir, &bytes);
+    let temporary = destination.with_extension("png.part");
+    if let Err(error) =
+        fs::write(&temporary, bytes).and_then(|()| fs::rename(&temporary, &destination))
+    {
+        if let Err(cleanup) = fs::remove_file(&temporary)
+            && cleanup.kind() != std::io::ErrorKind::NotFound
+        {
+            tracing::warn!(error = %cleanup, "Could not remove a partial instance icon");
+        }
+        return Err(error.into());
+    }
+    // The new icon is already in place, so a leftover old one must not fail the change.
+    if let Err(error) = super::icon::remove_custom_icons(&dir, Some(&destination)) {
+        tracing::warn!(error = %error, "Could not remove a previous instance icon");
+    }
+    Ok(entry_from(&dir, folder.to_string(), instance))
+}
+
+/// Drops the icon the user picked, so the pack's icon or the default shows again.
+pub async fn reset_instance_icon(
+    database: &crate::DatabaseClient,
+    instances_dir: &Path,
+    folder: &str,
+) -> Result<InstanceEntry> {
+    let _guard = profile_guard().await;
+    let dir = instance_dir(instances_dir, folder)?;
+    let instance = load_instance(database, &dir).await?;
+    super::icon::remove_custom_icons(&dir, None)?;
+    Ok(entry_from(&dir, folder.to_string(), instance))
+}
 pub async fn duplicate_instance(
     database: &crate::DatabaseClient,
     instances_dir: &Path,

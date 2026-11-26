@@ -78,6 +78,10 @@ pub enum CoreError {
     InstanceMemory,
     #[error("instance name is invalid")]
     InstanceName,
+    #[error("instance icon must be a PNG, JPEG, WebP or GIF image")]
+    InstanceIconImage,
+    #[error("instance icon must be 2 MB or smaller")]
+    InstanceIconSize,
     #[error("instance preparation is incomplete")]
     InstancePreparing,
     #[error("this instance is not linked to a modpack")]

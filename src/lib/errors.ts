@@ -1,5 +1,9 @@
 const FRIENDLY: Record<string, string> = {
   "player skin image is invalid": "The player's skin could not be loaded.",
+  "instance icon must be a PNG, JPEG, WebP or GIF image":
+    "That file is not an image. Pick a PNG, JPEG, WebP or GIF.",
+  "instance icon must be 2 MB or smaller":
+    "That image is too large. Pick one up to 2 MB.",
   "HTTP request failed":
     "The network request failed. Check your connection and try again.",
   "I/O operation failed":

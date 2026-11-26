@@ -21,6 +21,8 @@ export function InstanceSettingsPanel({
   snapshot,
   instanceName,
   folder,
+  iconPath,
+  customIcon,
   versionId,
   busy,
   versionBusy,
@@ -39,6 +41,9 @@ export function InstanceSettingsPanel({
   snapshot: SettingsSnapshot;
   instanceName: string;
   folder: string;
+  iconPath: string | null;
+  /** The icon is one the user picked rather than the pack's or the default. */
+  customIcon: boolean;
   versionId: string | null;
   preparing?: boolean;
   /** The pack a linked instance was installed from; `null` for other instances. */
@@ -79,6 +84,9 @@ export function InstanceSettingsPanel({
             {section === "general" ? (
               <GeneralSection
                 name={instanceName}
+                folder={folder}
+                iconPath={iconPath}
+                customIcon={customIcon}
                 busy={busy}
                 onRename={onRename}
                 onOpenFolder={onOpenFolder}

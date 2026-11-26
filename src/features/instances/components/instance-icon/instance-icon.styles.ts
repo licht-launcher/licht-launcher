@@ -4,5 +4,6 @@ export const instanceIconStyles = {
   sizes: {
     sm: { frame: "size-6 rounded-md" },
     md: { frame: "size-10 rounded-md" },
+    lg: { frame: "size-12 rounded-lg" },
   },
 } as const;

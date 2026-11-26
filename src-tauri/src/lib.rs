@@ -92,6 +92,8 @@ pub fn run() -> anyhow::Result<()> {
             commands::modpacks::create_instance_from_modpack_file,
             commands::modpacks::install_modpack_files,
             commands::instances::rename_instance,
+            commands::instances::set_instance_icon,
+            commands::instances::reset_instance_icon,
             commands::instances::duplicate_instance,
             commands::instances::delete_instance,
             commands::instances::save_instance,

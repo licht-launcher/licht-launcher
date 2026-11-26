@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use licht_core::{
     DatabaseClient, InstanceContentEntry, InstanceContentKind, InstanceEntry, InstanceFsEntry,
     InstanceSettings, LoaderChannel, LoaderPlatform, remove_instance_content as remove_content,
@@ -119,6 +121,37 @@ pub async fn rename_instance(
 ) -> Result<InstanceEntry, String> {
     let root = instances_root(&paths).map_err(failure)?;
     let entry = licht_core::rename_instance(&database, &root, &folder, &name)
+        .await
+        .map_err(failure)?;
+    super::notify_windows(&app, super::INSTANCES_CHANGED_EVENT);
+    Ok(entry)
+}
+
+#[tauri::command]
+pub async fn set_instance_icon(
+    app: AppHandle,
+    database: State<'_, DatabaseClient>,
+    paths: State<'_, LauncherPaths>,
+    folder: String,
+    path: String,
+) -> Result<InstanceEntry, String> {
+    let root = instances_root(&paths).map_err(failure)?;
+    let entry = licht_core::set_instance_icon(&database, &root, &folder, Path::new(&path))
+        .await
+        .map_err(failure)?;
+    super::notify_windows(&app, super::INSTANCES_CHANGED_EVENT);
+    Ok(entry)
+}
+
+#[tauri::command]
+pub async fn reset_instance_icon(
+    app: AppHandle,
+    database: State<'_, DatabaseClient>,
+    paths: State<'_, LauncherPaths>,
+    folder: String,
+) -> Result<InstanceEntry, String> {
+    let root = instances_root(&paths).map_err(failure)?;
+    let entry = licht_core::reset_instance_icon(&database, &root, &folder)
         .await
         .map_err(failure)?;
     super::notify_windows(&app, super::INSTANCES_CHANGED_EVENT);

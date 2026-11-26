@@ -15,6 +15,15 @@ describe("friendly errors", () => {
     );
   });
 
+  it("says which images can be an instance icon", () => {
+    expect(
+      friendlyError("instance icon must be a PNG, JPEG, WebP or GIF image"),
+    ).toBe("That file is not an image. Pick a PNG, JPEG, WebP or GIF.");
+    expect(friendlyError("instance icon must be 2 MB or smaller")).toBe(
+      "That image is too large. Pick one up to 2 MB.",
+    );
+  });
+
   it("turns a damaged download into a short sentence without the hash", () => {
     expect(friendlyError("downloaded SHA1 does not match")).toBe(
       "A downloaded file was damaged. Try again.",
