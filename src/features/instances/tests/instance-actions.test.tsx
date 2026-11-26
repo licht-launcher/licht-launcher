@@ -186,12 +186,28 @@ describe("Instance actions", () => {
         name: "Renamed",
       });
     });
+    const calls = invoke.mock.calls.length;
     act(() => {
       listeners.get("instance-settings-action")?.({
         payload: { kind: "format", folder: "next" },
       });
+      listeners.get("instance-settings-action")?.({
+        payload: { kind: "delete" },
+      });
     });
-    expect(invoke).not.toHaveBeenCalledWith("format", expect.anything());
+    await act(async () => {});
+    const instanceCommands = [
+      "rename_instance",
+      "duplicate_instance",
+      "delete_instance",
+      "open_instance_folder",
+      "change_instance_base",
+    ];
+    expect(
+      invoke.mock.calls
+        .slice(calls)
+        .filter(([command]) => instanceCommands.includes(command)),
+    ).toEqual([]);
   });
 
   it("tells the instance settings window why an action failed", async () => {
@@ -216,6 +232,8 @@ describe("Instance actions", () => {
         message: "Folder in use",
       });
     });
+    // The instance settings window shows the error; the launcher does not.
+    expect(screen.queryByText("Folder in use")).not.toBeInTheDocument();
   });
 
   it("tells instance settings windows what blocks their actions", async () => {
@@ -229,6 +247,23 @@ describe("Instance actions", () => {
       });
     });
     emit.mockClear();
+    // Game logs render the launcher often; the unchanged status is not sent again.
+    act(() => {
+      for (const line of ["One", "Two", "Three"]) {
+        listeners.get("game-log")?.({
+          payload: {
+            folder: "classic",
+            stream: "stdout",
+            line,
+          } satisfies GameLogEvent,
+        });
+      }
+    });
+    await act(async () => {});
+    expect(emit).not.toHaveBeenCalledWith(
+      "instance-settings-status",
+      expect.anything(),
+    );
     act(() => {
       listeners.get("instance-settings-status-request")?.({ payload: null });
     });

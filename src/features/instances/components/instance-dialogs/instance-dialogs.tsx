@@ -11,7 +11,7 @@ type DialogMutations = {
     unknown,
     { folder: string; name: string }
   >;
-  remove: UseMutationResult<void, unknown, string>;
+  remove: UseMutationResult<void, unknown, { folder: string }>;
 };
 
 export function InstanceDialogs({
@@ -49,7 +49,7 @@ export function InstanceDialogs({
         if (action?.kind !== "delete") {
           return;
         }
-        mutations.remove.mutate(action.folder);
+        mutations.remove.mutate({ folder: action.folder });
       }}
     />
   );

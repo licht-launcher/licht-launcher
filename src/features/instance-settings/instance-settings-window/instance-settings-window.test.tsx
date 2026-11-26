@@ -17,11 +17,24 @@ import {
 } from "@/features/settings/fixtures/render-settings";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 
-const { listeners, showWindow, setTitle, emitTo } = vi.hoisted(() => ({
+type CloseRequest = { preventDefault: () => void };
+
+const {
+  listeners,
+  showWindow,
+  setTitle,
+  emitTo,
+  destroyWindow,
+  closeRequested,
+} = vi.hoisted(() => ({
   listeners: new Map<string, Set<(event: { payload: unknown }) => void>>(),
   showWindow: vi.fn(),
   setTitle: vi.fn(),
   emitTo: vi.fn(),
+  destroyWindow: vi.fn(),
+  closeRequested: {
+    handler: null as ((request: CloseRequest) => Promise<void>) | null,
+  },
 }));
 vi.mock("@tauri-apps/api/event", () => ({
   emitTo,
@@ -40,9 +53,15 @@ vi.mock("@tauri-apps/api/window", () => ({
   getCurrentWindow: () => ({
     show: showWindow,
     setTitle,
+    destroy: destroyWindow,
     minimize: vi.fn(),
     close: vi.fn(),
-    onCloseRequested: vi.fn().mockResolvedValue(() => {}),
+    onCloseRequested: vi.fn(
+      async (handler: (request: CloseRequest) => Promise<void>) => {
+        closeRequested.handler = handler;
+        return () => {};
+      },
+    ),
   }),
 }));
 vi.mock("@tauri-apps/api/core", async (importOriginal) => {
@@ -95,10 +114,13 @@ describe("InstanceSettingsWindow", () => {
     showWindow.mockReset().mockResolvedValue(undefined);
     setTitle.mockReset().mockResolvedValue(undefined);
     emitTo.mockReset().mockResolvedValue(undefined);
+    destroyWindow.mockReset().mockResolvedValue(undefined);
+    closeRequested.handler = null;
     mockSettingsCommands((command) => {
       if (command === "instance_settings_window_ready")
         return Promise.resolve("survival");
       if (command === "list_instances") return Promise.resolve([survival]);
+      if (command === "save_instance") return Promise.resolve(survival);
       if (command === "get_instance_platform") {
         return Promise.resolve({
           platform: "vanilla",
@@ -217,5 +239,66 @@ describe("InstanceSettingsWindow", () => {
     await waitFor(() => expect(listeners.has("instances-changed")).toBe(true));
     emit("instances-changed", null);
     await waitFor(() => expect(fetches()).toBeGreaterThan(before));
+  });
+
+  it("saves the last edit before the window closes", async () => {
+    view();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Override Settings" }),
+    );
+    fireEvent.click(
+      screen.getByRole("switch", { name: "Customize window settings" }),
+    );
+    expect(invoke).not.toHaveBeenCalledWith("save_instance", expect.anything());
+    const request = { preventDefault: vi.fn() };
+    await act(async () => {
+      await closeRequested.handler?.(request);
+    });
+    expect(invoke).toHaveBeenCalledWith("save_instance", {
+      folder: "survival",
+      settings: expect.objectContaining({ overrideWindow: true }),
+    });
+    expect(request.preventDefault).not.toHaveBeenCalled();
+  });
+
+  it("stays open when the last edit cannot be saved", async () => {
+    view();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Override Settings" }),
+    );
+    fireEvent.click(
+      screen.getByRole("switch", { name: "Customize window settings" }),
+    );
+    fireEvent.change(screen.getByLabelText("Width"), {
+      target: { value: "0" },
+    });
+    const request = { preventDefault: vi.fn() };
+    await act(async () => {
+      await closeRequested.handler?.(request);
+    });
+    expect(request.preventDefault).toHaveBeenCalled();
+    expect(
+      await screen.findByText("window size must be at least 1"),
+    ).toBeVisible();
+  });
+
+  it("saves the last edit and closes when the launcher closes", async () => {
+    view();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Override Settings" }),
+    );
+    fireEvent.click(
+      screen.getByRole("switch", { name: "Customize window settings" }),
+    );
+    await waitFor(() => expect(listeners.has("launcher-closed")).toBe(true));
+    await act(async () => {
+      for (const handler of listeners.get("launcher-closed") ?? [])
+        handler({ payload: null });
+    });
+    await waitFor(() => expect(destroyWindow).toHaveBeenCalled());
+    expect(invoke).toHaveBeenCalledWith("save_instance", {
+      folder: "survival",
+      settings: expect.objectContaining({ overrideWindow: true }),
+    });
   });
 });

@@ -15,6 +15,10 @@ export function useInstanceDialogs() {
     setAction(null);
   }
 
+  function clearActionFor(folder: string) {
+    setAction((current) => (current?.folder === folder ? null : current));
+  }
+
   function openCreate() {
     setCreateOpen(true);
   }
@@ -47,6 +51,7 @@ export function useInstanceDialogs() {
     draftName,
     setDraftName,
     clearAction,
+    clearActionFor,
     openConfigure,
     openGlobalSettings,
     openRename,

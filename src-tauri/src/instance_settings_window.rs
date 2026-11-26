@@ -1,6 +1,8 @@
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 
+use anyhow::Context;
+
 use tauri::{AppHandle, Manager, State, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
 use crate::commands::{LauncherPaths, command_error, command_failure, failure};
@@ -73,11 +75,12 @@ fn open(app: &AppHandle, folder: &str) -> anyhow::Result<()> {
     let mut windows = windows()?;
     match windows.request(folder, |label| app.get_webview_window(label).is_some()) {
         Next::Show(label) => {
-            if let Some(window) = app.get_webview_window(&label) {
-                window.unminimize()?;
-                window.show()?;
-                window.set_focus()?;
-            }
+            let window = app
+                .get_webview_window(&label)
+                .context("The instance settings window closed while opening; try again")?;
+            window.unminimize()?;
+            window.show()?;
+            window.set_focus()?;
         }
         Next::Create(label) => {
             let builder = WebviewWindowBuilder::new(app, &label, WebviewUrl::default())
@@ -216,6 +219,23 @@ mod tests {
             Next::Create("instance-settings-1".to_string())
         );
         assert_eq!(windows.folder_of("instance-settings-0"), None);
+    }
+
+    #[test]
+    fn finds_the_windows_to_close() {
+        let mut windows = Windows::default();
+        windows.request("Survival", |_| false);
+        windows.request("Creative", |_| false);
+        assert_eq!(
+            windows.label_of("Creative").as_deref(),
+            Some("instance-settings-1")
+        );
+        assert_eq!(windows.label_of("Hardcore"), None);
+        let mut labels = windows.labels();
+        labels.sort();
+        assert_eq!(labels, ["instance-settings-0", "instance-settings-1"]);
+        windows.closed("instance-settings-0");
+        assert_eq!(windows.labels(), ["instance-settings-1"]);
     }
 
     #[test]

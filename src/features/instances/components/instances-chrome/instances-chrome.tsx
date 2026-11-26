@@ -182,7 +182,7 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
     useInstanceMutations({
       beginInstall,
       endInstall,
-      clearAction: dialogs.clearAction,
+      clearActionFor: dialogs.clearActionFor,
     });
 
   // Duplicating needs no questions: the copy is named like the original plus
@@ -197,21 +197,18 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
     };
   }
 
-  const instanceSettingsStatus = useMemo<InstanceSettingsStatus>(
-    () => ({
-      busy,
-      versionBusy: changeBase.isPending,
-      // Instances whose game or a download for them is running.
-      activeFolders: (instances.data ?? [])
-        .filter(
-          (instance) =>
-            playPhase(instance.folder) !== "idle" ||
-            isInstalling(instance.folder),
-        )
-        .map((instance) => instance.folder),
-    }),
-    [busy, changeBase.isPending, instances.data, playPhase, isInstalling],
-  );
+  const instanceSettingsStatus: InstanceSettingsStatus = {
+    busy,
+    versionBusy: changeBase.isPending,
+    // Instances whose game or a download for them is running.
+    activeFolders: (instances.data ?? [])
+      .filter(
+        (instance) =>
+          playPhase(instance.folder) !== "idle" ||
+          isInstalling(instance.folder),
+      )
+      .map((instance) => instance.folder),
+  };
   useInstanceSettingsBridge(
     instanceSettingsStatus,
     (action: InstanceSettingsAction) => {
@@ -220,14 +217,19 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
           return rename.mutateAsync({
             folder: action.folder,
             name: action.name,
+            fromSettingsWindow: true,
           });
         case "changeBase":
           return changeBase.mutateAsync({
             folder: action.folder,
             base: action.base,
+            fromSettingsWindow: true,
           });
         case "openFolder":
-          return openFolder.mutateAsync(action.folder);
+          return openFolder.mutateAsync({
+            folder: action.folder,
+            fromSettingsWindow: true,
+          });
         case "duplicate": {
           const instance = instances.data?.find(
             (item) => item.folder === action.folder,
@@ -235,12 +237,16 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
           if (!instance) {
             return Promise.reject(new Error("instance not found"));
           }
-          return duplicate.mutateAsync(
-            numberedCopy(instance.folder, instance.name),
-          );
+          return duplicate.mutateAsync({
+            ...numberedCopy(instance.folder, instance.name),
+            fromSettingsWindow: true,
+          });
         }
         case "delete":
-          return remove.mutateAsync(action.folder);
+          return remove.mutateAsync({
+            folder: action.folder,
+            fromSettingsWindow: true,
+          });
       }
     },
   );
@@ -369,7 +375,7 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
                       dialogs.openConfigure(instance.folder);
                       break;
                     case "open-folder":
-                      openFolder.mutate(instance.folder);
+                      openFolder.mutate({ folder: instance.folder });
                       break;
                     case "rename":
                       dialogs.openRename(instance.folder, instance.name);

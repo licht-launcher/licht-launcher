@@ -514,6 +514,11 @@ describe("InstanceSettingsPage", () => {
     expect(
       await screen.findByRole("button", { name: "Change version" }),
     ).toBeDisabled();
+    expect(
+      screen.getByText(
+        "Imported from a Modrinth file · No other versions to install",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("waits to repair while the modpack version changes", async () => {

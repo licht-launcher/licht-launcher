@@ -15,7 +15,7 @@ import { friendlyError, messageOf } from "@/lib/errors";
 
 /**
  * Runs the actions instance settings windows ask for and tells them what blocks them.
- * `status` is sent again whenever its identity changes, so memoize it.
+ * `status` is sent only when its value changes, so it need not be memoized.
  */
 export function useInstanceSettingsBridge(
   status: InstanceSettingsStatus,
@@ -26,11 +26,16 @@ export function useInstanceSettingsBridge(
   const runRef = useRef(run);
   runRef.current = run;
 
+  // The launcher renders on every game log line; resend only what changed.
+  const statusKey = JSON.stringify(status);
+  const sentKeyRef = useRef<string | null>(null);
   useEffect(() => {
-    emit(INSTANCE_SETTINGS_STATUS_EVENT, status).catch((error: unknown) =>
-      reportInterfaceError("promise", error),
+    if (sentKeyRef.current === statusKey) return;
+    sentKeyRef.current = statusKey;
+    emit(INSTANCE_SETTINGS_STATUS_EVENT, statusRef.current).catch(
+      (error: unknown) => reportInterfaceError("promise", error),
     );
-  }, [status]);
+  }, [statusKey]);
 
   useEffect(() => {
     let active = true;

@@ -103,6 +103,8 @@ export function LinkedModpackSettings({
   const details = [
     linked?.author ? `by ${linked.author}` : null,
     source,
+    // Says why Change version stays disabled.
+    fromFile ? "No other versions to install" : null,
   ].filter((detail) => detail !== null);
   const disabled =
     busy ||
