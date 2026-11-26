@@ -14,9 +14,10 @@ vi.mock("@tauri-apps/api/core", async () => {
   return { invoke: mocked };
 });
 
-const closeHandlers = vi.hoisted(
-  () => new Set<(request: CloseRequest) => Promise<void>>(),
-);
+const { closeHandlers, launcherClosedHandlers } = vi.hoisted(() => ({
+  closeHandlers: new Set<(request: CloseRequest) => Promise<void>>(),
+  launcherClosedHandlers: new Set<() => Promise<void>>(),
+}));
 vi.mock("@/api/window-close", () => ({
   onWindowCloseRequested: async (
     handler: (request: CloseRequest) => Promise<void>,
@@ -24,6 +25,12 @@ vi.mock("@/api/window-close", () => ({
     closeHandlers.add(handler);
     return () => {
       closeHandlers.delete(handler);
+    };
+  },
+  onLauncherClosed: async (handler: () => Promise<void>) => {
+    launcherClosedHandlers.add(handler);
+    return () => {
+      launcherClosedHandlers.delete(handler);
     };
   },
 }));
@@ -39,6 +46,7 @@ async function requestClose() {
 describe("SettingsPage", () => {
   beforeEach(() => {
     closeHandlers.clear();
+    launcherClosedHandlers.clear();
     mockSettingsCommands();
   });
 
@@ -215,5 +223,75 @@ describe("SettingsPage", () => {
 
     expect(request.preventDefault).not.toHaveBeenCalled();
     expect(invoke).not.toHaveBeenCalledWith("save_settings", expect.anything());
+  });
+
+  it("waits for a save already running before the window closes", async () => {
+    let failSave: ((error: Error) => void) | undefined;
+    mockSettingsCommands((command) =>
+      command === "save_settings"
+        ? new Promise((_resolve, reject) => {
+            failSave = reject;
+          })
+        : undefined,
+    );
+    await renderSettings("developers");
+    fireEvent.change(
+      await screen.findByRole("textbox", { name: "Offline username" }),
+      { target: { value: "Saving" } },
+    );
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("save_settings", expect.anything()),
+    );
+
+    const closing = requestClose();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    failSave?.(new Error("Disk is full"));
+    const request = await closing;
+
+    expect(request.preventDefault).toHaveBeenCalledOnce();
+    expect(await screen.findByText("Disk is full")).toBeVisible();
+  });
+
+  it("saves the last edit when the launcher closes", async () => {
+    mockSettingsCommands((command, args) => {
+      if (
+        command === "save_settings" &&
+        typeof args === "object" &&
+        args !== null &&
+        "settings" in args
+      )
+        return Promise.resolve(args.settings);
+      return undefined;
+    });
+    await renderSettings("developers");
+    fireEvent.change(
+      await screen.findByRole("textbox", { name: "Offline username" }),
+      { target: { value: "Leaving" } },
+    );
+    await waitFor(() => expect(launcherClosedHandlers.size).toBe(1));
+
+    for (const handler of launcherClosedHandlers) await handler();
+
+    expect(invoke).toHaveBeenCalledWith("save_settings", {
+      settings: expect.objectContaining({ username: "Leaving" }),
+    });
+  });
+
+  it("reports an edit it could not save when the launcher closes", async () => {
+    await renderSettings("instances");
+    fireEvent.change(await screen.findByLabelText("Window width"), {
+      target: { value: "0" },
+    });
+    await waitFor(() => expect(launcherClosedHandlers.size).toBe(1));
+
+    for (const handler of launcherClosedHandlers) await handler();
+
+    expect(invoke).not.toHaveBeenCalledWith("save_settings", expect.anything());
+    expect(invoke).toHaveBeenCalledWith("log_frontend_error", {
+      source: "promise",
+      message: expect.stringContaining(
+        "could not be saved before the launcher closed",
+      ),
+    });
   });
 });

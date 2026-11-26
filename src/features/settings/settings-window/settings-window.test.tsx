@@ -50,6 +50,8 @@ vi.mock("@tauri-apps/api/core", async (importOriginal) => {
 });
 
 let state = appUpdateState({ automaticUpdates: false });
+/** The section the backend gives the page once it reports that it is ready. */
+let requestedSection: string | null = null;
 
 function emit(name: string, payload: unknown) {
   act(() => {
@@ -79,19 +81,21 @@ describe("SettingsWindow", () => {
     listeners.clear();
     showWindow.mockReset().mockResolvedValue(undefined);
     state = appUpdateState({ automaticUpdates: false });
+    requestedSection = null;
     mockSettingsCommands((command) => {
+      if (command === "settings_window_ready")
+        return Promise.resolve(requestedSection);
       if (command === "get_app_update_state") return Promise.resolve(state);
       if (command === "check_app_update") return Promise.resolve();
       return undefined;
     });
   });
   afterEach(() => {
-    vi.unstubAllGlobals();
     toast.dismiss();
   });
 
-  it("opens at the section the launcher asked for and shows itself", async () => {
-    vi.stubGlobal("__LICHT_SETTINGS_SECTION__", "downloads");
+  it("opens at the section the launcher asked for and then shows itself", async () => {
+    requestedSection = "downloads";
     view();
     expect(
       await screen.findByRole("heading", { name: "Downloads" }),
@@ -100,10 +104,32 @@ describe("SettingsWindow", () => {
       screen.getByRole("button", { name: "Downloads", current: "page" }),
     ).toBeVisible();
     await waitFor(() => expect(showWindow).toHaveBeenCalledOnce());
+    const ready =
+      invoke.mock.invocationCallOrder[
+        invoke.mock.calls.findIndex(
+          ([command]) => command === "settings_window_ready",
+        )
+      ];
+    expect(ready).toBeLessThan(showWindow.mock.invocationCallOrder[0] ?? 0);
+    expect(listeners.has("settings-window-section")).toBe(true);
+  });
+
+  it("shows itself even when it cannot ask for its section", async () => {
+    mockSettingsCommands((command) =>
+      command === "settings_window_ready"
+        ? Promise.reject(new Error("No state"))
+        : undefined,
+    );
+    view();
+    expect(
+      await screen.findByRole("button", { name: "General", current: "page" }),
+    ).toBeVisible();
+    await waitFor(() => expect(showWindow).toHaveBeenCalledOnce());
+    expect(await screen.findByText("No state")).toBeVisible();
   });
 
   it("opens General for an unknown section", async () => {
-    vi.stubGlobal("__LICHT_SETTINGS_SECTION__", "nope");
+    requestedSection = "nope";
     view();
     expect(
       await screen.findByRole("button", { name: "General", current: "page" }),
@@ -135,7 +161,7 @@ describe("SettingsWindow", () => {
   });
 
   it("checks for updates from this window and reports the result here", async () => {
-    vi.stubGlobal("__LICHT_SETTINGS_SECTION__", "updater");
+    requestedSection = "updater";
     view();
     fireEvent.click(
       await screen.findByRole("button", { name: "Check for updates" }),
@@ -151,7 +177,7 @@ describe("SettingsWindow", () => {
   });
 
   it("closes the checking notice when the update is ready", async () => {
-    vi.stubGlobal("__LICHT_SETTINGS_SECTION__", "updater");
+    requestedSection = "updater";
     view();
     fireEvent.click(
       await screen.findByRole("button", { name: "Check for updates" }),

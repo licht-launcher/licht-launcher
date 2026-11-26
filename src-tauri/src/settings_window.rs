@@ -1,18 +1,77 @@
 //! The launcher settings open in their own window beside the launcher window.
 
 use std::sync::Mutex;
+use std::time::Duration;
 
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
 use crate::commands::{command_error, command_failure};
 
 pub const LABEL: &str = "settings";
-/// Sent to an open settings window when another section is requested.
+/// Sent to a ready settings window when another section is requested.
 const SECTION_EVENT: &str = "settings-window-section";
+/// Sent to the settings window when the launcher window has closed: the page
+/// saves its last edit and closes itself, since the app is ending.
+const LAUNCHER_CLOSED_EVENT: &str = "launcher-closed";
+/// How long the settings window may take to save before it is closed anyway.
+const LAUNCHER_CLOSED_GRACE: Duration = Duration::from_secs(5);
 const MAX_SECTION_LENGTH: usize = 32;
-/// Held while one request looks for the window and creates it, so two quick
+
+/// The settings window's lifecycle, kept so a request made while the page is
+/// still loading is not lost.
+#[derive(Debug, Default)]
+struct WindowState {
+    /// The section asked for most recently.
+    section: Option<String>,
+    /// The page listens for section requests and has shown itself.
+    ready: bool,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum Next {
+    /// No window yet: create it. The page asks for the section once it loads.
+    Create,
+    /// The page is still loading: it reads the section when it is ready.
+    Wait,
+    /// The page is ready: send it the section and bring it forward.
+    Show,
+}
+
+impl WindowState {
+    fn request(&mut self, section: &str, window_exists: bool) -> Next {
+        self.section = Some(section.to_string());
+        if !window_exists {
+            self.ready = false;
+            Next::Create
+        } else if self.ready {
+            Next::Show
+        } else {
+            Next::Wait
+        }
+    }
+
+    fn mark_ready(&mut self) -> Option<String> {
+        self.ready = true;
+        self.section.clone()
+    }
+
+    fn closed(&mut self) {
+        *self = Self::default();
+    }
+}
+
+/// Also held while a request looks for the window and creates it, so two quick
 /// requests cannot both try to create it.
-static OPENING: Mutex<()> = Mutex::new(());
+static STATE: Mutex<WindowState> = Mutex::new(WindowState {
+    section: None,
+    ready: false,
+});
+
+fn state() -> anyhow::Result<std::sync::MutexGuard<'static, WindowState>> {
+    STATE
+        .lock()
+        .map_err(|_| anyhow::anyhow!("settings window lock failed"))
+}
 
 /// Windows that may use launcher-only commands such as updates and diagnostics.
 pub fn is_launcher_window(label: &str) -> bool {
@@ -27,42 +86,63 @@ fn valid_section(section: &str) -> bool {
         && section.bytes().all(|byte| byte.is_ascii_lowercase())
 }
 
-fn initialization_script(section: &str) -> Result<String, serde_json::Error> {
-    Ok(format!(
-        "window.__LICHT_SETTINGS_SECTION__ = {};",
-        serde_json::to_string(section)?
-    ))
-}
-
 /// Shows the settings window at `section`, creating it when it is not open yet.
 pub fn open(app: &AppHandle, section: &str) -> anyhow::Result<()> {
     anyhow::ensure!(valid_section(section), "Unknown settings section");
-    let _opening = OPENING
-        .lock()
-        .map_err(|_| anyhow::anyhow!("settings window lock failed"))?;
-    if let Some(window) = app.get_webview_window(LABEL) {
-        app.emit_to(LABEL, SECTION_EVENT, section)?;
-        window.unminimize()?;
-        window.show()?;
-        window.set_focus()?;
-        return Ok(());
+    let mut state = state()?;
+    let window = app.get_webview_window(LABEL);
+    match (state.request(section, window.is_some()), window) {
+        (Next::Show, Some(window)) => {
+            app.emit_to(LABEL, SECTION_EVENT, section)?;
+            window.unminimize()?;
+            window.show()?;
+            window.set_focus()?;
+        }
+        (Next::Create, _) => {
+            let builder = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::default())
+                .title("Settings - Licht Launcher")
+                // The size the settings dialog had inside the launcher window.
+                .inner_size(896.0, 664.0)
+                .min_inner_size(760.0, 520.0)
+                .center();
+            crate::build_launcher_style_window(app, builder)?;
+        }
+        _ => {}
     }
-    let builder = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::default())
-        .title("Settings - Licht Launcher")
-        // The size the settings dialog had inside the launcher window.
-        .inner_size(896.0, 664.0)
-        .min_inner_size(760.0, 520.0)
-        .center()
-        .initialization_script(initialization_script(section)?);
-    crate::build_launcher_style_window(app, builder)?;
     Ok(())
 }
 
-/// Closes the settings window, so closing the launcher window ends the app.
+/// Forgets the closed settings window, so the next request creates a new one.
+pub fn forget() {
+    match state() {
+        Ok(mut state) => state.closed(),
+        Err(error) => tracing::error!(%error, "Could not reset the settings window state"),
+    }
+}
+
+/// Closes the settings window after the launcher window has closed, so the app
+/// ends. The page saves its last edit first; it cannot keep itself open.
 pub fn close(app: &AppHandle) {
-    if let Some(window) = app.get_webview_window(LABEL)
-        && let Err(error) = window.close()
-    {
+    let Some(window) = app.get_webview_window(LABEL) else {
+        return;
+    };
+    if let Err(error) = app.emit_to(LABEL, LAUNCHER_CLOSED_EVENT, ()) {
+        tracing::error!(%error, "Could not ask the settings window to close");
+        destroy(&window);
+        return;
+    }
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(LAUNCHER_CLOSED_GRACE).await;
+        if let Some(window) = app.get_webview_window(LABEL) {
+            tracing::warn!("The settings window did not close in time; closing it");
+            destroy(&window);
+        }
+    });
+}
+
+fn destroy(window: &WebviewWindow) {
+    if let Err(error) = window.destroy() {
         tracing::error!(%error, "Could not close the settings window");
     }
 }
@@ -81,6 +161,19 @@ pub async fn open_settings_window(
         .await
         .map_err(|error| command_failure("Could not join settings window creation", &error))?
         .map_err(|error| command_error(error.as_ref()))
+}
+
+/// Called by the settings page once it listens for section requests. Returns the
+/// section asked for most recently; the page then shows the window.
+// Async, so it never waits for the state lock on the UI thread while a request
+// holds it to create the window there.
+#[tauri::command]
+pub async fn settings_window_ready(window: WebviewWindow) -> Result<Option<String>, String> {
+    if window.label() != LABEL {
+        return Err("Only the settings window can report that it is ready".to_string());
+    }
+    let mut state = state().map_err(|error| command_error(error.as_ref()))?;
+    Ok(state.mark_ready())
 }
 
 #[cfg(test)]
@@ -106,11 +199,45 @@ mod tests {
     }
 
     #[test]
-    fn passes_the_section_to_the_page_as_a_json_string() {
-        assert_eq!(
-            initialization_script("downloads").expect("script"),
-            "window.__LICHT_SETTINGS_SECTION__ = \"downloads\";"
-        );
+    fn creates_the_window_and_gives_the_page_the_requested_section() {
+        let mut state = WindowState::default();
+        assert_eq!(state.request("downloads", false), Next::Create);
+        assert_eq!(state.mark_ready().as_deref(), Some("downloads"));
+    }
+
+    #[test]
+    fn keeps_the_latest_section_requested_while_the_page_loads() {
+        let mut state = WindowState::default();
+        assert_eq!(state.request("downloads", false), Next::Create);
+        assert_eq!(state.request("updater", true), Next::Wait);
+        assert_eq!(state.mark_ready().as_deref(), Some("updater"));
+    }
+
+    #[test]
+    fn sends_the_section_to_a_ready_page() {
+        let mut state = WindowState::default();
+        state.request("account", false);
+        state.mark_ready();
+        assert_eq!(state.request("java", true), Next::Show);
+    }
+
+    #[test]
+    fn a_closed_window_is_created_again_and_waits_for_its_page() {
+        let mut state = WindowState::default();
+        state.request("account", false);
+        state.mark_ready();
+        state.closed();
+        assert_eq!(state.request("java", false), Next::Create);
+        assert_eq!(state.request("updater", true), Next::Wait);
+    }
+
+    #[test]
+    fn a_window_closed_without_notice_is_created_again() {
+        let mut state = WindowState::default();
+        state.request("account", false);
+        state.mark_ready();
+        assert_eq!(state.request("java", false), Next::Create);
+        assert_eq!(state.request("updater", true), Next::Wait);
     }
 
     #[test]

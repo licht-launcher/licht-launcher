@@ -74,6 +74,7 @@ import {
   searchModpacks,
   setActiveMicrosoftAccount,
   setLastPlayedFolder,
+  settingsWindowReady,
   stopGame,
   touchLastOpened,
   unlinkInstanceModpack,
@@ -151,6 +152,18 @@ describe("launcher commands", () => {
     vi.mocked(invoke).mockResolvedValueOnce("off");
     await expect(appliedHardwareAcceleration()).rejects.toThrow(
       "Invalid hardware acceleration state",
+    );
+  });
+
+  it("reads the section requested while the settings window was loading", async () => {
+    vi.mocked(invoke).mockResolvedValueOnce("updater");
+    expect(await settingsWindowReady()).toBe("updater");
+    expect(invoke).toHaveBeenCalledWith("settings_window_ready");
+    vi.mocked(invoke).mockResolvedValueOnce(null);
+    expect(await settingsWindowReady()).toBeNull();
+    vi.mocked(invoke).mockResolvedValueOnce(7);
+    await expect(settingsWindowReady()).rejects.toThrow(
+      "Invalid settings section",
     );
   });
 

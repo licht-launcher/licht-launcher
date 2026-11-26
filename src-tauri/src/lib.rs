@@ -65,6 +65,7 @@ pub fn run() -> anyhow::Result<()> {
             app_updates::install_app_update,
             commands::shell::get_build_diagnostics,
             settings_window::open_settings_window,
+            settings_window::settings_window_ready,
             commands::downloads::list_download_jobs,
             commands::downloads::reorder_download_jobs,
             commands::downloads::download_telemetry,
@@ -167,6 +168,14 @@ pub fn run() -> anyhow::Result<()> {
             && label == "main"
         {
             settings_window::close(app);
+        } else if let tauri::RunEvent::WindowEvent {
+            label,
+            event: tauri::WindowEvent::Destroyed,
+            ..
+        } = &event
+            && label == settings_window::LABEL
+        {
+            settings_window::forget();
         } else if let tauri::RunEvent::WindowEvent {
             label,
             event: tauri::WindowEvent::Destroyed,

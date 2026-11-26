@@ -2,6 +2,7 @@ import { type QueryKey, useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import { useEffect } from "react";
 import { toast } from "sonner";
+import { reportInterfaceError } from "@/lib/error-reporting";
 
 /** Backend notifications and the cached data each one makes stale. */
 const SHARED_DATA: Record<string, QueryKey[]> = {
@@ -28,7 +29,8 @@ export function useSharedDataSync() {
           if (active) stops.push(stop);
           else stop();
         })
-        .catch(() => {
+        .catch((error: unknown) => {
+          reportInterfaceError("promise", error);
           if (active) toast.error("Could not listen for launcher changes.");
         });
     }

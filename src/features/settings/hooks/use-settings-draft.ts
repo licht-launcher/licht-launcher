@@ -7,7 +7,7 @@ import {
   runtimeJava,
   saveSettings,
 } from "@/api/commands";
-import { onWindowCloseRequested } from "@/api/window-close";
+import { onLauncherClosed, onWindowCloseRequested } from "@/api/window-close";
 import { useToastError } from "@/features/settings/hooks/use-toast-error";
 import {
   dismissRestartToast,
@@ -56,6 +56,8 @@ export function useSettingsDraft() {
     async () => true,
   );
   const flushRef = useRef<() => Promise<boolean>>(async () => true);
+  // The save that is still running, so closing the window can wait for it.
+  const savingRef = useRef<Promise<boolean> | null>(null);
 
   const save = useMutation({
     mutationFn: saveSettings,
@@ -75,7 +77,7 @@ export function useSettingsDraft() {
     },
   });
 
-  persistRef.current = async (current) => {
+  async function saveDraft(current: Draft): Promise<boolean> {
     const width = optionalSize(current.width);
     const height = optionalSize(current.height);
     if (width === "invalid" || height === "invalid") {
@@ -96,12 +98,24 @@ export function useSettingsDraft() {
       // The mutation's onError has already shown why.
       return false;
     }
+  }
+
+  persistRef.current = (current) => {
+    const saving = saveDraft(current);
+    savingRef.current = saving;
+    void saving.then(() => {
+      if (savingRef.current === saving) savingRef.current = null;
+    });
+    return saving;
   };
 
-  /** Saves the edit still waiting for its delay; resolves to whether it saved. */
+  /**
+   * Saves the edit still waiting for its delay, or waits for the save already
+   * running; resolves to whether the last edit is saved.
+   */
   flushRef.current = () => {
     if (timerRef.current === null || draftRef.current === null) {
-      return Promise.resolve(true);
+      return savingRef.current ?? Promise.resolve(true);
     }
     clearTimeout(timerRef.current);
     timerRef.current = null;
@@ -122,20 +136,38 @@ export function useSettingsDraft() {
 
   // Closing the window ends the page without unmounting it, so the window
   // waits for the last edit, and stays open to show why it could not be saved.
+  // When the launcher closed, the app is ending: the window closes regardless.
   useEffect(() => {
     let active = true;
-    let stop: (() => void) | undefined;
-    onWindowCloseRequested(async (request) => {
-      if (!(await flushRef.current())) request.preventDefault();
-    })
-      .then((unsubscribe) => {
-        if (active) stop = unsubscribe;
-        else unsubscribe();
-      })
-      .catch((error: unknown) => reportInterfaceError("promise", error));
+    const stops: (() => void)[] = [];
+    const keep = (subscribing: Promise<() => void>) => {
+      subscribing
+        .then((stop) => {
+          if (active) stops.push(stop);
+          else stop();
+        })
+        .catch((error: unknown) => reportInterfaceError("promise", error));
+    };
+    keep(
+      onWindowCloseRequested(async (request) => {
+        if (!(await flushRef.current())) request.preventDefault();
+      }),
+    );
+    keep(
+      onLauncherClosed(async () => {
+        if (!(await flushRef.current())) {
+          reportInterfaceError(
+            "promise",
+            new Error(
+              "The last settings edit could not be saved before the launcher closed",
+            ),
+          );
+        }
+      }),
+    );
     return () => {
       active = false;
-      stop?.();
+      for (const stop of stops) stop();
       // Unmounting without closing the window also keeps the last edit.
       void flushRef.current();
     };
