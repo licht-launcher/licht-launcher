@@ -4,11 +4,15 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { InstanceIconSettings } from "@/features/instance-settings/components/instance-icon-settings";
 
 import { generalSectionStyles } from "./general-section.styles";
 
 export function GeneralSection({
   name,
+  folder,
+  iconPath,
+  customIcon,
   busy,
   onRename,
   onOpenFolder,
@@ -16,6 +20,9 @@ export function GeneralSection({
   onDelete,
 }: {
   name: string;
+  folder: string;
+  iconPath: string | null;
+  customIcon: boolean;
   busy: boolean;
   onRename: (name: string) => void;
   onOpenFolder: () => void;
@@ -40,6 +47,12 @@ export function GeneralSection({
   return (
     <div className={generalSectionStyles.root}>
       <Card title="Instance">
+        <InstanceIconSettings
+          folder={folder}
+          iconPath={iconPath}
+          customIcon={customIcon}
+          busy={busy}
+        />
         <div className={generalSectionStyles.row}>
           <div className={generalSectionStyles.rowText}>
             <label

@@ -252,6 +252,27 @@ export function renameInstance(
   return invoke("rename_instance", { folder, name });
 }
 
+export function browseInstanceIcon(): Promise<string | null> {
+  return open({
+    multiple: false,
+    directory: false,
+    filters: [
+      { name: "Image", extensions: ["png", "jpg", "jpeg", "webp", "gif"] },
+    ],
+  });
+}
+
+export function setInstanceIcon(
+  folder: string,
+  path: string,
+): Promise<InstanceEntry> {
+  return invoke("set_instance_icon", { folder, path });
+}
+
+export function resetInstanceIcon(folder: string): Promise<InstanceEntry> {
+  return invoke("reset_instance_icon", { folder });
+}
+
 export function duplicateInstance(
   folder: string,
   name: string,

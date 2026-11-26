@@ -23,6 +23,7 @@ const instance: InstanceEntry = {
   javaPath: null,
   lastOpenedAt: new Date(Date.now() - 5 * 60_000).toISOString(),
   iconPath: null,
+  customIcon: false,
 };
 
 function renderJob(job: DownloadJobSnapshot, speedBytesPerSecond = 0) {

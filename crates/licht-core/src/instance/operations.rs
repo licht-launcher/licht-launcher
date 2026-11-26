@@ -65,6 +65,37 @@ pub async fn rename_instance(
     write_instance(database, &dir, &instance).await?;
     Ok(entry_from(&dir, folder.to_string(), instance))
 }
+/// Uses the image at `source` as this instance's icon in place of the pack's or the default.
+pub async fn set_instance_icon(
+    database: &crate::DatabaseClient,
+    instances_dir: &Path,
+    folder: &str,
+    source: &Path,
+) -> Result<InstanceEntry> {
+    let _guard = profile_guard().await;
+    let dir = instance_dir(instances_dir, folder)?;
+    let instance = load_instance(database, &dir).await?;
+    let bytes = super::icon::read_custom_icon(source)?;
+    let destination = super::icon::custom_icon_path(&dir, &bytes);
+    let temporary = destination.with_extension("png.part");
+    fs::write(&temporary, bytes)?;
+    fs::rename(temporary, &destination)?;
+    super::icon::remove_custom_icons(&dir, Some(&destination))?;
+    Ok(entry_from(&dir, folder.to_string(), instance))
+}
+
+/// Drops the icon the user picked, so the pack's icon or the default shows again.
+pub async fn reset_instance_icon(
+    database: &crate::DatabaseClient,
+    instances_dir: &Path,
+    folder: &str,
+) -> Result<InstanceEntry> {
+    let _guard = profile_guard().await;
+    let dir = instance_dir(instances_dir, folder)?;
+    let instance = load_instance(database, &dir).await?;
+    super::icon::remove_custom_icons(&dir, None)?;
+    Ok(entry_from(&dir, folder.to_string(), instance))
+}
 pub async fn duplicate_instance(
     database: &crate::DatabaseClient,
     instances_dir: &Path,

@@ -80,6 +80,7 @@ export function createdInstance(name: string, versionId = "1.20.1") {
     javaPath: null,
     lastOpenedAt: null,
     iconPath: null,
+    customIcon: false,
   };
   return entry;
 }

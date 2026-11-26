@@ -24,7 +24,6 @@ import { instanceContentKey } from "@/features/instances/lib/content-query";
 import type { ModpackOrigin } from "@/features/instances/lib/modpack-content";
 import { friendlyError, messageOf } from "@/lib/errors";
 import type { LinkedModpack } from "@/lib/generated/LinkedModpack";
-import { SOURCE_LABELS } from "@/lib/modpack-sources";
 
 import { linkedModpackSettingsStyles as styles } from "./linked-modpack-settings.styles";
 
@@ -97,12 +96,8 @@ export function LinkedModpackSettings({
   });
   const [versionOpen, setVersionOpen] = useState(false);
   const fromFile = origin.type === "modpackFile";
-  const source = fromFile
-    ? `Imported from a ${SOURCE_LABELS[origin.source]} file`
-    : `${SOURCE_LABELS[origin.source]} modpack`;
   const details = [
     linked?.author ? `by ${linked.author}` : null,
-    source,
     // Says why Change version stays disabled.
     fromFile ? "No other versions to install" : null,
   ].filter((detail) => detail !== null);

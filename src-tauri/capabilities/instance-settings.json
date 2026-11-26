@@ -1,6 +1,6 @@
 {
   "identifier": "instance-settings",
-  "description": "Instance settings windows can call the launcher commands, talk to the launcher window, listen for changes, and manage their own window (each destroys itself once its last edit is saved).",
+  "description": "Instance settings windows can call the launcher commands, talk to the launcher window, listen for changes, pick an icon image, and manage their own window (each destroys itself once its last edit is saved).",
   "windows": ["instance-settings-*"],
   "permissions": [
     "core:default",
@@ -9,6 +9,7 @@
     "core:window:allow-destroy",
     "core:window:allow-start-dragging",
     "core:window:allow-show",
-    "core:window:allow-set-title"
+    "core:window:allow-set-title",
+    "dialog:allow-open"
   ]
 }

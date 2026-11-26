@@ -29,6 +29,7 @@ fn entry(folder: &str, name: &str, version: Option<&str>) -> InstanceEntry {
         java_path: None,
         last_opened_at: None,
         icon_path: None,
+        custom_icon: false,
     }
 }
 

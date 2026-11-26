@@ -28,6 +28,7 @@ function entry(
     javaPath: null,
     lastOpenedAt,
     iconPath: null,
+    customIcon: false,
   };
 }
 

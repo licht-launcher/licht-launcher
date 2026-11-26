@@ -63,6 +63,8 @@ export function InstanceSettingsPage({
           snapshot={settings.data}
           instanceName={entry.name}
           folder={entry.folder}
+          iconPath={entry.iconPath}
+          customIcon={entry.customIcon}
           versionId={entry.versionId}
           preparing={
             entry.installation !== undefined &&

@@ -104,6 +104,7 @@ export const classicInstance = {
   javaPath: null,
   lastOpenedAt: null as string | null,
   iconPath: null as string | null,
+  customIcon: false,
 };
 
 export const contextInstance = {

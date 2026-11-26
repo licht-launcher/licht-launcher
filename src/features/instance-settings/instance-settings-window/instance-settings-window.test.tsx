@@ -88,6 +88,7 @@ const survival: InstanceEntry = {
   javaPath: null,
   lastOpenedAt: null,
   iconPath: null,
+  customIcon: false,
 };
 
 function emit(name: string, payload: unknown) {

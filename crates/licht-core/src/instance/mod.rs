@@ -9,7 +9,8 @@ mod preparation;
 
 pub use operations::{
     create_instance, delete_instance, duplicate_instance, list_instances, rename_instance,
-    touch_last_opened, update_instance, update_instance_version,
+    reset_instance_icon, set_instance_icon, touch_last_opened, update_instance,
+    update_instance_version,
 };
 pub use persistence::{load_instance, parse_instance};
 use persistence::{validate, write_instance};
@@ -77,7 +78,7 @@ pub struct Instance {
 /// An instance folder and its profile.
 ///
 /// `folder` is chosen once and does not change when the profile is renamed.
-/// `icon_path` is the absolute path to the cached icon when present.
+/// `icon_path` is the absolute path to the icon shown for it, when there is one.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct InstanceEntry {
@@ -100,6 +101,9 @@ pub struct InstanceEntry {
     pub java_path: Option<String>,
     pub last_opened_at: Option<String>,
     pub icon_path: Option<String>,
+    /// The icon is one the user picked rather than the pack's or the default.
+    #[serde(default)]
+    pub custom_icon: bool,
 }
 
 /// Launch personalization written from the instance settings dialog.
@@ -209,8 +213,18 @@ pub async fn instance_entry(
 }
 
 fn entry_from(dir: &Path, folder: String, instance: Instance) -> InstanceEntry {
-    let icon = icon::cached_icon_path(dir, icon::source_icon_url(&instance))
-        .filter(|path| path.is_file())
+    let custom = icon::custom_icons(dir).unwrap_or_else(|error| {
+        tracing::warn!(error = %error, "Could not look for a picked instance icon");
+        Vec::new()
+    });
+    let custom_icon = !custom.is_empty();
+    let icon = custom
+        .into_iter()
+        .next()
+        .or_else(|| {
+            icon::cached_icon_path(dir, icon::source_icon_url(&instance))
+                .filter(|path| path.is_file())
+        })
         .unwrap_or_else(|| dir.join(ICON_FILE));
     let icon_path = icon.is_file().then(|| icon.to_string_lossy().into_owned());
     InstanceEntry {
@@ -231,6 +245,7 @@ fn entry_from(dir: &Path, folder: String, instance: Instance) -> InstanceEntry {
         java_path: instance.java_path,
         last_opened_at: instance.last_opened_at,
         icon_path,
+        custom_icon,
     }
 }
 

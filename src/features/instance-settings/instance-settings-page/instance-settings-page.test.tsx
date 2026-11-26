@@ -18,12 +18,17 @@ import {
 import { InstanceSettingsPage } from "@/features/instance-settings/instance-settings-page";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 
-const { invoke } = vi.hoisted(() => ({
+const { invoke, open } = vi.hoisted(() => ({
   invoke: vi.fn(),
+  open: vi.fn(),
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke,
+}));
+
+vi.mock("@tauri-apps/plugin-dialog", () => ({
+  open,
 }));
 
 const entry: InstanceEntry = {
@@ -43,6 +48,7 @@ const entry: InstanceEntry = {
   javaPath: null,
   lastOpenedAt: null,
   iconPath: null,
+  customIcon: false,
 };
 
 function renderPage(
@@ -357,12 +363,11 @@ describe("InstanceSettingsPage", () => {
     expect(
       await screen.findByRole("heading", { name: "Linked modpack" }),
     ).toBeInTheDocument();
-    // The pack sits with its version, author and store next to Change version.
+    // The pack sits with its version and author next to Change version, without its store.
     expect(screen.getByText("Fabulously Optimized")).toBeInTheDocument();
     expect(screen.getByText("15.0.0-beta.3")).toBeInTheDocument();
-    expect(
-      screen.getByText("by robotkoer · Modrinth modpack"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("by robotkoer")).toBeInTheDocument();
+    expect(screen.queryByText(/Modrinth/)).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Change version" }),
     ).toBeInTheDocument();
@@ -383,6 +388,52 @@ describe("InstanceSettingsPage", () => {
     ).toBeDisabled();
     expect(screen.getByRole("button", { name: "Unlink" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Repair" })).toBeEnabled();
+  });
+
+  it("changes the icon to a picked image", async () => {
+    const success = vi.spyOn(toast, "success");
+    open.mockResolvedValueOnce("C:\\pictures\\creeper.png");
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Change icon" }));
+
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("set_instance_icon", {
+        folder: "Survival",
+        path: "C:\\pictures\\creeper.png",
+      }),
+    );
+    await waitFor(() => expect(success).toHaveBeenCalledWith("Icon changed."));
+  });
+
+  it("leaves the icon alone when no image is picked", async () => {
+    open.mockResolvedValueOnce(null);
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Change icon" }));
+
+    await waitFor(() => expect(open).toHaveBeenCalled());
+    expect(invoke).not.toHaveBeenCalledWith(
+      "set_instance_icon",
+      expect.anything(),
+    );
+  });
+
+  it("resets only an icon the user picked", async () => {
+    const success = vi.spyOn(toast, "success");
+    const { unmount } = renderPage();
+    expect(await screen.findByRole("button", { name: "Reset" })).toBeDisabled();
+    unmount();
+
+    renderPage({ entry: { ...entry, customIcon: true } });
+    fireEvent.click(await screen.findByRole("button", { name: "Reset" }));
+
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("reset_instance_icon", {
+        folder: "Survival",
+      }),
+    );
+    await waitFor(() => expect(success).toHaveBeenCalledWith("Icon reset."));
   });
 
   it("unlinks the modpack after the user confirms", async () => {
@@ -515,9 +566,7 @@ describe("InstanceSettingsPage", () => {
       await screen.findByRole("button", { name: "Change version" }),
     ).toBeDisabled();
     expect(
-      screen.getByText(
-        "Imported from a Modrinth file · No other versions to install",
-      ),
+      screen.getByText("No other versions to install"),
     ).toBeInTheDocument();
   });
 

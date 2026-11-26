@@ -42,6 +42,7 @@ const instance: InstanceEntry = {
   javaPath: null,
   lastOpenedAt: null,
   iconPath: "/icons/survival.png",
+  customIcon: false,
 };
 
 function backend(initial: DownloadJobSnapshot[]) {

@@ -8,6 +8,7 @@ import {
   appliedHardwareAcceleration,
   beginMicrosoftLogin,
   browseApplicationDirectory,
+  browseInstanceIcon,
   browseJava,
   browseModpackFile,
   cancelDownloadJob,
@@ -67,6 +68,7 @@ import {
   renameInstance,
   repairInstance,
   requestUpdateRestart,
+  resetInstanceIcon,
   restartApp,
   restartStartupPreview,
   resumeDownloadJob,
@@ -75,6 +77,7 @@ import {
   saveSettings,
   searchModpacks,
   setActiveMicrosoftAccount,
+  setInstanceIcon,
   setLastPlayedFolder,
   settingsWindowReady,
   stopGame,
@@ -353,6 +356,26 @@ describe("launcher commands", () => {
     expect(invoke).toHaveBeenCalledWith("rename_instance", {
       folder: "Survival",
       name: "Classic",
+    });
+    vi.mocked(open).mockResolvedValueOnce("C:\\pictures\\creeper.png");
+    await expect(browseInstanceIcon()).resolves.toBe(
+      "C:\\pictures\\creeper.png",
+    );
+    expect(open).toHaveBeenCalledWith({
+      multiple: false,
+      directory: false,
+      filters: [
+        { name: "Image", extensions: ["png", "jpg", "jpeg", "webp", "gif"] },
+      ],
+    });
+    await setInstanceIcon("Survival", "C:\\pictures\\creeper.png");
+    expect(invoke).toHaveBeenCalledWith("set_instance_icon", {
+      folder: "Survival",
+      path: "C:\\pictures\\creeper.png",
+    });
+    await resetInstanceIcon("Survival");
+    expect(invoke).toHaveBeenCalledWith("reset_instance_icon", {
+      folder: "Survival",
     });
     await duplicateInstance("Survival", "Survival copy");
     expect(invoke).toHaveBeenCalledWith("duplicate_instance", {

@@ -52,6 +52,7 @@ const instance: InstanceEntry = {
   javaPath: null,
   lastOpenedAt: null,
   iconPath: null,
+  customIcon: false,
 };
 
 function session() {

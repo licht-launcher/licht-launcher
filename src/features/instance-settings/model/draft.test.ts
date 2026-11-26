@@ -24,6 +24,7 @@ const entry: InstanceEntry = {
   javaPath: "C:/jdk/bin/java.exe",
   lastOpenedAt: null,
   iconPath: null,
+  customIcon: false,
 };
 
 describe("instance draft", () => {

@@ -5,6 +5,10 @@ import type { InstanceInstallation } from "./InstanceInstallation";
  * An instance folder and its profile.
  *
  * `folder` is chosen once and does not change when the profile is renamed.
- * `icon_path` is the absolute path to the cached icon when present.
+ * `icon_path` is the absolute path to the icon shown for it, when there is one.
  */
-export type InstanceEntry = { folder: string, name: string, versionId: string | null, installation?: InstanceInstallation, minMemoryMb: number, maxMemoryMb: number, jvmArguments: Array<string>, fullscreen: boolean, width: number | null, height: number | null, overrideWindow: boolean, overrideMemory: boolean, overrideJava: boolean, overrideJvmArguments: boolean, javaPath: string | null, lastOpenedAt: string | null, iconPath: string | null, };
+export type InstanceEntry = { folder: string, name: string, versionId: string | null, installation?: InstanceInstallation, minMemoryMb: number, maxMemoryMb: number, jvmArguments: Array<string>, fullscreen: boolean, width: number | null, height: number | null, overrideWindow: boolean, overrideMemory: boolean, overrideJava: boolean, overrideJvmArguments: boolean, javaPath: string | null, lastOpenedAt: string | null, iconPath: string | null, 
+/**
+ * The icon is one the user picked rather than the pack's or the default.
+ */
+customIcon: boolean, };
