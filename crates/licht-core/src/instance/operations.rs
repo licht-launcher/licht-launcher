@@ -78,9 +78,20 @@ pub async fn set_instance_icon(
     let bytes = super::icon::read_custom_icon(source)?;
     let destination = super::icon::custom_icon_path(&dir, &bytes);
     let temporary = destination.with_extension("png.part");
-    fs::write(&temporary, bytes)?;
-    fs::rename(temporary, &destination)?;
-    super::icon::remove_custom_icons(&dir, Some(&destination))?;
+    if let Err(error) =
+        fs::write(&temporary, bytes).and_then(|()| fs::rename(&temporary, &destination))
+    {
+        if let Err(cleanup) = fs::remove_file(&temporary)
+            && cleanup.kind() != std::io::ErrorKind::NotFound
+        {
+            tracing::warn!(error = %cleanup, "Could not remove a partial instance icon");
+        }
+        return Err(error.into());
+    }
+    // The new icon is already in place, so a leftover old one must not fail the change.
+    if let Err(error) = super::icon::remove_custom_icons(&dir, Some(&destination)) {
+        tracing::warn!(error = %error, "Could not remove a previous instance icon");
+    }
     Ok(entry_from(&dir, folder.to_string(), instance))
 }
 

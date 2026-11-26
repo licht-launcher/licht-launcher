@@ -68,17 +68,18 @@ fn is_custom_icon_name(name: &str) -> bool {
         .is_some_and(|hash| hash.len() == 16 && hash.bytes().all(|byte| byte.is_ascii_hexdigit()))
 }
 
-/// Icons the user picked for this instance; normally at most one.
+/// Icons the user picked for this instance, newest first; normally at most one.
 pub(crate) fn custom_icons(dir: &Path) -> Result<Vec<PathBuf>> {
     let mut icons = Vec::new();
     for entry in fs::read_dir(dir)? {
         let entry = entry?;
         if entry.file_name().to_str().is_some_and(is_custom_icon_name) && entry.path().is_file() {
-            icons.push(entry.path());
+            icons.push((entry.metadata()?.modified()?, entry.path()));
         }
     }
-    icons.sort();
-    Ok(icons)
+    // An old icon that could not be removed must not hide the one picked after it.
+    icons.sort_by(|left, right| right.cmp(left));
+    Ok(icons.into_iter().map(|(_, path)| path).collect())
 }
 
 /// Removes the icons the user picked, except `keep`.
@@ -306,6 +307,69 @@ mod tests {
         crate::reset_instance_icon(&database, &instances, &entry.folder)
             .await
             .expect("resetting twice");
+        service.shutdown().await.expect("shutdown");
+    }
+
+    #[test]
+    fn the_newest_picked_icon_wins_over_one_left_behind() {
+        let temp = TempDir::new("icon-newest");
+        let dir = temp.path();
+        let older = custom_icon_path(dir, b"older");
+        let newer = custom_icon_path(dir, b"newer");
+        fs::write(&older, b"older").expect("older icon");
+        fs::write(&newer, b"newer").expect("newer icon");
+        fs::write(dir.join("icon-notes.png"), b"not a picked icon").expect("other file");
+        let now = std::time::SystemTime::now();
+        for (path, age) in [(&older, 60), (&newer, 0)] {
+            fs::File::options()
+                .write(true)
+                .open(path)
+                .expect("icon file")
+                .set_modified(now - std::time::Duration::from_secs(age))
+                .expect("modified time");
+        }
+        assert_eq!(custom_icons(dir).expect("icons"), vec![newer, older]);
+    }
+
+    #[tokio::test]
+    async fn a_failed_icon_change_leaves_no_partial_file() {
+        let temp = TempDir::new("icon-failed");
+        let root = temp.path().to_path_buf();
+        let instances = root.join("instances");
+        let settings = crate::settings::load_settings_at(&crate::SharedCache::at(&root))
+            .await
+            .expect("settings");
+        let service = crate::DatabaseService::start(
+            crate::Database::open(&crate::SharedCache::at(&root))
+                .await
+                .expect("database"),
+        )
+        .await
+        .expect("database");
+        let database = service.client();
+        let entry = crate::create_instance(
+            &database,
+            &instances,
+            "Survival",
+            "1.21",
+            &crate::global_launch(&settings),
+        )
+        .await
+        .expect("instance");
+        let dir = instances.join(&entry.folder);
+        let bytes = b"GIF89a picked";
+        let picked = root.join("picked.gif");
+        fs::write(&picked, bytes).expect("picked image");
+        // A directory where the icon goes makes moving the written image into place fail.
+        let destination = custom_icon_path(&dir, bytes);
+        fs::create_dir(&destination).expect("blocking directory");
+
+        assert!(
+            crate::set_instance_icon(&database, &instances, &entry.folder, &picked)
+                .await
+                .is_err()
+        );
+        assert!(!destination.with_extension("png.part").exists());
         service.shutdown().await.expect("shutdown");
     }
 
