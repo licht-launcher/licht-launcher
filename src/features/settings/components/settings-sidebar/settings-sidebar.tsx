@@ -57,7 +57,7 @@ export function SettingsSidebar({
 
   return (
     <div className={settingsSidebarStyles.root}>
-      {/* Moves the settings window, in line with the title bar over the panel. */}
+      {/* Moves the settings window from the top of the sidebar. */}
       <div
         data-tauri-drag-region
         aria-hidden
