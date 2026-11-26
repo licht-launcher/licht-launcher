@@ -42,7 +42,12 @@ export function InstanceSettingsPanel({
   versionId: string | null;
   preparing?: boolean;
   /** The pack a linked instance was installed from; `null` for other instances. */
-  modpack?: { origin: ModpackOrigin; linked: LinkedModpack | null } | null;
+  modpack?: {
+    origin: ModpackOrigin;
+    linked: LinkedModpack | null;
+    /** The pack icon cached for the instance. */
+    iconPath: string | null;
+  } | null;
   busy: boolean;
   versionBusy: boolean;
   instanceActive?: boolean;

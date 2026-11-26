@@ -39,7 +39,12 @@ export function InstanceBaseSection({
    * The pack a linked instance came from. It sets the game version, so that cannot
    * change while the instance is linked.
    */
-  modpack?: { origin: ModpackOrigin; linked: LinkedModpack | null } | null;
+  modpack?: {
+    origin: ModpackOrigin;
+    linked: LinkedModpack | null;
+    /** The pack icon cached for the instance. */
+    iconPath: string | null;
+  } | null;
   /** The game or a download is running, so the modpack must not change under it. */
   instanceActive?: boolean;
   busy: boolean;
@@ -146,6 +151,7 @@ export function InstanceBaseSection({
           folder={folder}
           origin={modpack.origin}
           linked={modpack.linked}
+          iconPath={modpack.iconPath}
           preparing={preparing}
           busy={busy || versionBusy || instanceActive}
         />

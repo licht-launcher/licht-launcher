@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Toaster } from "@/components/ui/sonner";
+import { formatUpdatedAt } from "@/features/discover/lib/format";
 import {
   completedDownload,
   downloadJob,
@@ -354,13 +355,45 @@ describe("InstanceSettingsPage", () => {
     fireEvent.click(
       await screen.findByRole("button", { name: "Instance base" }),
     );
-    expect(await screen.findByText("Linked modpack")).toBeInTheDocument();
     expect(
-      screen.getByText("Fabulously Optimized 15.0.0-beta.3"),
+      await screen.findByRole("heading", { name: "Linked modpack" }),
+    ).toBeInTheDocument();
+    // The pack sits with its version, author and store next to Change version.
+    expect(screen.getByText("Fabulously Optimized")).toBeInTheDocument();
+    expect(screen.getByText("15.0.0-beta.3")).toBeInTheDocument();
+    expect(
+      screen.getByText("by robotkoer · Modrinth modpack"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Change version" }),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Modpack" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("shows when the installed modpack version was released", async () => {
+    const publishedAt = "2024-05-01T12:00:00Z";
+    const linked = linkedEntry.installation?.modpack;
+    if (!linked || !linkedEntry.installation)
+      throw new Error("missing linked modpack");
+    renderPage({
+      entry: {
+        ...linkedEntry,
+        installation: {
+          ...linkedEntry.installation,
+          modpack: { ...linked, publishedAt },
+        },
+      },
+    });
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Instance base" }),
+    );
+    expect(
+      await screen.findByText(
+        `by robotkoer · Modrinth modpack · Released ${formatUpdatedAt(publishedAt)}`,
+      ),
+    ).toBeInTheDocument();
   });
 
   it("holds the modpack actions while the game or a download runs", async () => {
@@ -384,9 +417,7 @@ describe("InstanceSettingsPage", () => {
     fireEvent.click(
       await screen.findByRole("button", { name: "Instance base" }),
     );
-    expect(
-      await screen.findByText("Fabulously Optimized 15.0.0-beta.3"),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Fabulously Optimized")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Unlink" }));
     const confirm = await screen.findByRole("dialog", {
       name: "Unlink this modpack?",
@@ -449,13 +480,16 @@ describe("InstanceSettingsPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Instance base" }));
 
-    expect(await screen.findByText("Modpack version")).toBeInTheDocument();
-    // The linked pack replaces Edit base, right under the base it sets.
+    expect(
+      await screen.findByRole("button", { name: "Change version" }),
+    ).toBeInTheDocument();
+    // The linked pack replaces Edit base, right under the base it sets;
+    // the actions that reset or drop the link sit apart from it.
     expect(
       screen
         .getAllByRole("heading", { level: 3 })
         .map((heading) => heading.textContent),
-    ).toEqual(["Base", "Linked modpack", "Maintenance"]);
+    ).toEqual(["Base", "Linked modpack", "Manage modpack", "Maintenance"]);
     expect(screen.getByText("Reinstall modpack")).toBeInTheDocument();
     expect(screen.getByText("Unlink modpack")).toBeInTheDocument();
     expect(

@@ -70,7 +70,11 @@ export function InstanceSettingsPage({
           }
           modpack={
             origin !== null
-              ? { origin, linked: entry.installation?.modpack ?? null }
+              ? {
+                  origin,
+                  linked: entry.installation?.modpack ?? null,
+                  iconPath: entry.iconPath,
+                }
               : null
           }
           busy={busy}

@@ -18,7 +18,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { formatUpdatedAt } from "@/features/discover/lib/format";
 import { ChangeModpackVersionDialog } from "@/features/instance-settings/components/change-modpack-version-dialog";
+import { InstanceIcon } from "@/features/instances/components/instance-icon";
 import { instanceContentKey } from "@/features/instances/lib/content-query";
 import type { ModpackOrigin } from "@/features/instances/lib/modpack-content";
 import { friendlyError, messageOf } from "@/lib/errors";
@@ -43,12 +45,15 @@ export function LinkedModpackSettings({
   folder,
   origin,
   linked,
+  iconPath,
   preparing,
   busy,
 }: {
   folder: string;
   origin: ModpackOrigin;
   linked: LinkedModpack | null;
+  /** The pack icon cached for the instance. */
+  iconPath: string | null;
   preparing: boolean;
   /** Another action on the instance is running. */
   busy: boolean;
@@ -100,6 +105,12 @@ export function LinkedModpackSettings({
   const source = fromFile
     ? `Imported from a ${SOURCE_LABELS[origin.source]} file`
     : `${SOURCE_LABELS[origin.source]} modpack`;
+  const released = formatUpdatedAt(linked?.publishedAt ?? null);
+  const details = [
+    linked?.author ? `by ${linked.author}` : null,
+    source,
+    released ? `Released ${released}` : null,
+  ].filter((detail) => detail !== null);
   const disabled =
     busy ||
     preparing ||
@@ -108,61 +119,64 @@ export function LinkedModpackSettings({
     changeVersion.isPending;
 
   return (
-    <Card title="Linked modpack">
-      <div className={styles.row}>
-        <div className={styles.rowText}>
-          <p className={styles.rowLabel}>
-            {linked ? `${linked.name} ${linked.versionName}` : "Linked modpack"}
-          </p>
-          <p className={styles.rowDescription}>{source}</p>
+    <>
+      <Card title="Linked modpack">
+        <div className={styles.pack}>
+          <InstanceIcon iconPath={iconPath} size="md" />
+          <div className={styles.packText}>
+            <p className={styles.packName}>
+              {linked?.name ?? "Linked modpack"}
+            </p>
+            {linked ? (
+              <p className={styles.packVersion}>{linked.versionName}</p>
+            ) : null}
+            <p className={styles.packDetails}>{details.join(" · ")}</p>
+          </div>
+          <Button
+            type="button"
+            variant="warning"
+            className={styles.control}
+            disabled={disabled || fromFile}
+            onClick={() => setVersionOpen(true)}
+          >
+            <PackageIcon data-icon="inline-start" aria-hidden />
+            Change version
+          </Button>
+          {origin.type === "modpack" ? (
+            <ChangeModpackVersionDialog
+              open={versionOpen}
+              origin={origin}
+              busy={changeVersion.isPending}
+              onOpenChange={setVersionOpen}
+              onSave={(versionId) => changeVersion.mutate(versionId)}
+            />
+          ) : null}
         </div>
-      </div>
-      <div className={styles.row}>
-        <div className={styles.rowText}>
-          <p className={styles.rowLabel}>Modpack version</p>
-          <p className={styles.rowDescription}>
-            {fromFile ? VERSION_FILE_HINT : VERSION_HINT}
-          </p>
-        </div>
-        <Button
-          type="button"
-          variant="warning"
-          className={styles.control}
+        <p className={styles.rowDescription}>
+          {fromFile ? VERSION_FILE_HINT : VERSION_HINT}
+        </p>
+      </Card>
+      <Card title="Manage modpack">
+        <ConfirmedAction
+          title="Reinstall modpack"
+          hint={fromFile ? REINSTALL_FILE_HINT : REINSTALL_HINT}
+          icon={<RotateCcwIcon data-icon="inline-start" aria-hidden />}
+          action="Reinstall"
+          question="Reinstall this modpack?"
           disabled={disabled || fromFile}
-          onClick={() => setVersionOpen(true)}
-        >
-          <PackageIcon data-icon="inline-start" aria-hidden />
-          Change version
-        </Button>
-        {origin.type === "modpack" ? (
-          <ChangeModpackVersionDialog
-            open={versionOpen}
-            origin={origin}
-            busy={changeVersion.isPending}
-            onOpenChange={setVersionOpen}
-            onSave={(versionId) => changeVersion.mutate(versionId)}
-          />
-        ) : null}
-      </div>
-      <ConfirmedAction
-        title="Reinstall modpack"
-        hint={fromFile ? REINSTALL_FILE_HINT : REINSTALL_HINT}
-        icon={<RotateCcwIcon data-icon="inline-start" aria-hidden />}
-        action="Reinstall"
-        question="Reinstall this modpack?"
-        disabled={disabled || fromFile}
-        onConfirm={() => reinstall.mutate()}
-      />
-      <ConfirmedAction
-        title="Unlink modpack"
-        hint={UNLINK_HINT}
-        icon={<UnlinkIcon data-icon="inline-start" aria-hidden />}
-        action="Unlink"
-        question="Unlink this modpack?"
-        disabled={disabled}
-        onConfirm={() => unlink.mutate()}
-      />
-    </Card>
+          onConfirm={() => reinstall.mutate()}
+        />
+        <ConfirmedAction
+          title="Unlink modpack"
+          hint={UNLINK_HINT}
+          icon={<UnlinkIcon data-icon="inline-start" aria-hidden />}
+          action="Unlink"
+          question="Unlink this modpack?"
+          disabled={disabled}
+          onConfirm={() => unlink.mutate()}
+        />
+      </Card>
+    </>
   );
 }
 
