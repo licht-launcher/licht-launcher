@@ -49,6 +49,7 @@
       "capabilities": [
         "default",
         "settings",
+        "instance-settings",
         "startup",
         "startup-preview-controls"
       ]

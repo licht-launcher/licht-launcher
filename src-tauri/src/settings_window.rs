@@ -104,27 +104,33 @@ pub fn forget() {
 
 /// The page saves its last edit, then closes itself without being able to refuse.
 pub fn close(app: &AppHandle) {
-    let Some(window) = app.get_webview_window(LABEL) else {
+    close_after_last_edit(app, LABEL);
+}
+
+/// Asks the window `label` to save its last edit and close, and closes it if it does not.
+pub(crate) fn close_after_last_edit(app: &AppHandle, label: &str) {
+    let Some(window) = app.get_webview_window(label) else {
         return;
     };
-    if let Err(error) = app.emit_to(LABEL, LAUNCHER_CLOSED_EVENT, ()) {
-        tracing::error!(%error, "Could not ask the settings window to close");
+    if let Err(error) = app.emit_to(label, LAUNCHER_CLOSED_EVENT, ()) {
+        tracing::error!(%error, label, "Could not ask a settings window to close");
         destroy(&window);
         return;
     }
     let app = app.clone();
+    let label = label.to_string();
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(LAUNCHER_CLOSED_GRACE).await;
-        if let Some(window) = app.get_webview_window(LABEL) {
-            tracing::warn!("The settings window did not close in time; closing it");
+        if let Some(window) = app.get_webview_window(&label) {
+            tracing::warn!(label, "A settings window did not close in time; closing it");
             destroy(&window);
         }
     });
 }
 
-fn destroy(window: &WebviewWindow) {
+pub(crate) fn destroy(window: &WebviewWindow) {
     if let Err(error) = window.destroy() {
-        tracing::error!(%error, "Could not close the settings window");
+        tracing::error!(%error, label = window.label(), "Could not close a settings window");
     }
 }
 
@@ -134,7 +140,9 @@ pub async fn open_settings_window(
     window: WebviewWindow,
     section: String,
 ) -> Result<(), String> {
-    if !is_launcher_window(window.label()) {
+    if !is_launcher_window(window.label())
+        && !crate::instance_settings_window::is_instance_settings_window(window.label())
+    {
         return Err("Settings can only be opened from the launcher".to_string());
     }
     // WebView2 creation must not block the synchronous IPC/UI thread on Windows.

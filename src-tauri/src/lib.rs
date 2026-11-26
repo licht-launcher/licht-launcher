@@ -4,6 +4,7 @@ use tauri::{WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 mod app_updates;
 mod commands;
 mod desktop;
+mod instance_settings_window;
 mod logging;
 mod progress;
 mod settings_window;
@@ -66,6 +67,8 @@ pub fn run() -> anyhow::Result<()> {
             commands::shell::get_build_diagnostics,
             settings_window::open_settings_window,
             settings_window::settings_window_ready,
+            instance_settings_window::open_instance_settings_window,
+            instance_settings_window::instance_settings_window_ready,
             commands::downloads::list_download_jobs,
             commands::downloads::reorder_download_jobs,
             commands::downloads::download_telemetry,
@@ -168,6 +171,7 @@ pub fn run() -> anyhow::Result<()> {
             && label == "main"
         {
             settings_window::close(app);
+            instance_settings_window::close_all(app);
         } else if let tauri::RunEvent::WindowEvent {
             label,
             event: tauri::WindowEvent::Destroyed,
@@ -176,6 +180,14 @@ pub fn run() -> anyhow::Result<()> {
             && label == settings_window::LABEL
         {
             settings_window::forget();
+        } else if let tauri::RunEvent::WindowEvent {
+            label,
+            event: tauri::WindowEvent::Destroyed,
+            ..
+        } = &event
+            && instance_settings_window::is_instance_settings_window(label)
+        {
+            instance_settings_window::forget(label);
         } else if let tauri::RunEvent::WindowEvent {
             label,
             event: tauri::WindowEvent::Destroyed,

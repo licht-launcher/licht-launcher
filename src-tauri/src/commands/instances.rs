@@ -94,6 +94,7 @@ fn platform_source(
 /// for the change job.
 #[tauri::command]
 pub async fn change_instance_base(
+    app: AppHandle,
     downloads: State<'_, std::sync::Arc<licht_core::DownloadManager>>,
     folder: String,
     platform: String,
@@ -102,49 +103,58 @@ pub async fn change_instance_base(
     loader_version: Option<String>,
 ) -> Result<licht_core::DownloadJobSnapshot, String> {
     let source = platform_source(&platform, game_version, &loader_channel, loader_version)?;
-    downloads
-        .inner()
-        .change_base(&folder, source)
-        .await
-        .map_err(failure)
+    let changed = downloads.inner().change_base(&folder, source).await;
+    // Also after a failure: the instance waits to retry, or a cancel put the old base back.
+    super::notify_windows(&app, super::INSTANCES_CHANGED_EVENT);
+    changed.map_err(failure)
 }
 
 #[tauri::command]
 pub async fn rename_instance(
+    app: AppHandle,
     database: State<'_, DatabaseClient>,
     paths: State<'_, LauncherPaths>,
     folder: String,
     name: String,
 ) -> Result<InstanceEntry, String> {
     let root = instances_root(&paths).map_err(failure)?;
-    licht_core::rename_instance(&database, &root, &folder, &name)
+    let entry = licht_core::rename_instance(&database, &root, &folder, &name)
         .await
-        .map_err(failure)
+        .map_err(failure)?;
+    super::notify_windows(&app, super::INSTANCES_CHANGED_EVENT);
+    Ok(entry)
 }
 
 #[tauri::command]
 pub async fn unlink_instance_modpack(
+    app: AppHandle,
     downloads: State<'_, std::sync::Arc<licht_core::DownloadManager>>,
     folder: String,
 ) -> Result<InstanceEntry, String> {
-    downloads.inner().unlink(&folder).await.map_err(failure)
+    let entry = downloads.inner().unlink(&folder).await.map_err(failure)?;
+    super::notify_windows(&app, super::INSTANCES_CHANGED_EVENT);
+    Ok(entry)
 }
 
 #[tauri::command]
 pub async fn duplicate_instance(
+    app: AppHandle,
     database: State<'_, DatabaseClient>,
     paths: State<'_, LauncherPaths>,
     folder: String,
     name: String,
 ) -> Result<InstanceEntry, String> {
     let root = instances_root(&paths).map_err(failure)?;
-    licht_core::duplicate_instance(&database, &root, &folder, &name)
+    let entry = licht_core::duplicate_instance(&database, &root, &folder, &name)
         .await
-        .map_err(failure)
+        .map_err(failure)?;
+    super::notify_windows(&app, super::INSTANCES_CHANGED_EVENT);
+    Ok(entry)
 }
 
 #[tauri::command]
 pub async fn delete_instance(
+    app: AppHandle,
     database: State<'_, DatabaseClient>,
     paths: State<'_, LauncherPaths>,
     downloads: State<'_, std::sync::Arc<licht_core::DownloadManager>>,
@@ -154,20 +164,26 @@ pub async fn delete_instance(
     let root = instances_root(&paths).map_err(failure)?;
     licht_core::delete_instance(&database, &root, &folder)
         .await
-        .map_err(failure)
+        .map_err(failure)?;
+    crate::instance_settings_window::close_for(&app, &folder);
+    super::notify_windows(&app, super::INSTANCES_CHANGED_EVENT);
+    Ok(())
 }
 
 #[tauri::command]
 pub async fn save_instance(
+    app: AppHandle,
     database: State<'_, DatabaseClient>,
     paths: State<'_, LauncherPaths>,
     folder: String,
     settings: InstanceSettings,
 ) -> Result<InstanceEntry, String> {
     let root = instances_root(&paths).map_err(failure)?;
-    update_instance(&database, &root, &folder, &settings)
+    let entry = update_instance(&database, &root, &folder, &settings)
         .await
-        .map_err(failure)
+        .map_err(failure)?;
+    super::notify_windows(&app, super::INSTANCES_CHANGED_EVENT);
+    Ok(entry)
 }
 
 #[tauri::command]
