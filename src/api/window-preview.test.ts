@@ -6,12 +6,14 @@ import {
   type WindowSizePreset,
 } from "@/api/window-preview";
 
-const { setSize, center, settingsSetSize, getByLabel } = vi.hoisted(() => ({
-  setSize: vi.fn(),
-  center: vi.fn(),
-  settingsSetSize: vi.fn(),
-  getByLabel: vi.fn(),
-}));
+const { setSize, center, unmaximize, settingsSetSize, getByLabel } =
+  vi.hoisted(() => ({
+    setSize: vi.fn(),
+    unmaximize: vi.fn(),
+    center: vi.fn(),
+    settingsSetSize: vi.fn(),
+    getByLabel: vi.fn(),
+  }));
 vi.mock("@tauri-apps/api/window", () => ({
   getCurrentWindow: () => ({ setSize: settingsSetSize, center: vi.fn() }),
   Window: { getByLabel },
@@ -21,11 +23,12 @@ describe("window preview", () => {
   beforeEach(() => {
     setSize.mockReset().mockResolvedValue(undefined);
     center.mockReset().mockResolvedValue(undefined);
+    unmaximize.mockReset().mockResolvedValue(undefined);
     settingsSetSize.mockReset().mockResolvedValue(undefined);
     getByLabel
       .mockReset()
       .mockImplementation(async (label: string) =>
-        label === "main" ? { setSize, center } : null,
+        label === "main" ? { setSize, center, unmaximize } : null,
       );
   });
 
@@ -34,6 +37,21 @@ describe("window preview", () => {
     expect(getByLabel).toHaveBeenCalledWith("main");
     expect(setSize).toHaveBeenCalledOnce();
     expect(settingsSetSize).not.toHaveBeenCalled();
+  });
+
+  it("leaves a maximized launcher window before resizing it", async () => {
+    let finishUnmaximize: (() => void) | undefined;
+    unmaximize.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        finishUnmaximize = resolve;
+      }),
+    );
+    const resizing = previewWindowSize("default");
+    await vi.waitFor(() => expect(unmaximize).toHaveBeenCalledOnce());
+    expect(setSize).not.toHaveBeenCalled();
+    finishUnmaximize?.();
+    await resizing;
+    expect(setSize).toHaveBeenCalledExactlyOnceWith(new LogicalSize(1200, 800));
   });
 
   it("reports a closed launcher window", async () => {
@@ -90,6 +108,7 @@ describe("window preview", () => {
     await expect(
       previewWindowSize("unknown" as WindowSizePreset),
     ).rejects.toThrow("Unsupported window size preset");
+    expect(unmaximize).not.toHaveBeenCalled();
     expect(setSize).not.toHaveBeenCalled();
     expect(center).not.toHaveBeenCalled();
   });

@@ -1,7 +1,7 @@
 import { LogicalSize } from "@tauri-apps/api/dpi";
 import { Window } from "@tauri-apps/api/window";
 
-// Test sizes stay within the limits in src-tauri/src/lib.rs::create_main_window.
+// Test sizes stay above the minimum size in src-tauri/src/lib.rs::create_launcher_window.
 export const WINDOW_SIZE_PRESETS = [
   { id: "small", label: "Small", width: 960, height: 560 },
   { id: "default", label: "Default", width: 1200, height: 800 },
@@ -21,6 +21,8 @@ export async function previewWindowSize(id: WindowSizePreset): Promise<void> {
   const preset = WINDOW_SIZE_PRESETS.find((item) => item.id === id);
   if (!preset) throw new Error("Unsupported window size preset");
   const window = await launcherWindow();
+  // A maximized window keeps its maximized state while resized.
+  await window.unmaximize();
   await window.setSize(new LogicalSize(preset.width, preset.height));
 }
 
