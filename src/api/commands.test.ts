@@ -36,6 +36,7 @@ import {
   installModpackFiles,
   installRecommendedJava,
   installVersion,
+  instanceSettingsWindowReady,
   isStartupPreviewOpen,
   isVersionReady,
   javaInstallationStatus,
@@ -55,6 +56,7 @@ import {
   openExternalUrl,
   openFeedback,
   openInstanceFolder,
+  openInstanceSettingsWindow,
   openLogsFolder,
   openRepository,
   openStartupPreview,
@@ -164,6 +166,24 @@ describe("launcher commands", () => {
     vi.mocked(invoke).mockResolvedValueOnce(7);
     await expect(settingsWindowReady()).rejects.toThrow(
       "Invalid settings section",
+    );
+  });
+
+  it("opens the settings window of an instance", async () => {
+    vi.mocked(invoke).mockResolvedValueOnce(undefined);
+    await openInstanceSettingsWindow("survival");
+    expect(invoke).toHaveBeenCalledWith("open_instance_settings_window", {
+      folder: "survival",
+    });
+  });
+
+  it("reads the instance an instance settings window was opened for", async () => {
+    vi.mocked(invoke).mockResolvedValueOnce("survival");
+    expect(await instanceSettingsWindowReady()).toBe("survival");
+    expect(invoke).toHaveBeenCalledWith("instance_settings_window_ready");
+    vi.mocked(invoke).mockResolvedValueOnce("");
+    await expect(instanceSettingsWindowReady()).rejects.toThrow(
+      "Invalid instance folder",
     );
   });
 

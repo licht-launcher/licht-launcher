@@ -1,13 +1,13 @@
 import { useState } from "react";
+import { toast } from "sonner";
+import { openInstanceSettingsWindow } from "@/api/commands";
 import { requestOpenSettings } from "@/api/shell-events";
 import type { InstanceAction } from "@/features/instances/components/instance-action-dialog";
 import type { SectionId } from "@/features/settings/model/sections";
+import { friendlyError, messageOf } from "@/lib/errors";
 
 export function useInstanceDialogs() {
   const [createOpen, setCreateOpen] = useState(false);
-  const [configuringFolder, setConfiguringFolder] = useState<string | null>(
-    null,
-  );
   const [action, setAction] = useState<InstanceAction | null>(null);
   const [draftName, setDraftName] = useState("");
 
@@ -15,12 +15,18 @@ export function useInstanceDialogs() {
     setAction(null);
   }
 
+  function clearActionFor(folder: string) {
+    setAction((current) => (current?.folder === folder ? null : current));
+  }
+
   function openCreate() {
     setCreateOpen(true);
   }
 
   function openConfigure(folder: string) {
-    setConfiguringFolder(folder);
+    openInstanceSettingsWindow(folder).catch((error: unknown) => {
+      toast.error(friendlyError(messageOf(error)));
+    });
   }
 
   function openGlobalSettings(section: SectionId = "account") {
@@ -41,12 +47,11 @@ export function useInstanceDialogs() {
     createOpen,
     setCreateOpen,
     openCreate,
-    configuringFolder,
-    setConfiguringFolder,
     action,
     draftName,
     setDraftName,
     clearAction,
+    clearActionFor,
     openConfigure,
     openGlobalSettings,
     openRename,

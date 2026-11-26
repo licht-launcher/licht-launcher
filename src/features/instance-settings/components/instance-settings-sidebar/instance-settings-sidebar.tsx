@@ -1,41 +1,35 @@
-import { ChevronRightIcon } from "lucide-react";
-
 import { Button } from "@/components/ui/button";
-import { DialogTitle } from "@/components/ui/dialog";
 import {
   INSTANCE_SECTIONS,
   type InstanceSectionId,
 } from "@/features/instance-settings/model/sections";
+import { InstanceIcon } from "@/features/instances/components/instance-icon";
 
 import { instanceSettingsSidebarStyles } from "./instance-settings-sidebar.styles";
 
 export function InstanceSettingsSidebar({
   name,
+  iconPath,
   section,
   onSectionChange,
-  onOpenGlobalSettings,
 }: {
   name: string;
+  iconPath: string | null;
   section: InstanceSectionId;
   onSectionChange: (section: InstanceSectionId) => void;
-  onOpenGlobalSettings: () => void;
 }) {
   return (
     <div className={instanceSettingsSidebarStyles.root}>
+      <div
+        data-tauri-drag-region
+        aria-hidden
+        className={instanceSettingsSidebarStyles.dragRegion}
+      />
       <div className={instanceSettingsSidebarStyles.header}>
-        <DialogTitle className={instanceSettingsSidebarStyles.title}>
+        <InstanceIcon iconPath={iconPath} />
+        <h1 className={instanceSettingsSidebarStyles.title} title={name}>
           {name}
-        </DialogTitle>
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          className={instanceSettingsSidebarStyles.instanceButton}
-          onClick={onOpenGlobalSettings}
-        >
-          Open Global Settings
-          <ChevronRightIcon data-icon="inline-end" aria-hidden />
-        </Button>
+        </h1>
       </div>
       <nav
         aria-label="Instance settings sections"
@@ -48,12 +42,15 @@ export function InstanceSettingsSidebar({
               key={item.id}
               type="button"
               variant={section === item.id ? "secondary" : "ghost"}
+              size="sm"
               className={instanceSettingsSidebarStyles.navButton}
               aria-current={section === item.id ? "page" : undefined}
               onClick={() => onSectionChange(item.id)}
             >
-              <Icon />
-              {item.label}
+              <Icon className={instanceSettingsSidebarStyles.navIcon} />
+              <span className={instanceSettingsSidebarStyles.navLabel}>
+                {item.label}
+              </span>
             </Button>
           );
         })}

@@ -15,7 +15,7 @@ import {
   completedDownload,
   downloadJob,
 } from "@/features/downloads/fixtures/job";
-import { InstanceSettingsDialog } from "@/features/instance-settings/instance-settings-dialog";
+import { InstanceSettingsPage } from "@/features/instance-settings/instance-settings-page";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 
 const { invoke } = vi.hoisted(() => ({
@@ -45,21 +45,18 @@ const entry: InstanceEntry = {
   iconPath: null,
 };
 
-function renderDialog(
-  props: Partial<ComponentProps<typeof InstanceSettingsDialog>> = {},
+function renderPage(
+  props: Partial<ComponentProps<typeof InstanceSettingsPage>> = {},
 ) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <InstanceSettingsDialog
+      <InstanceSettingsPage
         entry={entry}
-        open
         busy={false}
         versionBusy={false}
-        onOpenChange={() => {}}
-        onOpenGlobalSettings={() => {}}
         onRename={() => {}}
         onChangeBase={() => {}}
         onOpenFolder={() => {}}
@@ -92,7 +89,7 @@ const linkedEntry: InstanceEntry = {
   },
 };
 
-describe("InstanceSettingsDialog", () => {
+describe("InstanceSettingsPage", () => {
   afterEach(() => vi.restoreAllMocks());
   beforeEach(() => {
     invoke.mockReset();
@@ -148,7 +145,7 @@ describe("InstanceSettingsDialog", () => {
     const onDuplicate = vi.fn();
     const onDelete = vi.fn();
     const onChangeBase = vi.fn();
-    renderDialog({
+    renderPage({
       onRename,
       onOpenFolder,
       onDuplicate,
@@ -177,12 +174,10 @@ describe("InstanceSettingsDialog", () => {
     expect(onRename).toHaveBeenCalledWith("Hardcore");
 
     expect(
-      screen.getByRole("heading", { name: "Open folder" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { name: "Duplicate" }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Delete" })).toBeInTheDocument();
+      screen
+        .getAllByRole("heading", { level: 3 })
+        .map((heading) => heading.textContent),
+    ).toEqual(["Instance", "Actions", "Danger zone"]);
     fireEvent.click(screen.getByRole("button", { name: "Open folder" }));
     fireEvent.click(screen.getByRole("button", { name: "Duplicate" }));
     fireEvent.click(screen.getByRole("button", { name: "Delete instance" }));
@@ -202,9 +197,6 @@ describe("InstanceSettingsDialog", () => {
     expect(await screen.findByText("Vanilla")).toBeInTheDocument();
     expect(screen.getByText("1.20.1")).toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: "Edit base" }),
-    ).toBeInTheDocument();
-    expect(
       screen.getByText(
         "Change the platform, game version or loader this instance launches with.",
       ),
@@ -213,7 +205,7 @@ describe("InstanceSettingsDialog", () => {
       screen
         .getAllByRole("heading", { level: 3 })
         .map((heading) => heading.textContent),
-    ).toEqual(["Edit base", "Repair"]);
+    ).toEqual(["Base", "Maintenance"]);
     expect(invoke).not.toHaveBeenCalledWith("list_versions");
 
     // The version list is virtualized; give it room to render its options.
@@ -253,7 +245,7 @@ describe("InstanceSettingsDialog", () => {
           })
         : original(command, args),
     );
-    renderDialog({
+    renderPage({
       entry: { ...entry, versionId: "fabric-loader-0.19.5-26.3" },
     });
 
@@ -274,7 +266,7 @@ describe("InstanceSettingsDialog", () => {
         ? Promise.reject(new Error("invalid loader profile"))
         : original(command, args),
     );
-    renderDialog();
+    renderPage();
 
     fireEvent.click(screen.getByRole("button", { name: "Instance base" }));
 
@@ -297,7 +289,7 @@ describe("InstanceSettingsDialog", () => {
         : original(command, args),
     );
     const success = vi.spyOn(toast, "success");
-    renderDialog({ entry: linkedEntry });
+    renderPage({ entry: linkedEntry });
 
     fireEvent.click(
       await screen.findByRole("button", { name: "Instance base" }),
@@ -323,7 +315,7 @@ describe("InstanceSettingsDialog", () => {
   });
 
   it("cannot reinstall a modpack imported from a file", async () => {
-    renderDialog({
+    renderPage({
       entry: {
         ...linkedEntry,
         installation: {
@@ -347,7 +339,7 @@ describe("InstanceSettingsDialog", () => {
   });
 
   it("shows the linked modpack under Instance base only for linked instances", async () => {
-    const { unmount } = renderDialog();
+    const { unmount } = renderPage();
     fireEvent.click(
       await screen.findByRole("button", { name: "Instance base" }),
     );
@@ -358,13 +350,21 @@ describe("InstanceSettingsDialog", () => {
     ).not.toBeInTheDocument();
     unmount();
 
-    renderDialog({ entry: linkedEntry });
+    renderPage({ entry: linkedEntry });
     fireEvent.click(
       await screen.findByRole("button", { name: "Instance base" }),
     );
-    expect(await screen.findByText("Linked modpack")).toBeInTheDocument();
     expect(
-      screen.getByText("Fabulously Optimized 15.0.0-beta.3"),
+      await screen.findByRole("heading", { name: "Linked modpack" }),
+    ).toBeInTheDocument();
+    // The pack sits with its version, author and store next to Change version.
+    expect(screen.getByText("Fabulously Optimized")).toBeInTheDocument();
+    expect(screen.getByText("15.0.0-beta.3")).toBeInTheDocument();
+    expect(
+      screen.getByText("by robotkoer · Modrinth modpack"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Change version" }),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Modpack" }),
@@ -372,7 +372,7 @@ describe("InstanceSettingsDialog", () => {
   });
 
   it("holds the modpack actions while the game or a download runs", async () => {
-    renderDialog({ entry: linkedEntry, instanceActive: true });
+    renderPage({ entry: linkedEntry, instanceActive: true });
 
     fireEvent.click(
       await screen.findByRole("button", { name: "Instance base" }),
@@ -387,14 +387,12 @@ describe("InstanceSettingsDialog", () => {
 
   it("unlinks the modpack after the user confirms", async () => {
     const success = vi.spyOn(toast, "success");
-    renderDialog({ entry: linkedEntry });
+    renderPage({ entry: linkedEntry });
 
     fireEvent.click(
       await screen.findByRole("button", { name: "Instance base" }),
     );
-    expect(
-      await screen.findByText("Fabulously Optimized 15.0.0-beta.3"),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Fabulously Optimized")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Unlink" }));
     const confirm = await screen.findByRole("dialog", {
       name: "Unlink this modpack?",
@@ -439,7 +437,7 @@ describe("InstanceSettingsDialog", () => {
       }
       return original(command, args);
     });
-    renderDialog({
+    renderPage({
       entry: {
         ...entry,
         installation: {
@@ -458,19 +456,17 @@ describe("InstanceSettingsDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Instance base" }));
 
     expect(
-      await screen.findByRole("heading", { name: "Modpack version" }),
+      await screen.findByRole("button", { name: "Change version" }),
     ).toBeInTheDocument();
-    // Each action sits right under the card it changes.
+    // The linked pack replaces Edit base, right under the base it sets;
+    // the actions that reset or drop the link sit apart from it.
     expect(
       screen
         .getAllByRole("heading", { level: 3 })
         .map((heading) => heading.textContent),
-    ).toEqual([
-      "Modpack version",
-      "Reinstall modpack",
-      "Unlink modpack",
-      "Repair",
-    ]);
+    ).toEqual(["Base", "Linked modpack", "Manage modpack", "Maintenance"]);
+    expect(screen.getByText("Reinstall modpack")).toBeInTheDocument();
+    expect(screen.getByText("Unlink modpack")).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Edit base" }),
     ).not.toBeInTheDocument();
@@ -503,7 +499,7 @@ describe("InstanceSettingsDialog", () => {
   });
 
   it("has no other versions for a modpack imported from a file", async () => {
-    renderDialog({
+    renderPage({
       entry: {
         ...entry,
         installation: {
@@ -516,17 +512,17 @@ describe("InstanceSettingsDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Instance base" }));
 
     expect(
-      await screen.findByText(
-        "A modpack imported from a file has no other versions to install.",
+      await screen.findByRole("button", { name: "Change version" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByText(
+        "Imported from a Modrinth file · No other versions to install",
       ),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Change version" }),
-    ).toBeDisabled();
   });
 
   it("waits to repair while the modpack version changes", async () => {
-    renderDialog({
+    renderPage({
       entry: {
         ...entry,
         installation: {
@@ -586,7 +582,7 @@ describe("InstanceSettingsDialog", () => {
       }
       return Promise.resolve(entry);
     });
-    renderDialog();
+    renderPage();
     fireEvent.click(
       await screen.findByRole("button", { name: "Instance base" }),
     );
@@ -612,7 +608,7 @@ describe("InstanceSettingsDialog", () => {
         : original(command),
     );
     const success = vi.spyOn(toast, "success");
-    renderDialog();
+    renderPage();
     fireEvent.click(
       await screen.findByRole("button", { name: "Instance base" }),
     );
@@ -629,11 +625,13 @@ describe("InstanceSettingsDialog", () => {
   });
 
   it("groups overrides under Override Settings", async () => {
-    renderDialog();
-    expect(await screen.findByText("Survival")).toBeInTheDocument();
+    renderPage();
     expect(
-      screen.getByRole("button", { name: "Open Global Settings" }),
+      await screen.findByRole("heading", { level: 1, name: "Survival" }),
     ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Open Global Settings" }),
+    ).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Override Settings" }));
 
     expect(
@@ -641,9 +639,19 @@ describe("InstanceSettingsDialog", () => {
         "Turn on a category to use values from this instance instead of global Settings.",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Window" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Memory" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Java" })).toBeInTheDocument();
+    expect(
+      screen
+        .getAllByRole("heading", { level: 3 })
+        .map((heading) => heading.textContent),
+    ).toEqual(["Game window", "Memory", "Java"]);
+    // Off, each category says which global value the instance uses.
+    expect(
+      screen.getByText("Using global settings: 854 × 480."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Using global settings: 2GB.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Using the Java installation from global settings."),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole("heading", { name: "Arguments" }),
     ).not.toBeInTheDocument();
@@ -660,6 +668,9 @@ describe("InstanceSettingsDialog", () => {
     expect(screen.queryByLabelText("Full screen")).not.toBeInTheDocument();
     fireEvent.click(customizeWindow);
     expect(screen.getByLabelText("Full screen")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Using global settings: 854 × 480."),
+    ).not.toBeInTheDocument();
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith(
@@ -673,7 +684,7 @@ describe("InstanceSettingsDialog", () => {
   });
 
   it("saves an exact memory override from the numeric input", async () => {
-    renderDialog();
+    renderPage();
     await screen.findByText("Survival");
     fireEvent.click(screen.getByRole("button", { name: "Override Settings" }));
     fireEvent.click(

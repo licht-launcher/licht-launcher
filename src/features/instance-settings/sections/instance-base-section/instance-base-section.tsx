@@ -8,6 +8,7 @@ import {
   repairInstance,
 } from "@/api/commands";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { EditInstanceBaseDialog } from "@/features/instance-settings/components/edit-instance-base-dialog";
 import { LinkedModpackSettings } from "@/features/instance-settings/components/linked-modpack-settings";
@@ -38,7 +39,12 @@ export function InstanceBaseSection({
    * The pack a linked instance came from. It sets the game version, so that cannot
    * change while the instance is linked.
    */
-  modpack?: { origin: ModpackOrigin; linked: LinkedModpack | null } | null;
+  modpack?: {
+    origin: ModpackOrigin;
+    linked: LinkedModpack | null;
+    /** The pack icon cached for the instance. */
+    iconPath: string | null;
+  } | null;
   /** The game or a download is running, so the modpack must not change under it. */
   instanceActive?: boolean;
   busy: boolean;
@@ -66,123 +72,122 @@ export function InstanceBaseSection({
     },
   });
 
+  const editBase = (
+    <div className={instanceBaseSectionStyles.row}>
+      <div className={instanceBaseSectionStyles.rowText}>
+        <p className={instanceBaseSectionStyles.rowLabel}>Edit base</p>
+        <p className={instanceBaseSectionStyles.rowDescription}>
+          Change the platform, game version or loader this instance launches
+          with.
+        </p>
+      </div>
+      <Button
+        type="button"
+        variant="warning"
+        className={instanceBaseSectionStyles.control}
+        disabled={
+          busy ||
+          versionBusy ||
+          preparing ||
+          instanceActive ||
+          versionId === null
+        }
+        onClick={() => {
+          setEditOpen(true);
+        }}
+      >
+        <PencilIcon data-icon="inline-start" aria-hidden />
+        Edit base
+      </Button>
+    </div>
+  );
+
   return (
     <div className={instanceBaseSectionStyles.root}>
-      <div className={instanceBaseSectionStyles.summary}>
-        <div className={instanceBaseSectionStyles.summaryItem}>
-          <div className={instanceBaseSectionStyles.summaryLabel}>
+      <Card title="Base">
+        <div className={instanceBaseSectionStyles.row}>
+          <div className={instanceBaseSectionStyles.rowName}>
             <LayersIcon
               aria-hidden
-              className={instanceBaseSectionStyles.summaryIcon}
+              className={instanceBaseSectionStyles.icon}
             />
-            <span className={instanceBaseSectionStyles.summaryName}>
-              Platform
-            </span>
+            <span className={instanceBaseSectionStyles.rowLabel}>Platform</span>
           </div>
-          <div className={instanceBaseSectionStyles.summaryValue}>
+          <span className={instanceBaseSectionStyles.value}>
             {platform.data !== undefined
               ? formatPlatform(platform.data)
               : platform.isError
                 ? "Could not read the platform"
                 : "—"}
-          </div>
+          </span>
         </div>
-        <div className={instanceBaseSectionStyles.summaryItem}>
-          <div className={instanceBaseSectionStyles.summaryLabel}>
-            <BoxIcon
-              aria-hidden
-              className={instanceBaseSectionStyles.summaryIcon}
-            />
-            <span className={instanceBaseSectionStyles.summaryName}>
+        <div className={instanceBaseSectionStyles.row}>
+          <div className={instanceBaseSectionStyles.rowName}>
+            <BoxIcon aria-hidden className={instanceBaseSectionStyles.icon} />
+            <span className={instanceBaseSectionStyles.rowLabel}>
               Game version
             </span>
           </div>
-          <div className={instanceBaseSectionStyles.summaryValue}>
-            {versionBusy ? (
-              <span className={instanceBaseSectionStyles.busy}>
-                <Spinner
-                  className={instanceBaseSectionStyles.busySpinner}
-                  aria-hidden
-                />
-                Updating…
-              </span>
-            ) : (
-              <span className={instanceBaseSectionStyles.valueText}>
-                {platform.data?.gameVersion ?? versionId ?? "Preparing"}
-              </span>
-            )}
-          </div>
+          {versionBusy ? (
+            <span className={instanceBaseSectionStyles.busy}>
+              <Spinner
+                className={instanceBaseSectionStyles.busySpinner}
+                aria-hidden
+              />
+              Updating…
+            </span>
+          ) : (
+            <span className={instanceBaseSectionStyles.value}>
+              {platform.data?.gameVersion ?? versionId ?? "Preparing"}
+            </span>
+          )}
         </div>
-      </div>
+        {/* The linked pack sets the base, so only an unlinked instance edits it here. */}
+        {modpack === null ? editBase : null}
+      </Card>
 
-      {/* Right under the card it changes: the pack's version, or the platform and game version. */}
       {modpack !== null ? (
         <LinkedModpackSettings
           folder={folder}
           origin={modpack.origin}
           linked={modpack.linked}
+          iconPath={modpack.iconPath}
           preparing={preparing}
           busy={busy || versionBusy || instanceActive}
         />
-      ) : (
-        <div className={instanceBaseSectionStyles.group}>
-          <div className={instanceBaseSectionStyles.groupText}>
-            <h3 className={instanceBaseSectionStyles.label}>Edit base</h3>
-            <p className={instanceBaseSectionStyles.hint}>
-              Change the platform, game version or loader this instance launches
-              with.
+      ) : null}
+
+      <Card title="Maintenance">
+        <div className={instanceBaseSectionStyles.row}>
+          <div className={instanceBaseSectionStyles.rowText}>
+            <p className={instanceBaseSectionStyles.rowLabel}>Repair</p>
+            <p className={instanceBaseSectionStyles.rowDescription}>
+              Re-download missing game files and modpack content for this
+              instance.
             </p>
           </div>
           <Button
             type="button"
-            variant="warning"
-            className={instanceBaseSectionStyles.action}
-            disabled={
-              busy ||
-              versionBusy ||
-              preparing ||
-              instanceActive ||
-              versionId === null
-            }
+            variant="outline"
+            className={instanceBaseSectionStyles.control}
+            disabled={busy || versionBusy || preparing || repair.isPending}
             onClick={() => {
-              setEditOpen(true);
+              repair.mutate();
             }}
           >
-            <PencilIcon data-icon="inline-start" aria-hidden />
-            Edit base
+            {repair.isPending ? (
+              <Spinner
+                className={instanceBaseSectionStyles.busySpinner}
+                data-icon="inline-start"
+                aria-hidden
+              />
+            ) : (
+              <WrenchIcon data-icon="inline-start" aria-hidden />
+            )}
+            Repair
           </Button>
         </div>
-      )}
-
-      <div className={instanceBaseSectionStyles.group}>
-        <div className={instanceBaseSectionStyles.groupText}>
-          <h3 className={instanceBaseSectionStyles.label}>Repair</h3>
-          <p className={instanceBaseSectionStyles.hint}>
-            Re-download missing game files and modpack content for this
-            instance.
-          </p>
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          className={instanceBaseSectionStyles.action}
-          disabled={busy || versionBusy || preparing || repair.isPending}
-          onClick={() => {
-            repair.mutate();
-          }}
-        >
-          {repair.isPending ? (
-            <Spinner
-              className={instanceBaseSectionStyles.busySpinner}
-              data-icon="inline-start"
-              aria-hidden
-            />
-          ) : (
-            <WrenchIcon data-icon="inline-start" aria-hidden />
-          )}
-          Repair
-        </Button>
-      </div>
+      </Card>
 
       <EditInstanceBaseDialog
         open={editOpen}

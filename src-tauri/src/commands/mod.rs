@@ -68,6 +68,7 @@ pub(crate) fn command_failure(summary: &str, error: &dyn std::error::Error) -> S
 
 pub(crate) const SETTINGS_CHANGED_EVENT: &str = "settings-changed";
 pub(crate) const ACCOUNTS_CHANGED_EVENT: &str = "accounts-changed";
+pub(crate) const INSTANCES_CHANGED_EVENT: &str = "instances-changed";
 
 /// The change already succeeded, so a failed notification is only logged.
 pub(crate) fn notify_windows(app: &tauri::AppHandle, event: &str) {

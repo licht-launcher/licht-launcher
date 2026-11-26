@@ -7,6 +7,7 @@ import { reportInterfaceError } from "@/lib/error-reporting";
 const SHARED_DATA: Record<string, QueryKey[]> = {
   "settings-changed": [["settings"]],
   "accounts-changed": [["microsoft-accounts"], ["microsoft-account-active"]],
+  "instances-changed": [["instances"]],
 };
 
 /** Each window has its own query cache; refetch what another window changed. */

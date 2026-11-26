@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import {
   classicInstance,
+  emit,
   invoke,
   listeners,
   mockContextMenuCommands,
@@ -132,13 +133,145 @@ describe("Instance actions", () => {
     });
   });
 
-  it("opens configuration for the clicked instance", async () => {
+  it("opens the settings window of the clicked instance", async () => {
     await renderAt("/?instance=classic");
     await openInstanceContextMenu();
     fireEvent.click(screen.getByRole("menuitem", { name: "Configure" }));
-    expect(await screen.findByLabelText("Name")).toHaveValue("Next");
-    expect(screen.getByRole("dialog")).toBeVisible();
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("open_instance_settings_window", {
+        folder: "next",
+      });
+    });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
+  it("reports when the settings window of an instance cannot open", async () => {
+    mockContextMenuCommands((command) =>
+      command === "open_instance_settings_window"
+        ? Promise.reject(new Error("Window failed"))
+        : undefined,
+    );
+    await renderAt("/?instance=classic");
+    await openInstanceContextMenu();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Configure" }));
+    expect(await screen.findByText("Window failed")).toBeVisible();
+  });
+
+  it("runs the actions an instance settings window asks for", async () => {
+    await renderAt("/?instance=classic");
+    await screen.findByRole("heading", { name: "Classic" });
+    await waitFor(() =>
+      expect(listeners.has("instance-settings-action")).toBe(true),
+    );
+    act(() => {
+      listeners.get("instance-settings-action")?.({
+        payload: { kind: "duplicate", folder: "next" },
+      });
+    });
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("duplicate_instance", {
+        folder: "next",
+        name: expect.stringMatching(/^Next/),
+      });
+    });
+    act(() => {
+      listeners.get("instance-settings-action")?.({
+        payload: { kind: "rename", folder: "next", name: "Renamed" },
+      });
+    });
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("rename_instance", {
+        folder: "next",
+        name: "Renamed",
+      });
+    });
+    const calls = invoke.mock.calls.length;
+    act(() => {
+      listeners.get("instance-settings-action")?.({
+        payload: { kind: "format", folder: "next" },
+      });
+      listeners.get("instance-settings-action")?.({
+        payload: { kind: "delete" },
+      });
+    });
+    await act(async () => {});
+    const instanceCommands = [
+      "rename_instance",
+      "duplicate_instance",
+      "delete_instance",
+      "open_instance_folder",
+      "change_instance_base",
+    ];
+    expect(
+      invoke.mock.calls
+        .slice(calls)
+        .filter(([command]) => instanceCommands.includes(command)),
+    ).toEqual([]);
+  });
+
+  it("tells the instance settings window why an action failed", async () => {
+    mockContextMenuCommands((command) =>
+      command === "delete_instance"
+        ? Promise.reject(new Error("Folder in use"))
+        : undefined,
+    );
+    await renderAt("/?instance=classic");
+    await screen.findByRole("heading", { name: "Classic" });
+    await waitFor(() =>
+      expect(listeners.has("instance-settings-action")).toBe(true),
+    );
+    act(() => {
+      listeners.get("instance-settings-action")?.({
+        payload: { kind: "delete", folder: "next" },
+      });
+    });
+    await waitFor(() => {
+      expect(emit).toHaveBeenCalledWith("instance-settings-action-failed", {
+        folder: "next",
+        message: "Folder in use",
+      });
+    });
+    // The instance settings window shows the error; the launcher does not.
+    expect(screen.queryByText("Folder in use")).not.toBeInTheDocument();
+  });
+
+  it("tells instance settings windows what blocks their actions", async () => {
+    await renderAt("/?instance=classic");
+    await screen.findByRole("heading", { name: "Classic" });
+    await waitFor(() => {
+      expect(emit).toHaveBeenCalledWith("instance-settings-status", {
+        busy: false,
+        versionBusy: false,
+        activeFolders: [],
+      });
+    });
+    emit.mockClear();
+    // Game logs render the launcher often; the unchanged status is not sent again.
+    act(() => {
+      for (const line of ["One", "Two", "Three"]) {
+        listeners.get("game-log")?.({
+          payload: {
+            folder: "classic",
+            stream: "stdout",
+            line,
+          } satisfies GameLogEvent,
+        });
+      }
+    });
+    await act(async () => {});
+    expect(emit).not.toHaveBeenCalledWith(
+      "instance-settings-status",
+      expect.anything(),
+    );
+    act(() => {
+      listeners.get("instance-settings-status-request")?.({ payload: null });
+    });
+    expect(emit).toHaveBeenCalledWith("instance-settings-status", {
+      busy: false,
+      versionBusy: false,
+      activeFolders: [],
+    });
   });
 
   it("renames the clicked instance through the action dialog", async () => {

@@ -16,6 +16,10 @@ import {
 import { lastDiscoverSearch } from "@/features/discover/lib/last-search";
 import { DownloadsPopover } from "@/features/downloads/components/downloads-popover";
 import { STORAGE_LOADING_PREVIEW_EVENT } from "@/features/downloads/hooks/use-storage-loading-preview";
+import type {
+  InstanceSettingsAction,
+  InstanceSettingsStatus,
+} from "@/features/instance-settings/model/window-events";
 import { HomeSidebar } from "@/features/instances/components/home-sidebar";
 import { InstanceDialogs } from "@/features/instances/components/instance-dialogs";
 import {
@@ -26,6 +30,7 @@ import { useGameEvents } from "@/features/instances/hooks/use-game-events";
 import { useInstanceDialogs } from "@/features/instances/hooks/use-instance-dialogs";
 import { useInstanceMutations } from "@/features/instances/hooks/use-instance-mutations";
 import { useInstanceSelection } from "@/features/instances/hooks/use-instance-selection";
+import { useInstanceSettingsBridge } from "@/features/instances/hooks/use-instance-settings-bridge";
 import { useInstancesData } from "@/features/instances/hooks/use-instances-data";
 import { usePlaySession } from "@/features/instances/hooks/use-play-session";
 import { instanceContentQuery } from "@/features/instances/lib/content-query";
@@ -177,31 +182,74 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
     useInstanceMutations({
       beginInstall,
       endInstall,
-      setConfiguringFolder: dialogs.setConfiguringFolder,
-      clearAction: dialogs.clearAction,
+      clearActionFor: dialogs.clearActionFor,
     });
 
   // Duplicating needs no questions: the copy is named like the original plus
   // a number, and it can be renamed afterwards.
-  function duplicateNumbered(folder: string, name: string) {
-    duplicate.mutate({
+  function numberedCopy(folder: string, name: string) {
+    return {
       folder,
       name: uniqueName(
         name,
         (instances.data ?? []).map((instance) => instance.name),
       ),
-    });
+    };
   }
 
-  const configuring =
-    instances.data?.find(
-      (instance) => instance.folder === dialogs.configuringFolder,
-    ) ?? null;
-  // A running game or download for the instance being configured.
-  const configuringActive =
-    configuring !== null &&
-    (playPhase(configuring.folder) !== "idle" ||
-      isInstalling(configuring.folder));
+  const instanceSettingsStatus: InstanceSettingsStatus = {
+    busy,
+    versionBusy: changeBase.isPending,
+    // Instances whose game or a download for them is running.
+    activeFolders: (instances.data ?? [])
+      .filter(
+        (instance) =>
+          playPhase(instance.folder) !== "idle" ||
+          isInstalling(instance.folder),
+      )
+      .map((instance) => instance.folder),
+  };
+  useInstanceSettingsBridge(
+    instanceSettingsStatus,
+    (action: InstanceSettingsAction) => {
+      switch (action.kind) {
+        case "rename":
+          return rename.mutateAsync({
+            folder: action.folder,
+            name: action.name,
+            fromSettingsWindow: true,
+          });
+        case "changeBase":
+          return changeBase.mutateAsync({
+            folder: action.folder,
+            base: action.base,
+            fromSettingsWindow: true,
+          });
+        case "openFolder":
+          return openFolder.mutateAsync({
+            folder: action.folder,
+            fromSettingsWindow: true,
+          });
+        case "duplicate": {
+          const instance = instances.data?.find(
+            (item) => item.folder === action.folder,
+          );
+          if (!instance) {
+            return Promise.reject(new Error("instance not found"));
+          }
+          return duplicate.mutateAsync({
+            ...numberedCopy(instance.folder, instance.name),
+            fromSettingsWindow: true,
+          });
+        }
+        case "delete":
+          return remove.mutateAsync({
+            folder: action.folder,
+            fromSettingsWindow: true,
+          });
+      }
+    },
+  );
 
   const context = useMemo<InstancesChromeContext>(
     () => ({
@@ -327,13 +375,15 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
                       dialogs.openConfigure(instance.folder);
                       break;
                     case "open-folder":
-                      openFolder.mutate(instance.folder);
+                      openFolder.mutate({ folder: instance.folder });
                       break;
                     case "rename":
                       dialogs.openRename(instance.folder, instance.name);
                       break;
                     case "duplicate":
-                      duplicateNumbered(instance.folder, instance.name);
+                      duplicate.mutate(
+                        numberedCopy(instance.folder, instance.name),
+                      );
                       break;
                     case "delete":
                       dialogs.openDelete(instance.folder, instance.name);
@@ -416,42 +466,16 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
         onOpenChange={dialogs.setCreateOpen}
       />
       <InstanceDialogs
-        configuring={configuring}
-        configuringActive={configuringActive}
         busy={busy}
-        mutations={{
-          rename,
-          remove,
-          openFolder,
-          changeBase,
-        }}
-        configuringOpen={dialogs.configuringFolder !== null}
+        mutations={{ rename, remove }}
         action={dialogs.action}
         draftName={dialogs.draftName}
-        onConfiguringOpenChange={(open) => {
-          if (!open) {
-            dialogs.setConfiguringFolder(null);
-          }
-        }}
         onActionOpenChange={(open) => {
           if (!open) {
             dialogs.clearAction();
           }
         }}
         onDraftNameChange={dialogs.setDraftName}
-        onOpenGlobalSettings={dialogs.openGlobalSettings}
-        onOpenDuplicate={() => {
-          if (!configuring) {
-            return;
-          }
-          duplicateNumbered(configuring.folder, configuring.name);
-        }}
-        onOpenDelete={() => {
-          if (!configuring) {
-            return;
-          }
-          dialogs.openDelete(configuring.folder, configuring.name);
-        }}
       />
     </>
   );

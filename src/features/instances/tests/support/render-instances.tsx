@@ -22,6 +22,7 @@ import { completedDownload } from "@/features/downloads/fixtures/job";
 import { storageSummary } from "@/features/downloads/fixtures/storage";
 import {
   closeWindow,
+  emit,
   invoke,
   listeners,
 } from "@/features/instances/tests/support/tauri-mocks";
@@ -33,7 +34,7 @@ import { startupProgress } from "@/features/startup/fixtures/progress";
 import { appUpdateState } from "@/features/updater/fixtures/state";
 import { routeTree } from "@/routeTree.gen";
 
-export { closeWindow, invoke, listeners };
+export { closeWindow, emit, invoke, listeners };
 
 export async function renderAt(path: string) {
   const queryClient = new QueryClient({
@@ -187,6 +188,7 @@ export function setupInstancesPageTests() {
     forgetDiscoverSearch();
     listeners.clear();
     invoke.mockReset();
+    emit.mockClear();
     closeWindow.mockReset().mockResolvedValue(undefined);
     vi.spyOn(console, "error");
   });

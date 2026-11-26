@@ -1,4 +1,6 @@
+import { Card } from "@/components/ui/card";
 import type { InstanceDraft } from "@/features/instance-settings/model/draft";
+import { globalValues } from "@/features/instance-settings/model/global-values";
 import { ArgumentsSection } from "@/features/instance-settings/sections/arguments-section";
 import { JavaSection } from "@/features/instance-settings/sections/java-section";
 import { MemorySection } from "@/features/instance-settings/sections/memory-section";
@@ -16,38 +18,36 @@ export function OverridesSection({
   snapshot: SettingsSnapshot;
   onChange: (patch: Partial<InstanceDraft>) => void;
 }) {
+  const global = globalValues(snapshot.settings);
   return (
     <div className={overridesSectionStyles.root}>
-      <section
-        className={overridesSectionStyles.section}
-        aria-labelledby="override-window-title"
-      >
-        <h3 id="override-window-title" className={overridesSectionStyles.title}>
-          Window
-        </h3>
-        <WindowSection draft={draft} onChange={onChange} />
-      </section>
-      <section
-        className={overridesSectionStyles.dividedSection}
-        aria-labelledby="override-memory-title"
-      >
-        <h3 id="override-memory-title" className={overridesSectionStyles.title}>
-          Memory
-        </h3>
-        <MemorySection draft={draft} snapshot={snapshot} onChange={onChange} />
-      </section>
-      <section
-        className={overridesSectionStyles.dividedSection}
-        aria-labelledby="override-java-title"
-      >
-        <h3 id="override-java-title" className={overridesSectionStyles.title}>
-          Java
-        </h3>
-        <div className={overridesSectionStyles.javaFields}>
-          <JavaSection draft={draft} onChange={onChange} />
-          <ArgumentsSection draft={draft} onChange={onChange} />
-        </div>
-      </section>
+      <Card title="Game window">
+        <WindowSection
+          draft={draft}
+          globalHint={global.window}
+          onChange={onChange}
+        />
+      </Card>
+      <Card title="Memory">
+        <MemorySection
+          draft={draft}
+          snapshot={snapshot}
+          globalHint={global.memory}
+          onChange={onChange}
+        />
+      </Card>
+      <Card title="Java">
+        <JavaSection
+          draft={draft}
+          globalHint={global.java}
+          onChange={onChange}
+        />
+        <ArgumentsSection
+          draft={draft}
+          globalHint={global.arguments}
+          onChange={onChange}
+        />
+      </Card>
     </div>
   );
 }

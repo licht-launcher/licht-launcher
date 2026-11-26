@@ -9,11 +9,12 @@
       "capabilities": [
         "default",
         "settings",
+        "instance-settings",
         "startup",
         {
           "identifier": "e2e",
           "description": "End-to-end test builds let WebdriverIO inspect windows and run scripts.",
-          "windows": ["main", "settings", "startup"],
+          "windows": ["main", "settings", "instance-settings-*", "startup"],
           "permissions": ["wdio:default"]
         }
       ]

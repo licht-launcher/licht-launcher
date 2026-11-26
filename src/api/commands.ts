@@ -50,6 +50,18 @@ export function openSettingsWindow(section: SectionId): Promise<void> {
   return invoke("open_settings_window", { section });
 }
 
+export function openInstanceSettingsWindow(folder: string): Promise<void> {
+  return invoke("open_instance_settings_window", { folder });
+}
+
+/** The instance folder this instance settings window was opened for. */
+export async function instanceSettingsWindowReady(): Promise<string> {
+  const folder = await invoke<unknown>("instance_settings_window_ready");
+  if (typeof folder !== "string" || folder === "")
+    throw new Error("Invalid instance folder");
+  return folder;
+}
+
 export async function settingsWindowReady(): Promise<string | null> {
   const section = await invoke<unknown>("settings_window_ready");
   if (section !== null && typeof section !== "string")

@@ -2,101 +2,109 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import type { InstanceDraft } from "@/features/instance-settings/model/draft";
 
-import { windowSectionStyles } from "./window-section.styles";
+import { windowSectionStyles as styles } from "./window-section.styles";
 
 export function WindowSection({
   draft,
+  globalHint,
   onChange,
 }: {
   draft: InstanceDraft;
+  /** What the instance uses while it does not override the window. */
+  globalHint: string;
   onChange: (patch: Partial<InstanceDraft>) => void;
 }) {
   return (
-    <div className={windowSectionStyles.root}>
-      <div className={windowSectionStyles.toggle}>
-        <div className={windowSectionStyles.toggleRow}>
-          <label
-            htmlFor="override-window"
-            className={windowSectionStyles.label}
-          >
+    <>
+      <div className={styles.row}>
+        <div className={styles.rowText}>
+          <label htmlFor="override-window" className={styles.rowLabel}>
             Customize window settings
           </label>
-          <Switch
-            id="override-window"
-            aria-label="Customize window settings"
-            aria-describedby="override-window-hint"
-            checked={draft.overrideWindow}
-            onCheckedChange={(overrideWindow) => onChange({ overrideWindow })}
-          />
+          <p id="override-window-hint" className={styles.rowDescription}>
+            {draft.overrideWindow
+              ? "Configure fullscreen and launch resolution separately for this instance."
+              : globalHint}
+          </p>
         </div>
-        <p id="override-window-hint" className={windowSectionStyles.hint}>
-          Configure fullscreen and launch resolution separately for this
-          instance.
-        </p>
+        <Switch
+          id="override-window"
+          className={styles.control}
+          aria-label="Customize window settings"
+          aria-describedby="override-window-hint"
+          checked={draft.overrideWindow}
+          onCheckedChange={(overrideWindow) => onChange({ overrideWindow })}
+        />
       </div>
       {draft.overrideWindow ? (
         <>
-          <div className={windowSectionStyles.toggle}>
-            <div className={windowSectionStyles.toggleRow}>
-              <label
-                htmlFor="instance-fullscreen"
-                className={windowSectionStyles.label}
-              >
+          <div className={styles.row}>
+            <div className={styles.rowText}>
+              <label htmlFor="instance-fullscreen" className={styles.rowLabel}>
                 Full screen
               </label>
-              <Switch
-                id="instance-fullscreen"
-                aria-label="Full screen"
-                aria-describedby="instance-fullscreen-hint"
-                checked={draft.fullscreen}
-                onCheckedChange={(fullscreen) => onChange({ fullscreen })}
-              />
+              <p
+                id="instance-fullscreen-hint"
+                className={styles.rowDescription}
+              >
+                The game starts in full screen. Width and height are not used.
+              </p>
             </div>
-            <p
-              id="instance-fullscreen-hint"
-              className={windowSectionStyles.hint}
-            >
-              The game starts in full screen. Width and height are not used.
-            </p>
+            <Switch
+              id="instance-fullscreen"
+              className={styles.control}
+              aria-label="Full screen"
+              aria-describedby="instance-fullscreen-hint"
+              checked={draft.fullscreen}
+              onCheckedChange={(fullscreen) => onChange({ fullscreen })}
+            />
           </div>
-          <div className={windowSectionStyles.sizeField}>
-            <label
-              className={windowSectionStyles.field}
-              htmlFor="instance-width"
-            >
-              Width
-              <Input
-                id="instance-width"
-                type="number"
-                min={1}
-                inputMode="numeric"
-                placeholder="854"
-                value={draft.width}
-                disabled={draft.fullscreen}
-                onChange={(event) => onChange({ width: event.target.value })}
-              />
-            </label>
+          <div className={styles.row}>
+            <div className={styles.rowText}>
+              <label htmlFor="instance-width" className={styles.rowLabel}>
+                Width
+              </label>
+              <p id="instance-width-hint" className={styles.rowDescription}>
+                Window width in pixels.
+              </p>
+            </div>
+            <Input
+              id="instance-width"
+              type="number"
+              min={1}
+              inputMode="numeric"
+              placeholder="854"
+              className={styles.numberInput}
+              aria-describedby="instance-width-hint"
+              value={draft.width}
+              disabled={draft.fullscreen}
+              onChange={(event) => onChange({ width: event.target.value })}
+            />
           </div>
-          <div className={windowSectionStyles.sizeField}>
-            <label
-              className={windowSectionStyles.field}
-              htmlFor="instance-height"
-            >
-              Height
-              <Input
-                id="instance-height"
-                type="number"
-                min={1}
-                inputMode="numeric"
-                placeholder="480"
-                value={draft.height}
-                disabled={draft.fullscreen}
-                onChange={(event) => onChange({ height: event.target.value })}
-              />
-            </label>
+          <div className={styles.row}>
+            <div className={styles.rowText}>
+              <label htmlFor="instance-height" className={styles.rowLabel}>
+                Height
+              </label>
+              <p id="instance-height-hint" className={styles.rowDescription}>
+                Window height in pixels.
+              </p>
+            </div>
+            <Input
+              id="instance-height"
+              type="number"
+              min={1}
+              inputMode="numeric"
+              placeholder="480"
+              className={styles.numberInput}
+              aria-describedby="instance-height-hint"
+              value={draft.height}
+              disabled={draft.fullscreen}
+              onChange={(event) => onChange({ height: event.target.value })}
+            />
           </div>
         </>
       ) : null}
-    </div>
+    </>
   );
 }

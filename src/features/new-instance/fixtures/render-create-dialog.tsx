@@ -35,6 +35,7 @@ afterEach(() => expect(unexpectedCommands).toEqual([]));
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: openDialog }));
 vi.mock("@tauri-apps/api/event", () => ({
+  emit: vi.fn(async () => {}),
   listen: vi.fn(async () => () => {}),
 }));
 vi.mock("@tauri-apps/api/window", () => ({
