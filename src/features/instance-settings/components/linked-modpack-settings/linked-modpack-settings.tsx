@@ -18,7 +18,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { formatUpdatedAt } from "@/features/discover/lib/format";
 import { ChangeModpackVersionDialog } from "@/features/instance-settings/components/change-modpack-version-dialog";
 import { InstanceIcon } from "@/features/instances/components/instance-icon";
 import { instanceContentKey } from "@/features/instances/lib/content-query";
@@ -33,10 +32,6 @@ const REINSTALL_HINT =
   "Reinstalling installs the modpack again and resets this instance's mods, resource packs and shader packs to the pack's own, removing any you added. Worlds stay.";
 const REINSTALL_FILE_HINT =
   "A modpack imported from a file cannot be reinstalled, because its archive is not kept after install.";
-const VERSION_HINT =
-  "The linked modpack sets this instance's platform and game version. Install another version of it; content you added stays.";
-const VERSION_FILE_HINT =
-  "A modpack imported from a file has no other versions to install.";
 const UNLINK_HINT =
   "Unlinking permanently disconnects this instance from its modpack. You can then change its game version, but it will no longer receive modpack updates. Its files stay as they are.";
 
@@ -105,11 +100,9 @@ export function LinkedModpackSettings({
   const source = fromFile
     ? `Imported from a ${SOURCE_LABELS[origin.source]} file`
     : `${SOURCE_LABELS[origin.source]} modpack`;
-  const released = formatUpdatedAt(linked?.publishedAt ?? null);
   const details = [
     linked?.author ? `by ${linked.author}` : null,
     source,
-    released ? `Released ${released}` : null,
   ].filter((detail) => detail !== null);
   const disabled =
     busy ||
@@ -124,17 +117,19 @@ export function LinkedModpackSettings({
         <div className={styles.pack}>
           <InstanceIcon iconPath={iconPath} size="md" />
           <div className={styles.packText}>
-            <p className={styles.packName}>
-              {linked?.name ?? "Linked modpack"}
+            <p className={styles.packTitle}>
+              <span className={styles.packName}>
+                {linked?.name ?? "Linked modpack"}
+              </span>
+              {linked ? (
+                <span className={styles.packVersion}>{linked.versionName}</span>
+              ) : null}
             </p>
-            {linked ? (
-              <p className={styles.packVersion}>{linked.versionName}</p>
-            ) : null}
             <p className={styles.packDetails}>{details.join(" · ")}</p>
           </div>
           <Button
             type="button"
-            variant="warning"
+            variant="outline"
             className={styles.control}
             disabled={disabled || fromFile}
             onClick={() => setVersionOpen(true)}
@@ -152,9 +147,6 @@ export function LinkedModpackSettings({
             />
           ) : null}
         </div>
-        <p className={styles.rowDescription}>
-          {fromFile ? VERSION_FILE_HINT : VERSION_HINT}
-        </p>
       </Card>
       <Card title="Manage modpack">
         <ConfirmedAction

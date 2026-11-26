@@ -11,7 +11,6 @@ import { toast } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Toaster } from "@/components/ui/sonner";
-import { formatUpdatedAt } from "@/features/discover/lib/format";
 import {
   completedDownload,
   downloadJob,
@@ -372,30 +371,6 @@ describe("InstanceSettingsPage", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("shows when the installed modpack version was released", async () => {
-    const publishedAt = "2024-05-01T12:00:00Z";
-    const linked = linkedEntry.installation?.modpack;
-    if (!linked || !linkedEntry.installation)
-      throw new Error("missing linked modpack");
-    renderPage({
-      entry: {
-        ...linkedEntry,
-        installation: {
-          ...linkedEntry.installation,
-          modpack: { ...linked, publishedAt },
-        },
-      },
-    });
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Instance base" }),
-    );
-    expect(
-      await screen.findByText(
-        `by robotkoer · Modrinth modpack · Released ${formatUpdatedAt(publishedAt)}`,
-      ),
-    ).toBeInTheDocument();
-  });
-
   it("holds the modpack actions while the game or a download runs", async () => {
     renderPage({ entry: linkedEntry, instanceActive: true });
 
@@ -537,12 +512,7 @@ describe("InstanceSettingsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Instance base" }));
 
     expect(
-      await screen.findByText(
-        "A modpack imported from a file has no other versions to install.",
-      ),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Change version" }),
+      await screen.findByRole("button", { name: "Change version" }),
     ).toBeDisabled();
   });
 

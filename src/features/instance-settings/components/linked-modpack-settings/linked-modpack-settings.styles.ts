@@ -2,8 +2,9 @@
 export const linkedModpackSettingsStyles = {
   pack: "flex items-center gap-3",
   packText: "flex min-w-0 flex-1 flex-col",
+  packTitle: "flex min-w-0 items-baseline gap-2",
   packName: "truncate text-sm font-medium",
-  packVersion: "truncate text-sm",
+  packVersion: "shrink-0 font-mono text-xs text-muted-foreground",
   packDetails: "truncate text-xs text-muted-foreground",
   row: "flex items-center justify-between gap-3",
   rowText: "flex min-w-0 flex-col gap-0.5",
