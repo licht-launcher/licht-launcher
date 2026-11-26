@@ -41,7 +41,8 @@ pub fn open(app: &AppHandle, section: &str) -> anyhow::Result<()> {
     }
     let builder = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::default())
         .title("Settings - Licht Launcher")
-        .inner_size(960.0, 680.0)
+        // The size the settings dialog had inside the launcher window.
+        .inner_size(896.0, 664.0)
         .min_inner_size(760.0, 520.0)
         .center()
         .initialization_script(initialization_script(section)?);

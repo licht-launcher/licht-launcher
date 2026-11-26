@@ -1,7 +1,8 @@
 export const settingsWindowStyles = {
-  root: "flex h-svh flex-col overflow-hidden bg-home-sidebar text-popover-foreground",
-  title:
-    "flex shrink-0 items-center px-3.5 font-brand text-xs font-medium tracking-widest text-muted-foreground uppercase select-none",
-  frame:
-    "mx-2 mb-2 flex min-h-0 min-w-0 flex-1 overflow-hidden rounded-xl border border-foreground/10 bg-popover",
+  // Matches the former settings dialog: one popover surface, no frame.
+  root: "relative flex h-svh overflow-hidden bg-popover text-sm text-popover-foreground",
+  // An invisible title bar over the panel column, where the dialog had its
+  // close button. It starts after the sidebar (`w-48`) so its drag region
+  // never covers the section buttons.
+  titleBar: "absolute top-0 right-0 left-48 z-10",
 } as const;

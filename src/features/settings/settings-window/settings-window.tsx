@@ -64,11 +64,9 @@ export function SettingsWindow() {
 
   return (
     <div className={settingsWindowStyles.root}>
-      <TitleBar>
-        <span className={settingsWindowStyles.title}>Settings</span>
-      </TitleBar>
-      <div className={settingsWindowStyles.frame}>
-        <SettingsPage section={section} onSectionChange={setSection} />
+      <SettingsPage section={section} onSectionChange={setSection} />
+      <div className={settingsWindowStyles.titleBar}>
+        <TitleBar />
       </div>
     </div>
   );
