@@ -1,12 +1,12 @@
+import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { onOpenSettingsRequest } from "@/api/shell-events";
 import type { InstanceAction } from "@/features/instances/components/instance-action-dialog";
 import type { SectionId } from "@/features/settings/model/sections";
 
 export function useInstanceDialogs() {
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const navigate = useNavigate();
   const [createOpen, setCreateOpen] = useState(false);
-  const [settingsSection, setSettingsSection] = useState<SectionId>("account");
   const [configuringFolder, setConfiguringFolder] = useState<string | null>(
     null,
   );
@@ -16,10 +16,9 @@ export function useInstanceDialogs() {
   useEffect(() => {
     return onOpenSettingsRequest((section) => {
       setConfiguringFolder(null);
-      setSettingsSection(section);
-      setSettingsOpen(true);
+      void navigate({ to: "/settings", search: { section } });
     });
-  }, []);
+  }, [navigate]);
 
   function clearAction() {
     setAction(null);
@@ -35,8 +34,7 @@ export function useInstanceDialogs() {
 
   function openGlobalSettings(section: SectionId = "account") {
     setConfiguringFolder(null);
-    setSettingsSection(section);
-    setSettingsOpen(true);
+    void navigate({ to: "/settings", search: { section } });
   }
 
   function openRename(folder: string, name: string) {
@@ -50,12 +48,9 @@ export function useInstanceDialogs() {
   }
 
   return {
-    settingsOpen,
-    setSettingsOpen,
     createOpen,
     setCreateOpen,
     openCreate,
-    settingsSection,
     configuringFolder,
     setConfiguringFolder,
     action,

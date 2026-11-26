@@ -1,14 +1,10 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { useState } from "react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { requestOpenSettings } from "@/api/shell-events";
 import {
   invoke,
   mockSettingsCommands,
   renderSettings,
 } from "@/features/settings/fixtures/render-settings";
-import { SettingsDialog } from "@/features/settings/settings-dialog";
 
 vi.mock("@tauri-apps/api/core", async () => {
   const { invoke: mocked } = await import(
@@ -17,7 +13,7 @@ vi.mock("@tauri-apps/api/core", async () => {
   return { invoke: mocked };
 });
 
-describe("SettingsDialog", () => {
+describe("SettingsPage", () => {
   beforeEach(() => {
     mockSettingsCommands();
   });
@@ -127,73 +123,20 @@ describe("SettingsDialog", () => {
     expect(invoke).not.toHaveBeenCalledWith("save_settings", expect.anything());
   });
 
-  it("makes background application controls inaccessible while Settings is open", async () => {
-    render(<button type="button">Background application action</button>);
-    await renderSettings();
-    await screen.findByRole("button", { name: "Dark" });
-
-    expect(
-      screen.queryByRole("button", { name: "Background application action" }),
-    ).not.toBeInTheDocument();
-  });
-
-  it("keeps the modal backdrop visible while open", async () => {
-    await renderSettings();
-    await screen.findByRole("button", { name: "Dark" });
-
-    expect(document.querySelector(".bg-black\\/60")).toBeInTheDocument();
-  });
-
-  it("keeps window controls usable without dismissing Settings", async () => {
-    const minimize = vi.fn();
-    function Example() {
-      const [open, setOpen] = useState(true);
-      return (
-        <>
-          <div data-window-controls>
-            <button type="button" onClick={minimize}>
-              Minimize window
-            </button>
-          </div>
-          <SettingsDialog open={open} onOpenChange={setOpen} />
-        </>
-      );
-    }
-    const client = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
-    render(
-      <QueryClientProvider client={client}>
-        <Example />
-      </QueryClientProvider>,
+  it("saves a pending edit when leaving the page", async () => {
+    const view = await renderSettings("developers");
+    fireEvent.change(
+      await screen.findByRole("textbox", { name: "Offline username" }),
+      { target: { value: "Leaving" } },
     );
-    await screen.findByRole("button", { name: "Dark" });
-    const control = screen.getByText("Minimize window");
-    fireEvent.pointerDown(control);
-    fireEvent.pointerUp(control);
-    fireEvent.click(control);
-    expect(minimize).toHaveBeenCalledOnce();
-    expect(screen.getByRole("dialog", { name: "Settings" })).toBeVisible();
-  });
+    expect(invoke).not.toHaveBeenCalledWith("save_settings", expect.anything());
 
-  it("navigates to account when requested while already open", async () => {
-    const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
-    render(
-      <QueryClientProvider client={queryClient}>
-        <SettingsDialog open onOpenChange={() => {}} initialSection="updater" />
-      </QueryClientProvider>,
+    view.unmount();
+
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("save_settings", {
+        settings: expect.objectContaining({ username: "Leaving" }),
+      }),
     );
-
-    expect(
-      await screen.findByRole("heading", { name: "Updates" }),
-    ).toBeVisible();
-
-    requestOpenSettings("account");
-
-    expect(
-      await screen.findByRole("heading", { name: "General" }),
-    ).toBeVisible();
   });
 });

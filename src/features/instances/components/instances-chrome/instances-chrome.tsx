@@ -122,13 +122,12 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!import.meta.env.DEV) return;
     const preview = () => {
-      dialogs.setSettingsOpen(false);
       void navigate({ to: "/downloads" });
     };
     window.addEventListener(STORAGE_LOADING_PREVIEW_EVENT, preview);
     return () =>
       window.removeEventListener(STORAGE_LOADING_PREVIEW_EVENT, preview);
-  }, [dialogs.setSettingsOpen, navigate]);
+  }, [navigate]);
   const markStartedRef = useRef<(folder: string) => void>(() => {});
   const {
     progressForVersion,
@@ -264,12 +263,8 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
           }
         >
           <LauncherNavigation
-            libraryActive={
-              pathname === "/" &&
-              !(dialogs.settingsOpen && dialogs.settingsSection === "account")
-            }
+            libraryActive={pathname === "/"}
             onOpenLibrary={() => {
-              dialogs.setSettingsOpen(false);
               if (pathname === "/") return;
               void navigate({
                 to: "/",
@@ -279,14 +274,15 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
             }}
             discoverActive={discoverActive}
             onOpenDiscover={() => {
-              dialogs.setSettingsOpen(false);
               if (pathname === "/discover") return;
               void navigate({ to: "/discover", search: lastDiscoverSearch() });
             }}
             onOpenSettings={dialogs.openGlobalSettings}
           />
         </TitleBar>
-        {pathname === "/downloads" || discoverActive ? (
+        {pathname === "/downloads" ||
+        pathname === "/settings" ||
+        discoverActive ? (
           content
         ) : (
           <ResizablePanelGroup
@@ -384,10 +380,7 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
                 side="top"
                 showLabel
                 triggerClassName={instancesChromeStyles.footerAction}
-                onOpen={() => {
-                  dialogs.setSettingsOpen(false);
-                  void navigate({ to: "/downloads" });
-                }}
+                onOpen={() => void navigate({ to: "/downloads" })}
               />
             </div>
             <div className={instancesChromeStyles.footerEnd}>
@@ -427,9 +420,6 @@ export function InstancesChrome({ children }: { children: ReactNode }) {
         configuringOpen={dialogs.configuringFolder !== null}
         action={dialogs.action}
         draftName={dialogs.draftName}
-        settingsOpen={dialogs.settingsOpen}
-        settingsSection={dialogs.settingsSection}
-        onSettingsOpenChange={dialogs.setSettingsOpen}
         onConfiguringOpenChange={(open) => {
           if (!open) {
             dialogs.setConfiguringFolder(null);

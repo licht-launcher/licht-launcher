@@ -127,12 +127,12 @@ describe("SettingsSidebar", () => {
     expect(writeText).not.toHaveBeenCalled();
   });
 
-  it("keeps an accessible dialog name and navigates without the app footer", async () => {
+  it("keeps an accessible page name and navigates without the app footer", async () => {
     await renderSettings();
     await screen.findByRole("button", { name: "Dark" });
 
     expect(
-      screen.getByRole("dialog", { name: "Settings" }),
+      screen.getByRole("region", { name: "Settings" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Settings" })).toHaveClass(
       "sr-only",

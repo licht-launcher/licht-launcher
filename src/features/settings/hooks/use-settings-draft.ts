@@ -18,19 +18,33 @@ import { friendlyError, messageOf } from "@/lib/errors";
 import type { Settings } from "@/lib/generated/Settings";
 
 const SAVE_DELAY_MS = 400;
+// The value this launcher session started with. It outlives the Settings page,
+// so leaving and coming back still compares against what is actually applied.
+const APPLIED_HARDWARE_ACCELERATION_KEY = ["applied-hardware-acceleration"];
 
-export function useSettingsDraft(open: boolean) {
+export function useSettingsDraft() {
   const queryClient = useQueryClient();
   const settings = useQuery({
     queryKey: ["settings"],
     queryFn: getSettings,
-    enabled: open,
+    retry: false,
+  });
+  const appliedHardwareAcceleration = useQuery({
+    queryKey: APPLIED_HARDWARE_ACCELERATION_KEY,
+    queryFn: async () => {
+      const snapshot = await queryClient.ensureQueryData({
+        queryKey: ["settings"],
+        queryFn: getSettings,
+      });
+      return snapshot.settings.hardwareAcceleration;
+    },
+    staleTime: Number.POSITIVE_INFINITY,
+    gcTime: Number.POSITIVE_INFINITY,
     retry: false,
   });
   const runtime = useQuery({
     queryKey: ["runtime-java"],
     queryFn: runtimeJava,
-    enabled: open,
     retry: false,
   });
 
@@ -39,16 +53,15 @@ export function useSettingsDraft(open: boolean) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const schemaRef = useRef(1);
   const persistRef = useRef<(current: Draft) => void>(() => {});
-  const appliedHardwareAcceleration = useRef<boolean | null>(null);
 
   const save = useMutation({
     mutationFn: saveSettings,
     onSuccess: async (saved: Settings) => {
       await queryClient.invalidateQueries({ queryKey: ["settings"] });
-      if (
-        appliedHardwareAcceleration.current !== null &&
-        saved.hardwareAcceleration !== appliedHardwareAcceleration.current
-      ) {
+      const applied = queryClient.getQueryData<boolean>(
+        APPLIED_HARDWARE_ACCELERATION_KEY,
+      );
+      if (applied !== undefined && saved.hardwareAcceleration !== applied) {
         promptRestart("Apply the hardware acceleration change now?");
       } else {
         dismissRestartToast();
@@ -77,8 +90,6 @@ export function useSettingsDraft(open: boolean) {
   useEffect(() => {
     if (settings.data && runtime.isFetched && draft === null) {
       schemaRef.current = settings.data.settings.schema;
-      appliedHardwareAcceleration.current =
-        settings.data.settings.hardwareAcceleration;
       const next = fromSnapshot(settings.data, runtime.data ?? null);
       draftRef.current = next;
       setDraft(next);
@@ -88,12 +99,14 @@ export function useSettingsDraft(open: boolean) {
   useToastError(settings.error);
   useToastError(runtime.error);
 
+  // Leaving Settings saves the edit still waiting for its delay.
   useEffect(() => {
     return () => {
-      if (timerRef.current !== null) {
+      if (timerRef.current !== null && draftRef.current !== null) {
         clearTimeout(timerRef.current);
+        timerRef.current = null;
+        persistRef.current(draftRef.current);
       }
-      dismissRestartToast();
     };
   }, []);
 
@@ -108,8 +121,8 @@ export function useSettingsDraft(open: boolean) {
 
     if (
       patch.hardwareAcceleration !== undefined &&
-      appliedHardwareAcceleration.current !== null &&
-      next.hardwareAcceleration === appliedHardwareAcceleration.current
+      appliedHardwareAcceleration.data !== undefined &&
+      next.hardwareAcceleration === appliedHardwareAcceleration.data
     ) {
       dismissRestartToast();
     }
@@ -123,19 +136,9 @@ export function useSettingsDraft(open: boolean) {
     }, SAVE_DELAY_MS);
   }
 
-  function flush() {
-    if (timerRef.current === null || draftRef.current === null) {
-      return;
-    }
-    clearTimeout(timerRef.current);
-    timerRef.current = null;
-    persistRef.current(draftRef.current);
-  }
-
   return {
     draft,
     snapshot: settings.data ?? null,
     update,
-    flush,
   };
 }

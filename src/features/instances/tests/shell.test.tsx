@@ -21,19 +21,21 @@ describe("Launcher shell", () => {
 
   it("opens Updates settings from the footer version", async () => {
     mockContextMenuCommands();
-    await renderAt("/");
+    const { router } = await renderAt("/");
     fireEvent.click(
       within(
         screen.getByRole("contentinfo", { name: "Download status" }),
       ).getByRole("button", { name: "Early Release 0.3.1 · Rose" }),
     );
-    const settings = await screen.findByRole("dialog", { name: "Settings" });
+    const settings = await screen.findByRole("region", { name: "Settings" });
     expect(
       within(settings).getByRole("button", {
         name: "Updates",
         current: "page",
       }),
     ).toBeVisible();
+    expect(router.state.location.pathname).toBe("/settings");
+    expect(router.state.location.search).toEqual({ section: "updater" });
   });
 
   it("opens settings from the Licht menu using the keyboard", async () => {
@@ -53,7 +55,7 @@ describe("Launcher shell", () => {
     await waitFor(() => expect(settings).toHaveFocus());
     fireEvent.keyDown(settings, { key: "Enter" });
     expect(
-      await screen.findByRole("dialog", { name: "Settings" }),
+      await screen.findByRole("region", { name: "Settings" }),
     ).toBeVisible();
     expect(
       screen.getByRole("button", { name: "General", current: "page" }),
@@ -171,7 +173,7 @@ describe("Launcher shell", () => {
     fireEvent.click(
       within(menu).getByRole("menuitem", { name: "Add account" }),
     );
-    const settings = await screen.findByRole("dialog", { name: "Settings" });
+    const settings = await screen.findByRole("region", { name: "Settings" });
     expect(
       within(settings).getByRole("button", {
         name: "General",
@@ -181,27 +183,90 @@ describe("Launcher shell", () => {
     expect(invoke).not.toHaveBeenCalledWith("begin_microsoft_login");
   });
 
-  it("opens Download settings without leaving Downloads", async () => {
+  it("opens Download settings from Downloads and returns with Back", async () => {
     mockContextMenuCommands();
     const { router } = await renderAt("/downloads");
     fireEvent.click(
       await screen.findByRole("button", { name: "Download settings" }),
     );
-    const settings = await screen.findByRole("dialog", { name: "Settings" });
+    const settings = await screen.findByRole("region", { name: "Settings" });
     expect(
       within(settings).getByRole("button", {
         name: "Downloads",
         current: "page",
       }),
     ).toBeVisible();
+    expect(router.state.location.pathname).toBe("/settings");
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(
+      await screen.findByRole("heading", { name: "Downloads" }),
+    ).toBeVisible();
     expect(router.state.location.pathname).toBe("/downloads");
   });
 
-  it("opens the developer loading preview in Downloads and closes Settings", async () => {
+  it("keeps the selected section in the URL", async () => {
+    mockContextMenuCommands();
+    const { router } = await renderAt("/settings?section=downloads");
+    const settings = await screen.findByRole("region", { name: "Settings" });
+    expect(
+      within(settings).getByRole("button", {
+        name: "Downloads",
+        current: "page",
+      }),
+    ).toBeVisible();
+    fireEvent.click(within(settings).getByRole("button", { name: "Updates" }));
+    await waitFor(() =>
+      expect(router.state.location.search).toEqual({ section: "updater" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    await waitFor(() =>
+      expect(
+        within(settings).getByRole("button", {
+          name: "Downloads",
+          current: "page",
+        }),
+      ).toBeVisible(),
+    );
+  });
+
+  it("falls back to General for an unknown section", async () => {
+    mockContextMenuCommands();
+    await renderAt("/settings?section=nope");
+    const settings = await screen.findByRole("region", { name: "Settings" });
+    expect(
+      within(settings).getByRole("button", {
+        name: "General",
+        current: "page",
+      }),
+    ).toBeVisible();
+  });
+
+  it("switches section when Settings is requested while already open", async () => {
+    mockContextMenuCommands();
+    await renderAt("/settings?section=updater");
+    expect(
+      await screen.findByRole("heading", { name: "Updates" }),
+    ).toBeVisible();
+    act(() => requestOpenSettings("account"));
+    expect(
+      await screen.findByRole("heading", { name: "General" }),
+    ).toBeVisible();
+  });
+
+  it("does not show the Library as current while on Settings", async () => {
+    mockContextMenuCommands();
+    await renderAt("/settings");
+    await screen.findByRole("region", { name: "Settings" });
+    expect(screen.getByRole("button", { name: "Library" })).not.toHaveAttribute(
+      "aria-current",
+    );
+  });
+
+  it("opens the developer loading preview in Downloads and leaves Settings", async () => {
     mockContextMenuCommands();
     const { router } = await renderAt("/");
     act(() => requestOpenSettings("developers"));
-    const settings = await screen.findByRole("dialog", { name: "Settings" });
+    const settings = await screen.findByRole("region", { name: "Settings" });
     const preview = await within(settings).findByRole("switch", {
       name: "Simulate storage loading",
     });
@@ -213,7 +278,7 @@ describe("Launcher shell", () => {
       await screen.findByRole("heading", { name: "Downloads" }),
     ).toBeVisible();
     expect(
-      screen.queryByRole("dialog", { name: "Settings" }),
+      screen.queryByRole("region", { name: "Settings" }),
     ).not.toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/downloads");
     const data = within(
@@ -226,13 +291,17 @@ describe("Launcher shell", () => {
     expect(data.getByText("Instances")).toBeVisible();
     expect(invoke).not.toHaveBeenCalledWith("storage_summary");
     act(() => requestOpenSettings("developers"));
-    const reopened = await screen.findByRole("dialog", { name: "Settings" });
+    const reopened = await screen.findByRole("region", { name: "Settings" });
     const loading = within(reopened).getByRole("switch", {
       name: "Simulate storage loading",
     });
     expect(loading).toBeChecked();
     fireEvent.click(loading);
     await waitFor(() => expect(loading).not.toBeChecked());
-    expect(await data.findByText("20.0 GB")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    const storage = within(
+      await screen.findByRole("region", { name: "Launcher Storage" }),
+    );
+    expect(await storage.findByText("20.0 GB")).toBeVisible();
   });
 });

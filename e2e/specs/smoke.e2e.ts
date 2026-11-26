@@ -1,4 +1,4 @@
-import { $, browser, expect } from "@wdio/globals";
+import { $, expect } from "@wdio/globals";
 
 describe("launcher smoke", () => {
   it("leaves the startup screen for an empty library", async () => {
@@ -19,16 +19,16 @@ describe("launcher smoke", () => {
   it("opens settings and switches sections", async () => {
     await $("button=Licht Launcher").click();
     await $('[role="menuitem"]=Settings').click();
-    const dialog = $('[role="dialog"]');
-    await expect(dialog.$("h2=General")).toBeDisplayed();
+    const page = $('section[aria-label="Settings"]');
+    await expect(page.$("h2=General")).toBeDisplayed();
 
-    await dialog
+    await page
       .$('nav[aria-label="Settings sections"]')
       .$("button=Instances")
       .click();
-    await expect(dialog.$("h2=Instances")).toBeDisplayed();
+    await expect(page.$("h2=Instances")).toBeDisplayed();
 
-    await browser.keys("Escape");
-    await expect(dialog).not.toBeExisting();
+    await $("button=Library").click();
+    await expect(page).not.toBeExisting();
   });
 });
