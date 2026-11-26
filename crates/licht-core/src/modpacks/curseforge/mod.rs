@@ -205,9 +205,10 @@ pub(super) async fn list_curseforge_versions(
         let url = format!("{MOD_URL}/{mod_id}/files?index={index}&pageSize={FILES_PAGE_SIZE}");
         api::get_api(client, key, &url, "curseforge_files").await
     };
-    let (first, title) = tokio::try_join!(fetch_page(0), fetch_pack_title(client, key, mod_id))?;
+    let (first, title) = tokio::join!(fetch_page(0), fetch_pack_title(client, key, mod_id));
+    let title = title_or_none(title, mod_id);
     let title = title.as_str();
-    let first = api::parse_versions(&first, title)?;
+    let first = api::parse_versions(&first?, title)?;
     if first.total > MAX_FILE_PAGES * FILES_PAGE_SIZE {
         tracing::warn!(
             mod_id,
@@ -275,10 +276,11 @@ pub(super) async fn download_curseforge_pack_to(
     let file_ids = [file_id];
     let (files, title) = context
         .metadata(async {
-            tokio::try_join!(
+            let (files, title) = tokio::join!(
                 api::fetch_remote_files(client, &key, &file_ids),
                 fetch_pack_title(client, &key, project),
-            )
+            );
+            Ok::<_, CoreError>((files?, title_or_none(title, project)))
         })
         .await?;
     let file = files
@@ -323,23 +325,58 @@ fn pack_version(file: &api::RemoteFile, pack_title: &str) -> super::PackVersion 
     }
 }
 
+/// Separators that set a subtitle apart in a pack title ("Homestead - A Cozy Pack").
+const SUBTITLE_SEPARATORS: [&str; 4] = [" - ", " – ", ":", " | "];
+
 /// CurseForge file names usually repeat the pack title ("Homestead 2.0.1");
-/// the version is what follows it. A name without the title stays whole.
+/// the version is what follows it, or what follows the title without its
+/// subtitle. A name without the title stays whole.
 fn version_label(name: &str, pack_title: &str) -> String {
     let name = name.trim();
     let title = pack_title.trim();
-    let rest = name
-        .get(..title.len())
-        .filter(|head| !title.is_empty() && head.eq_ignore_ascii_case(title))
-        .map(|_| &name[title.len()..])
-        .filter(|rest| rest.starts_with(|ch: char| !ch.is_alphanumeric()))
-        .map(|rest| rest.trim_start_matches(|ch: char| !ch.is_alphanumeric()))
-        .unwrap_or_default();
-    if rest.is_empty() {
-        name.to_string()
-    } else {
-        rest.to_string()
+    let short_title = SUBTITLE_SEPARATORS
+        .iter()
+        .filter_map(|separator| title.find(separator))
+        .min()
+        .map(|end| title[..end].trim());
+    strip_title(name, title)
+        .or_else(|| short_title.and_then(|short| strip_title(name, short)))
+        .unwrap_or(name)
+        .to_string()
+}
+
+/// What follows `title` at the start of `name`, ignoring case, when the title
+/// ends at a word boundary and something is left.
+fn strip_title<'a>(name: &'a str, title: &str) -> Option<&'a str> {
+    if title.is_empty() {
+        return None;
     }
+    let title_chars = title.chars().count();
+    let end = name
+        .char_indices()
+        .nth(title_chars)
+        .map_or(name.len(), |(index, _)| index);
+    let head = &name[..end];
+    if head.chars().count() != title_chars || head.to_lowercase() != title.to_lowercase() {
+        return None;
+    }
+    let rest = &name[end..];
+    rest.starts_with(|ch: char| !ch.is_alphanumeric())
+        .then(|| rest.trim_start_matches(|ch: char| !ch.is_alphanumeric()))
+        .filter(|rest| !rest.is_empty())
+}
+
+/// The title only tidies version names, so a failed lookup leaves them whole
+/// instead of failing the listing or the install.
+fn title_or_none(title: Result<String>, mod_id: u64) -> String {
+    title.unwrap_or_else(|error| {
+        tracing::warn!(
+            mod_id,
+            %error,
+            "CurseForge pack title lookup failed; showing full version names"
+        );
+        String::new()
+    })
 }
 
 async fn fetch_pack_title(client: &Client, key: &str, mod_id: u64) -> Result<String> {
@@ -420,6 +457,32 @@ mod tests {
         assert_eq!(version_label("Homestead", "Homestead"), "Homestead");
         assert_eq!(version_label("2.0.1", "Homestead"), "2.0.1");
         assert_eq!(version_label("Ñandú 1.0", "Ñandú"), "1.0");
+        assert_eq!(version_label("ñandú 1.0", "Ñandú"), "1.0");
+        assert_eq!(version_label("ñ 1.0", "Ñandú"), "ñ 1.0");
+    }
+
+    #[test]
+    fn a_version_drops_the_short_title_before_a_subtitle() {
+        assert_eq!(
+            version_label("Homestead 2.0.1", "Homestead - A Cozy Pack"),
+            "2.0.1"
+        );
+        assert_eq!(version_label("Pack 1.0", "Pack: Reloaded"), "1.0");
+        // The full title wins when the name carries it.
+        assert_eq!(version_label("Pack: Reloaded 3.0", "Pack: Reloaded"), "3.0");
+    }
+
+    #[test]
+    fn a_failed_title_lookup_leaves_names_whole() {
+        let title = title_or_none(
+            Err(CoreError::ModpackMeta {
+                detail: "curseforge_mod_http_429".into(),
+            }),
+            1,
+        );
+        assert_eq!(title, "");
+        assert_eq!(version_label("Homestead 2.0.1", &title), "Homestead 2.0.1");
+        assert_eq!(title_or_none(Ok("Homestead".into()), 1), "Homestead");
     }
 
     #[test]

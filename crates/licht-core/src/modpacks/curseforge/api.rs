@@ -445,7 +445,7 @@ pub(super) fn parse_versions(body: &str, pack_title: &str) -> Result<FilesPage> 
             }
             ModpackVersionItem {
                 id: file.id.to_string(),
-                name: if file.display_name.is_empty() {
+                name: if file.display_name.trim().is_empty() {
                     file.file_name
                 } else {
                     super::version_label(&file.display_name, pack_title)
@@ -875,8 +875,9 @@ mod tests {
               {"id":9431424,"displayName":"All the Mods 10-8.5","fileName":"atm10.zip","releaseType":1,
                "fileDate":"2026-11-04T07:16:05.953Z","downloadCount":72327,"gameVersions":["1.21.1","NeoForge"]},
               {"id":2,"displayName":"","fileName":"beta.zip","releaseType":2,"gameVersions":["Forge","1.20.1","Client"]},
-              {"id":3,"displayName":"Alpha","releaseType":3,"gameVersions":[]}
-            ],"pagination":{"index":0,"pageSize":50,"resultCount":3,"totalCount":148}}"#,
+              {"id":3,"displayName":"Alpha","releaseType":3,"gameVersions":[]},
+              {"id":4,"displayName":" ","fileName":"blank.zip","gameVersions":[]}
+            ],"pagination":{"index":0,"pageSize":50,"resultCount":4,"totalCount":148}}"#,
             "All the Mods 10",
         )
         .expect("ok");
@@ -896,6 +897,7 @@ mod tests {
         assert_eq!(page.items[1].loaders, vec![ModpackLoader::Forge]);
         assert_eq!(page.items[1].version_type, ModpackVersionType::Beta);
         assert_eq!(page.items[2].version_type, ModpackVersionType::Alpha);
+        assert_eq!(page.items[3].name, "blank.zip");
     }
 
     #[test]
