@@ -11,6 +11,7 @@ import { createRoot, type RootOptions } from "react-dom/client";
 
 import { Toaster } from "@/components/ui/sonner";
 import { clearStorageLoadingPreview } from "@/features/downloads/hooks/use-storage-loading-preview";
+import { InstanceSettingsWindow } from "@/features/instance-settings/instance-settings-window";
 import { useLauncherTheme } from "@/features/settings/hooks/use-launcher-theme";
 import { SettingsWindow } from "@/features/settings/settings-window";
 import { StartupGate } from "@/features/startup/startup-gate";
@@ -99,9 +100,22 @@ function Settings() {
   );
 }
 
+function InstanceSettings() {
+  const theme = useLauncherTheme(false);
+  return (
+    <>
+      <InstanceSettingsWindow />
+      <Toaster theme={theme} />
+    </>
+  );
+}
+
 function App() {
   if (windowLabel === "settings") {
     return <Settings />;
+  }
+  if (windowLabel.startsWith("instance-settings-")) {
+    return <InstanceSettings />;
   }
   return previewWindow ? (
     <Startup />

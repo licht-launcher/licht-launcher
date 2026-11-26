@@ -1,4 +1,5 @@
 import type { InstanceBaseInput } from "@/api/commands";
+import { PageTransition } from "@/components/ui/page-transition";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { InstanceDraft } from "@/features/instance-settings/model/draft";
 import {
@@ -60,43 +61,47 @@ export function InstanceSettingsPanel({
         /* Radix top/bottom are inline; height:auto so h-full does not ignore bottom. */
         scrollbarStyle={{ top: "2.5rem", bottom: "0.75rem", height: "auto" }}
       >
-        <div className={instanceSettingsPanelStyles.content}>
-          <div className={instanceSettingsPanelStyles.header}>
-            <h2 className={instanceSettingsPanelStyles.title}>{meta?.label}</h2>
-            <p className={instanceSettingsPanelStyles.description}>
-              {meta?.description}
-            </p>
+        <PageTransition animationKey={section}>
+          <div className={instanceSettingsPanelStyles.content}>
+            <div className={instanceSettingsPanelStyles.header}>
+              <h2 className={instanceSettingsPanelStyles.title}>
+                {meta?.label}
+              </h2>
+              <p className={instanceSettingsPanelStyles.description}>
+                {meta?.description}
+              </p>
+            </div>
+            {section === "general" ? (
+              <GeneralSection
+                name={instanceName}
+                busy={busy}
+                onRename={onRename}
+                onOpenFolder={onOpenFolder}
+                onDuplicate={onDuplicate}
+                onDelete={onDelete}
+              />
+            ) : null}
+            {section === "base" ? (
+              <InstanceBaseSection
+                folder={folder}
+                versionId={versionId}
+                preparing={preparing}
+                modpack={modpack}
+                instanceActive={instanceActive}
+                busy={busy}
+                versionBusy={versionBusy}
+                onChangeBase={onChangeBase}
+              />
+            ) : null}
+            {section === "overrides" ? (
+              <OverridesSection
+                draft={draft}
+                snapshot={snapshot}
+                onChange={onChange}
+              />
+            ) : null}
           </div>
-          {section === "general" ? (
-            <GeneralSection
-              name={instanceName}
-              busy={busy}
-              onRename={onRename}
-              onOpenFolder={onOpenFolder}
-              onDuplicate={onDuplicate}
-              onDelete={onDelete}
-            />
-          ) : null}
-          {section === "base" ? (
-            <InstanceBaseSection
-              folder={folder}
-              versionId={versionId}
-              preparing={preparing}
-              modpack={modpack}
-              instanceActive={instanceActive}
-              busy={busy}
-              versionBusy={versionBusy}
-              onChangeBase={onChangeBase}
-            />
-          ) : null}
-          {section === "overrides" ? (
-            <OverridesSection
-              draft={draft}
-              snapshot={snapshot}
-              onChange={onChange}
-            />
-          ) : null}
-        </div>
+        </PageTransition>
       </ScrollArea>
     </div>
   );

@@ -1,7 +1,6 @@
 import { ChevronRightIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { DialogTitle } from "@/components/ui/dialog";
 import {
   INSTANCE_SECTIONS,
   type InstanceSectionId,
@@ -22,21 +21,12 @@ export function InstanceSettingsSidebar({
 }) {
   return (
     <div className={instanceSettingsSidebarStyles.root}>
-      <div className={instanceSettingsSidebarStyles.header}>
-        <DialogTitle className={instanceSettingsSidebarStyles.title}>
-          {name}
-        </DialogTitle>
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          className={instanceSettingsSidebarStyles.instanceButton}
-          onClick={onOpenGlobalSettings}
-        >
-          Open Global Settings
-          <ChevronRightIcon data-icon="inline-end" aria-hidden />
-        </Button>
-      </div>
+      <div
+        data-tauri-drag-region
+        aria-hidden
+        className={instanceSettingsSidebarStyles.dragRegion}
+      />
+      <h1 className={instanceSettingsSidebarStyles.title}>{name}</h1>
       <nav
         aria-label="Instance settings sections"
         className={instanceSettingsSidebarStyles.nav}
@@ -48,16 +38,33 @@ export function InstanceSettingsSidebar({
               key={item.id}
               type="button"
               variant={section === item.id ? "secondary" : "ghost"}
+              size="sm"
               className={instanceSettingsSidebarStyles.navButton}
               aria-current={section === item.id ? "page" : undefined}
               onClick={() => onSectionChange(item.id)}
             >
-              <Icon />
-              {item.label}
+              <Icon className={instanceSettingsSidebarStyles.navIcon} />
+              <span className={instanceSettingsSidebarStyles.navLabel}>
+                {item.label}
+              </span>
             </Button>
           );
         })}
       </nav>
+      <div className={instanceSettingsSidebarStyles.footer}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className={instanceSettingsSidebarStyles.globalButton}
+          onClick={onOpenGlobalSettings}
+        >
+          <span className={instanceSettingsSidebarStyles.navLabel}>
+            Open Global Settings
+          </span>
+          <ChevronRightIcon data-icon="inline-end" aria-hidden />
+        </Button>
+      </div>
     </div>
   );
 }

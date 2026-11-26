@@ -1,12 +1,13 @@
 import { vi } from "vitest";
 
-const { invoke, listeners, closeWindow } = vi.hoisted(() => ({
+const { invoke, listeners, closeWindow, emit } = vi.hoisted(() => ({
   invoke: vi.fn(),
   closeWindow: vi.fn(),
+  emit: vi.fn(async (_name: string, _payload?: unknown) => {}),
   listeners: new Map<string, (event: { payload: unknown }) => void>(),
 }));
 
-export { closeWindow, invoke, listeners };
+export { closeWindow, emit, invoke, listeners };
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke,
@@ -14,6 +15,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 
 vi.mock("@tauri-apps/api/event", () => ({
+  emit,
   listen: vi.fn(
     async (name: string, handler: (event: { payload: unknown }) => void) => {
       listeners.set(name, handler);

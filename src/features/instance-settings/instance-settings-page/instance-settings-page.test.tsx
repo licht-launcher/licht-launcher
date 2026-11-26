@@ -15,7 +15,7 @@ import {
   completedDownload,
   downloadJob,
 } from "@/features/downloads/fixtures/job";
-import { InstanceSettingsDialog } from "@/features/instance-settings/instance-settings-dialog";
+import { InstanceSettingsPage } from "@/features/instance-settings/instance-settings-page";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 
 const { invoke } = vi.hoisted(() => ({
@@ -45,20 +45,18 @@ const entry: InstanceEntry = {
   iconPath: null,
 };
 
-function renderDialog(
-  props: Partial<ComponentProps<typeof InstanceSettingsDialog>> = {},
+function renderPage(
+  props: Partial<ComponentProps<typeof InstanceSettingsPage>> = {},
 ) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <InstanceSettingsDialog
+      <InstanceSettingsPage
         entry={entry}
-        open
         busy={false}
         versionBusy={false}
-        onOpenChange={() => {}}
         onOpenGlobalSettings={() => {}}
         onRename={() => {}}
         onChangeBase={() => {}}
@@ -92,7 +90,7 @@ const linkedEntry: InstanceEntry = {
   },
 };
 
-describe("InstanceSettingsDialog", () => {
+describe("InstanceSettingsPage", () => {
   afterEach(() => vi.restoreAllMocks());
   beforeEach(() => {
     invoke.mockReset();
@@ -148,7 +146,7 @@ describe("InstanceSettingsDialog", () => {
     const onDuplicate = vi.fn();
     const onDelete = vi.fn();
     const onChangeBase = vi.fn();
-    renderDialog({
+    renderPage({
       onRename,
       onOpenFolder,
       onDuplicate,
@@ -253,7 +251,7 @@ describe("InstanceSettingsDialog", () => {
           })
         : original(command, args),
     );
-    renderDialog({
+    renderPage({
       entry: { ...entry, versionId: "fabric-loader-0.19.5-26.3" },
     });
 
@@ -274,7 +272,7 @@ describe("InstanceSettingsDialog", () => {
         ? Promise.reject(new Error("invalid loader profile"))
         : original(command, args),
     );
-    renderDialog();
+    renderPage();
 
     fireEvent.click(screen.getByRole("button", { name: "Instance base" }));
 
@@ -297,7 +295,7 @@ describe("InstanceSettingsDialog", () => {
         : original(command, args),
     );
     const success = vi.spyOn(toast, "success");
-    renderDialog({ entry: linkedEntry });
+    renderPage({ entry: linkedEntry });
 
     fireEvent.click(
       await screen.findByRole("button", { name: "Instance base" }),
@@ -323,7 +321,7 @@ describe("InstanceSettingsDialog", () => {
   });
 
   it("cannot reinstall a modpack imported from a file", async () => {
-    renderDialog({
+    renderPage({
       entry: {
         ...linkedEntry,
         installation: {
@@ -347,7 +345,7 @@ describe("InstanceSettingsDialog", () => {
   });
 
   it("shows the linked modpack under Instance base only for linked instances", async () => {
-    const { unmount } = renderDialog();
+    const { unmount } = renderPage();
     fireEvent.click(
       await screen.findByRole("button", { name: "Instance base" }),
     );
@@ -358,7 +356,7 @@ describe("InstanceSettingsDialog", () => {
     ).not.toBeInTheDocument();
     unmount();
 
-    renderDialog({ entry: linkedEntry });
+    renderPage({ entry: linkedEntry });
     fireEvent.click(
       await screen.findByRole("button", { name: "Instance base" }),
     );
@@ -372,7 +370,7 @@ describe("InstanceSettingsDialog", () => {
   });
 
   it("holds the modpack actions while the game or a download runs", async () => {
-    renderDialog({ entry: linkedEntry, instanceActive: true });
+    renderPage({ entry: linkedEntry, instanceActive: true });
 
     fireEvent.click(
       await screen.findByRole("button", { name: "Instance base" }),
@@ -387,7 +385,7 @@ describe("InstanceSettingsDialog", () => {
 
   it("unlinks the modpack after the user confirms", async () => {
     const success = vi.spyOn(toast, "success");
-    renderDialog({ entry: linkedEntry });
+    renderPage({ entry: linkedEntry });
 
     fireEvent.click(
       await screen.findByRole("button", { name: "Instance base" }),
@@ -439,7 +437,7 @@ describe("InstanceSettingsDialog", () => {
       }
       return original(command, args);
     });
-    renderDialog({
+    renderPage({
       entry: {
         ...entry,
         installation: {
@@ -503,7 +501,7 @@ describe("InstanceSettingsDialog", () => {
   });
 
   it("has no other versions for a modpack imported from a file", async () => {
-    renderDialog({
+    renderPage({
       entry: {
         ...entry,
         installation: {
@@ -526,7 +524,7 @@ describe("InstanceSettingsDialog", () => {
   });
 
   it("waits to repair while the modpack version changes", async () => {
-    renderDialog({
+    renderPage({
       entry: {
         ...entry,
         installation: {
@@ -586,7 +584,7 @@ describe("InstanceSettingsDialog", () => {
       }
       return Promise.resolve(entry);
     });
-    renderDialog();
+    renderPage();
     fireEvent.click(
       await screen.findByRole("button", { name: "Instance base" }),
     );
@@ -612,7 +610,7 @@ describe("InstanceSettingsDialog", () => {
         : original(command),
     );
     const success = vi.spyOn(toast, "success");
-    renderDialog();
+    renderPage();
     fireEvent.click(
       await screen.findByRole("button", { name: "Instance base" }),
     );
@@ -629,7 +627,7 @@ describe("InstanceSettingsDialog", () => {
   });
 
   it("groups overrides under Override Settings", async () => {
-    renderDialog();
+    renderPage();
     expect(await screen.findByText("Survival")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Open Global Settings" }),
@@ -673,7 +671,7 @@ describe("InstanceSettingsDialog", () => {
   });
 
   it("saves an exact memory override from the numeric input", async () => {
-    renderDialog();
+    renderPage();
     await screen.findByText("Survival");
     fireEvent.click(screen.getByRole("button", { name: "Override Settings" }));
     fireEvent.click(

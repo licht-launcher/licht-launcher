@@ -14,12 +14,10 @@ import { friendlyError, messageOf } from "@/lib/errors";
 export function useInstanceMutations({
   beginInstall,
   endInstall,
-  setConfiguringFolder,
   clearAction,
 }: {
   beginInstall: (folder: string, versionId: string | null) => void;
   endInstall: (folder: string, versionId: string | null) => void;
-  setConfiguringFolder: (folder: string | null) => void;
   clearAction: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -49,10 +47,7 @@ export function useInstanceMutations({
 
   const remove = useMutation({
     mutationFn: deleteInstance,
-    onSuccess: async () => {
-      setConfiguringFolder(null);
-      await refreshInstances();
-    },
+    onSuccess: refreshInstances,
     onError: (error: unknown) => {
       toast.error(friendlyError(messageOf(error)));
     },
