@@ -127,12 +127,26 @@ describe("SettingsSidebar", () => {
     expect(writeText).not.toHaveBeenCalled();
   });
 
-  it("keeps an accessible dialog name and navigates without the app footer", async () => {
+  it("moves the window only from its top strip", async () => {
+    const { container } = await renderSettings();
+    await screen.findByRole("button", { name: "Dark" });
+    const sections = screen.getByRole("navigation", {
+      name: "Settings sections",
+    });
+    const sidebar = sections.parentElement;
+    const dragRegions = container.querySelectorAll("[data-tauri-drag-region]");
+    expect(dragRegions).toHaveLength(1);
+    expect(sidebar?.firstElementChild).toBe(dragRegions[0]);
+    expect(dragRegions[0]).toHaveAttribute("data-tauri-drag-region", "true");
+    expect(sidebar).not.toHaveAttribute("data-tauri-drag-region");
+  });
+
+  it("keeps an accessible page name and navigates without the app footer", async () => {
     await renderSettings();
     await screen.findByRole("button", { name: "Dark" });
 
     expect(
-      screen.getByRole("dialog", { name: "Settings" }),
+      screen.getByRole("region", { name: "Settings" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Settings" })).toHaveClass(
       "sr-only",

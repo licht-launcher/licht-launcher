@@ -81,6 +81,35 @@ describe("General preferences", () => {
     );
   });
 
+  it("compares hardware acceleration with what the running launcher uses", async () => {
+    // Started with acceleration off; turning it on was saved but is not applied yet.
+    mockSettingsCommands((command, args) => {
+      if (command === "applied_hardware_acceleration")
+        return Promise.resolve(false);
+      if (
+        command === "save_settings" &&
+        typeof args === "object" &&
+        args !== null &&
+        "settings" in args
+      )
+        return Promise.resolve(args.settings);
+      return undefined;
+    });
+    await renderSettings();
+    const acceleration = await screen.findByRole("switch", {
+      name: "Use hardware acceleration when available",
+    });
+    expect(acceleration).toBeChecked();
+    fireEvent.click(acceleration);
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("save_settings", {
+        settings: expect.objectContaining({ hardwareAcceleration: false }),
+      }),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.queryByText("Restart required")).not.toBeInTheDocument();
+  });
+
   it("shows restore only while minimizing on game start is enabled and saves both choices", async () => {
     await renderSettings();
     const minimize = await screen.findByRole("switch", {

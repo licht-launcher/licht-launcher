@@ -18,7 +18,7 @@ import {
 import { promptRestart } from "@/features/settings/lib/restart-toast";
 import { fromSnapshot } from "@/features/settings/model/draft";
 import { UpdaterSection } from "@/features/settings/sections/updater-section";
-import { SettingsDialog } from "@/features/settings/settings-dialog";
+import { SettingsPage } from "@/features/settings/settings-page";
 import { startupProgress } from "@/features/startup/fixtures/progress";
 import {
   getUpdateCheckStatus,
@@ -357,19 +357,14 @@ describe("UpdaterSection", () => {
     ).toBeEnabled();
   });
 
-  it("dismisses only the manual update toast without dismissing settings or the restart prompt", async () => {
-    const onOpenChange = vi.fn();
+  it("dismisses only the manual update toast without dismissing the restart prompt", async () => {
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
     render(
       <QueryClientProvider client={client}>
         <UpdateCheck />
-        <SettingsDialog
-          open
-          onOpenChange={onOpenChange}
-          initialSection="updater"
-        />
+        <SettingsPage section="updater" onSectionChange={() => {}} />
         <Toaster />
       </QueryClientProvider>,
     );
@@ -394,7 +389,6 @@ describe("UpdaterSection", () => {
       ).not.toBeInTheDocument(),
     );
     expect(screen.getByText("Restart required")).toBeVisible();
-    expect(screen.getByRole("dialog", { name: "Settings" })).toBeVisible();
-    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(screen.getByRole("region", { name: "Settings" })).toBeVisible();
   });
 });

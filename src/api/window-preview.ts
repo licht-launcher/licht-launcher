@@ -1,5 +1,5 @@
 import { LogicalSize } from "@tauri-apps/api/dpi";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { Window } from "@tauri-apps/api/window";
 
 // Test sizes stay within the limits in src-tauri/src/lib.rs::create_main_window.
 export const WINDOW_SIZE_PRESETS = [
@@ -10,15 +10,22 @@ export const WINDOW_SIZE_PRESETS = [
 
 export type WindowSizePreset = (typeof WINDOW_SIZE_PRESETS)[number]["id"];
 
+// Developer Tools runs in the settings window; the presets are for the launcher.
+async function launcherWindow(): Promise<Window> {
+  const window = await Window.getByLabel("main");
+  if (!window) throw new Error("The launcher window is not open");
+  return window;
+}
+
 export async function previewWindowSize(id: WindowSizePreset): Promise<void> {
   const preset = WINDOW_SIZE_PRESETS.find((item) => item.id === id);
   if (!preset) throw new Error("Unsupported window size preset");
-  await getCurrentWindow().setSize(
-    new LogicalSize(preset.width, preset.height),
-  );
+  const window = await launcherWindow();
+  await window.setSize(new LogicalSize(preset.width, preset.height));
 }
 
 export async function resetWindowBounds(): Promise<void> {
   await previewWindowSize("default");
-  await getCurrentWindow().center();
+  const window = await launcherWindow();
+  await window.center();
 }

@@ -46,7 +46,12 @@
         "style-src": "'self' 'unsafe-inline'",
         "style-src-attr": "'unsafe-inline'"
       },
-      "capabilities": ["default", "startup", "startup-preview-controls"]
+      "capabilities": [
+        "default",
+        "settings",
+        "startup",
+        "startup-preview-controls"
+      ]
     }
   },
   "bundle": {

@@ -66,6 +66,17 @@ pub(crate) fn command_failure(summary: &str, error: &dyn std::error::Error) -> S
     summary.to_string()
 }
 
+pub(crate) const SETTINGS_CHANGED_EVENT: &str = "settings-changed";
+pub(crate) const ACCOUNTS_CHANGED_EVENT: &str = "accounts-changed";
+
+/// The change already succeeded, so a failed notification is only logged.
+pub(crate) fn notify_windows(app: &tauri::AppHandle, event: &str) {
+    use tauri::Emitter;
+    if let Err(error) = app.emit(event, ()) {
+        tracing::error!(%error, event, "Could not notify windows of a change");
+    }
+}
+
 pub(crate) fn host_environment() -> Result<LaunchEnvironment, CoreError> {
     let os = match std::env::consts::OS {
         "windows" => OsName::Windows,

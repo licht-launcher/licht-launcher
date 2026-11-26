@@ -5,7 +5,7 @@ use licht_core::{
 use tauri::{AppHandle, State};
 use tauri_plugin_opener::OpenerExt;
 
-use super::{LauncherPaths, failure, http_client};
+use super::{ACCOUNTS_CHANGED_EVENT, LauncherPaths, failure, http_client, notify_windows};
 
 #[tauri::command]
 pub async fn list_microsoft_accounts(
@@ -36,8 +36,10 @@ pub fn active_microsoft_account(
 }
 
 #[tauri::command]
-pub fn use_offline_account() -> Result<(), String> {
-    licht_core::use_offline_account().map_err(failure)
+pub fn use_offline_account(app: AppHandle) -> Result<(), String> {
+    licht_core::use_offline_account().map_err(failure)?;
+    notify_windows(&app, ACCOUNTS_CHANGED_EVENT);
+    Ok(())
 }
 
 #[tauri::command]
@@ -47,28 +49,38 @@ pub async fn begin_microsoft_login(
 ) -> Result<AccountProfile, String> {
     let client = http_client().map_err(failure)?;
     let opener = app.clone();
-    login_with_browser(&client, &database, move |url| {
+    let profile = login_with_browser(&client, &database, move |url| {
         opener
             .opener()
             .open_url(url, None::<&str>)
             .map_err(|error| error.to_string())
     })
     .await
-    .map_err(failure)
+    .map_err(failure)?;
+    notify_windows(&app, ACCOUNTS_CHANGED_EVENT);
+    Ok(profile)
 }
 
 #[tauri::command]
 pub async fn set_active_microsoft_account(
+    app: AppHandle,
     database: State<'_, licht_core::DatabaseClient>,
     uuid: String,
 ) -> Result<AccountProfile, String> {
-    set_active_account(&database, &uuid).await.map_err(failure)
+    let profile = set_active_account(&database, &uuid)
+        .await
+        .map_err(failure)?;
+    notify_windows(&app, ACCOUNTS_CHANGED_EVENT);
+    Ok(profile)
 }
 
 #[tauri::command]
 pub async fn logout_microsoft_account(
+    app: AppHandle,
     database: State<'_, licht_core::DatabaseClient>,
     uuid: String,
 ) -> Result<(), String> {
-    logout_account(&database, &uuid).await.map_err(failure)
+    logout_account(&database, &uuid).await.map_err(failure)?;
+    notify_windows(&app, ACCOUNTS_CHANGED_EVENT);
+    Ok(())
 }

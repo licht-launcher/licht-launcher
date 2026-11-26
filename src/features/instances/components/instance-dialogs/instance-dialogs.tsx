@@ -6,7 +6,6 @@ import {
   InstanceActionDialog,
 } from "@/features/instances/components/instance-action-dialog";
 import type { SectionId } from "@/features/settings/model/sections";
-import { SettingsDialog } from "@/features/settings/settings-dialog";
 import type { DownloadJobSnapshot } from "@/lib/generated/DownloadJobSnapshot";
 import type { InstanceEntry } from "@/lib/generated/InstanceEntry";
 
@@ -33,9 +32,6 @@ export function InstanceDialogs({
   configuringOpen,
   action,
   draftName,
-  settingsOpen,
-  settingsSection,
-  onSettingsOpenChange,
   onConfiguringOpenChange,
   onActionOpenChange,
   onDraftNameChange,
@@ -51,9 +47,6 @@ export function InstanceDialogs({
   configuringOpen: boolean;
   action: InstanceAction | null;
   draftName: string;
-  settingsOpen: boolean;
-  settingsSection: SectionId;
-  onSettingsOpenChange: (open: boolean) => void;
   onConfiguringOpenChange: (open: boolean) => void;
   onActionOpenChange: (open: boolean) => void;
   onDraftNameChange: (name: string) => void;
@@ -114,12 +107,6 @@ export function InstanceDialogs({
         }}
         onDuplicate={onOpenDuplicate}
         onDelete={onOpenDelete}
-      />
-
-      <SettingsDialog
-        open={settingsOpen}
-        onOpenChange={onSettingsOpenChange}
-        initialSection={settingsSection}
       />
     </>
   );

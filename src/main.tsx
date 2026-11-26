@@ -10,9 +10,12 @@ import { StrictMode } from "react";
 import { createRoot, type RootOptions } from "react-dom/client";
 
 import { Toaster } from "@/components/ui/sonner";
+import { clearStorageLoadingPreview } from "@/features/downloads/hooks/use-storage-loading-preview";
 import { useLauncherTheme } from "@/features/settings/hooks/use-launcher-theme";
+import { SettingsWindow } from "@/features/settings/settings-window";
 import { StartupGate } from "@/features/startup/startup-gate";
 import { StartupScreen } from "@/features/startup/startup-screen";
+import { clearUpdateSimulation } from "@/features/updater/model/simulation";
 import {
   installGlobalErrorReporting,
   reportInterfaceError,
@@ -63,8 +66,13 @@ if (root === null) {
 
 // Developer startup previews open in their own window; the launcher window
 // shows startup itself and then the launcher.
-const previewWindow =
-  isTauri() && getCurrentWindow().label.startsWith("startup-preview-");
+const windowLabel = isTauri() ? getCurrentWindow().label : "main";
+const previewWindow = windowLabel.startsWith("startup-preview-");
+
+if (windowLabel === "main") {
+  clearUpdateSimulation();
+  clearStorageLoadingPreview();
+}
 
 function Startup() {
   useLauncherTheme(true);
@@ -81,7 +89,20 @@ function Launcher() {
   );
 }
 
+function Settings() {
+  const theme = useLauncherTheme(false);
+  return (
+    <>
+      <SettingsWindow />
+      <Toaster theme={theme} />
+    </>
+  );
+}
+
 function App() {
+  if (windowLabel === "settings") {
+    return <Settings />;
+  }
   return previewWindow ? (
     <Startup />
   ) : (

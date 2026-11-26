@@ -3,7 +3,6 @@ import { useState } from "react";
 import { buildIdentifier, formatBuildDiagnostics } from "@/api/build-info";
 import { getBuildDiagnostics } from "@/api/commands";
 import { Button } from "@/components/ui/button";
-import { DialogTitle } from "@/components/ui/dialog";
 import {
   Tooltip,
   TooltipContent,
@@ -58,9 +57,12 @@ export function SettingsSidebar({
 
   return (
     <div className={settingsSidebarStyles.root}>
-      <DialogTitle className={settingsSidebarStyles.title}>
-        Settings
-      </DialogTitle>
+      <div
+        data-tauri-drag-region
+        aria-hidden
+        className={settingsSidebarStyles.dragRegion}
+      />
+      <h1 className={settingsSidebarStyles.title}>Settings</h1>
       <nav aria-label="Settings sections" className={settingsSidebarStyles.nav}>
         {SECTIONS.filter((item) => item.id !== "developers").map(renderSection)}
       </nav>

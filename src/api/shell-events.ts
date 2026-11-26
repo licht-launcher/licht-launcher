@@ -1,28 +1,10 @@
+import { toast } from "sonner";
+import { openSettingsWindow } from "@/api/commands";
 import type { SectionId } from "@/features/settings/model/sections";
-
-export const OPEN_SETTINGS_EVENT = "licht:open-settings";
-
-export type OpenSettingsDetail = {
-  section: SectionId;
-};
+import { friendlyError, messageOf } from "@/lib/errors";
 
 export function requestOpenSettings(section: SectionId = "account") {
-  window.dispatchEvent(
-    new CustomEvent<OpenSettingsDetail>(OPEN_SETTINGS_EVENT, {
-      detail: { section },
-    }),
-  );
-}
-
-export function onOpenSettingsRequest(
-  handler: (section: SectionId) => void,
-): () => void {
-  const listener = (event: Event) => {
-    const detail = (event as CustomEvent<OpenSettingsDetail>).detail;
-    handler(detail?.section ?? "account");
-  };
-  window.addEventListener(OPEN_SETTINGS_EVENT, listener);
-  return () => {
-    window.removeEventListener(OPEN_SETTINGS_EVENT, listener);
-  };
+  openSettingsWindow(section).catch((error: unknown) => {
+    toast.error(friendlyError(messageOf(error)));
+  });
 }

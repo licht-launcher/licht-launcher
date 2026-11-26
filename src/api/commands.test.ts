@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   activateOfflineAccount,
   activeMicrosoftAccount,
+  appliedHardwareAcceleration,
   beginMicrosoftLogin,
   browseApplicationDirectory,
   browseJava,
@@ -73,6 +74,7 @@ import {
   searchModpacks,
   setActiveMicrosoftAccount,
   setLastPlayedFolder,
+  settingsWindowReady,
   stopGame,
   touchLastOpened,
   unlinkInstanceModpack,
@@ -141,6 +143,28 @@ describe("launcher commands", () => {
     expect(invoke).toHaveBeenCalledWith("is_startup_preview_open");
     await closeStartupPreview();
     expect(invoke).toHaveBeenCalledWith("close_startup_preview");
+  });
+
+  it("reads the hardware acceleration the launcher started with", async () => {
+    vi.mocked(invoke).mockResolvedValueOnce(false);
+    expect(await appliedHardwareAcceleration()).toBe(false);
+    expect(invoke).toHaveBeenCalledWith("applied_hardware_acceleration");
+    vi.mocked(invoke).mockResolvedValueOnce("off");
+    await expect(appliedHardwareAcceleration()).rejects.toThrow(
+      "Invalid hardware acceleration state",
+    );
+  });
+
+  it("reads the section requested while the settings window was loading", async () => {
+    vi.mocked(invoke).mockResolvedValueOnce("updater");
+    expect(await settingsWindowReady()).toBe("updater");
+    expect(invoke).toHaveBeenCalledWith("settings_window_ready");
+    vi.mocked(invoke).mockResolvedValueOnce(null);
+    expect(await settingsWindowReady()).toBeNull();
+    vi.mocked(invoke).mockResolvedValueOnce(7);
+    await expect(settingsWindowReady()).rejects.toThrow(
+      "Invalid settings section",
+    );
   });
 
   it("rejects an invalid native preview state", async () => {

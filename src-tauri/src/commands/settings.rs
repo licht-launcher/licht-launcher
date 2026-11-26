@@ -4,7 +4,7 @@ use licht_core::{
     JavaDetections, JavaPaths, JavaStatus, Settings, SettingsSnapshot, browse_start_directory,
     detect_known_javas, runtime_java_paths, settings_snapshot,
 };
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, State, WebviewWindow};
 use tauri_plugin_dialog::{DialogExt, FileDialogBuilder};
 
 use super::{LauncherPaths, failure, host_environment};
@@ -24,6 +24,8 @@ pub async fn save_settings(
     let saved = licht_core::save_settings(&paths.settings, &settings)
         .await
         .map_err(failure)?;
+    // Saved, so every window must refresh even if a later step fails.
+    super::notify_windows(&app, super::SETTINGS_CHANGED_EVENT);
     updates
         .preferences_changed(&app, saved.automatic_updates)
         .map_err(|error| {
@@ -33,6 +35,12 @@ pub async fn save_settings(
         format!("Settings were saved, but launcher behavior could not be applied: {error}")
     })?;
     Ok(saved)
+}
+
+/// The value this process started with; a saved change applies after a restart.
+#[tauri::command]
+pub fn applied_hardware_acceleration(runtime: State<'_, crate::desktop::Runtime>) -> bool {
+    runtime.hardware_acceleration
 }
 
 #[tauri::command]
@@ -87,23 +95,19 @@ fn starting_directory(current: &str, fallback: &Path) -> Result<PathBuf, String>
     Ok(directory)
 }
 
-fn owned_file_dialog(app: &AppHandle) -> FileDialogBuilder<tauri::Wry> {
-    let mut dialog = app.dialog().file();
-    if let Some(window) = app.get_webview_window("main") {
-        dialog = dialog.set_parent(&window);
-    }
-    dialog
+fn owned_file_dialog(window: &WebviewWindow) -> FileDialogBuilder<tauri::Wry> {
+    window.dialog().file().set_parent(window)
 }
 
 #[tauri::command]
 pub async fn browse_java(
-    app: AppHandle,
+    window: WebviewWindow,
     paths: State<'_, LauncherPaths>,
     path: String,
 ) -> Result<Option<String>, String> {
     let directory = starting_directory(&path, &paths.game.root().join("runtime"))?;
     let (sender, receiver) = tokio::sync::oneshot::channel();
-    owned_file_dialog(&app)
+    owned_file_dialog(&window)
         .set_directory(&directory)
         .pick_file(move |file| {
             let _ = sender.send(file);
@@ -116,7 +120,7 @@ pub async fn browse_java(
 
 #[tauri::command]
 pub async fn browse_application_directory(
-    app: AppHandle,
+    window: WebviewWindow,
     paths: State<'_, LauncherPaths>,
     path: String,
 ) -> Result<Option<String>, String> {
@@ -125,7 +129,7 @@ pub async fn browse_application_directory(
     };
     let directory = starting_directory(&path, fallback)?;
     let (sender, receiver) = tokio::sync::oneshot::channel();
-    owned_file_dialog(&app)
+    owned_file_dialog(&window)
         .set_directory(&directory)
         .pick_folder(move |file| {
             let _ = sender.send(file);

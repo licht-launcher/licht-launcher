@@ -620,8 +620,8 @@ pub fn start(
     Ok(())
 }
 
-fn require_main(window: &WebviewWindow) -> Result<(), String> {
-    if window.label() != "main" {
+fn require_launcher_window(window: &WebviewWindow) -> Result<(), String> {
+    if !crate::settings_window::is_launcher_window(window.label()) {
         return Err("Updates must be requested from the launcher".to_string());
     }
     Ok(())
@@ -642,7 +642,7 @@ pub fn get_app_update_state(
     window: WebviewWindow,
     runtime: State<'_, Arc<Runtime>>,
 ) -> Result<AppUpdateState, String> {
-    require_main(&window)?;
+    require_launcher_window(&window)?;
     runtime.snapshot().map_err(|error| {
         crate::commands::command_failure("Could not read application update state", error.as_ref())
     })
@@ -655,7 +655,7 @@ pub async fn check_app_update(
     runtime: State<'_, Arc<Runtime>>,
     startup: State<'_, Arc<StartupRuntime>>,
 ) -> Result<(), String> {
-    require_main(&window)?;
+    require_launcher_window(&window)?;
     require_self_managed(&runtime)?;
     let runtime = Arc::clone(runtime.inner());
     let startup = Arc::clone(startup.inner());
@@ -679,7 +679,7 @@ pub async fn download_app_update(
     window: WebviewWindow,
     runtime: State<'_, Arc<Runtime>>,
 ) -> Result<(), String> {
-    require_main(&window)?;
+    require_launcher_window(&window)?;
     require_self_managed(&runtime)?;
     let runtime = Arc::clone(runtime.inner());
     let operation = runtime.reserve().map_err(|error| error.to_string())?;
@@ -703,7 +703,7 @@ pub async fn install_app_update(
     runtime: State<'_, Arc<Runtime>>,
     downloads: State<'_, Arc<licht_core::DownloadManager>>,
 ) -> Result<(), String> {
-    require_main(&window)?;
+    require_launcher_window(&window)?;
     require_self_managed(&runtime)?;
     let _operation = runtime.reserve().map_err(|error| error.to_string())?;
     let mut verified = false;

@@ -1,12 +1,14 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render } from "@testing-library/react";
+import { useState } from "react";
 
 import { Toaster } from "@/components/ui/sonner";
 import { storageSummary } from "@/features/downloads/fixtures/storage";
 import { buildDiagnostics } from "@/features/settings/fixtures/build-diagnostics";
 import { invoke } from "@/features/settings/fixtures/invoke";
 import { snapshot } from "@/features/settings/fixtures/snapshot";
-import { SettingsDialog } from "@/features/settings/settings-dialog";
+import type { SectionId } from "@/features/settings/model/sections";
+import { SettingsPage } from "@/features/settings/settings-page";
 import { appUpdateState } from "@/features/updater/fixtures/state";
 
 export { invoke } from "@/features/settings/fixtures/invoke";
@@ -25,6 +27,9 @@ export function mockSettingsCommands(
     }
     if (command === "get_settings") {
       return Promise.resolve(snapshot);
+    }
+    if (command === "applied_hardware_acceleration") {
+      return Promise.resolve(snapshot.settings.hardwareAcceleration);
     }
     if (command === "get_app_update_state")
       return Promise.resolve(appUpdateState());
@@ -75,13 +80,22 @@ export function mockSettingsCommands(
   });
 }
 
-export function renderSettings() {
+function StatefulSettingsPage({
+  initialSection,
+}: {
+  initialSection: SectionId;
+}) {
+  const [section, setSection] = useState<SectionId>(initialSection);
+  return <SettingsPage section={section} onSectionChange={setSection} />;
+}
+
+export function renderSettings(initialSection: SectionId = "account") {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <SettingsDialog open onOpenChange={() => {}} />
+      <StatefulSettingsPage initialSection={initialSection} />
       <Toaster />
     </QueryClientProvider>,
   );

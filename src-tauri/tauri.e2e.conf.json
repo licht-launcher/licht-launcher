@@ -8,11 +8,12 @@
     "security": {
       "capabilities": [
         "default",
+        "settings",
         "startup",
         {
           "identifier": "e2e",
           "description": "End-to-end test builds let WebdriverIO inspect windows and run scripts.",
-          "windows": ["main", "startup"],
+          "windows": ["main", "settings", "startup"],
           "permissions": ["wdio:default"]
         }
       ]

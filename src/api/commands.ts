@@ -7,6 +7,7 @@ import type {
   LoaderChannel,
   PlatformId,
 } from "@/features/new-instance/model/create-state";
+import type { SectionId } from "@/features/settings/model/sections";
 import type { AccountProfile } from "@/lib/generated/AccountProfile";
 import type { AppUpdateState } from "@/lib/generated/AppUpdateState";
 import type { BuildDiagnostics } from "@/lib/generated/BuildDiagnostics";
@@ -43,6 +44,17 @@ export function listInstances(): Promise<InstanceEntry[]> {
 
 export async function getBuildDiagnostics(): Promise<BuildDiagnostics> {
   return parseBuildDiagnostics(await invoke<unknown>("get_build_diagnostics"));
+}
+
+export function openSettingsWindow(section: SectionId): Promise<void> {
+  return invoke("open_settings_window", { section });
+}
+
+export async function settingsWindowReady(): Promise<string | null> {
+  const section = await invoke<unknown>("settings_window_ready");
+  if (section !== null && typeof section !== "string")
+    throw new Error("Invalid settings section");
+  return section;
 }
 
 export function quitApp(): Promise<void> {
@@ -439,6 +451,13 @@ export function restartApp(): Promise<void> {
 
 export function saveSettings(settings: Settings): Promise<Settings> {
   return invoke("save_settings", { settings });
+}
+
+export async function appliedHardwareAcceleration(): Promise<boolean> {
+  const applied = await invoke<unknown>("applied_hardware_acceleration");
+  if (typeof applied !== "boolean")
+    throw new Error("Invalid hardware acceleration state");
+  return applied;
 }
 
 export function runtimeJava(): Promise<JavaPaths> {

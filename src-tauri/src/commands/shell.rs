@@ -70,7 +70,7 @@ pub fn quit_app(app: AppHandle, window: WebviewWindow) -> Result<(), String> {
 pub async fn get_build_diagnostics(
     window: WebviewWindow,
 ) -> Result<licht_core::BuildDiagnostics, String> {
-    if window.label() != "main" {
+    if !crate::settings_window::is_launcher_window(window.label()) {
         return Err("Build information is only available in the launcher".to_string());
     }
     tauri::async_runtime::spawn_blocking(collect_build_diagnostics)

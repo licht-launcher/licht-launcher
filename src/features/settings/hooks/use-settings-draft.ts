@@ -1,7 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { getSettings, runtimeJava, saveSettings } from "@/api/commands";
+import {
+  appliedHardwareAcceleration as getAppliedHardwareAcceleration,
+  getSettings,
+  runtimeJava,
+  saveSettings,
+} from "@/api/commands";
+import { onLauncherClosed, onWindowCloseRequested } from "@/api/window-close";
 import { useToastError } from "@/features/settings/hooks/use-toast-error";
 import {
   dismissRestartToast,
@@ -14,23 +20,29 @@ import {
   toSettings,
 } from "@/features/settings/model/draft";
 import { DOWNLOAD_SPEED_ERROR, parseDownloadLimit } from "@/lib/download-speed";
+import { reportInterfaceError } from "@/lib/error-reporting";
 import { friendlyError, messageOf } from "@/lib/errors";
 import type { Settings } from "@/lib/generated/Settings";
 
 const SAVE_DELAY_MS = 400;
+const APPLIED_HARDWARE_ACCELERATION_KEY = ["applied-hardware-acceleration"];
 
-export function useSettingsDraft(open: boolean) {
+export function useSettingsDraft() {
   const queryClient = useQueryClient();
   const settings = useQuery({
     queryKey: ["settings"],
     queryFn: getSettings,
-    enabled: open,
+    retry: false,
+  });
+  const appliedHardwareAcceleration = useQuery({
+    queryKey: APPLIED_HARDWARE_ACCELERATION_KEY,
+    queryFn: getAppliedHardwareAcceleration,
+    staleTime: Number.POSITIVE_INFINITY,
     retry: false,
   });
   const runtime = useQuery({
     queryKey: ["runtime-java"],
     queryFn: runtimeJava,
-    enabled: open,
     retry: false,
   });
 
@@ -38,17 +50,20 @@ export function useSettingsDraft(open: boolean) {
   const draftRef = useRef<Draft | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const schemaRef = useRef(1);
-  const persistRef = useRef<(current: Draft) => void>(() => {});
-  const appliedHardwareAcceleration = useRef<boolean | null>(null);
+  const persistRef = useRef<(current: Draft) => Promise<boolean>>(
+    async () => true,
+  );
+  const flushRef = useRef<() => Promise<boolean>>(async () => true);
+  const savingRef = useRef<Promise<boolean> | null>(null);
 
   const save = useMutation({
     mutationFn: saveSettings,
     onSuccess: async (saved: Settings) => {
       await queryClient.invalidateQueries({ queryKey: ["settings"] });
-      if (
-        appliedHardwareAcceleration.current !== null &&
-        saved.hardwareAcceleration !== appliedHardwareAcceleration.current
-      ) {
+      const applied = queryClient.getQueryData<boolean>(
+        APPLIED_HARDWARE_ACCELERATION_KEY,
+      );
+      if (applied !== undefined && saved.hardwareAcceleration !== applied) {
         promptRestart("Apply the hardware acceleration change now?");
       } else {
         dismissRestartToast();
@@ -59,26 +74,50 @@ export function useSettingsDraft(open: boolean) {
     },
   });
 
-  persistRef.current = (current) => {
+  async function saveDraft(current: Draft): Promise<boolean> {
     const width = optionalSize(current.width);
     const height = optionalSize(current.height);
     if (width === "invalid" || height === "invalid") {
       toast.error("window size must be at least 1");
-      return;
+      return false;
     }
     const speed = parseDownloadLimit(current.downloadSpeedLimitKbs);
     if (speed === "invalid") {
       toast.error(DOWNLOAD_SPEED_ERROR);
-      return;
+      return false;
     }
-    save.mutate(toSettings(current, schemaRef.current, width, height));
+    try {
+      await save.mutateAsync(
+        toSettings(current, schemaRef.current, width, height),
+      );
+      return true;
+    } catch {
+      // The mutation's onError has already shown why.
+      return false;
+    }
+  }
+
+  persistRef.current = (current) => {
+    const saving = saveDraft(current);
+    savingRef.current = saving;
+    void saving.then(() => {
+      if (savingRef.current === saving) savingRef.current = null;
+    });
+    return saving;
+  };
+
+  flushRef.current = () => {
+    if (timerRef.current === null || draftRef.current === null) {
+      return savingRef.current ?? Promise.resolve(true);
+    }
+    clearTimeout(timerRef.current);
+    timerRef.current = null;
+    return persistRef.current(draftRef.current);
   };
 
   useEffect(() => {
     if (settings.data && runtime.isFetched && draft === null) {
       schemaRef.current = settings.data.settings.schema;
-      appliedHardwareAcceleration.current =
-        settings.data.settings.hardwareAcceleration;
       const next = fromSnapshot(settings.data, runtime.data ?? null);
       draftRef.current = next;
       setDraft(next);
@@ -88,12 +127,39 @@ export function useSettingsDraft(open: boolean) {
   useToastError(settings.error);
   useToastError(runtime.error);
 
+  // Closing a window does not unmount React, so the cleanup below would not save.
   useEffect(() => {
+    let active = true;
+    const stops: (() => void)[] = [];
+    const keep = (subscribing: Promise<() => void>) => {
+      subscribing
+        .then((stop) => {
+          if (active) stops.push(stop);
+          else stop();
+        })
+        .catch((error: unknown) => reportInterfaceError("promise", error));
+    };
+    keep(
+      onWindowCloseRequested(async (request) => {
+        if (!(await flushRef.current())) request.preventDefault();
+      }),
+    );
+    keep(
+      onLauncherClosed(async () => {
+        if (!(await flushRef.current())) {
+          reportInterfaceError(
+            "promise",
+            new Error(
+              "The last settings edit could not be saved before the launcher closed",
+            ),
+          );
+        }
+      }),
+    );
     return () => {
-      if (timerRef.current !== null) {
-        clearTimeout(timerRef.current);
-      }
-      dismissRestartToast();
+      active = false;
+      for (const stop of stops) stop();
+      void flushRef.current();
     };
   }, []);
 
@@ -108,8 +174,8 @@ export function useSettingsDraft(open: boolean) {
 
     if (
       patch.hardwareAcceleration !== undefined &&
-      appliedHardwareAcceleration.current !== null &&
-      next.hardwareAcceleration === appliedHardwareAcceleration.current
+      appliedHardwareAcceleration.data !== undefined &&
+      next.hardwareAcceleration === appliedHardwareAcceleration.data
     ) {
       dismissRestartToast();
     }
@@ -119,23 +185,13 @@ export function useSettingsDraft(open: boolean) {
     }
     timerRef.current = setTimeout(() => {
       timerRef.current = null;
-      persistRef.current(next);
+      void persistRef.current(next);
     }, SAVE_DELAY_MS);
-  }
-
-  function flush() {
-    if (timerRef.current === null || draftRef.current === null) {
-      return;
-    }
-    clearTimeout(timerRef.current);
-    timerRef.current = null;
-    persistRef.current(draftRef.current);
   }
 
   return {
     draft,
     snapshot: settings.data ?? null,
     update,
-    flush,
   };
 }

@@ -8,7 +8,6 @@ import {
   within,
 } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { STORAGE_LOADING_PREVIEW_EVENT } from "@/features/downloads/hooks/use-storage-loading-preview";
 import { snapshot } from "@/features/settings/fixtures/snapshot";
 import { type Draft, fromSnapshot } from "@/features/settings/model/draft";
 import { DevelopersSection } from "@/features/settings/sections/developers-section";
@@ -26,7 +25,9 @@ const {
   restartPreview,
   resizeWindow,
   resetWindow,
+  emitTo,
 } = vi.hoisted(() => ({
+  emitTo: vi.fn(),
   openPreview: vi.fn(),
   closePreview: vi.fn(),
   getPreviewOpen: vi.fn(),
@@ -43,6 +44,7 @@ vi.mock("@/api/commands", () => ({
   restartStartupPreview: restartPreview,
 }));
 vi.mock("@tauri-apps/api/event", () => ({
+  emitTo,
   listen: vi.fn(
     async (_name: string, handler: (event: { payload: unknown }) => void) => {
       previewListeners.add(handler);
@@ -93,7 +95,8 @@ describe("DevelopersSection", () => {
     restartPreview.mockReset();
     resizeWindow.mockReset().mockResolvedValue(undefined);
     resetWindow.mockReset().mockResolvedValue(undefined);
-    sessionStorage.clear();
+    emitTo.mockReset().mockResolvedValue(undefined);
+    localStorage.clear();
   });
 
   it("shows the offline username directly and sends edits through the settings draft", () => {
@@ -274,10 +277,7 @@ describe("DevelopersSection", () => {
   });
 
   it("keeps the storage loading switch enabled when Developer Tools is reopened", async () => {
-    const listener = vi.fn();
-    window.addEventListener(STORAGE_LOADING_PREVIEW_EVENT, listener);
-    const client = new QueryClient();
-    const first = view(vi.fn(), {}, client);
+    const first = view();
     fireEvent.click(
       screen.getByRole("switch", { name: "Simulate storage loading" }),
     );
@@ -286,9 +286,12 @@ describe("DevelopersSection", () => {
         screen.getByRole("switch", { name: "Simulate storage loading" }),
       ).toBeChecked(),
     );
-    expect(listener).toHaveBeenCalledOnce();
+    expect(emitTo).toHaveBeenCalledExactlyOnceWith(
+      "main",
+      "dev-storage-loading-preview",
+    );
     first.unmount();
-    view(vi.fn(), {}, client);
+    view();
     expect(
       screen.getByRole("switch", { name: "Simulate storage loading" }),
     ).toBeChecked();
@@ -300,8 +303,27 @@ describe("DevelopersSection", () => {
         screen.getByRole("switch", { name: "Simulate storage loading" }),
       ).not.toBeChecked(),
     );
-    expect(listener).toHaveBeenCalledOnce();
-    window.removeEventListener(STORAGE_LOADING_PREVIEW_EVENT, listener);
+    expect(emitTo).toHaveBeenCalledOnce();
+  });
+
+  it("follows developer simulations changed in another window", () => {
+    view();
+    const update = screen.getByRole("switch", {
+      name: "Simulate available update",
+    });
+    const storage = screen.getByRole("switch", {
+      name: "Simulate storage loading",
+    });
+    act(() => {
+      localStorage.setItem("licht-launcher.dev-update-simulation", "true");
+      localStorage.setItem(
+        "licht-launcher.dev-storage-loading-preview",
+        "true",
+      );
+      window.dispatchEvent(new StorageEvent("storage", { key: null }));
+    });
+    expect(update).toBeChecked();
+    expect(storage).toBeChecked();
   });
 
   it("does not expose the storage preview in production", () => {

@@ -6,10 +6,10 @@ import {
   within,
 } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { requestOpenSettings } from "@/api/shell-events";
 import {
   closeWindow,
   invoke,
+  listeners,
   mockContextMenuCommands,
   renderAt,
   setupInstancesPageTests,
@@ -21,19 +21,18 @@ describe("Launcher shell", () => {
 
   it("opens Updates settings from the footer version", async () => {
     mockContextMenuCommands();
-    await renderAt("/");
+    const { router } = await renderAt("/");
     fireEvent.click(
       within(
         screen.getByRole("contentinfo", { name: "Download status" }),
       ).getByRole("button", { name: "Early Release 0.3.1 · Rose" }),
     );
-    const settings = await screen.findByRole("dialog", { name: "Settings" });
-    expect(
-      within(settings).getByRole("button", {
-        name: "Updates",
-        current: "page",
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("open_settings_window", {
+        section: "updater",
       }),
-    ).toBeVisible();
+    );
+    expect(router.state.location.pathname).toBe("/");
   });
 
   it("opens settings from the Licht menu using the keyboard", async () => {
@@ -52,12 +51,11 @@ describe("Launcher shell", () => {
     fireEvent.keyDown(accounts, { key: "ArrowDown" });
     await waitFor(() => expect(settings).toHaveFocus());
     fireEvent.keyDown(settings, { key: "Enter" });
-    expect(
-      await screen.findByRole("dialog", { name: "Settings" }),
-    ).toBeVisible();
-    expect(
-      screen.getByRole("button", { name: "General", current: "page" }),
-    ).toBeVisible();
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("open_settings_window", {
+        section: "account",
+      }),
+    );
     expect(
       screen.queryByRole("menu", { name: "Licht menu" }),
     ).not.toBeInTheDocument();
@@ -171,13 +169,11 @@ describe("Launcher shell", () => {
     fireEvent.click(
       within(menu).getByRole("menuitem", { name: "Add account" }),
     );
-    const settings = await screen.findByRole("dialog", { name: "Settings" });
-    expect(
-      within(settings).getByRole("button", {
-        name: "General",
-        current: "page",
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("open_settings_window", {
+        section: "account",
       }),
-    ).toBeVisible();
+    );
     expect(invoke).not.toHaveBeenCalledWith("begin_microsoft_login");
   });
 
@@ -187,52 +183,62 @@ describe("Launcher shell", () => {
     fireEvent.click(
       await screen.findByRole("button", { name: "Download settings" }),
     );
-    const settings = await screen.findByRole("dialog", { name: "Settings" });
-    expect(
-      within(settings).getByRole("button", {
-        name: "Downloads",
-        current: "page",
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("open_settings_window", {
+        section: "downloads",
       }),
-    ).toBeVisible();
+    );
     expect(router.state.location.pathname).toBe("/downloads");
   });
 
-  it("opens the developer loading preview in Downloads and closes Settings", async () => {
+  it("shows an error when the settings window cannot open", async () => {
+    mockContextMenuCommands((command) =>
+      command === "open_settings_window"
+        ? Promise.reject(new Error("Settings window failed"))
+        : undefined,
+    );
+    await renderAt("/downloads");
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Download settings" }),
+    );
+    expect(await screen.findByText("Settings window failed")).toBeVisible();
+  });
+
+  it("opens Downloads when Developer Tools previews storage loading", async () => {
     mockContextMenuCommands();
     const { router } = await renderAt("/");
-    act(() => requestOpenSettings("developers"));
-    const settings = await screen.findByRole("dialog", { name: "Settings" });
-    const preview = await within(settings).findByRole("switch", {
-      name: "Simulate storage loading",
-    });
+    await waitFor(() =>
+      expect(listeners.has("dev-storage-loading-preview")).toBe(true),
+    );
     await act(async () => {
-      fireEvent.click(preview);
+      listeners.get("dev-storage-loading-preview")?.({ payload: null });
       await router.load();
     });
     expect(
       await screen.findByRole("heading", { name: "Downloads" }),
     ).toBeVisible();
-    expect(
-      screen.queryByRole("dialog", { name: "Settings" }),
-    ).not.toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/downloads");
-    const data = within(
-      screen.getByRole("region", { name: "Launcher Storage" }),
-    );
-    expect(data.getAllByRole("status")).toHaveLength(6);
+  });
+
+  it("refetches the account when another window changes it", async () => {
+    mockContextMenuCommands();
+    await renderAt("/");
     expect(
-      data.getByRole("progressbar", { name: "Loading launcher storage" }),
-    ).toHaveAttribute("data-state", "indeterminate");
-    expect(data.getByText("Instances")).toBeVisible();
-    expect(invoke).not.toHaveBeenCalledWith("storage_summary");
-    act(() => requestOpenSettings("developers"));
-    const reopened = await screen.findByRole("dialog", { name: "Settings" });
-    const loading = within(reopened).getByRole("switch", {
-      name: "Simulate storage loading",
-    });
-    expect(loading).toBeChecked();
-    fireEvent.click(loading);
-    await waitFor(() => expect(loading).not.toBeChecked());
-    expect(await data.findByText("20.0 GB")).toBeVisible();
+      await screen.findByRole("button", { name: "Account: Steve" }),
+    ).toBeVisible();
+    await waitFor(() => expect(listeners.has("accounts-changed")).toBe(true));
+    mockContextMenuCommands((command) =>
+      command === "active_microsoft_account"
+        ? Promise.resolve({
+            uuid: "0123456789abcdef0123456789abcdef",
+            name: "OnlinePlayer",
+            skinUrl: null,
+          })
+        : undefined,
+    );
+    act(() => listeners.get("accounts-changed")?.({ payload: null }));
+    expect(
+      await screen.findByRole("button", { name: "Account: OnlinePlayer" }),
+    ).toBeVisible();
   });
 });

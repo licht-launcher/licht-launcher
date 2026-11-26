@@ -6,18 +6,41 @@ import {
   type WindowSizePreset,
 } from "@/api/window-preview";
 
-const { setSize, center } = vi.hoisted(() => ({
+const { setSize, center, settingsSetSize, getByLabel } = vi.hoisted(() => ({
   setSize: vi.fn(),
   center: vi.fn(),
+  settingsSetSize: vi.fn(),
+  getByLabel: vi.fn(),
 }));
 vi.mock("@tauri-apps/api/window", () => ({
-  getCurrentWindow: () => ({ setSize, center }),
+  getCurrentWindow: () => ({ setSize: settingsSetSize, center: vi.fn() }),
+  Window: { getByLabel },
 }));
 
 describe("window preview", () => {
   beforeEach(() => {
     setSize.mockReset().mockResolvedValue(undefined);
     center.mockReset().mockResolvedValue(undefined);
+    settingsSetSize.mockReset().mockResolvedValue(undefined);
+    getByLabel
+      .mockReset()
+      .mockImplementation(async (label: string) =>
+        label === "main" ? { setSize, center } : null,
+      );
+  });
+
+  it("resizes the launcher window, not the window that asks", async () => {
+    await previewWindowSize("small");
+    expect(getByLabel).toHaveBeenCalledWith("main");
+    expect(setSize).toHaveBeenCalledOnce();
+    expect(settingsSetSize).not.toHaveBeenCalled();
+  });
+
+  it("reports a closed launcher window", async () => {
+    getByLabel.mockResolvedValue(null);
+    await expect(previewWindowSize("small")).rejects.toThrow(
+      "The launcher window is not open",
+    );
   });
 
   it.each([
@@ -43,7 +66,9 @@ describe("window preview", () => {
       }),
     );
     const resetting = resetWindowBounds();
-    expect(setSize).toHaveBeenCalledWith(new LogicalSize(1200, 800));
+    await vi.waitFor(() =>
+      expect(setSize).toHaveBeenCalledWith(new LogicalSize(1200, 800)),
+    );
     expect(center).not.toHaveBeenCalled();
     finishResize?.();
     await resetting;

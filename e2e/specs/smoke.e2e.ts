@@ -16,19 +16,31 @@ describe("launcher smoke", () => {
     await expect(dialog).not.toBeExisting();
   });
 
-  it("opens settings and switches sections", async () => {
+  it("opens settings in its own window and switches sections", async () => {
     await $("button=Licht Launcher").click();
     await $('[role="menuitem"]=Settings').click();
-    const dialog = $('[role="dialog"]');
-    await expect(dialog.$("h2=General")).toBeDisplayed();
+    await browser.waitUntil(async () =>
+      (await browser.tauri.listWindows()).includes("settings"),
+    );
+    await browser.tauri.switchWindow("settings");
 
-    await dialog
+    const page = $('section[aria-label="Settings"]');
+    await expect(page.$("h2=General")).toBeDisplayed();
+    await page
       .$('nav[aria-label="Settings sections"]')
       .$("button=Instances")
       .click();
-    await expect(dialog.$("h2=Instances")).toBeDisplayed();
+    await expect(page.$("h2=Instances")).toBeDisplayed();
 
-    await browser.keys("Escape");
-    await expect(dialog).not.toBeExisting();
+    // Close after the script answers, and leave the window first: WebDriver
+    // fails on a closed window.
+    await browser.tauri.execute(
+      "setTimeout(() => window.__TAURI__.window.getCurrentWindow().close(), 100); return null",
+    );
+    await browser.tauri.switchWindow("main");
+    await browser.waitUntil(
+      async () => !(await browser.tauri.listWindows()).includes("settings"),
+    );
+    await expect($("button=Licht Launcher")).toBeDisplayed();
   });
 });

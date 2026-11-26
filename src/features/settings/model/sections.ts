@@ -60,6 +60,10 @@ export const SECTIONS = [
 
 export type SectionId = (typeof SECTIONS)[number]["id"];
 
+export function parseSectionId(value: unknown): SectionId {
+  return SECTIONS.find((item) => item.id === value)?.id ?? "account";
+}
+
 export const JAVA_MAJORS = [
   { major: 25, field: "java25", label: "Java 25" },
   { major: 21, field: "java21", label: "Java 21" },
