@@ -64,6 +64,7 @@ import {
   pauseDownloadJob,
   prepareInstanceDownload,
   quitApp,
+  refreshLinkedModpackVersion,
   reinstallInstanceModpack,
   renameInstance,
   repairInstance,
@@ -737,6 +738,13 @@ describe("launcher commands", () => {
   it("reinstalls an instance's modpack", async () => {
     await reinstallInstanceModpack("classic");
     expect(invoke).toHaveBeenCalledWith("reinstall_instance_modpack", {
+      folder: "classic",
+    });
+  });
+
+  it("refreshes the saved name of an instance's modpack version", async () => {
+    await refreshLinkedModpackVersion("classic");
+    expect(invoke).toHaveBeenCalledWith("refresh_linked_modpack_version", {
       folder: "classic",
     });
   });
