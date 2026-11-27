@@ -39,19 +39,14 @@ pub(crate) struct PackVersion {
 }
 
 /// What to keep about a store pack: the store's name and author, falling back to what
-/// the pack's own archive declares, with the version the download resolved.
-/// CurseForge file names repeat the pack's name (`All the Mods 10-8.5`), so there the
-/// version its manifest declares is preferred.
+/// the pack's own archive declares, with the version the download resolved. The
+/// version is the store's name even when a manifest declares one, so it matches
+/// what `refresh_linked_modpack_version` keeps it in line with.
 fn linked_modpack(
-    source: ModpackSource,
     store: Option<&ModpackDetails>,
     archive: Option<LinkedModpack>,
     version: PackVersion,
 ) -> Option<LinkedModpack> {
-    let declared_version = archive
-        .as_ref()
-        .filter(|_| source == ModpackSource::Curseforge)
-        .map(|archive| archive.version_name.clone());
     let (name, author) = match store {
         Some(details) => (
             archive_details::capped(&details.name),
@@ -65,10 +60,7 @@ fn linked_modpack(
     Some(LinkedModpack {
         name: name?,
         author,
-        version_name: match declared_version {
-            Some(declared) => declared,
-            None => archive_details::capped(&version.name)?,
-        },
+        version_name: archive_details::capped(&version.name)?,
         published_at: version
             .published_at
             .as_deref()
@@ -124,9 +116,10 @@ pub async fn list_modpack_versions(
     Ok(versions)
 }
 
-/// Instances installed before version names were tidied saved the store's long
-/// form ("Homestead 2.0.1"). This asks the store for the installed version and
-/// saves its name; `None` when the instance is not a store pack or nothing changed.
+/// Keeps a store pack's saved version name in line with the store: instances
+/// installed before version names were tidied saved the long form ("Homestead
+/// 2.0.1"), and authors can edit a version's name later. `None` when the
+/// instance is not a store pack or nothing changed.
 pub async fn refresh_linked_modpack_version(
     database: &crate::DatabaseClient,
     client: &Client,
@@ -142,9 +135,7 @@ pub async fn refresh_linked_modpack_version(
     let Some(renamed) = versions
         .iter()
         .find(|version| version.id == linked.version_id)
-        .and_then(|version| {
-            refreshed_version_name(linked.source, &linked.version_name, &version.name)
-        })
+        .and_then(|version| refreshed_version_name(&linked.version_name, &version.name))
     else {
         return Ok(None);
     };
@@ -158,17 +149,11 @@ pub async fn refresh_linked_modpack_version(
     .await
 }
 
-/// The store's name for a version, when it should replace the saved one. A
-/// Modrinth name always came from the store, so it follows the store. A
-/// CurseForge name may come from the pack's own manifest, so only its long
-/// form ("Homestead 2.0.1" for "2.0.1") is replaced.
-fn refreshed_version_name(source: ModpackSource, saved: &str, store: &str) -> Option<String> {
+/// The store's name for a version, when it differs from the saved one. The
+/// saved name follows the store, so edits made there reach the instance.
+fn refreshed_version_name(saved: &str, store: &str) -> Option<String> {
     let (saved, store) = (saved.trim(), store.trim());
-    let replace = match source {
-        ModpackSource::Modrinth => true,
-        ModpackSource::Curseforge => saved.ends_with(store),
-    };
-    (replace && !store.is_empty() && saved != store).then(|| store.to_string())
+    (!store.is_empty() && saved != store).then(|| store.to_string())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -515,7 +500,7 @@ async fn install_modpack(
     let bytes = std::fs::read(&archive)?;
     let declared = archive_details::archive_details(*source, &bytes);
     let details = match resolved {
-        Some((version, store)) => linked_modpack(*source, store.as_ref(), declared, version),
+        Some((version, store)) => linked_modpack(store.as_ref(), declared, version),
         None => declared,
     };
     if let Some(details) = details {
@@ -611,8 +596,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_saved_modrinth_name_follows_the_store() {
-        let refresh = |saved, store| refreshed_version_name(ModpackSource::Modrinth, saved, store);
+    fn a_saved_version_name_follows_the_store() {
+        let refresh = refreshed_version_name;
         assert_eq!(
             refresh("Homestead 2.0.1", "2.0.1").as_deref(),
             Some("2.0.1")
@@ -626,23 +611,14 @@ mod tests {
             refresh("Fresh & Smooth 3.0.0 ", "3.0.0+26.3").as_deref(),
             Some("3.0.0+26.3")
         );
+        // An edit on the store reaches the saved name, even a manifest one.
+        assert_eq!(
+            refresh("2.0.1", "2.0.1 Hotfix").as_deref(),
+            Some("2.0.1 Hotfix")
+        );
         assert_eq!(refresh("2.0.1", "2.0.1"), None);
         assert_eq!(refresh(" 2.0.1 ", "2.0.1"), None);
         assert_eq!(refresh("Homestead 2.0.1", " "), None);
-    }
-
-    #[test]
-    fn a_saved_curseforge_name_only_drops_its_long_form() {
-        let refresh =
-            |saved, store| refreshed_version_name(ModpackSource::Curseforge, saved, store);
-        assert_eq!(
-            refresh("Homestead 2.0.1", "2.0.1").as_deref(),
-            Some("2.0.1")
-        );
-        // Read from the pack's manifest: kept.
-        assert_eq!(refresh("8.5", "All the Mods 10-8.5"), None);
-        assert_eq!(refresh("1.2", "v1.2-hotfix"), None);
-        assert_eq!(refresh("2.0.1", "2.0.1"), None);
     }
 
     fn details(author: &str) -> ModpackDetails {
@@ -678,12 +654,7 @@ mod tests {
     #[test]
     fn keeps_the_store_name_author_and_installed_version() {
         assert_eq!(
-            linked_modpack(
-                ModpackSource::Modrinth,
-                Some(&details("robotkoer")),
-                None,
-                version()
-            ),
+            linked_modpack(Some(&details("robotkoer")), None, version()),
             Some(LinkedModpack {
                 name: "Fabulously Optimized".into(),
                 author: Some("robotkoer".into()),
@@ -692,13 +663,7 @@ mod tests {
             })
         );
         assert_eq!(
-            linked_modpack(
-                ModpackSource::Modrinth,
-                Some(&details("  ")),
-                None,
-                version()
-            )
-            .and_then(|pack| pack.author),
+            linked_modpack(Some(&details("  ")), None, version()).and_then(|pack| pack.author),
             None
         );
     }
@@ -712,7 +677,7 @@ mod tests {
             published_at: None,
         };
         assert_eq!(
-            linked_modpack(ModpackSource::Modrinth, None, Some(declared), version()),
+            linked_modpack(None, Some(declared), version()),
             Some(LinkedModpack {
                 name: "Fabulously Optimized".into(),
                 author: None,
@@ -720,39 +685,28 @@ mod tests {
                 published_at: Some("2026-11-01T10:00:00Z".into()),
             })
         );
-        assert_eq!(
-            linked_modpack(ModpackSource::Modrinth, None, None, version()),
-            None
-        );
+        assert_eq!(linked_modpack(None, None, version()), None);
     }
 
     #[test]
-    fn prefers_the_curseforge_manifest_version_over_the_file_name() {
+    fn the_store_version_wins_over_the_manifest_version() {
+        // The store's name can be edited later and the refresh follows it, so
+        // installs save the same name the refresh would.
         let declared = LinkedModpack {
             name: "All the Mods 10".into(),
             author: None,
-            version_name: "8.5".into(),
+            version_name: "8.5-manifest".into(),
             published_at: None,
         };
         let file = PackVersion {
-            name: "All the Mods 10-8.5".into(),
+            name: "8.5".into(),
             published_at: None,
         };
-        let pick = |source, archive: Option<LinkedModpack>| {
-            linked_modpack(source, Some(&details("ATM Team")), archive, file.clone())
+        assert_eq!(
+            linked_modpack(Some(&details("ATM Team")), Some(declared), file)
                 .map(|pack| pack.version_name)
-        };
-        assert_eq!(
-            pick(ModpackSource::Curseforge, Some(declared.clone())).as_deref(),
+                .as_deref(),
             Some("8.5")
-        );
-        assert_eq!(
-            pick(ModpackSource::Curseforge, None).as_deref(),
-            Some("All the Mods 10-8.5")
-        );
-        assert_eq!(
-            pick(ModpackSource::Modrinth, Some(declared)).as_deref(),
-            Some("All the Mods 10-8.5")
         );
     }
 
@@ -760,8 +714,7 @@ mod tests {
     fn caps_long_store_text() {
         let mut store = details("robotkoer");
         store.name = "x".repeat(500);
-        let pack = linked_modpack(ModpackSource::Modrinth, Some(&store), None, version())
-            .expect("details");
+        let pack = linked_modpack(Some(&store), None, version()).expect("details");
         assert_eq!(pack.name.chars().count(), 200);
     }
 
