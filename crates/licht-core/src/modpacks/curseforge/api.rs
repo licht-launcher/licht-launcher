@@ -407,8 +407,24 @@ pub(super) fn parse_mod(mod_body: &str, description_body: &str) -> Result<Modpac
     })
 }
 
+#[derive(Debug, Deserialize)]
+struct ModTitleResponse {
+    data: ModTitle,
+}
+
+#[derive(Debug, Deserialize)]
+struct ModTitle {
+    name: String,
+}
+
+/// The project title from a `GET /mods/{id}` reply.
+pub(super) fn parse_mod_title(body: &str) -> Result<String> {
+    let parsed: ModTitleResponse = serde_json::from_str(body).map_err(CoreError::LoaderJson)?;
+    Ok(parsed.data.name)
+}
+
 /// One page of a pack's files; `releaseType` 1/2/3 is release/beta/alpha.
-pub(super) fn parse_versions(body: &str) -> Result<FilesPage> {
+pub(super) fn parse_versions(body: &str, pack_title: &str) -> Result<FilesPage> {
     let parsed: FilesResponse = serde_json::from_str(body).map_err(CoreError::LoaderJson)?;
     let total = parsed
         .pagination
@@ -429,10 +445,10 @@ pub(super) fn parse_versions(body: &str) -> Result<FilesPage> {
             }
             ModpackVersionItem {
                 id: file.id.to_string(),
-                name: if file.display_name.is_empty() {
+                name: if file.display_name.trim().is_empty() {
                     file.file_name
                 } else {
-                    file.display_name
+                    super::version_label(&file.display_name, pack_title)
                 },
                 game_versions,
                 loaders,
@@ -698,6 +714,13 @@ mod tests {
     }
 
     #[test]
+    fn reads_the_mod_title() {
+        let body = r#"{"data":{"id":1,"name":"Homestead","summary":"","downloadCount":1}}"#;
+        assert_eq!(parse_mod_title(body).expect("ok"), "Homestead");
+        assert!(parse_mod_title(r#"{"data":{}}"#).is_err());
+    }
+
+    #[test]
     fn reads_the_search_total_count() {
         let page = parse_search(
             r#"{"data":[],"pagination":{"index":0,"pageSize":10,"resultCount":0,"totalCount":5321}}"#,
@@ -852,13 +875,16 @@ mod tests {
               {"id":9431424,"displayName":"All the Mods 10-8.5","fileName":"atm10.zip","releaseType":1,
                "fileDate":"2026-11-04T07:16:05.953Z","downloadCount":72327,"gameVersions":["1.21.1","NeoForge"]},
               {"id":2,"displayName":"","fileName":"beta.zip","releaseType":2,"gameVersions":["Forge","1.20.1","Client"]},
-              {"id":3,"displayName":"Alpha","releaseType":3,"gameVersions":[]}
-            ],"pagination":{"index":0,"pageSize":50,"resultCount":3,"totalCount":148}}"#,
+              {"id":3,"displayName":"Alpha","releaseType":3,"gameVersions":[]},
+              {"id":4,"displayName":" ","fileName":"blank.zip","gameVersions":[]}
+            ],"pagination":{"index":0,"pageSize":50,"resultCount":4,"totalCount":148}}"#,
+            "All the Mods 10",
         )
         .expect("ok");
         assert_eq!(page.total, 148);
         let first = &page.items[0];
         assert_eq!(first.id, "9431424");
+        assert_eq!(first.name, "8.5");
         assert_eq!(first.game_versions, vec!["1.21.1"]);
         assert_eq!(first.loaders, vec![ModpackLoader::Neoforge]);
         assert_eq!(first.version_type, ModpackVersionType::Release);
@@ -871,6 +897,7 @@ mod tests {
         assert_eq!(page.items[1].loaders, vec![ModpackLoader::Forge]);
         assert_eq!(page.items[1].version_type, ModpackVersionType::Beta);
         assert_eq!(page.items[2].version_type, ModpackVersionType::Alpha);
+        assert_eq!(page.items[3].name, "blank.zip");
     }
 
     #[test]

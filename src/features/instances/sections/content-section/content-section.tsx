@@ -14,6 +14,7 @@ import { ModpackContentCard } from "@/features/instances/components/content/modp
 import { ModpackContentDialog } from "@/features/instances/components/content/modpack-content-dialog";
 import { useContentVirtualizer } from "@/features/instances/hooks/use-content-virtualizer";
 import { useInstanceContent } from "@/features/instances/hooks/use-instance-content";
+import { useLinkedVersionRefresh } from "@/features/instances/hooks/use-linked-version-refresh";
 import {
   type ContentFilter,
   type ContentSortDir,
@@ -52,6 +53,7 @@ export function ContentSection({
   iconPath?: string | null;
 }) {
   const instanceContent = useInstanceContent(folder);
+  useLinkedVersionRefresh(folder, modpack, linkedModpack);
   const { content, modpackEntries, extraEntries, busy, toggle, remove } =
     instanceContent;
   const [pendingRemoval, setPendingRemoval] =

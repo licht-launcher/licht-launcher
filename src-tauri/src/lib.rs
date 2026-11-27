@@ -88,6 +88,7 @@ pub fn run() -> anyhow::Result<()> {
             commands::modpacks::get_modpack,
             commands::modpacks::modpack_sources,
             commands::modpacks::list_modpack_versions,
+            commands::modpacks::refresh_linked_modpack_version,
             commands::modpacks::create_instance_from_modpack,
             commands::modpacks::create_instance_from_modpack_file,
             commands::modpacks::install_modpack_files,

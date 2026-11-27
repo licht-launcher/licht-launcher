@@ -240,6 +240,16 @@ export function createInstanceFromModpackFile(input: {
   });
 }
 
+/**
+ * Re-reads the installed modpack version's name from the store for an
+ * instance that saved its long form; `null` when nothing changed.
+ */
+export function refreshLinkedModpackVersion(
+  folder: string,
+): Promise<InstanceEntry | null> {
+  return invoke("refresh_linked_modpack_version", { folder });
+}
+
 /** Turns a modpack instance into a regular one, keeping its files. */
 export function unlinkInstanceModpack(folder: string): Promise<InstanceEntry> {
   return invoke("unlink_instance_modpack", { folder });

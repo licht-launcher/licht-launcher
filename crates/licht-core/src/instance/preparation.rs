@@ -227,6 +227,84 @@ pub(crate) async fn record_linked_modpack(
     write_instance(database, &dir, &instance).await
 }
 
+/// A ready store-pack instance's installed version and the name saved for it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct LinkedStoreVersion {
+    pub source: ModpackSource,
+    pub project_id: String,
+    pub version_id: String,
+    pub version_name: String,
+}
+
+/// The installed store version of a ready pack instance with saved pack details;
+/// `None` for any other instance.
+pub(crate) async fn linked_store_version(
+    database: &crate::DatabaseClient,
+    instances_dir: &Path,
+    folder: &str,
+) -> Result<Option<LinkedStoreVersion>> {
+    let dir = instance_dir(instances_dir, folder)?;
+    let instance = load_instance(database, &dir).await?;
+    let Some(installation) = instance.installation else {
+        return Ok(None);
+    };
+    let (
+        InstanceSource::Modpack {
+            source,
+            project_id,
+            version_id,
+            ..
+        },
+        InstancePreparationState::Ready,
+        Some(modpack),
+    ) = (
+        installation.source,
+        installation.state,
+        installation.modpack,
+    )
+    else {
+        return Ok(None);
+    };
+    Ok(Some(LinkedStoreVersion {
+        source,
+        project_id,
+        version_id,
+        version_name: modpack.version_name,
+    }))
+}
+
+/// Saves a new name for the installed pack version, unless a version change or
+/// another rename got there first while the store was asked.
+pub(crate) async fn rename_linked_modpack_version(
+    database: &crate::DatabaseClient,
+    instances_dir: &Path,
+    folder: &str,
+    expected: &LinkedStoreVersion,
+    version_name: &str,
+) -> Result<Option<InstanceEntry>> {
+    let _guard = profile_guard().await;
+    let dir = instance_dir(instances_dir, folder)?;
+    let mut instance = load_instance(database, &dir).await?;
+    let Some(installation) = instance.installation.as_mut() else {
+        return Ok(None);
+    };
+    let unchanged = installation.state == InstancePreparationState::Ready
+        && matches!(
+            &installation.source,
+            InstanceSource::Modpack { version_id, .. } if *version_id == expected.version_id
+        );
+    let Some(modpack) = installation
+        .modpack
+        .as_mut()
+        .filter(|modpack| unchanged && modpack.version_name == expected.version_name)
+    else {
+        return Ok(None);
+    };
+    modpack.version_name = version_name.to_string();
+    write_instance(database, &dir, &instance).await?;
+    Ok(Some(entry_from(&dir, folder.to_string(), instance)))
+}
+
 /// Turns a ready modpack instance into a regular one. Its files stay, but the
 /// launcher forgets the pack: none of its content counts as pack content any more,
 /// repairs stop restoring pack files, and its game version can change.
@@ -545,6 +623,98 @@ mod tests {
         )
         .await
         .expect("service")
+    }
+
+    #[tokio::test]
+    async fn a_ready_store_pack_saves_a_new_version_name() {
+        let temp = TempDir::new("rename-linked-version");
+        let root = temp.path().to_path_buf();
+        let service = service(&root).await;
+        let client = service.client();
+        let entry = ready_pack(&client, &root).await;
+        assert_eq!(
+            linked_store_version(&client, &root, &entry.folder)
+                .await
+                .expect("read"),
+            None,
+            "no saved pack details yet"
+        );
+        let mut long = linked();
+        long.version_name = "Fabulously Optimized 15.0.0-beta.3".into();
+        record_linked_modpack(&client, &root, &entry.folder, long)
+            .await
+            .expect("record");
+
+        let expected = linked_store_version(&client, &root, &entry.folder)
+            .await
+            .expect("read")
+            .expect("linked");
+        assert_eq!(
+            expected,
+            LinkedStoreVersion {
+                source: ModpackSource::Modrinth,
+                project_id: "fo".into(),
+                version_id: "v15".into(),
+                version_name: "Fabulously Optimized 15.0.0-beta.3".into(),
+            }
+        );
+        let renamed = rename_linked_modpack_version(
+            &client,
+            &root,
+            &entry.folder,
+            &expected,
+            "15.0.0-beta.3",
+        )
+        .await
+        .expect("rename")
+        .expect("renamed");
+        assert_eq!(
+            renamed.installation.expect("installation").modpack,
+            Some(linked())
+        );
+        // The saved name moved on, so the same rename does nothing again.
+        assert_eq!(
+            rename_linked_modpack_version(&client, &root, &entry.folder, &expected, "other")
+                .await
+                .expect("rename"),
+            None
+        );
+        service.shutdown().await.expect("shutdown");
+    }
+
+    #[tokio::test]
+    async fn a_version_change_meanwhile_keeps_its_name() {
+        let temp = TempDir::new("rename-linked-version-race");
+        let root = temp.path().to_path_buf();
+        let service = service(&root).await;
+        let client = service.client();
+        let entry = ready_pack(&client, &root).await;
+        record_linked_modpack(&client, &root, &entry.folder, linked())
+            .await
+            .expect("record");
+        let mut stale = linked_store_version(&client, &root, &entry.folder)
+            .await
+            .expect("read")
+            .expect("linked");
+        stale.version_id = "v14".into();
+
+        assert_eq!(
+            rename_linked_modpack_version(&client, &root, &entry.folder, &stale, "14.0.0")
+                .await
+                .expect("rename"),
+            None
+        );
+        let dir = root.join(&entry.folder);
+        assert_eq!(
+            load_instance(&client, &dir)
+                .await
+                .expect("load")
+                .installation
+                .expect("installation")
+                .modpack,
+            Some(linked())
+        );
+        service.shutdown().await.expect("shutdown");
     }
 
     #[tokio::test]

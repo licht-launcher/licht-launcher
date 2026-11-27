@@ -1,7 +1,7 @@
 use licht_core::{
-    DownloadProgress, InstanceEntry, ModpackDetails, ModpackSearchFilters, ModpackSearchPage,
-    ModpackSource, ModpackVersionItem, install_curseforge_files, install_mrpack_files,
-    load_instance,
+    DatabaseClient, DownloadProgress, InstanceEntry, ModpackDetails, ModpackSearchFilters,
+    ModpackSearchPage, ModpackSource, ModpackVersionItem, install_curseforge_files,
+    install_mrpack_files, load_instance,
 };
 use tauri::{AppHandle, State};
 use tokio::sync::mpsc;
@@ -52,6 +52,26 @@ pub async fn list_modpack_versions(
         .map_err(failure)
 }
 
+/// Re-reads the installed version's name from the store for an instance that
+/// saved the long form; `None` when nothing changed.
+#[tauri::command]
+pub async fn refresh_linked_modpack_version(
+    app: AppHandle,
+    database: State<'_, DatabaseClient>,
+    paths: State<'_, LauncherPaths>,
+    folder: String,
+) -> Result<Option<InstanceEntry>, String> {
+    let root = super::instances_root(&paths).map_err(failure)?;
+    let client = http_client().map_err(failure)?;
+    let entry = licht_core::refresh_linked_modpack_version(&database, &client, &root, &folder)
+        .await
+        .map_err(failure)?;
+    if entry.is_some() {
+        super::notify_windows(&app, super::INSTANCES_CHANGED_EVENT);
+    }
+    Ok(entry)
+}
+
 #[tauri::command]
 pub async fn create_instance_from_modpack(
     downloads: State<'_, std::sync::Arc<licht_core::DownloadManager>>,
@@ -94,7 +114,7 @@ pub async fn create_instance_from_modpack_file(
 #[tauri::command]
 pub async fn install_modpack_files(
     app: AppHandle,
-    database: State<'_, licht_core::DatabaseClient>,
+    database: State<'_, DatabaseClient>,
     paths: State<'_, LauncherPaths>,
     folder: String,
 ) -> Result<(), String> {
