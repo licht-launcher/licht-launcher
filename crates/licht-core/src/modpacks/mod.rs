@@ -142,7 +142,9 @@ pub async fn refresh_linked_modpack_version(
     let Some(renamed) = versions
         .iter()
         .find(|version| version.id == linked.version_id)
-        .and_then(|version| refreshed_version_name(&linked.version_name, &version.name))
+        .and_then(|version| {
+            refreshed_version_name(linked.source, &linked.version_name, &version.name)
+        })
     else {
         return Ok(None);
     };
@@ -156,11 +158,17 @@ pub async fn refresh_linked_modpack_version(
     .await
 }
 
-/// The store's name for a version replaces the saved one only when the saved one
-/// is its long form, so a name read from the pack's own manifest is kept.
-fn refreshed_version_name(saved: &str, store: &str) -> Option<String> {
+/// The store's name for a version, when it should replace the saved one. A
+/// Modrinth name always came from the store, so it follows the store. A
+/// CurseForge name may come from the pack's own manifest, so only its long
+/// form ("Homestead 2.0.1" for "2.0.1") is replaced.
+fn refreshed_version_name(source: ModpackSource, saved: &str, store: &str) -> Option<String> {
     let (saved, store) = (saved.trim(), store.trim());
-    (!store.is_empty() && saved != store && saved.ends_with(store)).then(|| store.to_string())
+    let replace = match source {
+        ModpackSource::Modrinth => true,
+        ModpackSource::Curseforge => saved.ends_with(store),
+    };
+    (replace && !store.is_empty() && saved != store).then(|| store.to_string())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -603,17 +611,38 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_saved_long_version_name_takes_the_store_name() {
+    fn a_saved_modrinth_name_follows_the_store() {
+        let refresh = |saved, store| refreshed_version_name(ModpackSource::Modrinth, saved, store);
         assert_eq!(
-            refreshed_version_name("Homestead 2.0.1", "2.0.1").as_deref(),
+            refresh("Homestead 2.0.1", "2.0.1").as_deref(),
             Some("2.0.1")
         );
-        // Already short, or read from the pack's manifest: kept.
-        assert_eq!(refreshed_version_name("2.0.1", "2.0.1"), None);
-        assert_eq!(refreshed_version_name("8.5", "All the Mods 10-8.5"), None);
-        // A different version is not a long form of this one.
-        assert_eq!(refreshed_version_name("Homestead 2.0", "2.0.1"), None);
-        assert_eq!(refreshed_version_name("Homestead 2.0.1", " "), None);
+        // Modrinth's old `name` need not end with the version number.
+        assert_eq!(
+            refresh("15.0.0-beta.4 for 26.3", "15.0.0-beta.4").as_deref(),
+            Some("15.0.0-beta.4")
+        );
+        assert_eq!(
+            refresh("Fresh & Smooth 3.0.0 ", "3.0.0+26.3").as_deref(),
+            Some("3.0.0+26.3")
+        );
+        assert_eq!(refresh("2.0.1", "2.0.1"), None);
+        assert_eq!(refresh(" 2.0.1 ", "2.0.1"), None);
+        assert_eq!(refresh("Homestead 2.0.1", " "), None);
+    }
+
+    #[test]
+    fn a_saved_curseforge_name_only_drops_its_long_form() {
+        let refresh =
+            |saved, store| refreshed_version_name(ModpackSource::Curseforge, saved, store);
+        assert_eq!(
+            refresh("Homestead 2.0.1", "2.0.1").as_deref(),
+            Some("2.0.1")
+        );
+        // Read from the pack's manifest: kept.
+        assert_eq!(refresh("8.5", "All the Mods 10-8.5"), None);
+        assert_eq!(refresh("1.2", "v1.2-hotfix"), None);
+        assert_eq!(refresh("2.0.1", "2.0.1"), None);
     }
 
     fn details(author: &str) -> ModpackDetails {
