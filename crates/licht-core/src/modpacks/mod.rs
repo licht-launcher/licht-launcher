@@ -124,6 +124,45 @@ pub async fn list_modpack_versions(
     Ok(versions)
 }
 
+/// Instances installed before version names were tidied saved the store's long
+/// form ("Homestead 2.0.1"). This asks the store for the installed version and
+/// saves its name; `None` when the instance is not a store pack or nothing changed.
+pub async fn refresh_linked_modpack_version(
+    database: &crate::DatabaseClient,
+    client: &Client,
+    instances_dir: &Path,
+    folder: &str,
+) -> Result<Option<InstanceEntry>> {
+    let Some(linked) =
+        crate::instance::linked_store_version(database, instances_dir, folder).await?
+    else {
+        return Ok(None);
+    };
+    let versions = list_modpack_versions(client, linked.source, &linked.project_id).await?;
+    let Some(renamed) = versions
+        .iter()
+        .find(|version| version.id == linked.version_id)
+        .and_then(|version| refreshed_version_name(&linked.version_name, &version.name))
+    else {
+        return Ok(None);
+    };
+    crate::instance::rename_linked_modpack_version(
+        database,
+        instances_dir,
+        folder,
+        &linked,
+        &renamed,
+    )
+    .await
+}
+
+/// The store's name for a version replaces the saved one only when the saved one
+/// is its long form, so a name read from the pack's own manifest is kept.
+fn refreshed_version_name(saved: &str, store: &str) -> Option<String> {
+    let (saved, store) = (saved.trim(), store.trim());
+    (!store.is_empty() && saved != store && saved.ends_with(store)).then(|| store.to_string())
+}
+
 #[allow(clippy::too_many_arguments)]
 pub async fn create_instance_from_modpack(
     database: &crate::DatabaseClient,
@@ -562,6 +601,20 @@ mod tests {
     use licht_testkit::temp::TempDir;
 
     use super::*;
+
+    #[test]
+    fn a_saved_long_version_name_takes_the_store_name() {
+        assert_eq!(
+            refreshed_version_name("Homestead 2.0.1", "2.0.1").as_deref(),
+            Some("2.0.1")
+        );
+        // Already short, or read from the pack's manifest: kept.
+        assert_eq!(refreshed_version_name("2.0.1", "2.0.1"), None);
+        assert_eq!(refreshed_version_name("8.5", "All the Mods 10-8.5"), None);
+        // A different version is not a long form of this one.
+        assert_eq!(refreshed_version_name("Homestead 2.0", "2.0.1"), None);
+        assert_eq!(refreshed_version_name("Homestead 2.0.1", " "), None);
+    }
 
     fn details(author: &str) -> ModpackDetails {
         ModpackDetails {

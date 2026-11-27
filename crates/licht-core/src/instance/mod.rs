@@ -21,7 +21,8 @@ pub use preparation::{
     unlink_instance_modpack,
 };
 pub(crate) use preparation::{
-    commit_modpack_content_change, record_linked_modpack, restore_instance_base,
+    commit_modpack_content_change, linked_store_version, record_linked_modpack,
+    rename_linked_modpack_version, restore_instance_base,
 };
 
 use std::fs;

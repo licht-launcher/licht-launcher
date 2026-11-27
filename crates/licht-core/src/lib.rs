@@ -103,7 +103,7 @@ pub use modpacks::{
     ModpackDetails, ModpackListItem, ModpackLoader, ModpackSearchFilters, ModpackSearchPage,
     ModpackSort, ModpackSource, ModpackVersionItem, apply_mrpack_loader, available_modpack_sources,
     create_instance_from_modpack, get_modpack, install_curseforge_files, install_mrpack_files,
-    list_modpack_versions, mrpack_download_tasks, search_modpacks,
+    list_modpack_versions, mrpack_download_tasks, refresh_linked_modpack_version, search_modpacks,
 };
 pub use natives::{NativeLibrary, create_natives_directory, extract_natives, native_libraries};
 pub use offline::{OfflineAccount, OfflineLaunch, offline_account, prepare_offline_launch};
